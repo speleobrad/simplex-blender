@@ -2,6 +2,7 @@ import { GAS_CONSTANT, calcMolarDensity, calcPressure, calcZFromDensity, getMixP
 import { solveTwoPhaseSimplex } from './simplex.js';
 import { isValidGasComposition } from './gas-input.js';
 import { validateCalculatorInputs, validateSupplyBankInput } from './input-validation.js';
+import { simulateThermalProtocol } from './thermodynamics.js';
 
 function bankVariableNames(activeBanks) {
   return activeBanks.map((bank, index) => `x_b${index + 1}_${bank.name.split(' ')[0]}`);
@@ -778,7 +779,7 @@ function validateBlendInput(input) {
   return errors;
 }
 
-export function optimizeBlend(input) {
+function optimizeBlendWithoutThermal(input) {
   const inputErrors = validateBlendInput(input);
   if (inputErrors.length > 0) {
     return failedResult(`Invalid blend input: ${inputErrors.join(' ')}`, null, []);
@@ -1322,6 +1323,10 @@ export function optimizeBlend(input) {
         sourceEndPressureBar: stage.sourceEndPressureBar,
         receiverStartPressureBar: stage.receiverStartPressureBar,
         receiverEndPressureBar: stage.receiverEndPressureBar,
+        ...(input.thermal ? {
+          sourceOxygenPercent: bank.oxygenPercent,
+          sourceHeliumPercent: bank.heliumPercent
+        } : {}),
         oxygenCompressionRatio,
         badgeClass: bank.heliumPercent > 0
           ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
@@ -1367,4 +1372,147 @@ export function optimizeBlend(input) {
     trajectory,
     maximumPressure: null
   };
+}
+
+const THERMAL_TARGET_TOLERANCE_BAR = 1e-5;
+const MAXIMUM_TARGET_PRESSURE_BAR = 350;
+
+function evaluateThermalCandidate(input, optimizeStatic, targetPressureBar) {
+  const candidateInput = {
+    ...input,
+    cylinder: {
+      ...input.cylinder,
+      targetPressureBar
+    }
+  };
+  const result = optimizeStatic(candidateInput);
+  if (!result.feasible) return { candidateInput, result, simulation: null };
+
+  const simulation = simulateThermalProtocol({
+    protocolSteps: result.protocolSteps,
+    cylinder: candidateInput.cylinder,
+    physics: candidateInput.physics,
+    thermal: candidateInput.thermal,
+    settings: candidateInput.settings
+  });
+  return { candidateInput, result, simulation };
+}
+
+function thermalResult(candidate) {
+  return {
+    ...candidate.result,
+    protocolSteps: candidate.simulation.protocolSteps,
+    thermal: candidate.simulation.final
+  };
+}
+
+function thermalizedMaximumResult(candidate) {
+  const maximum = candidate.result.maximumPressure;
+  if (!maximum) return { ...candidate.result, thermal: null };
+
+  const simulation = simulateThermalProtocol({
+    protocolSteps: maximum.protocolSteps,
+    cylinder: candidate.candidateInput.cylinder,
+    physics: candidate.candidateInput.physics,
+    thermal: candidate.candidateInput.thermal,
+    settings: candidate.candidateInput.settings
+  });
+  return {
+    ...candidate.result,
+    maximumPressure: {
+      ...maximum,
+      protocolSteps: simulation.protocolSteps,
+      thermal: simulation.final
+    },
+    thermal: simulation.final
+  };
+}
+
+function thermalLimitResult(input, requested, maximum) {
+  const maximumPressure = {
+    pressureBar: maximum.result.blend.finalPressureBar,
+    solution: maximum.result.solution,
+    tableauSteps: maximum.result.tableauSteps,
+    blend: maximum.result.blend,
+    protocolSteps: maximum.simulation.protocolSteps,
+    trajectory: maximum.result.trajectory,
+    thermal: maximum.simulation.final
+  };
+  return {
+    ...failedResult(
+      `Requested ambient-settled pressure ${input.cylinder.targetPressureBar.toFixed(1)} bar cannot be reached; maximum predicted ambient pressure is ${maximum.simulation.final.finalAmbientPressureBar.toFixed(1)} bar.`,
+      requested.result.gas,
+      maximum.result.tableauSteps,
+      maximumPressure,
+      requested.result.diagnostics ?? null
+    ),
+    thermal: maximum.simulation.final
+  };
+}
+
+function optimizeThermalBlend(input, optimizeStatic) {
+  const requestedPressureBar = input.cylinder.targetPressureBar;
+  const requested = evaluateThermalCandidate(input, optimizeStatic, requestedPressureBar);
+  if (!requested.result.feasible) return thermalizedMaximumResult(requested);
+
+  const requestedPressureDifference = requested.simulation.final.finalAmbientPressureBar
+    - requestedPressureBar;
+  if (Math.abs(requestedPressureDifference) <= THERMAL_TARGET_TOLERANCE_BAR) {
+    return thermalResult(requested);
+  }
+  if (requestedPressureDifference > 0) return thermalResult(requested);
+
+  const ceiling = evaluateThermalCandidate(input, optimizeStatic, MAXIMUM_TARGET_PRESSURE_BAR);
+  if (ceiling.result.feasible) {
+    const ceilingPressureDifference = ceiling.simulation.final.finalAmbientPressureBar
+      - requestedPressureBar;
+    if (Math.abs(ceilingPressureDifference) <= THERMAL_TARGET_TOLERANCE_BAR) {
+      return thermalResult(ceiling);
+    }
+    if (ceilingPressureDifference < 0) return thermalLimitResult(input, requested, ceiling);
+  }
+
+  let lowerPressureBar = requestedPressureBar;
+  let upperPressureBar = MAXIMUM_TARGET_PRESSURE_BAR;
+  let highestFeasible = requested;
+  let ambientTargetCandidate = null;
+  for (let iteration = 0; iteration < 40; iteration++) {
+    const candidatePressureBar = (lowerPressureBar + upperPressureBar) / 2;
+    const candidate = evaluateThermalCandidate(input, optimizeStatic, candidatePressureBar);
+    if (!candidate.result.feasible) {
+      upperPressureBar = candidatePressureBar;
+      continue;
+    }
+
+    highestFeasible = candidate;
+    const pressureDifference = candidate.simulation.final.finalAmbientPressureBar
+      - requestedPressureBar;
+    if (Math.abs(pressureDifference) <= THERMAL_TARGET_TOLERANCE_BAR) {
+      return thermalResult(candidate);
+    }
+    if (pressureDifference < 0) {
+      lowerPressureBar = candidatePressureBar;
+    } else {
+      upperPressureBar = candidatePressureBar;
+      ambientTargetCandidate = candidate;
+    }
+  }
+
+  if (ambientTargetCandidate) return thermalResult(ambientTargetCandidate);
+  if (!ceiling.result.feasible) {
+    const maximum = thermalizedMaximumResult(ceiling);
+    if (maximum.maximumPressure) {
+      return {
+        ...maximum,
+        gas: requested.result.gas,
+        error: `Requested ambient-settled pressure ${requestedPressureBar.toFixed(1)} bar cannot be reached. ${maximum.error}`
+      };
+    }
+  }
+  return thermalLimitResult(input, requested, highestFeasible);
+}
+
+export function optimizeBlend(input) {
+  if (!input?.thermal) return optimizeBlendWithoutThermal(input);
+  return optimizeThermalBlend(input, optimizeBlendWithoutThermal);
 }

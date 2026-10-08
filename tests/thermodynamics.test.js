@@ -6,7 +6,8 @@ import {
   calculateCoolingTime,
   calculatePressureAtTemperature,
   calculateTemperatureAfterWait,
-  estimateCompressionTemperature
+  estimateCompressionTemperature,
+  simulateThermalProtocol
 } from '../js/thermodynamics.js';
 
 test('booster rate uses displacement, BPM, and receiver/source compressibility', () => {
@@ -127,4 +128,98 @@ test('compression temperature increases with pressure and is cooled faster in wa
   assert.ok(airSteel > 20);
   assert.ok(heliumAluminumWater > 20);
   assert.ok(heliumAluminumWater < airSteel);
+});
+
+test('sequential simulation carries post-wait pressure and temperature into the next stage', () => {
+  const simulation = simulateThermalProtocol({
+    protocolSteps: [
+      {
+        type: 'boost',
+        operation: 'Boost',
+        resultingPressureBar: 150,
+        resultingMix: { oxygenPercent: 21, heliumPercent: 0 },
+        sourceStartPressureBar: 200,
+        sourceEndPressureBar: 150,
+        receiverStartPressureBar: 100,
+        receiverEndPressureBar: 150
+      },
+      {
+        type: 'decant',
+        operation: 'Decant',
+        resultingPressureBar: 180,
+        resultingMix: { oxygenPercent: 21, heliumPercent: 0 },
+        sourceStartPressureBar: 220,
+        sourceEndPressureBar: 190,
+        receiverStartPressureBar: 150,
+        receiverEndPressureBar: 180
+      }
+    ],
+    cylinder: { volumeL: 12 },
+    physics: { model: 'ideal', temperatureC: 20 },
+    thermal: {
+      tankMaterial: 'steel',
+      coolingMedium: 'air',
+      ambientTemperatureC: 20,
+      waitMode: 'minutes',
+      waitMinutes: 10,
+      targetTemperatureC: 25
+    },
+    settings: {
+      booster: {
+        cylinderVolumeCm3: 9,
+        oxygenBoostBpm: 50,
+        otherBoostBpm: 50,
+        oxygenDecantRateBarPerMin: 5,
+        otherDecantRateBarPerMin: 5,
+        compressorInletFlowLPerMin: 100
+      }
+    }
+  });
+
+  assert.equal(simulation.protocolSteps.length, 2);
+  assert.equal(simulation.protocolSteps[0].thermal.rateSource, 'booster');
+  assert.equal(simulation.protocolSteps[1].thermal.rateSource, 'decant-rate');
+  assert.ok(simulation.protocolSteps[0].thermal.pressureAfterWaitBar < 150);
+  assert.equal(
+    simulation.protocolSteps[1].thermal.temperatureStartC,
+    simulation.protocolSteps[0].thermal.temperatureAfterWaitC
+  );
+});
+
+test('top-up uses compressor flow and 40 percent oxygen selects oxygen rates', () => {
+  const simulation = simulateThermalProtocol({
+    protocolSteps: [{
+      type: 'boost',
+      operation: 'Top-up',
+      resultingPressureBar: 200,
+      resultingMix: { oxygenPercent: 21, heliumPercent: 0 },
+      sourceStartPressureBar: 190,
+      sourceEndPressureBar: 100,
+      receiverStartPressureBar: 150,
+      receiverEndPressureBar: 200
+    }],
+    cylinder: { volumeL: 12 },
+    physics: { model: 'ideal', temperatureC: 20 },
+    thermal: {
+      tankMaterial: 'steel',
+      coolingMedium: 'air',
+      ambientTemperatureC: 20,
+      waitMode: 'minutes',
+      waitMinutes: 0,
+      targetTemperatureC: 25
+    },
+    settings: {
+      booster: {
+        cylinderVolumeCm3: 9,
+        oxygenBoostBpm: 50,
+        otherBoostBpm: 50,
+        oxygenDecantRateBarPerMin: 5,
+        otherDecantRateBarPerMin: 5,
+        compressorInletFlowLPerMin: 100
+      }
+    }
+  });
+
+  assert.equal(simulation.protocolSteps[0].thermal.rateSource, 'compressor');
+  assert.ok(simulation.protocolSteps[0].thermal.rateBarPerMin > 0);
 });

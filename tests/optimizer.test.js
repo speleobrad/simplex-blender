@@ -1056,3 +1056,45 @@ test('rejects unsupported gas models instead of silently switching to ideal gas'
   assert.equal(result.gas, null);
   assert.match(result.error, /gas model.*ideal.*vdw/i);
 });
+
+test('thermal recipe overshoots the last hot target so ambient pressure reaches the request', () => {
+  const result = optimizeBlend({
+    cylinder: {
+      volumeL: 12,
+      initialPressureBar: 80,
+      initialOxygenPercent: 21,
+      initialHeliumPercent: 0,
+      targetPressureBar: 210,
+      targetOxygenPercent: 21,
+      targetHeliumPercent: 0
+    },
+    physics: { model: 'ideal', temperatureC: 20 },
+    thermal: {
+      tankMaterial: 'steel',
+      coolingMedium: 'air',
+      ambientTemperatureC: 20,
+      waitMode: 'minutes',
+      waitMinutes: 10,
+      targetTemperatureC: 25
+    },
+    settings: {
+      booster: {
+        minimumSourcePressureBar: 0,
+        cylinderVolumeCm3: 9,
+        oxygenBoostBpm: 50,
+        otherBoostBpm: 50,
+        oxygenDecantRateBarPerMin: 5,
+        otherDecantRateBarPerMin: 5,
+        compressorInletFlowLPerMin: 100
+      }
+    },
+    banks: [{
+      id: 'air', name: 'Air', volumeL: 80, pressureBar: 300,
+      oxygenPercent: 21, heliumPercent: 0, enabled: true
+    }]
+  });
+
+  assert.equal(result.feasible, true);
+  assert.ok(result.thermal.finalTransferEndPressureBar > 210);
+  assert.ok(Math.abs(result.thermal.finalAmbientPressureBar - 210) < 1e-5);
+});
