@@ -1,0 +1,146 @@
+/* Theme color channels are consumed by Tailwind's opacity-aware color tokens. */
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ocean-950: 3 8 18;
+  --ocean-900: 7 18 36;
+  --ocean-850: 11 27 54;
+  --ocean-800: 15 36 72;
+  --ocean-700: 23 54 107;
+  --ocean-600: 37 80 153;
+  --ocean-500: 59 130 246;
+  --ocean-400: 96 165 250;
+
+  --slate-100: 241 245 249;
+  --slate-200: 226 232 240;
+  --slate-300: 203 213 225;
+  --slate-400: 148 163 184;
+  --slate-500: 100 116 139;
+  --slate-600: 71 85 105;
+
+  --cyan-300: 103 232 249;
+  --cyan-400: 34 211 238;
+  --cyan-500: 6 182 212;
+  --cyan-600: 8 145 178;
+  --blue-600: 37 99 235;
+  --indigo-300: 165 180 252;
+  --indigo-400: 129 140 248;
+  --indigo-700: 67 56 202;
+  --indigo-800: 55 48 163;
+  --indigo-950: 30 27 75;
+  --emerald-300: 110 231 183;
+  --emerald-400: 52 211 153;
+  --emerald-800: 6 95 70;
+  --emerald-950: 2 44 34;
+  --amber-200: 253 230 138;
+  --amber-300: 252 211 77;
+  --amber-400: 251 191 36;
+  --amber-500: 245 158 11;
+  --amber-950: 69 26 3;
+  --rose-300: 253 164 175;
+  --rose-400: 251 113 133;
+  --rose-500: 244 63 94;
+
+  --scrollbar-track: 7 18 36;
+  --scrollbar-thumb: 23 54 107;
+  --scrollbar-thumb-hover: 37 80 153;
+
+  --chart-grid: rgba(30, 85, 135, 0.25);
+  --chart-full-boundary: rgba(148, 163, 184, 0.6);
+  --chart-feasible: #38bdf8;
+  --chart-oxygen: #10b981;
+  --chart-nitrogen: #818cf8;
+  --chart-helium: #f59e0b;
+  --chart-bank: #38bdf8;
+  --chart-point-outline: #071626;
+  --chart-marker-outline: #ffffff;
+  --chart-label: #94a3b8;
+  --chart-air: #94a3b8;
+  --chart-badge: rgba(11, 23, 44, 0.9);
+  --chart-badge-text: #f1f5f9;
+  --chart-badge-subtext: #94a3b8;
+  --chart-direct: rgba(148, 163, 184, 0.35);
+  --chart-init: #f43f5e;
+  --chart-target: #10b981;
+  --chart-path-1: #06b6d4;
+  --chart-path-2: #f59e0b;
+  --chart-path-3: #10b981;
+  --chart-path-4: #a855f7;
+  --chart-path-5: #ec4899;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --ocean-950: 248 250 252;
+  --ocean-900: 255 255 255;
+  --ocean-850: 241 245 249;
+  --ocean-800: 226 232 240;
+  --ocean-700: 203 213 225;
+  --ocean-600: 148 163 184;
+  --ocean-500: 59 130 246;
+  --ocean-400: 96 165 250;
+
+  --slate-100: 15 23 42;
+  --slate-200: 30 41 59;
+  --slate-300: 51 65 85;
+  --slate-400: 71 85 105;
+  --slate-500: 100 116 139;
+  --slate-600: 148 163 184;
+
+  --cyan-300: 14 116 144;
+  --cyan-400: 14 116 144;
+  --cyan-500: 8 145 178;
+  --cyan-600: 14 116 144;
+  --blue-600: 37 99 235;
+  --indigo-300: 67 56 202;
+  --indigo-400: 79 70 229;
+  --indigo-700: 67 56 202;
+  --indigo-800: 199 210 254;
+  --indigo-950: 238 242 255;
+  --emerald-300: 4 120 87;
+  --emerald-400: 4 120 87;
+  --emerald-800: 167 243 208;
+  --emerald-950: 236 253 245;
+  --amber-200: 146 64 14;
+  --amber-300: 180 83 9;
+  --amber-400: 180 83 9;
+  --amber-500: 217 119 6;
+  --amber-950: 255 251 235;
+  --rose-300: 190 18 60;
+  --rose-400: 190 18 60;
+  --rose-500: 225 29 72;
+
+  --scrollbar-track: 241 245 249;
+  --scrollbar-thumb: 148 163 184;
+  --scrollbar-thumb-hover: 100 116 139;
+
+  --chart-grid: rgba(100, 116, 139, 0.2);
+  --chart-full-boundary: rgba(71, 85, 105, 0.65);
+  --chart-feasible: #0369a1;
+  --chart-oxygen: #047857;
+  --chart-nitrogen: #4338ca;
+  --chart-helium: #b45309;
+  --chart-bank: #0369a1;
+  --chart-point-outline: #334155;
+  --chart-marker-outline: #334155;
+  --chart-label: #475569;
+  --chart-air: #475569;
+  --chart-badge: rgba(255, 255, 255, 0.96);
+  --chart-badge-text: #0f172a;
+  --chart-badge-subtext: #475569;
+  --chart-direct: rgba(71, 85, 105, 0.55);
+  --chart-init: #be123c;
+  --chart-target: #047857;
+  --chart-path-1: #0369a1;
+  --chart-path-2: #b45309;
+  --chart-path-3: #047857;
+  --chart-path-4: #7e22ce;
+  --chart-path-5: #be185d;
+}
+
+/* Custom scrollbar and subtle transitions */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: rgb(var(--scrollbar-track)); }
+::-webkit-scrollbar-thumb { background: rgb(var(--scrollbar-thumb)); border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover { background: rgb(var(--scrollbar-thumb-hover)); }
+.tableau-table td, .tableau-table th { padding: 5px 8px; font-size: 11px; white-space: nowrap; }
