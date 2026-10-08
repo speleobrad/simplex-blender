@@ -175,6 +175,51 @@
             </div>
           </div>
 
+          <div class="col-span-2 grid grid-cols-1 gap-3 rounded-xl border border-ocean-800/80 bg-ocean-950/60 p-3 sm:grid-cols-2">
+            <div>
+              <label for="tank-material" class="mb-1 block text-slate-400 font-medium">Tank material</label>
+              <select id="tank-material" data-recalculate="change" class="w-full rounded-lg border border-ocean-700 bg-ocean-900 px-2.5 py-1.5 text-slate-100 focus:border-cyan-400 focus:outline-none">
+                <option value="steel">Steel</option>
+                <option value="aluminum">Aluminum</option>
+              </select>
+            </div>
+            <div>
+              <label for="cooling-medium" class="mb-1 block text-slate-400 font-medium">Surrounding medium</label>
+              <select id="cooling-medium" data-recalculate="change" class="w-full rounded-lg border border-ocean-700 bg-ocean-900 px-2.5 py-1.5 text-slate-100 focus:border-cyan-400 focus:outline-none">
+                <option value="air">Air</option>
+                <option value="water">Water</option>
+              </select>
+            </div>
+            <div>
+              <label for="ambient-temperature" class="mb-1 block text-slate-400 font-medium">Ambient temperature</label>
+              <div class="flex items-center gap-2">
+                <input type="number" id="ambient-temperature" value="20" min="0" max="50" step="0.1" data-recalculate="input" class="min-w-0 flex-1 rounded-lg border border-ocean-700 bg-ocean-900 px-2.5 py-1.5 font-mono text-slate-100 focus:border-cyan-400 focus:outline-none">
+                <span class="font-mono text-slate-400">°C</span>
+              </div>
+            </div>
+            <div>
+              <label for="wait-mode" class="mb-1 block text-slate-400 font-medium">Wait between fills</label>
+              <select id="wait-mode" data-recalculate="change" class="w-full rounded-lg border border-ocean-700 bg-ocean-900 px-2.5 py-1.5 text-slate-100 focus:border-cyan-400 focus:outline-none">
+                <option value="minutes">Fixed minutes</option>
+                <option value="temperature">Target temperature</option>
+              </select>
+            </div>
+            <div id="wait-minutes-field">
+              <label for="wait-minutes" class="mb-1 block text-slate-400 font-medium">Wait time</label>
+              <div class="flex items-center gap-2">
+                <input type="number" id="wait-minutes" value="10" min="0" max="1440" step="1" data-recalculate="input" class="min-w-0 flex-1 rounded-lg border border-ocean-700 bg-ocean-900 px-2.5 py-1.5 font-mono text-slate-100 focus:border-cyan-400 focus:outline-none">
+                <span class="font-mono text-slate-400">min</span>
+              </div>
+            </div>
+            <div id="wait-target-temperature-field" hidden>
+              <label for="wait-target-temperature" class="mb-1 block text-slate-400 font-medium">Target temperature</label>
+              <div class="flex items-center gap-2">
+                <input type="number" id="wait-target-temperature" value="25" min="0" max="100" step="0.1" data-recalculate="input" class="min-w-0 flex-1 rounded-lg border border-ocean-700 bg-ocean-900 px-2.5 py-1.5 font-mono text-slate-100 focus:border-cyan-400 focus:outline-none">
+                <span class="font-mono text-slate-400">°C</span>
+              </div>
+            </div>
+          </div>
+
 
           <!-- Initial State -->
           <div class="col-span-2 sm:col-span-1 bg-ocean-850/60 p-3 rounded-xl border border-ocean-700/60">

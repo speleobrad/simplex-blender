@@ -258,6 +258,13 @@ function handleSettingsClosed() {
 }
 
 
+function updateWaitModeFields() {
+  const isMinutesMode = byId('wait-mode').value === 'minutes';
+  byId('wait-minutes-field').hidden = !isMinutesMode;
+  byId('wait-target-temperature-field').hidden = isMinutesMode;
+}
+
+
 function readInput() {
   return {
     cylinder: {
@@ -273,10 +280,17 @@ function readInput() {
       model: byId('gas-physics-model').value === 'vdw' ? 'vdw' : 'ideal',
       temperatureC: numberValue('blend-temp')
     },
+    thermal: {
+      tankMaterial: byId('tank-material').value,
+      coolingMedium: byId('cooling-medium').value,
+      ambientTemperatureC: numberValue('ambient-temperature'),
+      waitMode: byId('wait-mode').value,
+      waitMinutes: numberValue('wait-minutes'),
+      targetTemperatureC: numberValue('wait-target-temperature')
+    },
     banks: state.banks
   };
 }
-
 
 function ternaryData() {
   if (!state.lastInput || !state.lastResult?.feasible) return null;
@@ -296,6 +310,8 @@ function ternaryData() {
     trajectory: state.lastResult.trajectory
   };
 }
+
+
 
 function renderTernary() {
   const data = ternaryData();
@@ -319,7 +335,7 @@ function invalidInputResult(errors) {
 
 function recalculate() {
   const input = { ...readInput(), settings: state.settings };
-  const inputErrors = validateCalculatorInputs(input.cylinder, input.physics);
+  const inputErrors = validateCalculatorInputs(input.cylinder, input.physics, input.thermal);
   const result = inputErrors.length > 0 ? invalidInputResult(inputErrors) : optimizeBlend(input);
   state.lastInput = input;
   state.lastResult = result;
@@ -465,6 +481,7 @@ function handleInputOrChange(event) {
   if (target.dataset.recalculate === event.type) {
     markGasPresetCustom(target);
     if (target.id === 'cyl-vol-custom') byId('cyl-vol-preset').value = 'custom';
+    if (target.id === 'wait-mode') updateWaitModeFields();
     recalculate();
     return;
   }
@@ -540,6 +557,7 @@ function initialize() {
   applyTheme(state.theme);
   updateStorageWarning();
   refreshPresetOptions();
+  updateWaitModeFields();
   observeTernaryCanvas(byId('ternary-canvas'), renderTernary);
   recalculate();
 }

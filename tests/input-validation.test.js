@@ -35,3 +35,35 @@ test('rejects blank and out-of-range cylinder inputs', () => {
     assert.match(validateCalculatorInputs(cylinder, physics).join(' '), expectedMessage);
   }
 });
+
+test('rejects a temperature wait target at or below ambient', () => {
+  const errors = validateCalculatorInputs(
+    { volumeL: 12, initialPressureBar: 80, targetPressureBar: 210 },
+    { temperatureC: 20 },
+    {
+      tankMaterial: 'steel',
+      coolingMedium: 'air',
+      ambientTemperatureC: 25,
+      waitMode: 'temperature',
+      waitMinutes: 10,
+      targetTemperatureC: 25
+    }
+  );
+  assert.match(errors.join(' '), /target.*ambient/i);
+});
+
+test('rejects unsupported thermal selectors and negative fixed waits', () => {
+  const errors = validateCalculatorInputs(
+    { volumeL: 12, initialPressureBar: 80, targetPressureBar: 210 },
+    { temperatureC: 20 },
+    {
+      tankMaterial: 'carbon',
+      coolingMedium: 'oil',
+      ambientTemperatureC: 20,
+      waitMode: 'temperature',
+      waitMinutes: -1,
+      targetTemperatureC: 25
+    }
+  );
+  assert.ok(errors.length >= 3);
+});

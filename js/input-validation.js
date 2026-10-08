@@ -1,6 +1,6 @@
 import { isValidGasComposition } from './gas-input.js';
 
-export function validateCalculatorInputs(cylinder, physics) {
+export function validateCalculatorInputs(cylinder, physics, thermal) {
   const errors = [];
   if (!Number.isFinite(cylinder?.volumeL) || cylinder.volumeL < 0.1) {
     errors.push('Cylinder capacity must be at least 0.1 L.');
@@ -16,6 +16,36 @@ export function validateCalculatorInputs(cylinder, physics) {
   if (!Number.isFinite(physics?.temperatureC)
     || physics.temperatureC < 0 || physics.temperatureC > 50) {
     errors.push('Temperature must be between 0 and 50°C.');
+  }
+  if (thermal === undefined) return errors;
+
+  if (!thermal || typeof thermal !== 'object') {
+    errors.push('Thermal input must be an object.');
+    return errors;
+  }
+  if (!['steel', 'aluminum'].includes(thermal.tankMaterial)) {
+    errors.push('Thermal tank material must be steel or aluminum.');
+  }
+  if (!['air', 'water'].includes(thermal.coolingMedium)) {
+    errors.push('Thermal cooling medium must be air or water.');
+  }
+  if (!Number.isFinite(thermal.ambientTemperatureC)
+    || thermal.ambientTemperatureC < 0 || thermal.ambientTemperatureC > 50) {
+    errors.push('Thermal ambient temperature must be between 0 and 50°C.');
+  }
+  if (!['minutes', 'temperature'].includes(thermal.waitMode)) {
+    errors.push('Thermal wait mode must be minutes or temperature.');
+  }
+  if (!Number.isFinite(thermal.waitMinutes)
+    || thermal.waitMinutes < 0 || thermal.waitMinutes > 1440) {
+    errors.push('Thermal wait minutes must be between 0 and 1440.');
+  }
+  if (!Number.isFinite(thermal.targetTemperatureC)
+    || thermal.targetTemperatureC < 0 || thermal.targetTemperatureC > 100) {
+    errors.push('Thermal target temperature must be between 0 and 100°C.');
+  } else if (Number.isFinite(thermal.ambientTemperatureC)
+    && thermal.targetTemperatureC <= thermal.ambientTemperatureC) {
+    errors.push('Thermal target temperature must be above ambient temperature.');
   }
   return errors;
 }
