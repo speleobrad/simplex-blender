@@ -104,8 +104,19 @@ function renderVolumeRows(presets) {
 export function renderSettingsDialog(settings) {
   renderGasRows(settings.gasPresets);
   renderVolumeRows(settings.volumePresets);
-  const minimumSourcePressure = document.getElementById('settings-booster-min-source-pressure');
-  if (minimumSourcePressure) minimumSourcePressure.value = String(settings.booster.minimumSourcePressureBar);
+  const boosterFields = {
+    'settings-booster-min-source-pressure': settings.booster.minimumSourcePressureBar,
+    'settings-booster-cylinder-volume': settings.booster.cylinderVolumeCm3,
+    'settings-booster-oxygen-bpm': settings.booster.oxygenBoostBpm,
+    'settings-booster-other-bpm': settings.booster.otherBoostBpm,
+    'settings-booster-oxygen-decant-rate': settings.booster.oxygenDecantRateBarPerMin,
+    'settings-booster-other-decant-rate': settings.booster.otherDecantRateBarPerMin,
+    'settings-compressor-inlet-flow': settings.booster.compressorInletFlowLPerMin
+  };
+  for (const [id, value] of Object.entries(boosterFields)) {
+    const input = document.getElementById(id);
+    if (input) input.value = String(value);
+  }
 }
 
 function createOption(value, label) {

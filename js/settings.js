@@ -11,7 +11,15 @@ export const DEFAULT_SETTINGS = Object.freeze({
     Object.freeze({ name: 'Pure He', oxygenPercent: 0, heliumPercent: 100 })
   ]),
   volumePresets: Object.freeze([3, 5, 7, 10, 12, 15, 18, 24]),
-  booster: Object.freeze({ minimumSourcePressureBar: 20 })
+  booster: Object.freeze({
+    minimumSourcePressureBar: 20,
+    cylinderVolumeCm3: 9,
+    oxygenBoostBpm: 50,
+    otherBoostBpm: 50,
+    oxygenDecantRateBarPerMin: 5,
+    otherDecantRateBarPerMin: 5,
+    compressorInletFlowLPerMin: 100
+  })
 });
 
 function copySettings(settings) {
@@ -23,7 +31,13 @@ function copySettings(settings) {
     })),
     volumePresets: [...settings.volumePresets],
     booster: {
-      minimumSourcePressureBar: settings.booster.minimumSourcePressureBar
+      minimumSourcePressureBar: settings.booster.minimumSourcePressureBar,
+      cylinderVolumeCm3: settings.booster.cylinderVolumeCm3,
+      oxygenBoostBpm: settings.booster.oxygenBoostBpm,
+      otherBoostBpm: settings.booster.otherBoostBpm,
+      oxygenDecantRateBarPerMin: settings.booster.oxygenDecantRateBarPerMin,
+      otherDecantRateBarPerMin: settings.booster.otherDecantRateBarPerMin,
+      compressorInletFlowLPerMin: settings.booster.compressorInletFlowLPerMin
     }
   };
 }
@@ -35,7 +49,7 @@ function addDefaultBooster(settings) {
   return {
     ...settings,
     booster: {
-      minimumSourcePressureBar: DEFAULT_SETTINGS.booster.minimumSourcePressureBar,
+      ...DEFAULT_SETTINGS.booster,
       ...booster
     }
   };
@@ -46,10 +60,41 @@ export function validateSettings(settings) {
   if (!settings || !Array.isArray(settings.gasPresets) || !Array.isArray(settings.volumePresets)) {
     return ['Settings must contain gas and volume preset lists.'];
   }
-  if (!settings.booster || !Number.isFinite(settings.booster.minimumSourcePressureBar)
-    || settings.booster.minimumSourcePressureBar < 0
-    || settings.booster.minimumSourcePressureBar > 100) {
+  const booster = settings.booster;
+  if (!booster || !Number.isFinite(booster.minimumSourcePressureBar)
+    || booster.minimumSourcePressureBar < 0
+    || booster.minimumSourcePressureBar > 100) {
     errors.push('Booster minimum source pressure must be between 0 and 100 bar.');
+  }
+  if (!Number.isFinite(booster?.cylinderVolumeCm3)
+    || booster.cylinderVolumeCm3 < 0.1
+    || booster.cylinderVolumeCm3 > 1000) {
+    errors.push('Booster cylinder volume must be between 0.1 and 1000 cm³.');
+  }
+  if (!Number.isFinite(booster?.oxygenBoostBpm)
+    || booster.oxygenBoostBpm < 1
+    || booster.oxygenBoostBpm > 1000) {
+    errors.push('Oxygen booster speed must be between 1 and 1000 BPM.');
+  }
+  if (!Number.isFinite(booster?.otherBoostBpm)
+    || booster.otherBoostBpm < 1
+    || booster.otherBoostBpm > 1000) {
+    errors.push('Other-gas booster speed must be between 1 and 1000 BPM.');
+  }
+  if (!Number.isFinite(booster?.oxygenDecantRateBarPerMin)
+    || booster.oxygenDecantRateBarPerMin < 0.01
+    || booster.oxygenDecantRateBarPerMin > 1000) {
+    errors.push('Oxygen manual decant rate must be between 0.01 and 1000 bar/min.');
+  }
+  if (!Number.isFinite(booster?.otherDecantRateBarPerMin)
+    || booster.otherDecantRateBarPerMin < 0.01
+    || booster.otherDecantRateBarPerMin > 1000) {
+    errors.push('Other-gas manual decant rate must be between 0.01 and 1000 bar/min.');
+  }
+  if (!Number.isFinite(booster?.compressorInletFlowLPerMin)
+    || booster.compressorInletFlowLPerMin < 0.1
+    || booster.compressorInletFlowLPerMin > 10000) {
+    errors.push('Compressor inlet flow must be between 0.1 and 10000 L/min.');
   }
 
   const names = new Set();

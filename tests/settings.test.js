@@ -23,7 +23,7 @@ test('saved gas and volume presets survive a load/save round trip', () => {
   const settings = {
     gasPresets: [{ name: 'Tx 16/50', oxygenPercent: 16, heliumPercent: 50 }],
     volumePresets: [11, 22],
-    booster: { minimumSourcePressureBar: 20 }
+    booster: { ...DEFAULT_SETTINGS.booster }
   };
   saveSettings(settings, storage);
   assert.deepEqual(loadSettings(storage), settings);
@@ -34,7 +34,7 @@ test('saved settings preserve the shared booster minimum source pressure', () =>
   const settings = {
     gasPresets: [{ name: 'Tx 16/50', oxygenPercent: 16, heliumPercent: 50 }],
     volumePresets: [11, 22],
-    booster: { minimumSourcePressureBar: 27 }
+    booster: { ...DEFAULT_SETTINGS.booster, minimumSourcePressureBar: 27 }
   };
   saveSettings(settings, storage);
   assert.deepEqual(loadSettings(storage), settings);
@@ -49,6 +49,64 @@ test('old settings gain the default shared booster minimum', () => {
     })
   ]]);
   assert.equal(loadSettings(storage).booster.minimumSourcePressureBar, 20);
+});
+
+test('old settings gain all thermodynamic booster defaults', () => {
+  const storage = memoryStorage([[
+    'simplex-gas-remixer-settings',
+    JSON.stringify({
+      gasPresets: [{ name: 'Air', oxygenPercent: 21, heliumPercent: 0 }],
+      volumePresets: [12],
+      booster: { minimumSourcePressureBar: 25 }
+    })
+  ]]);
+
+  const settings = loadSettings(storage);
+
+  assert.deepEqual(settings.booster, {
+    minimumSourcePressureBar: 25,
+    cylinderVolumeCm3: 9,
+    oxygenBoostBpm: 50,
+    otherBoostBpm: 50,
+    oxygenDecantRateBarPerMin: 5,
+    otherDecantRateBarPerMin: 5,
+    compressorInletFlowLPerMin: 100
+  });
+});
+
+test('invalid thermodynamic booster settings are rejected before storage changes', () => {
+  const storage = memoryStorage();
+  assert.throws(() => saveSettings({
+    ...DEFAULT_SETTINGS,
+    booster: {
+      ...DEFAULT_SETTINGS.booster,
+      cylinderVolumeCm3: 0,
+      oxygenDecantRateBarPerMin: -1
+    }
+  }, storage), /cylinder.*cm|decant/i);
+  assert.equal(storage.getItem('simplex-gas-remixer-settings'), null);
+});
+
+test('thermodynamic booster settings survive a save/load round trip', () => {
+  const settings = {
+    ...DEFAULT_SETTINGS,
+    gasPresets: DEFAULT_SETTINGS.gasPresets.map(preset => ({ ...preset })),
+    volumePresets: [...DEFAULT_SETTINGS.volumePresets],
+    booster: {
+      minimumSourcePressureBar: 18,
+      cylinderVolumeCm3: 12,
+      oxygenBoostBpm: 40,
+      otherBoostBpm: 55,
+      oxygenDecantRateBarPerMin: 3,
+      otherDecantRateBarPerMin: 7,
+      compressorInletFlowLPerMin: 160
+    }
+  };
+  const storage = memoryStorage();
+
+  saveSettings(settings, storage);
+
+  assert.deepEqual(loadSettings(storage).booster, settings.booster);
 });
 
 test('unreadable or invalid saved settings fall back to defaults', () => {
