@@ -779,6 +779,37 @@ function validateBlendInput(input) {
   return errors;
 }
 
+function validateThermalInput(thermal) {
+  if (!thermal || typeof thermal !== 'object') return ['Thermal input must be an object.'];
+
+  const errors = [];
+  if (!['steel', 'aluminum'].includes(thermal.tankMaterial)) {
+    errors.push('Thermal tank material must be steel or aluminum.');
+  }
+  if (!['air', 'water'].includes(thermal.coolingMedium)) {
+    errors.push('Thermal cooling medium must be air or water.');
+  }
+  if (!Number.isFinite(thermal.ambientTemperatureC)
+    || thermal.ambientTemperatureC < 0 || thermal.ambientTemperatureC > 50) {
+    errors.push('Thermal ambient temperature must be between 0 and 50°C.');
+  }
+  if (!['minutes', 'temperature'].includes(thermal.waitMode)) {
+    errors.push('Thermal wait mode must be minutes or temperature.');
+  }
+  if (!Number.isFinite(thermal.waitMinutes)
+    || thermal.waitMinutes < 0 || thermal.waitMinutes > 1440) {
+    errors.push('Thermal wait minutes must be between 0 and 1440.');
+  }
+  if (!Number.isFinite(thermal.targetTemperatureC)
+    || thermal.targetTemperatureC < 0 || thermal.targetTemperatureC > 100) {
+    errors.push('Thermal target temperature must be between 0 and 100°C.');
+  } else if (Number.isFinite(thermal.ambientTemperatureC)
+    && thermal.targetTemperatureC <= thermal.ambientTemperatureC) {
+    errors.push('Thermal target temperature must be above ambient temperature.');
+  }
+  return errors;
+}
+
 function optimizeBlendWithoutThermal(input) {
   const inputErrors = validateBlendInput(input);
   if (inputErrors.length > 0) {
@@ -1375,6 +1406,7 @@ function optimizeBlendWithoutThermal(input) {
 }
 
 const THERMAL_TARGET_TOLERANCE_BAR = 1e-5;
+const MINIMUM_TARGET_PRESSURE_BAR = 10;
 const MAXIMUM_TARGET_PRESSURE_BAR = 350;
 
 function evaluateThermalCandidate(input, optimizeStatic, targetPressureBar) {
@@ -1451,6 +1483,14 @@ function thermalLimitResult(input, requested, maximum) {
 }
 
 function optimizeThermalBlend(input, optimizeStatic) {
+  const inputErrors = [
+    ...validateBlendInput(input),
+    ...validateThermalInput(input?.thermal)
+  ];
+  if (inputErrors.length > 0) {
+    return failedResult(`Invalid blend input: ${inputErrors.join(' ')}`, null, []);
+  }
+
   const requestedPressureBar = input.cylinder.targetPressureBar;
   const requested = evaluateThermalCandidate(input, optimizeStatic, requestedPressureBar);
   if (!requested.result.feasible) return thermalizedMaximumResult(requested);
@@ -1460,7 +1500,46 @@ function optimizeThermalBlend(input, optimizeStatic) {
   if (Math.abs(requestedPressureDifference) <= THERMAL_TARGET_TOLERANCE_BAR) {
     return thermalResult(requested);
   }
-  if (requestedPressureDifference > 0) return thermalResult(requested);
+  if (requestedPressureDifference > 0) {
+    const floor = evaluateThermalCandidate(
+      input,
+      optimizeStatic,
+      MINIMUM_TARGET_PRESSURE_BAR
+    );
+    if (!floor.result.feasible) return thermalizedMaximumResult(floor);
+
+    const floorPressureDifference = floor.simulation.final.finalAmbientPressureBar
+      - requestedPressureBar;
+    if (Math.abs(floorPressureDifference) <= THERMAL_TARGET_TOLERANCE_BAR) {
+      return thermalResult(floor);
+    }
+    if (floorPressureDifference > 0) return thermalLimitResult(input, requested, requested);
+
+    let lowerPressureBar = MINIMUM_TARGET_PRESSURE_BAR;
+    let upperPressureBar = requestedPressureBar;
+    let ambientTargetCandidate = requested;
+    for (let iteration = 0; iteration < 40; iteration++) {
+      const candidatePressureBar = (lowerPressureBar + upperPressureBar) / 2;
+      const candidate = evaluateThermalCandidate(input, optimizeStatic, candidatePressureBar);
+      if (!candidate.result.feasible) {
+        lowerPressureBar = candidatePressureBar;
+        continue;
+      }
+
+      const pressureDifference = candidate.simulation.final.finalAmbientPressureBar
+        - requestedPressureBar;
+      if (Math.abs(pressureDifference) <= THERMAL_TARGET_TOLERANCE_BAR) {
+        return thermalResult(candidate);
+      }
+      if (pressureDifference < 0) {
+        lowerPressureBar = candidatePressureBar;
+      } else {
+        upperPressureBar = candidatePressureBar;
+        ambientTargetCandidate = candidate;
+      }
+    }
+    return thermalResult(ambientTargetCandidate);
+  }
 
   const ceiling = evaluateThermalCandidate(input, optimizeStatic, MAXIMUM_TARGET_PRESSURE_BAR);
   if (ceiling.result.feasible) {

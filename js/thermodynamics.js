@@ -219,6 +219,13 @@ function rateForProtocolStep({
   const sourceHeliumPercent = step.sourceHeliumPercent ?? receiverMix.heliumPercent;
   const isOxygenRich = sourceOxygenPercent >= OXYGEN_RICH_THRESHOLD;
   const pressureIncreaseBar = Math.max(0, transferEndPressureBar - currentPressureBar);
+  if (pressureIncreaseBar <= 0) {
+    return {
+      rateSource: 'none',
+      rateBarPerMin: null,
+      pressureIncreaseBar
+    };
+  }
   const useVdw = physics.model === 'vdw';
 
   if (step.operation === 'Top-up') {
@@ -292,6 +299,29 @@ export function simulateThermalProtocol({
     ?? protocolSteps[0]?.resultingPressureBar
     ?? 0;
   let currentTemperatureC = physics.temperatureC;
+  if (protocolSteps.length === 0) {
+    const initialOxygenPercent = cylinder.initialOxygenPercent ?? 0;
+    const initialHeliumPercent = cylinder.initialHeliumPercent ?? 0;
+    const finalAmbientPressureBar = calculatePressureAtTemperature({
+      pressureBar: currentPressureBar,
+      oxygenPercent: initialOxygenPercent,
+      heliumPercent: initialHeliumPercent,
+      fromTemperatureC: currentTemperatureC,
+      toTemperatureC: thermal.ambientTemperatureC,
+      volumeL: cylinder.volumeL,
+      useVdw
+    });
+    return {
+      protocolSteps: [],
+      final: {
+        finalTransferEndPressureBar: currentPressureBar,
+        finalTransferEndTemperatureC: currentTemperatureC,
+        finalAmbientPressureBar,
+        finalAmbientTemperatureC: thermal.ambientTemperatureC
+      }
+    };
+  }
+
 
   const simulatedProtocolSteps = protocolSteps.map((step, index) => {
     const transferEndPressureBar = stepTransferEndPressure(step, currentPressureBar);

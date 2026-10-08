@@ -1098,3 +1098,100 @@ test('thermal recipe overshoots the last hot target so ambient pressure reaches 
   assert.ok(result.thermal.finalTransferEndPressureBar > 210);
   assert.ok(Math.abs(result.thermal.finalAmbientPressureBar - 210) < 1e-5);
 });
+
+test('rejects invalid thermal inputs with the existing invalid result shape', () => {
+  const input = {
+    cylinder: {
+      volumeL: 12,
+      initialPressureBar: 80,
+      initialOxygenPercent: 21,
+      initialHeliumPercent: 0,
+      targetPressureBar: 210,
+      targetOxygenPercent: 21,
+      targetHeliumPercent: 0
+    },
+    physics: { model: 'ideal', temperatureC: 20 },
+    banks: [{
+      id: 'air', name: 'Air', volumeL: 80, pressureBar: 300,
+      oxygenPercent: 21, heliumPercent: 0, enabled: true
+    }]
+  };
+  const validThermal = {
+    tankMaterial: 'steel',
+    coolingMedium: 'air',
+    ambientTemperatureC: 20,
+    waitMode: 'minutes',
+    waitMinutes: 10,
+    targetTemperatureC: 25
+  };
+
+  for (const thermal of [
+    { ...validThermal, tankMaterial: 'carbon' },
+    { ...validThermal, coolingMedium: 'oil' },
+    { ...validThermal, waitMode: 'hours' },
+    { ...validThermal, waitMinutes: -1 },
+    { ...validThermal, waitMode: 'temperature', targetTemperatureC: 20 }
+  ]) {
+    const result = optimizeBlend({ ...input, thermal });
+
+    assert.equal(result.feasible, false);
+    assert.equal(result.gas, null);
+    assert.equal(result.solution, null);
+    assert.equal(result.blend, null);
+    assert.deepEqual(result.protocolSteps, []);
+    assert.deepEqual(result.trajectory, []);
+    assert.equal(result.maximumPressure, null);
+    assert.equal(result.diagnostics, null);
+    assert.match(result.error, /invalid blend input:.*thermal/i);
+  }
+
+  const missingCylinder = optimizeBlend({ thermal: validThermal });
+  assert.equal(missingCylinder.feasible, false);
+  assert.equal(missingCylinder.gas, null);
+  assert.equal(missingCylinder.solution, null);
+  assert.equal(missingCylinder.blend, null);
+  assert.deepEqual(missingCylinder.protocolSteps, []);
+  assert.deepEqual(missingCylinder.trajectory, []);
+  assert.equal(missingCylinder.maximumPressure, null);
+  assert.equal(missingCylinder.diagnostics, null);
+  assert.match(missingCylinder.error, /invalid blend input:.*cylinder/i);
+});
+
+test('thermal target search lowers the hot recipe when ambient warming raises pressure', () => {
+  const result = optimizeBlend({
+    cylinder: {
+      volumeL: 12,
+      initialPressureBar: 80,
+      initialOxygenPercent: 21,
+      initialHeliumPercent: 0,
+      targetPressureBar: 80,
+      targetOxygenPercent: 21,
+      targetHeliumPercent: 0
+    },
+    physics: { model: 'ideal', temperatureC: 20 },
+    thermal: {
+      tankMaterial: 'steel',
+      coolingMedium: 'air',
+      ambientTemperatureC: 30,
+      waitMode: 'minutes',
+      waitMinutes: 10,
+      targetTemperatureC: 35
+    },
+    settings: {
+      booster: {
+        minimumSourcePressureBar: 0,
+        cylinderVolumeCm3: 9,
+        oxygenBoostBpm: 50,
+        otherBoostBpm: 50,
+        oxygenDecantRateBarPerMin: 5,
+        otherDecantRateBarPerMin: 5,
+        compressorInletFlowLPerMin: 100
+      }
+    },
+    banks: []
+  });
+
+  assert.equal(result.feasible, true);
+  assert.ok(result.thermal.finalTransferEndPressureBar < 80);
+  assert.ok(Math.abs(result.thermal.finalAmbientPressureBar - 80) < 1e-5);
+});
