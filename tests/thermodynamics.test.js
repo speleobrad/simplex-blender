@@ -43,7 +43,7 @@ test('booster clearance efficiency falls when receiver pressure exceeds source p
     useVdw: false
   });
 
-  assert.ok(rate.volumetricEfficiency < 98);
+  assert.ok(rate.volumetricEfficiency > 0.96 && rate.volumetricEfficiency < 0.98);
   assert.ok(rate.fillRateBarPerMin > 0);
 });
 
@@ -88,6 +88,20 @@ test('pressure falls when a hot ideal-gas tank cools at fixed density', () => {
     useVdw: false
   });
   assert.ok(Math.abs(pressure - 175.989) < 0.01);
+});
+
+test('pressure projection uses the selected Van der Waals model', () => {
+  const pressure = calculatePressureAtTemperature({
+    pressureBar: 200,
+    oxygenPercent: 21,
+    heliumPercent: 0,
+    fromTemperatureC: 60,
+    toTemperatureC: 20,
+    volumeL: 12,
+    useVdw: true
+  });
+
+  assert.ok(Math.abs(pressure - 167.5505) < 1e-3);
 });
 
 test('compression temperature increases with pressure and is cooled faster in water', () => {
