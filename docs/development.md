@@ -12,7 +12,7 @@ Open `http://127.0.0.1:8000/scuba_gas_remixer_simplex_optimizer.html`. Tailwind 
 
 ## Tests
 
-Node's built-in test runner covers gas physics, strict numeric parsing, calculator and bank input bounds, scale-aware simplex feasibility and recovered-solution constraint checks, tiny-drain pressure and retained-mole precision, blend optimization and stage ratios, preset and bank persistence/validation, slash-delimited gas entry, and ternary geometry/zoom limits. Run:
+Node's built-in test runner covers gas physics, strict numeric parsing, calculator and bank input bounds, thermal transfer/cooling calculations, scale-aware simplex feasibility and recovered-solution constraint checks, tiny-drain pressure and retained-mole precision, blend optimization and stage ratios, preset and bank persistence/validation, slash-delimited gas entry, and ternary geometry/zoom limits. Run:
 
 ```sh
 npm test
@@ -37,5 +37,7 @@ After serving the page, verify that:
 11. With a deliberately limited Pure He bank, verify the fallback alert reports the required source-bank pressure, current pressure, shared booster minimum, and volume, with no mole quantities; verify out-of-range real-gas source estimates are reported as unavailable rather than as a numeric pressure sentinel.
 12. With a 0.1 L cylinder and no enabled banks, 10 bar at 21/0 to 10 bar at 23/0 is infeasible. With a 12 L ideal-gas cylinder at 10.4 bar, 21/0 to 10 bar, 21/0, verify the protocol includes the required 0.4 bar drain and ends at the reported final pressure. A 12 L cylinder at 10 bar, 21.00/0 to 10 bar, 21.01/0 with a Pure Oxygen bank must display a nonzero small drain rather than `0.00 bar`.
 13. With a 0.1 L ideal-gas cylinder at 50°C, 10.0000002 bar, 21/0 to 10 bar, 21/0, and no banks, verify the protocol emits the representable small drain instead of preserving all gas and reports the retained amount above zero.
+
+14. Set thermal tank inputs and run a recipe with at least one transfer. Each thermal step reports its rate source/rate/duration, transfer-end pressure and temperature, wait, and post-wait pressure and temperature. The final step labels its full ambient cool-off. Confirm the final hot transfer-end pressure is above the requested target and the final ambient-settled pressure returns to the requested target. Treat these values as estimates: actual transfer rate, compression heat, and cooling vary with equipment, gas flow, and environmental conditions.
 
 See [Architecture](architecture.md) for runtime module responsibilities.

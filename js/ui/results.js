@@ -29,7 +29,7 @@ function renderDiagnosticDetails(diagnostics) {
 }
 
 
-function renderInfeasible(error, maximumPressure, requestedPressureBar, oxygenPercent, heliumPercent, diagnostics) {
+function renderInfeasible(error, maximumPressure, requestedPressureBar, oxygenPercent, heliumPercent, diagnostics, thermal) {
   const message = document.createElement('div');
   message.className = 'p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs';
   message.setAttribute('role', 'alert');
@@ -47,18 +47,48 @@ function renderInfeasible(error, maximumPressure, requestedPressureBar, oxygenPe
   const requestedPressureReason = safetyReason
     ? `The exact target mix cannot safely reach ${requestedPressureBar.toFixed(1)} bar.`
     : `The exact target mix (${oxygenPercent}/${heliumPercent}) cannot reach ${requestedPressureBar.toFixed(1)} bar with the current gas supply.`;
+  const ambientPressure = thermal?.finalAmbientPressureBar;
+  const ambientEstimate = Number.isFinite(ambientPressure)
+    ? ` Predicted ambient-settled pressure is ${ambientPressure.toFixed(1)} bar.`
+    : '';
   description.textContent = maximumPressure
-    ? `${requestedPressureReason} ${diagnosticDetails} The maximum safely achievable pressure is ${maximumPressure.pressureBar.toFixed(1)} bar.${safetyReason} The recipe below makes that exact mix.`
-    : [error || 'The available gas banks cannot satisfy both the target pressure and exact gas fractions.', diagnosticDetails].filter(Boolean).join(' ');
+    ? `${requestedPressureReason} ${diagnosticDetails} The maximum safely achievable pressure is ${maximumPressure.pressureBar.toFixed(1)} bar.${safetyReason}${ambientEstimate} The recipe below makes that exact mix.`
+    : [error || 'The available gas banks cannot satisfy both the target pressure and exact gas fractions.', diagnosticDetails, ambientEstimate.trim()].filter(Boolean).join(' ');
   message.append(description);
   return message;
+}
+
+function formatThermalValue(value) {
+  return Number.isFinite(value) ? value.toFixed(1) : '—';
+}
+
+function renderThermalDetails(thermal, isFinalStep) {
+  if (!thermal) return null;
+
+  const details = document.createElement('div');
+  details.className = 'mt-2 text-[11px] text-slate-400 space-y-0.5';
+  const wait = isFinalStep
+    ? `Wait: Full ambient cool-off (4.6 × tau = ${formatThermalValue(thermal.waitMinutes)} min)`
+    : `Wait: ${formatThermalValue(thermal.waitMinutes)} min`;
+  const lines = [
+    `Rate: ${thermal.rateSource} · ${formatThermalValue(thermal.rateBarPerMin)} bar/min · ${formatThermalValue(thermal.durationMinutes)} min`,
+    `Transfer end: ${formatThermalValue(thermal.pressureAtTransferEndBar)} bar at ${formatThermalValue(thermal.temperatureAtTransferEndC)} °C`,
+    wait,
+    `After wait: ${formatThermalValue(thermal.pressureAfterWaitBar)} bar at ${formatThermalValue(thermal.temperatureAfterWaitC)} °C`
+  ];
+  for (const text of lines) {
+    const line = document.createElement('div');
+    line.textContent = text;
+    details.append(line);
+  }
+  return details;
 }
 
 function renderProtocol(protocolSteps, alertMessage = null) {
   const container = document.getElementById('steps-container');
   if (!container) return;
 
-  const cards = protocolSteps.map(step => {
+  const cards = protocolSteps.map((step, index) => {
     const card = document.createElement('div');
     card.className = 'p-3 bg-ocean-950/70 border border-ocean-800 rounded-xl flex items-start justify-between gap-3';
 
@@ -76,6 +106,8 @@ function renderProtocol(protocolSteps, alertMessage = null) {
     description.className = 'text-[11px] text-slate-400';
     description.textContent = step.description;
     details.append(heading, description);
+    const thermalDetails = renderThermalDetails(step.thermal, index === protocolSteps.length - 1);
+    if (thermalDetails) details.append(thermalDetails);
 
     const result = document.createElement('div');
     result.className = 'text-right font-mono shrink-0';
@@ -103,6 +135,24 @@ function renderBlendSummary(blend) {
   setText('res-final-mix', `Tx ${blend.finalOxygenPercent}/${blend.finalHeliumPercent}`);
 }
 
+function renderThermalSummary(thermal) {
+  const summary = document.getElementById('res-final-thermal');
+  if (!thermal) {
+    if (summary) summary.hidden = true;
+    return;
+  }
+
+  setText(
+    'res-final-transfer-end',
+    `${formatThermalValue(thermal.finalTransferEndPressureBar)} bar at ${formatThermalValue(thermal.finalTransferEndTemperatureC)} °C`
+  );
+  setText(
+    'res-final-ambient',
+    `${formatThermalValue(thermal.finalAmbientPressureBar)} bar at ${formatThermalValue(thermal.finalAmbientTemperatureC)} °C`
+  );
+  if (summary) summary.hidden = false;
+}
+
 export function renderResults(result) {
   if (result.gas) {
     setText('lbl-init-p', result.gas.initialPressureBar);
@@ -114,6 +164,8 @@ export function renderResults(result) {
   }
   if (!result.feasible) {
     const maximum = result.maximumPressure;
+    const thermal = result.thermal ?? maximum?.thermal;
+    renderThermalSummary(thermal);
     if (maximum) {
       renderBlendSummary(maximum.blend);
       renderProtocol(
@@ -124,7 +176,8 @@ export function renderResults(result) {
           result.gas.targetPressureBar,
           maximum.blend.finalOxygenPercent,
           maximum.blend.finalHeliumPercent,
-          result.diagnostics
+          result.diagnostics,
+          thermal
         )
       );
     } else {
@@ -139,11 +192,12 @@ export function renderResults(result) {
       ]) {
         setText(id, '—');
       }
-      renderProtocol([], renderInfeasible(result.error, null, 0, 0, 0, result.diagnostics));
+      renderProtocol([], renderInfeasible(result.error, null, 0, 0, 0, result.diagnostics, thermal));
     }
     return;
   }
 
   renderBlendSummary(result.blend);
+  renderThermalSummary(result.thermal);
   renderProtocol(result.protocolSteps);
 }
