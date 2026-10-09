@@ -6,7 +6,7 @@ import {
   calculateCoolingTime,
   calculatePressureAtTemperature,
   calculateTemperatureAfterWait,
-  estimateCompressionTemperature,
+  estimateTransferTemperature,
   simulateThermalProtocol
 } from '../js/thermodynamics.js';
 
@@ -106,8 +106,8 @@ test('pressure projection uses the selected Van der Waals model', () => {
   assert.ok(Math.abs(pressure - 167.5505) < 1e-3);
 });
 
-test('compression temperature increases with pressure and is cooled faster in water', () => {
-  const airSteel = estimateCompressionTemperature({
+test('transfer temperature increases with pressure and is cooled faster in water', () => {
+  const airSteel = estimateTransferTemperature({
     startTemperatureC: 20,
     addedPressureBar: 70,
     fillTimeMinutes: 10,
@@ -116,7 +116,7 @@ test('compression temperature increases with pressure and is cooled faster in wa
     tankMaterial: 'steel',
     coolingMedium: 'air'
   });
-  const heliumAluminumWater = estimateCompressionTemperature({
+  const heliumAluminumWater = estimateTransferTemperature({
     startTemperatureC: 20,
     addedPressureBar: 70,
     fillTimeMinutes: 10,
@@ -180,7 +180,10 @@ test('sequential simulation carries post-wait pressure and temperature into the 
   assert.equal(simulation.protocolSteps.length, 2);
   assert.equal(simulation.protocolSteps[0].thermal.rateSource, 'booster');
   assert.equal(simulation.protocolSteps[1].thermal.rateSource, 'decant-rate');
-  assert.ok(simulation.protocolSteps[0].thermal.pressureAfterWaitBar < 150);
+  assert.ok(
+    simulation.protocolSteps[1].thermal.temperatureAtTransferEndC
+      > simulation.protocolSteps[1].thermal.temperatureStartC
+  );
   assert.equal(
     simulation.protocolSteps[1].thermal.temperatureStartC,
     simulation.protocolSteps[0].thermal.temperatureAfterWaitC

@@ -149,7 +149,7 @@ export function calculatePressureAtTemperature({
   );
 }
 
-export function estimateCompressionTemperature({
+export function estimateTransferTemperature({
   startTemperatureC,
   addedPressureBar,
   fillTimeMinutes,
@@ -343,7 +343,8 @@ export function simulateThermalProtocol({
     const receiverMix = stepMix(step);
     const temperatureAtTransferEndC = transfer.rateSource === 'booster'
       || transfer.rateSource === 'compressor'
-      ? estimateCompressionTemperature({
+      || transfer.rateSource === 'decant-rate'
+      ? estimateTransferTemperature({
         startTemperatureC: currentTemperatureC,
         addedPressureBar: transfer.pressureIncreaseBar,
         fillTimeMinutes: durationMinutes,

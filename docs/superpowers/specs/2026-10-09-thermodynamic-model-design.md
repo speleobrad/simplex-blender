@@ -174,7 +174,7 @@ Gas factor is:
 kGas = 1 + 0.45 × heliumFraction
 ```
 
-Only booster and compressor transfers generate compression heating. The positive pressure increase is used as `addedPressureBar`:
+Every positive booster, compressor, decant, or equalize pressure increase generates transfer heating. The positive pressure increase is used as `addedPressureBar`:
 
 ```text
 deltaT = addedPressureBar × kSize × kGas
@@ -182,7 +182,7 @@ deltaT = addedPressureBar × kSize × kGas
 T_transferEnd = T_start + deltaT
 ```
 
-Decant, equalize, drain, keep, and zero-change stages do not add compression heat.
+Drain, keep, and zero-change stages do not add transfer heat.
 
 Cooling uses Newton's law. Time constants are:
 

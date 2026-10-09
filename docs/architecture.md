@@ -13,7 +13,7 @@
 - `js/gas-input.js` parses slash-delimited O₂/He paste input and provides strict numeric parsing and gas-composition validation without DOM dependencies.
 - `js/input-validation.js` enforces supported calculator ranges and supply-bank record constraints, shared by the UI, optimizer, and persistence layer.
 - `js/physics.js` contains pure gas-property functions, including compressibility-factor calculation from an already-known density; it has no DOM dependency.
-- `js/thermodynamics.js` simulates transfer rates, compression heating, and cooling waits for a completed protocol; it has no DOM dependency and returns thermal values alongside each step plus final transfer-end and ambient-settled estimates.
+- `js/thermodynamics.js` simulates transfer rates, transfer heating, and cooling waits for a completed protocol; it has no DOM dependency and returns thermal values alongside each step plus final transfer-end and ambient-settled estimates.
 - `js/optimizer.js` validates the gas model, calculator ranges, bank records, physical gas compositions, and thermal equipment input before constructing the requested-mix and maximum-pressure linear programs; it applies the shared booster minimum source pressure, rechecks recovered solver variables against the original constraints, applies the oxygen-transfer safety limit, and returns gas data, solver steps, protocol entries, thermal estimates, and ternary trajectory points carrying each used source bank's starting and residual pressure.
 - `js/ui/settings-dialog.js` renders the editable preset lists, shared booster setting, and refreshes cylinder gas/volume choices.
 - `js/ui/storage-warning.js` renders persistence and rejected-bank-edit warnings from controller state.

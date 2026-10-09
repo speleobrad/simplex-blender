@@ -30,7 +30,7 @@ After each boost from a bank with more than 25% O₂, the optimizer checks that 
 
 ## Thermal protocol estimates
 
-When the main-screen thermal tank inputs are present, `js/optimizer.js` passes the completed static protocol to `js/thermodynamics.js`. The simulation applies configured booster/compressor/decant rates, estimates compression heating, and applies the selected tank-material and cooling-medium time constant between stages. The final stage always receives a full ambient cool-off of `4.6 × tau`; its transfer-end gauge pressure can therefore differ from the requested pressure while the predicted ambient-settled pressure matches it.
+When the main-screen thermal tank inputs are present, `js/optimizer.js` passes the completed static protocol to `js/thermodynamics.js`. The simulation applies configured booster/compressor/decant rates, estimates transfer heating for each positive pressure increase, and applies the selected tank-material and cooling-medium time constant between stages. The final stage always receives a full ambient cool-off of `4.6 × tau`; its transfer-end gauge pressure can therefore differ from the requested pressure while the predicted ambient-settled pressure matches it.
 
 These are operational estimates, not a pressure guarantee: actual heating, transfer rate, and cooling depend on equipment condition, gas flow, fill technique, and the surrounding environment. The optimizer does not use the estimates to relax gas composition, supply capacity, or transfer-safety constraints.
 

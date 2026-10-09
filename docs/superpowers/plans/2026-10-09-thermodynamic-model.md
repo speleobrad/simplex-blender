@@ -151,7 +151,7 @@ Run: `git add js/settings.js js/ui/settings-dialog.js js/main.js scuba_gas_remix
 - `calculateCoolingTime({ transferEndTemperatureC, ambientTemperatureC, targetTemperatureC, tauMinutes })` returns minutes or zero.
 - `calculateTemperatureAfterWait({ transferEndTemperatureC, ambientTemperatureC, waitMinutes, tauMinutes })` returns °C.
 - `calculatePressureAtTemperature({ pressureBar, oxygenPercent, heliumPercent, fromTemperatureC, toTemperatureC, volumeL, useVdw })` preserves hot-state density and evaluates pressure at the new temperature.
-- `estimateCompressionTemperature({ startTemperatureC, addedPressureBar, fillTimeMinutes, volumeL, heliumFraction, tankMaterial, coolingMedium })` returns transfer-end °C.
+- `estimateTransferTemperature({ startTemperatureC, addedPressureBar, fillTimeMinutes, volumeL, heliumFraction, tankMaterial, coolingMedium })` returns transfer-end °C for any positive pressure-increasing transfer.
 
 - [ ] **Step 1: Write the failing pure-model tests**
 
@@ -166,7 +166,7 @@ import {
   calculateCoolingTime,
   calculatePressureAtTemperature,
   calculateTemperatureAfterWait,
-  estimateCompressionTemperature
+  estimateTransferTemperature
 } from '../js/thermodynamics.js';
 
 test('booster rate uses displacement, BPM, and receiver/source compressibility', () => {
@@ -250,8 +250,8 @@ test('pressure falls when a hot ideal-gas tank cools at fixed density', () => {
   assert.ok(Math.abs(pressure - 175.989) < 0.01);
 });
 
-test('compression temperature increases with pressure and is cooled faster in water', () => {
-  const airSteel = estimateCompressionTemperature({
+test('transfer temperature increases with pressure and is cooled faster in water', () => {
+  const airSteel = estimateTransferTemperature({
     startTemperatureC: 20,
     addedPressureBar: 70,
     fillTimeMinutes: 10,
@@ -260,7 +260,7 @@ test('compression temperature increases with pressure and is cooled faster in wa
     tankMaterial: 'steel',
     coolingMedium: 'air'
   });
-  const heliumAluminumWater = estimateCompressionTemperature({
+  const heliumAluminumWater = estimateTransferTemperature({
     startTemperatureC: 20,
     addedPressureBar: 70,
     fillTimeMinutes: 10,
