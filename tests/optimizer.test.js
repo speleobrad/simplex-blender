@@ -1095,6 +1095,8 @@ test('thermal recipe overshoots the last hot target so ambient pressure reaches 
   });
 
   assert.equal(result.feasible, true);
+  assert.equal(result.thermal.requestedSettledTargetPressureBar, 210);
+  assert.equal(result.gas.targetPressureBar, 210);
   assert.ok(result.thermal.finalTransferEndPressureBar > 210);
   assert.ok(Math.abs(result.thermal.finalAmbientPressureBar - 210) < 1e-5);
 });
@@ -1194,4 +1196,79 @@ test('thermal target search lowers the hot recipe when ambient warming raises pr
   assert.equal(result.feasible, true);
   assert.ok(result.thermal.finalTransferEndPressureBar < 80);
   assert.ok(Math.abs(result.thermal.finalAmbientPressureBar - 80) < 1e-5);
+});
+
+test('reports an infeasible result when the requested settled target exceeds the hot ceiling', () => {
+  const result = optimizeBlend({
+    cylinder: {
+      volumeL: 12,
+      initialPressureBar: 80,
+      initialOxygenPercent: 21,
+      initialHeliumPercent: 0,
+      targetPressureBar: 340,
+      targetOxygenPercent: 21,
+      targetHeliumPercent: 0
+    },
+    physics: { model: 'ideal', temperatureC: 20 },
+    thermal: {
+      tankMaterial: 'steel',
+      coolingMedium: 'air',
+      ambientTemperatureC: 20,
+      waitMode: 'minutes',
+      waitMinutes: 10,
+      targetTemperatureC: 25
+    },
+    settings: {
+      booster: {
+        minimumSourcePressureBar: 0,
+        cylinderVolumeCm3: 9,
+        oxygenBoostBpm: 50,
+        otherBoostBpm: 50,
+        oxygenDecantRateBarPerMin: 5,
+        otherDecantRateBarPerMin: 5,
+        compressorInletFlowLPerMin: 100
+      }
+    },
+    banks: [{
+      id: 'air', name: 'Air', volumeL: 200, pressureBar: 350,
+      oxygenPercent: 21, heliumPercent: 0, enabled: true
+    }]
+  });
+
+  assert.equal(result.feasible, false);
+  assert.equal(result.gas.targetPressureBar, 340);
+  assert.ok(result.maximumPressure);
+  assert.equal(result.maximumPressure.pressureBar, 350);
+  assert.ok(result.thermal.finalAmbientPressureBar < 340);
+  assert.match(result.error, /cannot be reached.*maximum predicted ambient pressure/i);
+});
+
+test('thermal infeasibility preserves the no-positive-candidate result shape', () => {
+  const result = optimizeBlend({
+    cylinder: {
+      volumeL: 12,
+      initialPressureBar: 80,
+      initialOxygenPercent: 21,
+      initialHeliumPercent: 0,
+      targetPressureBar: 210,
+      targetOxygenPercent: 32,
+      targetHeliumPercent: 0
+    },
+    physics: { model: 'ideal', temperatureC: 20 },
+    thermal: {
+      tankMaterial: 'steel',
+      coolingMedium: 'air',
+      ambientTemperatureC: 20,
+      waitMode: 'minutes',
+      waitMinutes: 10,
+      targetTemperatureC: 25
+    },
+    banks: []
+  });
+
+  assert.equal(result.feasible, false);
+  assert.equal(result.gas.targetPressureBar, 210);
+  assert.equal(result.maximumPressure, null);
+  assert.deepEqual(result.protocolSteps, []);
+  assert.equal(result.thermal, null);
 });

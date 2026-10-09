@@ -51,6 +51,7 @@ test('booster clearance efficiency falls when receiver pressure exceeds source p
 test('compressor inlet flow converts free-air flow to receiver pressure rate', () => {
   const rate = calculateCompressorFillRate({
     inletFlowLPerMin: 100,
+    receiverPressureBar: 1.01325,
     receiverOxygenPercent: 21,
     receiverHeliumPercent: 0,
     receiverVolumeL: 12,
@@ -222,6 +223,41 @@ test('top-up uses compressor flow before stage type', () => {
 
   assert.equal(simulation.protocolSteps[0].thermal.rateSource, 'compressor');
   assert.ok(simulation.protocolSteps[0].thermal.rateBarPerMin > 0);
+});
+
+test('VDW top-up rate uses the receiver midpoint pressure', () => {
+  const simulation = simulateThermalProtocol({
+    protocolSteps: [{
+      type: 'boost',
+      operation: 'Top-up',
+      resultingPressureBar: 300,
+      resultingMix: { oxygenPercent: 21, heliumPercent: 0 },
+      receiverStartPressureBar: 200,
+      receiverEndPressureBar: 300
+    }],
+    cylinder: { initialPressureBar: 200, volumeL: 12 },
+    physics: { model: 'vdw', temperatureC: 20 },
+    thermal: {
+      tankMaterial: 'steel',
+      coolingMedium: 'air',
+      ambientTemperatureC: 20,
+      waitMode: 'minutes',
+      waitMinutes: 0,
+      targetTemperatureC: 25
+    },
+    settings: {
+      booster: {
+        cylinderVolumeCm3: 9,
+        oxygenBoostBpm: 50,
+        otherBoostBpm: 50,
+        oxygenDecantRateBarPerMin: 5,
+        otherDecantRateBarPerMin: 5,
+        compressorInletFlowLPerMin: 100
+      }
+    }
+  });
+
+  assert.ok(simulation.protocolSteps[0].thermal.rateBarPerMin > 8.6);
 });
 
 test('40 percent source oxygen selects oxygen-rich rates while lower concentrations use regular rates', () => {

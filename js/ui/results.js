@@ -72,9 +72,9 @@ function renderThermalDetails(thermal, isFinalStep) {
     : `Wait: ${formatThermalValue(thermal.waitMinutes)} min`;
   const lines = [
     `Rate: ${thermal.rateSource} · ${formatThermalValue(thermal.rateBarPerMin)} bar/min · ${formatThermalValue(thermal.durationMinutes)} min`,
-    `Transfer end: ${formatThermalValue(thermal.pressureAtTransferEndBar)} bar at ${formatThermalValue(thermal.temperatureAtTransferEndC)} °C`,
+    `Estimated transfer end: ${formatThermalValue(thermal.pressureAtTransferEndBar)} bar at ${formatThermalValue(thermal.temperatureAtTransferEndC)} °C`,
     wait,
-    `After wait: ${formatThermalValue(thermal.pressureAfterWaitBar)} bar at ${formatThermalValue(thermal.temperatureAfterWaitC)} °C`
+    `Estimated after wait: ${formatThermalValue(thermal.pressureAfterWaitBar)} bar at ${formatThermalValue(thermal.temperatureAfterWaitC)} °C`
   ];
   for (const text of lines) {
     const line = document.createElement('div');
@@ -156,7 +156,10 @@ function renderThermalSummary(thermal) {
 export function renderResults(result) {
   if (result.gas) {
     setText('lbl-init-p', result.gas.initialPressureBar);
-    setText('lbl-target-p', result.gas.targetPressureBar);
+    setText(
+      'lbl-target-p',
+      result.thermal?.requestedSettledTargetPressureBar ?? result.gas.targetPressureBar
+    );
   } else {
     for (const id of ['lbl-init-p', 'lbl-target-p']) {
       setText(id, '—');

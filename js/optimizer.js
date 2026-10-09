@@ -1430,15 +1430,22 @@ function evaluateThermalCandidate(input, optimizeStatic, targetPressureBar) {
   return { candidateInput, result, simulation };
 }
 
-function thermalResult(candidate) {
+function thermalResult(candidate, requestedSettledTargetPressureBar) {
   return {
     ...candidate.result,
+    gas: candidate.result.gas && {
+      ...candidate.result.gas,
+      targetPressureBar: requestedSettledTargetPressureBar
+    },
     protocolSteps: candidate.simulation.protocolSteps,
-    thermal: candidate.simulation.final
+    thermal: {
+      ...candidate.simulation.final,
+      requestedSettledTargetPressureBar
+    }
   };
 }
 
-function thermalizedMaximumResult(candidate) {
+function thermalizedMaximumResult(candidate, requestedSettledTargetPressureBar) {
   const maximum = candidate.result.maximumPressure;
   if (!maximum) return { ...candidate.result, thermal: null };
 
@@ -1451,16 +1458,31 @@ function thermalizedMaximumResult(candidate) {
   });
   return {
     ...candidate.result,
+    gas: candidate.result.gas && {
+      ...candidate.result.gas,
+      targetPressureBar: requestedSettledTargetPressureBar
+    },
     maximumPressure: {
       ...maximum,
       protocolSteps: simulation.protocolSteps,
-      thermal: simulation.final
+      thermal: {
+        ...simulation.final,
+        requestedSettledTargetPressureBar
+      }
     },
-    thermal: simulation.final
+    thermal: {
+      ...simulation.final,
+      requestedSettledTargetPressureBar
+    }
   };
 }
 
 function thermalLimitResult(input, requested, maximum) {
+  const requestedSettledTargetPressureBar = input.cylinder.targetPressureBar;
+  const thermal = {
+    ...maximum.simulation.final,
+    requestedSettledTargetPressureBar
+  };
   const maximumPressure = {
     pressureBar: maximum.result.blend.finalPressureBar,
     solution: maximum.result.solution,
@@ -1468,17 +1490,20 @@ function thermalLimitResult(input, requested, maximum) {
     blend: maximum.result.blend,
     protocolSteps: maximum.simulation.protocolSteps,
     trajectory: maximum.result.trajectory,
-    thermal: maximum.simulation.final
+    thermal
   };
   return {
     ...failedResult(
-      `Requested ambient-settled pressure ${input.cylinder.targetPressureBar.toFixed(1)} bar cannot be reached; maximum predicted ambient pressure is ${maximum.simulation.final.finalAmbientPressureBar.toFixed(1)} bar.`,
-      requested.result.gas,
+      `Requested ambient-settled pressure ${requestedSettledTargetPressureBar.toFixed(1)} bar cannot be reached; maximum predicted ambient pressure is ${maximum.simulation.final.finalAmbientPressureBar.toFixed(1)} bar.`,
+      {
+        ...requested.result.gas,
+        targetPressureBar: requestedSettledTargetPressureBar
+      },
       maximum.result.tableauSteps,
       maximumPressure,
       requested.result.diagnostics ?? null
     ),
-    thermal: maximum.simulation.final
+    thermal
   };
 }
 
@@ -1493,12 +1518,14 @@ function optimizeThermalBlend(input, optimizeStatic) {
 
   const requestedPressureBar = input.cylinder.targetPressureBar;
   const requested = evaluateThermalCandidate(input, optimizeStatic, requestedPressureBar);
-  if (!requested.result.feasible) return thermalizedMaximumResult(requested);
+  if (!requested.result.feasible) {
+    return thermalizedMaximumResult(requested, requestedPressureBar);
+  }
 
   const requestedPressureDifference = requested.simulation.final.finalAmbientPressureBar
     - requestedPressureBar;
   if (Math.abs(requestedPressureDifference) <= THERMAL_TARGET_TOLERANCE_BAR) {
-    return thermalResult(requested);
+    return thermalResult(requested, requestedPressureBar);
   }
   if (requestedPressureDifference > 0) {
     const floor = evaluateThermalCandidate(
@@ -1506,12 +1533,14 @@ function optimizeThermalBlend(input, optimizeStatic) {
       optimizeStatic,
       MINIMUM_TARGET_PRESSURE_BAR
     );
-    if (!floor.result.feasible) return thermalizedMaximumResult(floor);
+    if (!floor.result.feasible) {
+      return thermalizedMaximumResult(floor, requestedPressureBar);
+    }
 
     const floorPressureDifference = floor.simulation.final.finalAmbientPressureBar
       - requestedPressureBar;
     if (Math.abs(floorPressureDifference) <= THERMAL_TARGET_TOLERANCE_BAR) {
-      return thermalResult(floor);
+      return thermalResult(floor, requestedPressureBar);
     }
     if (floorPressureDifference > 0) return thermalLimitResult(input, requested, requested);
 
@@ -1529,7 +1558,7 @@ function optimizeThermalBlend(input, optimizeStatic) {
       const pressureDifference = candidate.simulation.final.finalAmbientPressureBar
         - requestedPressureBar;
       if (Math.abs(pressureDifference) <= THERMAL_TARGET_TOLERANCE_BAR) {
-        return thermalResult(candidate);
+        return thermalResult(candidate, requestedPressureBar);
       }
       if (pressureDifference < 0) {
         lowerPressureBar = candidatePressureBar;
@@ -1538,7 +1567,7 @@ function optimizeThermalBlend(input, optimizeStatic) {
         ambientTargetCandidate = candidate;
       }
     }
-    return thermalResult(ambientTargetCandidate);
+    return thermalResult(ambientTargetCandidate, requestedPressureBar);
   }
 
   const ceiling = evaluateThermalCandidate(input, optimizeStatic, MAXIMUM_TARGET_PRESSURE_BAR);
@@ -1546,7 +1575,7 @@ function optimizeThermalBlend(input, optimizeStatic) {
     const ceilingPressureDifference = ceiling.simulation.final.finalAmbientPressureBar
       - requestedPressureBar;
     if (Math.abs(ceilingPressureDifference) <= THERMAL_TARGET_TOLERANCE_BAR) {
-      return thermalResult(ceiling);
+      return thermalResult(ceiling, requestedPressureBar);
     }
     if (ceilingPressureDifference < 0) return thermalLimitResult(input, requested, ceiling);
   }
@@ -1567,7 +1596,7 @@ function optimizeThermalBlend(input, optimizeStatic) {
     const pressureDifference = candidate.simulation.final.finalAmbientPressureBar
       - requestedPressureBar;
     if (Math.abs(pressureDifference) <= THERMAL_TARGET_TOLERANCE_BAR) {
-      return thermalResult(candidate);
+      return thermalResult(candidate, requestedPressureBar);
     }
     if (pressureDifference < 0) {
       lowerPressureBar = candidatePressureBar;
@@ -1577,9 +1606,9 @@ function optimizeThermalBlend(input, optimizeStatic) {
     }
   }
 
-  if (ambientTargetCandidate) return thermalResult(ambientTargetCandidate);
+  if (ambientTargetCandidate) return thermalResult(ambientTargetCandidate, requestedPressureBar);
   if (!ceiling.result.feasible) {
-    const maximum = thermalizedMaximumResult(ceiling);
+    const maximum = thermalizedMaximumResult(ceiling, requestedPressureBar);
     if (maximum.maximumPressure) {
       return {
         ...maximum,

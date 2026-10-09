@@ -69,6 +69,7 @@ export function calculateBoosterFillRate({
 
 export function calculateCompressorFillRate({
   inletFlowLPerMin,
+  receiverPressureBar,
   receiverOxygenPercent,
   receiverHeliumPercent,
   receiverVolumeL,
@@ -86,7 +87,7 @@ export function calculateCompressorFillRate({
     useVdw
   );
   const zReceiver = calcZ(
-    ATMOSPHERIC_PRESSURE_BAR,
+    receiverPressureBar,
     receiverOxygenPercent,
     receiverHeliumPercent,
     receiverTemperatureC,
@@ -233,6 +234,7 @@ function rateForProtocolStep({
       rateSource: 'compressor',
       rateBarPerMin: calculateCompressorFillRate({
         inletFlowLPerMin: booster.compressorInletFlowLPerMin,
+        receiverPressureBar: (currentPressureBar + transferEndPressureBar) / 2,
         receiverOxygenPercent: receiverMix.oxygenPercent,
         receiverHeliumPercent: receiverMix.heliumPercent,
         receiverVolumeL: cylinder.volumeL,
