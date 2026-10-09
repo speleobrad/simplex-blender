@@ -147,7 +147,7 @@ n_dot = 1.01325 × inletFlowLPerMin
 rate_bar_per_min = n_dot × Z_receiver × R × T_receiver / receiverVolumeL
 ```
 
-Duration uses the stage receiver pressure change and the current receiver state.
+Duration uses the stage receiver pressure change and the current receiver state. In thermal mode, a single air-bank transfer is kept as one compressor top-up stage; compressor flow does not depend on the nominal air-bank/receiver pressure crossover.
 
 Drain, keep, and zero-change stages have no transfer rate. They still participate in the configured post-step wait.
 

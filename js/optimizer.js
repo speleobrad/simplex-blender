@@ -285,7 +285,8 @@ function pressureTransferStages({
   bankDensityByBankId,
   volumeL,
   temperatureC,
-  useVdw
+  useVdw,
+  airTopUp = false
 }) {
   const pressureAt = fraction => ({
     sourcePressure: sourceResidualPressureAfterTransfer(
@@ -307,6 +308,19 @@ function pressureTransferStages({
       useVdw
     })
   });
+  if (airTopUp) {
+    const start = pressureAt(0);
+    const end = pressureAt(1);
+    return [{
+      type: 'boost',
+      startFraction: 0,
+      endFraction: 1,
+      sourceStartPressureBar: start.sourcePressure,
+      sourceEndPressureBar: end.sourcePressure,
+      receiverStartPressureBar: start.receiverPressure,
+      receiverEndPressureBar: end.receiverPressure
+    }];
+  }
   const start = pressureAt(0);
   const end = pressureAt(1);
   const pressureTolerance = Math.max(1e-9, Math.max(start.sourcePressure, start.receiverPressure, end.sourcePressure, end.receiverPressure) * 1e-9);
@@ -1293,7 +1307,8 @@ function optimizeBlendWithoutThermal(input) {
       bankDensityByBankId,
       volumeL,
       temperatureC,
-      useVdw
+      useVdw,
+      airTopUp: Boolean(input.thermal && isAirBank(bank))
     });
 
     for (const stage of transferStages) {

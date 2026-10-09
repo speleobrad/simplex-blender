@@ -170,6 +170,40 @@ test('splits a transfer into decant and boost stages when source pressure crosse
   );
 });
 
+test('uses one compressor top-up stage for an air bank in thermal mode', () => {
+  const result = optimizeBlend({
+    ...equalGasTransferInput({
+      initialPressureBar: 100,
+      targetPressureBar: 140,
+      bankPressureBar: 120
+    }),
+    thermal: {
+      tankMaterial: 'steel',
+      coolingMedium: 'air',
+      ambientTemperatureC: 20,
+      waitMode: 'minutes',
+      waitMinutes: 10,
+      targetTemperatureC: 25
+    },
+    settings: {
+      booster: {
+        minimumSourcePressureBar: 0,
+        cylinderVolumeCm3: 9,
+        oxygenBoostBpm: 50,
+        otherBoostBpm: 50,
+        oxygenDecantRateBarPerMin: 5,
+        otherDecantRateBarPerMin: 5,
+        compressorInletFlowLPerMin: 100
+      }
+    }
+  });
+
+  assert.equal(result.feasible, true);
+  const topUps = result.protocolSteps.filter(step => step.operation === 'Top-up');
+  assert.equal(topUps.length, 1);
+  assert.equal(topUps[0].type, 'boost');
+});
+
 test('uses boost when source pressure is lower than receiver pressure for the whole transfer', () => {
   const result = optimizeBlend(equalGasTransferInput({
     initialPressureBar: 100,
