@@ -16,56 +16,237 @@ const defaultInput = {
   banks: [
     { id: 'bank-he', name: 'Pure Helium', volumeL: 50, pressureBar: 200, minimumPressureBar: 15, oxygenPercent: 0, heliumPercent: 100, enabled: true },
     { id: 'bank-1845', name: 'Tx 18/45 Bank', volumeL: 50, pressureBar: 200, minimumPressureBar: 20, oxygenPercent: 18, heliumPercent: 45, enabled: true },
-    { id: 'bank-o2', name: 'Pure Oxygen', volumeL: 40, pressureBar: 180, minimumPressureBar: 10, oxygenPercent: 100, heliumPercent: 0, enabled: true },
-    { id: 'bank-air', name: 'Air Top-off', volumeL: 80, pressureBar: 230, minimumPressureBar: 1, oxygenPercent: 21, heliumPercent: 0, enabled: true }
-  ]
+    { id: 'bank-o2', name: 'Pure Oxygen', volumeL: 40, pressureBar: 180, minimumPressureBar: 10, oxygenPercent: 100, heliumPercent: 0, enabled: true }
+  ],
+  settings: {
+    booster: {
+      maxCompressorPressureBar: 350,
+      maxBoosterOutputPressureBar: 350
+    }
+  }
 };
+test('safety fallback preserves working gas and uses available premixes before pure helium', () => {
+  const result = optimizeBlend({
+    cylinder: {
+      volumeL: 12,
+      initialPressureBar: 80,
+      initialOxygenPercent: 21,
+      initialHeliumPercent: 35,
+      targetPressureBar: 210,
+      targetOxygenPercent: 18,
+      targetHeliumPercent: 45
+    },
+    physics: { model: 'vdw', temperatureC: 20 },
+    banks: [
+      { id: 'he', name: 'Pure Helium', volumeL: 50, pressureBar: 200, minimumPressureBar: 15, oxygenPercent: 0, heliumPercent: 100, enabled: true },
+      { id: 'o2', name: 'Pure Oxygen', volumeL: 40, pressureBar: 180, minimumPressureBar: 10, oxygenPercent: 100, heliumPercent: 0, enabled: true },
+      { id: '1845', name: '18/45', volumeL: 18, pressureBar: 200, minimumPressureBar: 20, oxygenPercent: 18, heliumPercent: 45, enabled: true },
+      { id: '770', name: '7/70', volumeL: 50, pressureBar: 200, minimumPressureBar: 20, oxygenPercent: 7, heliumPercent: 70, enabled: true }
+    ],
+    settings: {
+      booster: {
+        maxCompressorPressureBar: 232,
+        maxBoosterOutputPressureBar: 200
+      }
+    }
+  });
+
+  assert.equal(result.feasible, true);
+  assert.ok(result.solution.x_cyl > 0);
+  assert.ok(
+    result.solution['x_b3_18/45'] > 0
+      || result.solution['x_b4_7/70'] > 0
+  );
+  assert.equal(result.solution.x_b1_Pure, 0);
+});
+
 function equalGasTransferInput({ initialPressureBar, targetPressureBar, bankPressureBar }) {
   return {
     cylinder: {
       volumeL: 10,
       initialPressureBar,
-      initialOxygenPercent: 21,
+      initialOxygenPercent: 0,
       initialHeliumPercent: 0,
       targetPressureBar,
-      targetOxygenPercent: 21,
+      targetOxygenPercent: 0,
       targetHeliumPercent: 0
     },
     physics: { model: 'ideal', temperatureC: 20 },
     banks: [{
-      id: 'air',
-      name: 'Air bank',
+      id: 'nitrogen',
+      name: 'Nitrogen source',
       volumeL: 10,
       pressureBar: bankPressureBar,
       minimumPressureBar: 0,
-      oxygenPercent: 21,
+      oxygenPercent: 0,
       heliumPercent: 0,
       enabled: true
     }]
   };
 }
+test('uses implicit unlimited Air without an Air bank', () => {
+  const result = optimizeBlend({
+    cylinder: {
+      volumeL: 12,
+      initialPressureBar: 0,
+      initialOxygenPercent: 0,
+      initialHeliumPercent: 0,
+      targetPressureBar: 180,
+      targetOxygenPercent: 21,
+      targetHeliumPercent: 0
+    },
+    physics: { model: 'ideal', temperatureC: 20 },
+    banks: [],
+    settings: {
+      booster: {
+        maxCompressorPressureBar: 232,
+        maxBoosterOutputPressureBar: 200
+      }
+    }
+  });
+
+  assert.equal(result.feasible, true);
+  assert.equal(result.protocolSteps.at(-1).operation, 'Top-up');
+});
+
+test('rejects finite Air banks in favor of the implicit compressor source', () => {
+  const result = optimizeBlend({
+    cylinder: {
+      volumeL: 12,
+      initialPressureBar: 0,
+      initialOxygenPercent: 0,
+      initialHeliumPercent: 0,
+      targetPressureBar: 180,
+      targetOxygenPercent: 21,
+      targetHeliumPercent: 0
+    },
+    physics: { model: 'ideal', temperatureC: 20 },
+    banks: [{
+      id: 'air-bank',
+      name: 'Air bank',
+      volumeL: 10,
+      pressureBar: 200,
+      oxygenPercent: 21,
+      heliumPercent: 0,
+      enabled: true
+    }]
+  });
+
+  assert.equal(result.feasible, false);
+  assert.match(result.error, /Air.*compressor|compressor.*Air/i);
+});
+
+test('compressor Air cannot top up above its configured ceiling', () => {
+  const result = optimizeBlend({
+    cylinder: {
+      volumeL: 12,
+      initialPressureBar: 0,
+      initialOxygenPercent: 0,
+      initialHeliumPercent: 0,
+      targetPressureBar: 250,
+      targetOxygenPercent: 21,
+      targetHeliumPercent: 0
+    },
+    physics: { model: 'ideal', temperatureC: 20 },
+    banks: [],
+    settings: {
+      booster: {
+        maxCompressorPressureBar: 232,
+        maxBoosterOutputPressureBar: 200
+      }
+    }
+  });
+
+  assert.equal(result.feasible, false);
+  assert.ok(result.maximumPressure.pressureBar <= 232 + 1e-9);
+});
+
+test('non-Air boost cannot end above the booster output ceiling', () => {
+  const result = optimizeBlend({
+    cylinder: {
+      volumeL: 12,
+      initialPressureBar: 0,
+      initialOxygenPercent: 0,
+      initialHeliumPercent: 0,
+      targetPressureBar: 250,
+      targetOxygenPercent: 0,
+      targetHeliumPercent: 100
+    },
+    physics: { model: 'ideal', temperatureC: 20 },
+    banks: [{
+      id: 'he',
+      name: 'Helium',
+      volumeL: 50,
+      pressureBar: 150,
+      oxygenPercent: 0,
+      heliumPercent: 100,
+      enabled: true
+    }],
+    settings: {
+      booster: {
+        maxCompressorPressureBar: 232,
+        maxBoosterOutputPressureBar: 200
+      }
+    }
+  });
+
+  assert.equal(result.feasible, false);
+  assert.ok(result.maximumPressure.pressureBar <= 200 + 1e-9);
+});
+
+test('non-Air decant can exceed the booster output ceiling', () => {
+  const result = optimizeBlend({
+    cylinder: {
+      volumeL: 12,
+      initialPressureBar: 0,
+      initialOxygenPercent: 0,
+      initialHeliumPercent: 0,
+      targetPressureBar: 250,
+      targetOxygenPercent: 0,
+      targetHeliumPercent: 100
+    },
+    physics: { model: 'ideal', temperatureC: 20 },
+    banks: [{
+      id: 'he',
+      name: 'Helium',
+      volumeL: 100,
+      pressureBar: 300,
+      oxygenPercent: 0,
+      heliumPercent: 100,
+      enabled: true
+    }],
+    settings: {
+      booster: {
+        maxCompressorPressureBar: 232,
+        maxBoosterOutputPressureBar: 200
+      }
+    }
+  });
+
+  assert.equal(result.feasible, true);
+  assert.ok(result.protocolSteps.some(step => step.operation === 'Decant' && step.resultingPressureBar > 200));
+});
 
 test('uses one booster minimum source pressure for every supply bank', () => {
   const result = optimizeBlend({
     cylinder: {
       volumeL: 10,
       initialPressureBar: 0,
-      initialOxygenPercent: 21,
+      initialOxygenPercent: 0,
       initialHeliumPercent: 0,
       targetPressureBar: 100,
-      targetOxygenPercent: 21,
-      targetHeliumPercent: 0
+      targetOxygenPercent: 0,
+      targetHeliumPercent: 100
     },
     physics: { model: 'ideal', temperatureC: 20 },
     settings: { booster: { minimumSourcePressureBar: 50 } },
     banks: [{
-      id: 'air',
-      name: 'Air',
+      id: 'helium',
+      name: 'Helium',
       volumeL: 10,
       pressureBar: 100,
-      minimumPressureBar: 0,
-      oxygenPercent: 21,
-      heliumPercent: 0,
+      oxygenPercent: 0,
+      heliumPercent: 100,
       enabled: true
     }]
   });
@@ -96,15 +277,6 @@ test('formats equalising and top-up protocol stages with source leftovers and in
       oxygenPercent: 20,
       heliumPercent: 0,
       enabled: true
-    }, {
-      id: 'air',
-      name: 'Air',
-      volumeL: 10,
-      pressureBar: 200,
-      minimumPressureBar: 0,
-      oxygenPercent: 21,
-      heliumPercent: 0,
-      enabled: true
     }]
   });
 
@@ -113,7 +285,7 @@ test('formats equalising and top-up protocol stages with source leftovers and in
   assert.match(step.title, /^Step 1: Equalize Nitrox source to \d+\.\d bar$/);
   assert.match(step.description, /^Equalize \d+\.\d bar from Nitrox source to \d+\.\d bar\. This will leave \d+\.\d bar of Nitrox source\. Interim mix is \d+\.\d\/\d+\.\d\./);
   const topUp = result.protocolSteps.at(-1);
-  assert.match(topUp.title, /^Step \d+: Top-up Air to \d+\.\d bar$/);
+  assert.match(topUp.title, /^Step \d+: Top-up Compressor Air to \d+\.\d bar$/);
 });
 
 test('counts helium from non-pure supply gas as salvaged helium', () => {
@@ -155,8 +327,8 @@ test('splits a transfer into decant and boost stages when source pressure crosse
   const transferSteps = result.protocolSteps.slice(1);
   assert.deepEqual(transferSteps.map(step => step.type), ['decant', 'boost']);
   assert.deepEqual(transferSteps.map(step => step.title), [
-    'Step 1: Top-up Air bank to 110.0 bar',
-    'Step 2: Top-up Air bank to 140.0 bar'
+    'Step 1: Equalize Nitrogen source to 110.0 bar',
+    'Step 2: Boost Nitrogen source to 140.0 bar'
   ]);
   assert.ok(Math.abs(transferSteps[0].resultingPressureBar - 110) < 1e-9);
   assert.ok(Math.abs(transferSteps[1].resultingPressureBar - 140) < 1e-9);
@@ -170,13 +342,18 @@ test('splits a transfer into decant and boost stages when source pressure crosse
   );
 });
 
-test('uses one compressor top-up stage for an air bank in thermal mode', () => {
+test('uses one compressor top-up stage without a finite Air bank in thermal mode', () => {
   const result = optimizeBlend({
-    ...equalGasTransferInput({
+    cylinder: {
+      volumeL: 10,
       initialPressureBar: 100,
+      initialOxygenPercent: 21,
+      initialHeliumPercent: 0,
       targetPressureBar: 140,
-      bankPressureBar: 120
-    }),
+      targetOxygenPercent: 21,
+      targetHeliumPercent: 0
+    },
+    physics: { model: 'ideal', temperatureC: 20 },
     thermal: {
       tankMaterial: 'steel',
       coolingMedium: 'air',
@@ -195,13 +372,15 @@ test('uses one compressor top-up stage for an air bank in thermal mode', () => {
         otherDecantRateBarPerMin: 5,
         compressorInletFlowLPerMin: 100
       }
-    }
+    },
+    banks: []
   });
 
   assert.equal(result.feasible, true);
   const topUps = result.protocolSteps.filter(step => step.operation === 'Top-up');
   assert.equal(topUps.length, 1);
   assert.equal(topUps[0].type, 'boost');
+  assert.equal(topUps[0].thermal.rateSource, 'compressor');
 });
 
 test('uses boost when source pressure is lower than receiver pressure for the whole transfer', () => {
@@ -215,7 +394,7 @@ test('uses boost when source pressure is lower than receiver pressure for the wh
   const transferSteps = result.protocolSteps.slice(1);
   assert.equal(transferSteps.length, 1);
   assert.equal(transferSteps[0].type, 'boost');
-  assert.match(transferSteps[0].title, /Top-up/);
+  assert.equal(transferSteps[0].operation, 'Boost');
 });
 
 test('uses decant when source pressure is not lower than receiver pressure for the whole transfer', () => {
@@ -229,7 +408,7 @@ test('uses decant when source pressure is not lower than receiver pressure for t
   const transferSteps = result.protocolSteps.slice(1);
   assert.equal(transferSteps.length, 1);
   assert.equal(transferSteps[0].type, 'decant');
-  assert.match(transferSteps[0].title, /Top-up/);
+  assert.equal(transferSteps[0].operation, 'Decant');
 });
 
 test('uses decant when source and receiver start at equal pressure', () => {
@@ -426,7 +605,7 @@ test('nitrox preset reports vented gas as equivalent litres at one bar', () => {
   assert.ok(Math.abs(result.blend.ventedGasLitres - 838.377979816809) < 1e-8);
 });
 
-test('reports the maximum achievable pressure with a recipe at the exact target mix', () => {
+test('reports the maximum achievable pressure at the compressor ceiling', () => {
   const result = optimizeBlend({
     cylinder: {
       volumeL: 10,
@@ -438,16 +617,13 @@ test('reports the maximum achievable pressure with a recipe at the exact target 
       targetHeliumPercent: 0
     },
     physics: { model: 'ideal', temperatureC: 20 },
-    banks: [{
-      id: 'air',
-      name: 'Air bank',
-      volumeL: 10,
-      pressureBar: 100,
-      minimumPressureBar: 0,
-      oxygenPercent: 21,
-      heliumPercent: 0,
-      enabled: true
-    }]
+    banks: [],
+    settings: {
+      booster: {
+        maxCompressorPressureBar: 150,
+        maxBoosterOutputPressureBar: 200
+      }
+    }
   });
 
   assert.equal(result.feasible, false);
@@ -458,9 +634,38 @@ test('reports the maximum achievable pressure with a recipe at the exact target 
   assert.equal(result.maximumPressure.blend.finalHeliumPercent, 0);
   assert.deepEqual(result.maximumPressure.protocolSteps.map(step => step.title), [
     'Preserve 100% of Cylinder Gas',
-    'Step 1: Top-up Air bank to 75.0 bar',
-    'Step 2: Top-up Air bank to 150.0 bar'
+    'Step 1: Top-up Compressor Air to 150.0 bar'
   ]);
+});
+test('converts compressor-ceiling fallback with the selected real-gas model', () => {
+  const result = optimizeBlend({
+    cylinder: {
+      volumeL: 10,
+      initialPressureBar: 50,
+      initialOxygenPercent: 21,
+      initialHeliumPercent: 0,
+      targetPressureBar: 200,
+      targetOxygenPercent: 21,
+      targetHeliumPercent: 0
+    },
+    physics: { model: 'vdw', temperatureC: 20 },
+    banks: [],
+    settings: {
+      booster: {
+        maxCompressorPressureBar: 150,
+        maxBoosterOutputPressureBar: 200
+      }
+    }
+  });
+
+  assert.equal(result.feasible, false);
+  assert.ok(Math.abs(result.maximumPressure.pressureBar - 150) < 1e-6);
+  assert.ok(
+    Math.abs(
+      result.maximumPressure.protocolSteps.at(-1).resultingPressureBar
+        - result.maximumPressure.pressureBar
+    ) < 1e-6
+  );
 });
 
 test('reports helium shortage as required source-bank pressure and names the depleted bank', () => {
@@ -478,7 +683,6 @@ test('reports helium shortage as required source-bank pressure and names the dep
     banks: [
       { id: 'he', name: 'Pure Helium', volumeL: 1, pressureBar: 10, minimumPressureBar: 0, oxygenPercent: 0, heliumPercent: 100, enabled: true },
       { id: 'o2', name: 'Pure Oxygen', volumeL: 10, pressureBar: 100, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true },
-      { id: 'air', name: 'Air Top-off', volumeL: 10, pressureBar: 100, minimumPressureBar: 0, oxygenPercent: 21, heliumPercent: 0, enabled: true }
     ]
   });
 
@@ -516,7 +720,6 @@ test('converts required source-bank pressure with the selected real-gas model', 
     banks: [
       { id: 'he', name: 'Pure Helium', volumeL: 1, pressureBar: 10, minimumPressureBar: 0, oxygenPercent: 0, heliumPercent: 100, enabled: true },
       { id: 'o2', name: 'Pure Oxygen', volumeL: 10, pressureBar: 100, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true },
-      { id: 'air', name: 'Air Top-off', volumeL: 10, pressureBar: 100, minimumPressureBar: 0, oxygenPercent: 21, heliumPercent: 0, enabled: true }
     ]
   });
 
@@ -544,7 +747,6 @@ test('does not present an out-of-range real-gas source pressure as exact', () =>
     banks: [
       { id: 'he', name: 'Pure Helium', volumeL: 1, pressureBar: 10, minimumPressureBar: 0, oxygenPercent: 0, heliumPercent: 100, enabled: true },
       { id: 'o2', name: 'Pure Oxygen', volumeL: 10, pressureBar: 100, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true },
-      { id: 'air', name: 'Air Top-off', volumeL: 10, pressureBar: 100, minimumPressureBar: 0, oxygenPercent: 21, heliumPercent: 0, enabled: true }
     ]
   });
 
@@ -582,7 +784,7 @@ test('does not label an unused trace bank as exhausted', () => {
   assert.ok(!result.diagnostics.exhaustedBanks.some(bank => bank.name === 'Trace helium bank'));
 });
 
-test('converts maximum fallback moles with the selected real-gas model', () => {
+test('converts compressor-ceiling fallback with the selected real-gas model', () => {
   const result = optimizeBlend({
     cylinder: {
       volumeL: 10,
@@ -594,22 +796,22 @@ test('converts maximum fallback moles with the selected real-gas model', () => {
       targetHeliumPercent: 0
     },
     physics: { model: 'vdw', temperatureC: 20 },
-    banks: [{
-      id: 'air',
-      name: 'Air bank',
-      volumeL: 10,
-      pressureBar: 100,
-      minimumPressureBar: 0,
-      oxygenPercent: 21,
-      heliumPercent: 0,
-      enabled: true
-    }]
+    banks: [],
+    settings: {
+      booster: {
+        maxCompressorPressureBar: 150,
+        maxBoosterOutputPressureBar: 200
+      }
+    }
   });
 
-  assert.ok(Math.abs(result.maximumPressure.pressureBar - 149.80912252198542) < 1e-8);
-  assert.equal(
-    result.maximumPressure.protocolSteps.at(-1).resultingPressureBar,
-    result.maximumPressure.pressureBar
+  assert.equal(result.feasible, false);
+  assert.ok(Math.abs(result.maximumPressure.pressureBar - 150) < 1e-6);
+  assert.ok(
+    Math.abs(
+      result.maximumPressure.protocolSteps.at(-1).resultingPressureBar
+        - result.maximumPressure.pressureBar
+    ) < 1e-6
   );
 });
 
@@ -626,18 +828,23 @@ test('maximum-pressure fallback uses complementary banks to preserve the exact t
     },
     physics: { model: 'ideal', temperatureC: 20 },
     banks: [
-      { id: 'air', name: 'Air bank', volumeL: 10, pressureBar: 100, minimumPressureBar: 0, oxygenPercent: 21, heliumPercent: 0, enabled: true },
       { id: 'he', name: 'Helium bank', volumeL: 10, pressureBar: 100, minimumPressureBar: 0, oxygenPercent: 0, heliumPercent: 100, enabled: true },
       { id: 'nitrogen', name: 'Nitrogen bank', volumeL: 10, pressureBar: 100, minimumPressureBar: 0, oxygenPercent: 0, heliumPercent: 0, enabled: true }
-    ]
+    ],
+    settings: {
+      booster: {
+        maxCompressorPressureBar: 350,
+        maxBoosterOutputPressureBar: 350
+      }
+    }
   });
 
   assert.equal(result.feasible, false);
-  assert.ok(Math.abs(result.maximumPressure.pressureBar - 210) < 1e-6);
+  assert.ok(Math.abs(result.maximumPressure.pressureBar - (2000 / 9)) < 1e-6);
   const finalStep = result.maximumPressure.trajectory.at(-1);
   assert.ok(Math.abs(finalStep.oxygenPercent - 10) < 1e-8);
   assert.ok(Math.abs(finalStep.heliumPercent - 45) < 1e-8);
-  assert.ok(Math.abs(finalStep.pressureBar - 210) < 1e-6);
+  assert.ok(Math.abs(finalStep.pressureBar - (2000 / 9)) < 1e-6);
 });
 
 test('keeps a sub-0.05-mol bank contribution in the fallback recipe', () => {
@@ -793,7 +1000,7 @@ test('finds a narrow safe bank split outside the fixed-share samples', () => {
   assert.ok(result.protocolSteps.some(step => step.title.includes('High-pressure oxygen')));
 });
 
-test('brackets feasible source shares before refining safety-limited splits', () => {
+test('allows a later non-Air transfer after compressor Air reaches its ceiling', () => {
   const result = optimizeBlend({
     cylinder: {
       volumeL: 10,
@@ -801,22 +1008,33 @@ test('brackets feasible source shares before refining safety-limited splits', ()
       initialOxygenPercent: 0,
       initialHeliumPercent: 0,
       targetPressureBar: 250,
-      targetOxygenPercent: 50,
+      targetOxygenPercent: 25,
       targetHeliumPercent: 0
     },
     physics: { model: 'ideal', temperatureC: 20 },
-    banks: [
-      { id: 'oxygen-a', name: 'Capacity-limited oxygen', volumeL: 100, pressureBar: 43.9, minimumPressureBar: 38.4, oxygenPercent: 100, heliumPercent: 0, enabled: true },
-      { id: 'oxygen-b', name: 'High-capacity oxygen', volumeL: 10, pressureBar: 98, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true },
-      { id: 'low-oxygen', name: 'Low O₂ bank', volumeL: 1, pressureBar: 1, minimumPressureBar: 0.99, oxygenPercent: 25, heliumPercent: 0, enabled: true },
-      { id: 'trimix', name: 'Unused Tx bank', volumeL: 200, pressureBar: 20, minimumPressureBar: 0, oxygenPercent: 25, heliumPercent: 35, enabled: true },
-    ]
+    banks: [{
+      id: 'oxygen-source',
+      name: 'Oxygen source',
+      volumeL: 100,
+      pressureBar: 200,
+      minimumPressureBar: 0,
+      oxygenPercent: 100,
+      heliumPercent: 0,
+      enabled: true
+    }],
+    settings: {
+      booster: {
+        maxCompressorPressureBar: 232,
+        maxBoosterOutputPressureBar: 350
+      }
+    }
   });
 
-  assert.equal(result.feasible, false);
-  assert.ok(result.maximumPressure.pressureBar >= 200 && result.maximumPressure.pressureBar < 200.01);
-  assert.ok(result.maximumPressure.protocolSteps.some(step => step.title.includes('Capacity-limited oxygen')));
-  assert.ok(result.maximumPressure.protocolSteps.some(step => step.title.includes('High-capacity oxygen')));
+  assert.equal(result.feasible, true);
+  const compressorStep = result.protocolSteps.find(step => step.title.includes('Compressor Air'));
+  assert.ok(compressorStep);
+  assert.ok(compressorStep.resultingPressureBar <= 232 + 1e-9);
+  assert.equal(result.blend.finalPressureBar, 250);
 });
 
 test('ignores oxygen inventory in air when the exact target contains no nitrogen', () => {
@@ -834,7 +1052,6 @@ test('ignores oxygen inventory in air when the exact target contains no nitrogen
     banks: [
       { id: 'oxygen-a', name: 'Oxygen A', volumeL: 2, pressureBar: 100, minimumPressureBar: 45, oxygenPercent: 100, heliumPercent: 0, enabled: true },
       { id: 'oxygen-b', name: 'Oxygen B', volumeL: 10, pressureBar: 240, minimumPressureBar: 45, oxygenPercent: 100, heliumPercent: 0, enabled: true },
-      { id: 'air', name: 'Air bank', volumeL: 80, pressureBar: 230, minimumPressureBar: 1, oxygenPercent: 21, heliumPercent: 0, enabled: true }
     ]
   });
 
@@ -854,7 +1071,7 @@ test('drains small amounts of cylinder gas when fallback fractions require it', 
       initialHeliumPercent: 0,
       targetPressureBar: 200,
       targetOxygenPercent: 25,
-      targetHeliumPercent: 0
+      targetHeliumPercent: 75
     },
     physics: { model: 'ideal', temperatureC: 20 },
     banks: [{
@@ -865,6 +1082,15 @@ test('drains small amounts of cylinder gas when fallback fractions require it', 
       minimumPressureBar: 66.8,
       oxygenPercent: 100,
       heliumPercent: 0,
+      enabled: true
+    }, {
+      id: 'helium',
+      name: 'Helium bank',
+      volumeL: 10,
+      pressureBar: 100,
+      minimumPressureBar: 0,
+      oxygenPercent: 0,
+      heliumPercent: 100,
       enabled: true
     }]
   });
@@ -886,7 +1112,7 @@ test('does not display moles for small fallback transfers', () => {
       initialHeliumPercent: 0,
       targetPressureBar: 300,
       targetOxygenPercent: 0.365,
-      targetHeliumPercent: 0
+      targetHeliumPercent: 99.635
     },
     physics: { model: 'ideal', temperatureC: 20 },
     banks: [{
@@ -898,12 +1124,21 @@ test('does not display moles for small fallback transfers', () => {
       oxygenPercent: 100,
       heliumPercent: 0,
       enabled: true
+    }, {
+      id: 'helium',
+      name: 'Helium bank',
+      volumeL: 10,
+      pressureBar: 100,
+      minimumPressureBar: 0,
+      oxygenPercent: 0,
+      heliumPercent: 100,
+      enabled: true
     }]
   });
 
-  const finalStep = result.maximumPressure.trajectory.at(-1);
+  const oxygenStep = result.maximumPressure.trajectory.find(point => point.bankName === 'Oxygen bank');
   const stepDescription = result.maximumPressure.protocolSteps.at(-1).description;
-  assert.ok(finalStep.addedMoles > 0.1 && finalStep.addedMoles < 0.5);
+  assert.ok(oxygenStep.addedMoles > 0.1 && oxygenStep.addedMoles < 0.5);
   assert.match(stepDescription, /bar/);
   assert.doesNotMatch(stepDescription, /Decompressively|mol|\(100\/0\)/);
 });
@@ -957,6 +1192,38 @@ test('rejects oxygen-rich transfer when receiver exceeds four times source resid
   assert.match(result.error, /4:1/);
   assert.equal(result.blend, null);
   assert.deepEqual(result.protocolSteps, []);
+});
+test('checks oxygen transfer after compressor Air is staged first', () => {
+  const result = optimizeBlend({
+    cylinder: {
+      volumeL: 10,
+      initialPressureBar: 150,
+      initialOxygenPercent: 0,
+      initialHeliumPercent: 0,
+      targetPressureBar: 280,
+      targetOxygenPercent: 25,
+      targetHeliumPercent: 0
+    },
+    physics: { model: 'ideal', temperatureC: 20 },
+    banks: [{
+      id: 'oxygen-source',
+      name: 'Oxygen source',
+      volumeL: 10,
+      pressureBar: 110,
+      oxygenPercent: 100,
+      heliumPercent: 0,
+      enabled: true
+    }],
+    settings: {
+      booster: {
+        maxCompressorPressureBar: 232,
+        maxBoosterOutputPressureBar: 350
+      }
+    }
+  });
+
+  assert.equal(result.feasible, false);
+  assert.match(result.error, /4:1/);
 });
 
 test('finds the maximum lower pressure that keeps the exact mix within the oxygen transfer limit', () => {
@@ -1012,6 +1279,24 @@ test('rejects impossible target gas composition without returning a recipe', () 
   assert.equal(result.maximumPressure, null);
   assert.deepEqual(result.protocolSteps, []);
   assert.match(result.error, /target.*gas composition/i);
+});
+test('does not recommend implicit Compressor Air for a pure-oxygen shortfall', () => {
+  const result = optimizeBlend({
+    cylinder: {
+      volumeL: 10,
+      initialPressureBar: 0,
+      initialOxygenPercent: 0,
+      initialHeliumPercent: 0,
+      targetPressureBar: 100,
+      targetOxygenPercent: 100,
+      targetHeliumPercent: 0
+    },
+    physics: { model: 'ideal', temperatureC: 20 },
+    banks: []
+  });
+
+  assert.equal(result.feasible, false);
+  assert.equal(result.diagnostics.componentShortfalls[0].sourceBank, null);
 });
 
 test('rejects impossible enabled-bank composition before solving', () => {
@@ -1122,10 +1407,7 @@ test('thermal recipe overshoots the last hot target so ambient pressure reaches 
         compressorInletFlowLPerMin: 100
       }
     },
-    banks: [{
-      id: 'air', name: 'Air', volumeL: 80, pressureBar: 300,
-      oxygenPercent: 21, heliumPercent: 0, enabled: true
-    }]
+    banks: []
   });
 
   assert.equal(result.feasible, true);
@@ -1134,6 +1416,44 @@ test('thermal recipe overshoots the last hot target so ambient pressure reaches 
   assert.ok(result.thermal.finalTransferEndPressureBar > 210);
   assert.ok(Math.abs(result.thermal.finalAmbientPressureBar - 210) < 1e-5);
 });
+test('fixed-minute waits allow a hidden target temperature below ambient', () => {
+  const result = optimizeBlend({
+    cylinder: {
+      volumeL: 12,
+      initialPressureBar: 80,
+      initialOxygenPercent: 21,
+      initialHeliumPercent: 0,
+      targetPressureBar: 210,
+      targetOxygenPercent: 21,
+      targetHeliumPercent: 0
+    },
+    physics: { model: 'ideal', temperatureC: 20 },
+    thermal: {
+      tankMaterial: 'steel',
+      coolingMedium: 'air',
+      ambientTemperatureC: 30,
+      inletTemperatureC: 29,
+      waitMode: 'minutes',
+      waitMinutes: 10,
+      targetTemperatureC: 25
+    },
+    settings: {
+      booster: {
+        minimumSourcePressureBar: 0,
+        cylinderVolumeCm3: 9,
+        oxygenBoostBpm: 50,
+        otherBoostBpm: 50,
+        oxygenDecantRateBarPerMin: 5,
+        otherDecantRateBarPerMin: 5,
+        compressorInletFlowLPerMin: 100
+      }
+    },
+    banks: []
+  });
+
+  assert.equal(result.feasible, true);
+});
+
 
 test('rejects invalid thermal inputs with the existing invalid result shape', () => {
   const input = {
@@ -1147,10 +1467,7 @@ test('rejects invalid thermal inputs with the existing invalid result shape', ()
       targetHeliumPercent: 0
     },
     physics: { model: 'ideal', temperatureC: 20 },
-    banks: [{
-      id: 'air', name: 'Air', volumeL: 80, pressureBar: 300,
-      oxygenPercent: 21, heliumPercent: 0, enabled: true
-    }]
+    banks: []
   };
   const validThermal = {
     tankMaterial: 'steel',
@@ -1260,13 +1577,12 @@ test('reports an infeasible result when the requested settled target exceeds the
         otherBoostBpm: 50,
         oxygenDecantRateBarPerMin: 5,
         otherDecantRateBarPerMin: 5,
-        compressorInletFlowLPerMin: 100
+        compressorInletFlowLPerMin: 100,
+        maxCompressorPressureBar: 350,
+        maxBoosterOutputPressureBar: 350
       }
     },
-    banks: [{
-      id: 'air', name: 'Air', volumeL: 200, pressureBar: 350,
-      oxygenPercent: 21, heliumPercent: 0, enabled: true
-    }]
+    banks: []
   });
 
   assert.equal(result.feasible, false);

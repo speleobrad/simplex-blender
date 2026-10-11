@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateCalculatorInputs } from '../js/input-validation.js';
+import { validateCalculatorInputs, validateSupplyBankInput } from '../js/input-validation.js';
 
 const defaultCylinder = {
   volumeL: 12,
@@ -51,6 +51,23 @@ test('rejects a temperature wait target at or below ambient', () => {
   );
   assert.match(errors.join(' '), /target.*ambient/i);
 });
+test('fixed-minute waits do not validate the hidden target temperature against ambient', () => {
+  const errors = validateCalculatorInputs(
+    { volumeL: 12, initialPressureBar: 80, targetPressureBar: 210 },
+    { temperatureC: 20 },
+    {
+      tankMaterial: 'steel',
+      coolingMedium: 'air',
+      ambientTemperatureC: 26,
+      waitMode: 'minutes',
+      waitMinutes: 10,
+      targetTemperatureC: 25
+    }
+  );
+
+  assert.doesNotMatch(errors.join(' '), /target.*ambient/i);
+});
+
 
 test('rejects unsupported thermal selectors and negative fixed waits', () => {
   const errors = validateCalculatorInputs(
@@ -66,4 +83,18 @@ test('rejects unsupported thermal selectors and negative fixed waits', () => {
     }
   );
   assert.ok(errors.length >= 3);
+});
+
+test('rejects finite Air supply banks because Air is an implicit compressor source', () => {
+  const errors = validateSupplyBankInput({
+    id: 'air-bank',
+    name: 'Air bank',
+    volumeL: 10,
+    pressureBar: 200,
+    oxygenPercent: 21,
+    heliumPercent: 0,
+    enabled: true
+  });
+
+  assert.match(errors.join(' '), /Air.*compressor|compressor.*Air/i);
 });

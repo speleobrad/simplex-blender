@@ -18,9 +18,97 @@ test('missing settings return independent copies of the built-in presets', () =>
   assert.deepEqual(second.volumePresets, [3, 5, 7, 10, 12, 15, 18, 24]);
 });
 
+test('settings default to the real-gas physics model', () => {
+  assert.deepEqual(DEFAULT_SETTINGS.physics, { model: 'vdw' });
+});
+test('settings include compressor and booster pressure ceilings and temperature modifiers', () => {
+  assert.equal(DEFAULT_SETTINGS.booster.maxCompressorPressureBar, 232);
+  assert.equal(DEFAULT_SETTINGS.booster.maxBoosterOutputPressureBar, 200);
+  assert.equal(DEFAULT_SETTINGS.booster.boosterTemperatureModifierC, 0);
+  assert.equal(DEFAULT_SETTINGS.booster.compressorTemperatureModifierC, 0);
+});
+
+test('old settings gain both pressure ceiling defaults', () => {
+  const storage = memoryStorage([[
+    'simplex-gas-remixer-settings',
+    JSON.stringify({
+      gasPresets: [{ name: 'Air', oxygenPercent: 21, heliumPercent: 0 }],
+      volumePresets: [12]
+    })
+  ]]);
+  assert.deepEqual(loadSettings(storage).booster, DEFAULT_SETTINGS.booster);
+});
+
+test('legacy settings gain the default real-gas physics model', () => {
+  const storage = memoryStorage([[
+    'simplex-gas-remixer-settings',
+    JSON.stringify({
+      gasPresets: [{ name: 'Air', oxygenPercent: 21, heliumPercent: 0 }],
+      volumePresets: [12]
+    })
+  ]]);
+
+  assert.deepEqual(loadSettings(storage).physics, { model: 'vdw' });
+});
+
+test('pressure ceilings survive settings round trip', () => {
+  const settings = {
+    ...DEFAULT_SETTINGS,
+    gasPresets: DEFAULT_SETTINGS.gasPresets.map(preset => ({ ...preset })),
+    volumePresets: [...DEFAULT_SETTINGS.volumePresets],
+    booster: {
+      ...DEFAULT_SETTINGS.booster,
+      maxCompressorPressureBar: 240,
+      maxBoosterOutputPressureBar: 190
+    }
+  };
+  const storage = memoryStorage();
+
+  saveSettings(settings, storage);
+
+  assert.deepEqual(loadSettings(storage).booster, settings.booster);
+});
+
+test('invalid pressure ceilings are rejected before storage changes', () => {
+  const storage = memoryStorage();
+  for (const field of ['maxCompressorPressureBar', 'maxBoosterOutputPressureBar']) {
+    assert.throws(() => saveSettings({
+      ...DEFAULT_SETTINGS,
+      booster: { ...DEFAULT_SETTINGS.booster, [field]: 9 }
+    }, storage), /pressure.*10.*350/i);
+  }
+  assert.equal(storage.getItem('simplex-gas-remixer-settings'), null);
+});
+
+test('selected gas model survives a settings round trip', () => {
+  const storage = memoryStorage();
+  const settings = {
+    ...DEFAULT_SETTINGS,
+    physics: { model: 'ideal' },
+    gasPresets: DEFAULT_SETTINGS.gasPresets.map(preset => ({ ...preset })),
+    volumePresets: [...DEFAULT_SETTINGS.volumePresets],
+    booster: { ...DEFAULT_SETTINGS.booster }
+  };
+
+  saveSettings(settings, storage);
+
+  assert.deepEqual(loadSettings(storage).physics, { model: 'ideal' });
+});
+
+test('unsupported gas models are rejected before storage changes', () => {
+  const storage = memoryStorage();
+
+  assert.throws(() => saveSettings({
+    ...DEFAULT_SETTINGS,
+    physics: { model: 'peng-robinson' }
+  }, storage), /gas model.*ideal.*vdw/i);
+  assert.equal(storage.getItem('simplex-gas-remixer-settings'), null);
+});
+
 test('saved gas and volume presets survive a load/save round trip', () => {
   const storage = memoryStorage();
   const settings = {
+    physics: { model: 'vdw' },
     gasPresets: [{ name: 'Tx 16/50', oxygenPercent: 16, heliumPercent: 50 }],
     volumePresets: [11, 22],
     booster: { ...DEFAULT_SETTINGS.booster }
@@ -32,6 +120,7 @@ test('saved gas and volume presets survive a load/save round trip', () => {
 test('saved settings preserve the shared booster minimum source pressure', () => {
   const storage = memoryStorage();
   const settings = {
+    physics: { model: 'vdw' },
     gasPresets: [{ name: 'Tx 16/50', oxygenPercent: 16, heliumPercent: 50 }],
     volumePresets: [11, 22],
     booster: { ...DEFAULT_SETTINGS.booster, minimumSourcePressureBar: 27 }
@@ -70,8 +159,41 @@ test('old settings gain all thermodynamic booster defaults', () => {
     otherBoostBpm: 50,
     oxygenDecantRateBarPerMin: 5,
     otherDecantRateBarPerMin: 5,
-    compressorInletFlowLPerMin: 100
+    compressorInletFlowLPerMin: 100,
+    maxCompressorPressureBar: 232,
+    maxBoosterOutputPressureBar: 200,
+    boosterTemperatureModifierC: 0,
+    compressorTemperatureModifierC: 0
   });
+});
+
+test('temperature modifiers survive settings round trip', () => {
+  const settings = {
+    ...DEFAULT_SETTINGS,
+    gasPresets: DEFAULT_SETTINGS.gasPresets.map(preset => ({ ...preset })),
+    volumePresets: [...DEFAULT_SETTINGS.volumePresets],
+    booster: {
+      ...DEFAULT_SETTINGS.booster,
+      boosterTemperatureModifierC: 12,
+      compressorTemperatureModifierC: 28
+    }
+  };
+  const storage = memoryStorage();
+
+  saveSettings(settings, storage);
+
+  assert.deepEqual(loadSettings(storage).booster, settings.booster);
+});
+
+test('temperature modifiers are bounded', () => {
+  const storage = memoryStorage();
+  for (const field of ['boosterTemperatureModifierC', 'compressorTemperatureModifierC']) {
+    assert.throws(() => saveSettings({
+      ...DEFAULT_SETTINGS,
+      booster: { ...DEFAULT_SETTINGS.booster, [field]: 101 }
+    }, storage), /temperature modifier.*-100.*100/i);
+  }
+  assert.equal(storage.getItem('simplex-gas-remixer-settings'), null);
 });
 
 test('invalid thermodynamic booster settings are rejected before storage changes', () => {
@@ -93,13 +215,16 @@ test('thermodynamic booster settings survive a save/load round trip', () => {
     gasPresets: DEFAULT_SETTINGS.gasPresets.map(preset => ({ ...preset })),
     volumePresets: [...DEFAULT_SETTINGS.volumePresets],
     booster: {
+      ...DEFAULT_SETTINGS.booster,
       minimumSourcePressureBar: 18,
       cylinderVolumeCm3: 12,
       oxygenBoostBpm: 40,
       otherBoostBpm: 55,
       oxygenDecantRateBarPerMin: 3,
       otherDecantRateBarPerMin: 7,
-      compressorInletFlowLPerMin: 160
+      compressorInletFlowLPerMin: 160,
+      maxCompressorPressureBar: 245,
+      maxBoosterOutputPressureBar: 185
     }
   };
   const storage = memoryStorage();

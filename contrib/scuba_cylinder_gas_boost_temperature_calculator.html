@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Scuba Cylinder Gas Boosting Simulator</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js for interactive dynamic charts -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Inter Font -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#f0fdfa',
+              100: '#ccfbf1',
+              400: '#2dd4bf',
+              500: '#14b8a6',
+              600: '#0d9488',
+              700: '#0f766e',
+              900: '#134e4a',
+            },
+            darkbg: '#0f172a',
+            darkcard: '#1e293b',
+            darkborder: '#334155'
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+    input[type=range] {
+      accent-color: #14b8a6;
+    }
+  </style>
+</head>
+<body class="bg-darkbg text-slate-100 min-h-screen font-sans antialiased p-3 md:p-6">
+
+  <div class="max-w-7xl mx-auto space-y-6">
+    
+    <!-- Top Header Bar -->
+    <header class="flex flex-col md:flex-row md:items-center md:justify-between p-5 bg-darkcard border border-darkborder rounded-2xl shadow-xl gap-4">
+      <div class="flex items-center gap-3">
+        <div class="p-3 bg-brand-500/10 text-brand-400 rounded-xl border border-brand-500/20">
+          <i class="fa-solid fa-temperature-arrow-up text-2xl"></i>
+        </div>
+        <div>
+          <h1 class="text-xl md:text-2xl font-bold tracking-tight text-white flex items-center gap-2">
+            Scuba Boosting Thermodynamic Simulator
+          </h1>
+          <p class="text-xs md:text-sm text-slate-400">
+            Open-System Flow Work ODE Engine &amp; Continuous Heat Dissipation Model
+          </p>
+        </div>
+      </div>
+      <div class="flex items-center gap-3 self-end md:self-auto text-xs font-medium text-slate-300 bg-slate-800/80 px-3.5 py-2 rounded-lg border border-darkborder">
+        <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        Flow Work ODE Corrected
+      </div>
+    </header>
+
+    <!-- Main Grid Content -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+      <!-- LEFT CONTROL PANEL (4 Cols) -->
+      <aside class="lg:col-span-4 bg-darkcard border border-darkborder rounded-2xl p-5 shadow-xl space-y-6">
+        <div class="flex items-center justify-between border-b border-darkborder pb-3">
+          <h2 class="font-semibold text-lg text-white flex items-center gap-2">
+            <i class="fa-solid fa-sliders text-brand-400 text-sm"></i>
+            Simulation Parameters
+          </h2>
+          <button id="resetBtn" class="text-xs text-brand-400 hover:text-brand-300 font-medium transition-colors">
+            <i class="fa-solid fa-rotate-left mr-1"></i> Reset Defaults
+          </button>
+        </div>
+
+        <!-- Inputs Form -->
+        <div class="space-y-4 text-xs md:text-sm">
+          
+          <!-- Cylinder Material -->
+          <div>
+            <label class="block text-slate-300 mb-1.5 font-medium">Cylinder Material</label>
+            <div class="grid grid-cols-2 gap-2">
+              <button type="button" id="matSteelBtn" onclick="setMaterial('steel')"
+                class="py-2.5 px-3 rounded-xl border text-center font-medium transition-all flex items-center justify-center gap-2 bg-brand-500/20 border-brand-500 text-brand-400">
+                <i class="fa-solid fa-shield-halved text-xs"></i> Steel (14 kg)
+              </button>
+              <button type="button" id="matAluBtn" onclick="setMaterial('aluminum')"
+                class="py-2.5 px-3 rounded-xl border border-darkborder bg-slate-800 text-slate-400 text-center font-medium transition-all hover:bg-slate-700 flex items-center justify-center gap-2">
+                <i class="fa-solid fa-feather text-xs"></i> AL80 (14.2 kg)
+              </button>
+            </div>
+          </div>
+
+          <!-- Cylinder Volume Slider -->
+          <div>
+            <div class="flex justify-between items-center mb-1">
+              <label class="text-slate-300 font-medium">Cylinder Volume</label>
+              <span class="text-brand-400 font-bold" id="volVal">12 L</span>
+            </div>
+            <input type="range" id="volInput" min="3" max="18" step="0.5" value="12" class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer">
+            <div class="flex justify-between text-[10px] text-slate-500 mt-1">
+              <span>3L (Stage)</span>
+              <span>12L (Std)</span>
+              <span>18L (Large)</span>
+            </div>
+          </div>
+
+          <!-- Pressures Grid -->
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-slate-300 mb-1 font-medium">Start Pressure (bar)</label>
+              <input type="number" id="pStartInput" value="0" min="0" max="300" class="w-full bg-slate-800 border border-darkborder rounded-xl px-3 py-2 text-white focus:outline-none focus:border-brand-500 font-mono">
+            </div>
+            <div>
+              <label class="block text-slate-300 mb-1 font-medium">End-Fill Target (bar)</label>
+              <input type="number" id="pTargetInput" value="210" min="10" max="350" class="w-full bg-slate-800 border border-darkborder rounded-xl px-3 py-2 text-white focus:outline-none focus:border-brand-500 font-mono">
+            </div>
+          </div>
+
+          <!-- Cylinder Start Temp vs Ambient Temp -->
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <div class="flex justify-between items-center mb-1">
+                <label class="text-slate-300 font-medium">Start Tank Temp</label>
+                <span class="text-cyan-400 font-bold" id="startTempVal">20 °C</span>
+              </div>
+              <input type="range" id="startTempInput" min="0" max="50" step="1" value="20" class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer">
+            </div>
+            <div>
+              <div class="flex justify-between items-center mb-1">
+                <label class="text-slate-300 font-medium">Ambient Temp</label>
+                <span class="text-brand-400 font-bold" id="ambTempVal">20 °C</span>
+              </div>
+              <input type="range" id="ambTempInput" min="0" max="45" step="1" value="20" class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer">
+            </div>
+          </div>
+
+          <!-- Inlet / Source Gas Temperature -->
+          <div>
+            <div class="flex justify-between items-center mb-1">
+              <label class="text-slate-300 font-medium">Inlet Gas Temp (Booster/Supply)</label>
+              <span class="text-orange-400 font-bold" id="inletTempVal">20 °C</span>
+            </div>
+            <input type="range" id="inletTempInput" min="-10" max="70" step="1" value="20" class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer">
+            <div class="flex justify-between text-[10px] text-slate-500 mt-1">
+              <span>-10°C (Chilled Decant)</span>
+              <span>20°C (Ambient)</span>
+              <span>70°C (Hot Booster)</span>
+            </div>
+          </div>
+
+          <!-- Boost Rate -->
+          <div>
+            <div class="flex justify-between items-center mb-1">
+              <label class="text-slate-300 font-medium">Fill Speed (bar/min)</label>
+              <span class="text-brand-400 font-bold" id="boostRateVal">10 bar/min</span>
+            </div>
+            <input type="range" id="boostRateInput" min="1" max="25" step="0.5" value="10" class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer">
+            <div class="flex justify-between text-[10px] text-slate-500 mt-1">
+              <span>1 (Ultra-slow)</span>
+              <span>10 (Compressor Std)</span>
+              <span>25 (Decant fast)</span>
+            </div>
+          </div>
+
+          <!-- Gas Mix Sliders -->
+          <div class="p-3 bg-slate-800/50 border border-darkborder rounded-xl space-y-3">
+            <span class="text-xs font-semibold text-slate-300 block">Gas Mixture Composition</span>
+            <div>
+              <div class="flex justify-between items-center mb-1">
+                <label class="text-slate-400 text-xs">Helium (He %)</label>
+                <span class="text-purple-400 font-bold font-mono text-xs" id="heVal">0 %</span>
+              </div>
+              <input type="range" id="heInput" min="0" max="100" step="1" value="0" class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer">
+            </div>
+            <div>
+              <div class="flex justify-between items-center mb-1">
+                <label class="text-slate-400 text-xs">Oxygen (O2 %)</label>
+                <span class="text-emerald-400 font-bold font-mono text-xs" id="o2Val">21 %</span>
+              </div>
+              <input type="range" id="o2Input" min="0" max="100" step="1" value="21" class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer">
+            </div>
+            <div class="flex justify-between text-xs text-slate-400 pt-1 border-t border-slate-700/50">
+              <span>Nitrogen Balance (N2):</span>
+              <span class="text-slate-200 font-mono font-bold" id="n2Val">79 %</span>
+            </div>
+          </div>
+
+          <!-- Cooling Medium Toggle -->
+          <div>
+            <label class="block text-slate-300 mb-1.5 font-medium">Cooling Environment</label>
+            <div class="grid grid-cols-2 gap-2">
+              <button type="button" id="mediumAirBtn" onclick="setMedium(false)"
+                class="py-2 px-3 rounded-xl border text-center font-medium transition-all flex items-center justify-center gap-1.5 bg-brand-500/20 border-brand-500 text-brand-400">
+                <i class="fa-solid fa-wind text-xs"></i> Ambient Air
+              </button>
+              <button type="button" id="mediumWaterBtn" onclick="setMedium(true)"
+                class="py-2 px-3 rounded-xl border border-darkborder bg-slate-800 text-slate-400 text-center font-medium transition-all hover:bg-slate-700 flex items-center justify-center gap-1.5">
+                <i class="fa-solid fa-water text-xs"></i> Water Bath
+              </button>
+            </div>
+          </div>
+
+          <!-- Post-Boost Time Slider -->
+          <div class="pt-2 border-t border-darkborder">
+            <div class="flex justify-between items-center mb-1">
+              <label class="text-slate-300 font-medium">Time Elapsed Post-Fill</label>
+              <span class="text-amber-400 font-bold" id="postTimeVal">15 min</span>
+            </div>
+            <input type="range" id="postTimeInput" min="0" max="60" step="1" value="15" class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer">
+          </div>
+
+        </div>
+      </aside>
+
+      <!-- RIGHT DASHBOARD & GRAPH PANEL (8 Cols) -->
+      <main class="lg:col-span-8 space-y-6">
+
+        <!-- Top Output Metrics Cards Grid -->
+        <div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
+          
+          <!-- Peak Temp -->
+          <div class="bg-darkcard border border-darkborder p-3.5 rounded-2xl flex flex-col justify-between shadow-lg">
+            <span class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Peak Gas Temp</span>
+            <div class="my-1">
+              <span class="text-xl font-bold text-rose-400 font-mono" id="metricPeakTemp">-- °C</span>
+            </div>
+            <span class="text-[10px] text-slate-500" id="metricFillDuration">In -- min fill</span>
+          </div>
+
+          <!-- Temp After X Mins -->
+          <div class="bg-darkcard border border-darkborder p-3.5 rounded-2xl flex flex-col justify-between shadow-lg">
+            <span class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider" id="metricPostTimeLabel">Temp @ 15 min</span>
+            <div class="my-1">
+              <span class="text-xl font-bold text-amber-400 font-mono" id="metricPostTemp">-- °C</span>
+            </div>
+            <span class="text-[10px] text-slate-500" id="metricCoolingDelta">-- °C above amb</span>
+          </div>
+
+          <!-- Settled Pressure @ Waiting Time -->
+          <div class="bg-darkcard border border-darkborder p-3.5 rounded-2xl flex flex-col justify-between shadow-lg border-sky-500/30">
+            <span class="text-[10px] font-semibold text-sky-300 uppercase tracking-wider" id="metricPWaitLabel">P_settled @ 15m</span>
+            <div class="my-1">
+              <span class="text-xl font-bold text-sky-400 font-mono" id="metricSettledPWait">-- bar</span>
+            </div>
+            <span class="text-[10px] text-sky-300/70" id="metricPDropWait">Drop: -- bar</span>
+          </div>
+
+          <!-- Settled Pressure @ Full Ambient -->
+          <div class="bg-darkcard border border-darkborder p-3.5 rounded-2xl flex flex-col justify-between shadow-lg border-indigo-500/30">
+            <span class="text-[10px] font-semibold text-indigo-300 uppercase tracking-wider">P_settled @ Ambient</span>
+            <div class="my-1">
+              <span class="text-xl font-bold text-indigo-400 font-mono" id="metricSettledPAmb">-- bar</span>
+            </div>
+            <span class="text-[10px] text-indigo-300/70" id="metricPDropAmb">Total Drop: -- bar</span>
+          </div>
+
+          <!-- Thermal Time Constant -->
+          <div class="bg-darkcard border border-darkborder p-3.5 rounded-2xl flex flex-col justify-between shadow-lg">
+            <span class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Thermal Tau (&tau;)</span>
+            <div class="my-1">
+              <span class="text-xl font-bold text-purple-400 font-mono" id="metricTau">-- min</span>
+            </div>
+            <span class="text-[10px] text-slate-500" id="metricFullCoolTime">Ambient in ~-- min</span>
+          </div>
+
+          <!-- Total Heat Generated vs Lost -->
+          <div class="bg-darkcard border border-darkborder p-3.5 rounded-2xl flex flex-col justify-between shadow-lg">
+            <span class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Flow Work Input</span>
+            <div class="my-1">
+              <span class="text-base font-bold text-emerald-400 font-mono" id="metricHeatWork">-- kJ</span>
+            </div>
+            <span class="text-[10px] text-slate-400" id="metricHeatDissipated">Dissipated: -- kJ</span>
+          </div>
+
+        </div>
+
+        <!-- Charts Container -->
+        <div class="bg-darkcard border border-darkborder rounded-2xl p-5 shadow-xl space-y-6">
+          
+          <!-- Chart 1: Temperature vs Time -->
+          <div>
+            <div class="flex flex-wrap items-center justify-between mb-3 gap-2">
+              <h3 class="font-semibold text-slate-200 text-sm flex items-center gap-2">
+                <i class="fa-solid fa-chart-line text-brand-400"></i>
+                Temperature Curve (Fill Boost &rarr; Linear Wait &rarr; Compressed Settling)
+              </h3>
+              <div class="flex items-center gap-2 text-xs">
+                <span class="bg-slate-800 text-slate-400 px-2.5 py-1 rounded-md border border-darkborder font-mono">
+                  T_peak = <span id="chartPeakText" class="text-rose-400">0°C</span>
+                </span>
+                <span class="bg-slate-800 text-slate-400 px-2.5 py-1 rounded-md border border-darkborder font-mono">
+                  Phase Segmentation Active
+                </span>
+              </div>
+            </div>
+            <div class="h-64 sm:h-72 w-full relative">
+              <canvas id="tempChart"></canvas>
+            </div>
+          </div>
+
+          <!-- Chart 2: Pressure vs Time -->
+          <div class="pt-4 border-t border-darkborder">
+            <div class="flex flex-wrap items-center justify-between mb-3 gap-2">
+              <h3 class="font-semibold text-slate-200 text-sm flex items-center gap-2">
+                <i class="fa-solid fa-gauge-high text-sky-400"></i>
+                Cylinder Pressure (End-Fill Target &rarr; P_settled_wait &rarr; P_settled_ambient)
+              </h3>
+              <div class="flex items-center gap-2 text-xs font-mono">
+                <span class="bg-slate-800 text-slate-400 px-2 py-1 rounded-md border border-darkborder">
+                  P_wait = <span id="chartWaitPText" class="text-sky-400">0 bar</span>
+                </span>
+                <span class="bg-slate-800 text-slate-400 px-2 py-1 rounded-md border border-darkborder">
+                  P_ambient = <span id="chartAmbPText" class="text-indigo-400">0 bar</span>
+                </span>
+              </div>
+            </div>
+            <div class="h-56 sm:h-64 w-full relative">
+              <canvas id="pressureChart"></canvas>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Heat Transfer Mechanics Summary Card -->
+        <div class="bg-darkcard border border-darkborder rounded-2xl p-5 shadow-xl space-y-3">
+          <h3 class="font-semibold text-slate-200 text-sm flex items-center gap-2">
+            <i class="fa-solid fa-circle-info text-amber-400"></i>
+            Thermodynamic Energy Balance &amp; Physics Correction
+          </h3>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs text-slate-300 leading-relaxed">
+            <div class="p-3 bg-slate-800/50 rounded-xl border border-darkborder space-y-1.5">
+              <span class="font-semibold text-brand-400 block">1. Flow Work vs. Pure Enthalpy Input:</span>
+              <p>When filling a rigid container, net energy added to the gas is given by flow work $\dot{m} (C_p T_{\text{in}} - C_v T_{\text{tank}}) \approx \dot{m} R T_{\text{in}}$. This prevents over-counting gas heat capacity and correctly predicts realistic peak temperatures ($\sim 44^\circ\text{C}$ for 0&rarr;210 bar in 20m air fill).</p>
+            </div>
+            <div class="p-3 bg-slate-800/50 rounded-xl border border-darkborder space-y-1.5">
+              <span class="font-semibold text-purple-400 block">2. Gas Mix &amp; Material Capacity:</span>
+              <p>Monatomic Helium ($\gamma = 1.66$) lacks rotational degrees of freedom, generating higher flow work heat than Nitrogen or Oxygen ($\gamma = 1.40$). Steel walls heat faster due to lower heat capacity ($C = 490\text{ J/kg}\cdot\text{K}$) than AL80 aluminum ($C = 900\text{ J/kg}\cdot\text{K}$).</p>
+            </div>
+          </div>
+        </div>
+
+      </main>
+
+    </div>
+  </div>
+
+  <script>
+    /* GLOBAL STATE & CONSTANTS */
+    const state = {
+      material: 'steel', // 'steel' or 'aluminum'
+      volumeL: 12.0,
+      pStartBar: 0,
+      pTargetBar: 210, // Target pressure at END OF FILL (gauge bar)
+      boostRateBarMin: 10.0,
+      hePct: 0,
+      o2Pct: 21,
+      isSubmerged: false, // false = air, true = water bath
+      startTankTempC: 20, // Initial cylinder starting temperature
+      ambTempC: 20,       // Ambient room/water temperature
+      inletTempC: 20,     // Incoming gas temperature from booster/supply whip
+      postTimeMins: 15    // User-selected waiting duration
+    };
+
+    // Physical Constants
+    const R_GAS = 8.314; // J/(mol K)
+    
+    // Tank Physical Properties
+    const MAT_PROPS = {
+      steel: {
+        name: 'Steel',
+        massKg: 14.0,
+        cMetal: 490, // J/(kg K)
+        areaM2: 0.45,
+        wallThicknessM: 0.0045
+      },
+      aluminum: {
+        name: 'AL80 Aluminum',
+        massKg: 14.2,
+        cMetal: 900, // J/(kg K)
+        areaM2: 0.48,
+        wallThicknessM: 0.0110
+      }
+    };
+
+    // Heat transfer coefficients (W / (m^2 K))
+    const H_AIR = 12.0;       // Natural convection air
+    const H_WATER = 250.0;    // Submerged water bath
+
+    // Chart References
+    let tempChart = null;
+    let pressureChart = null;
+
+    /* CORE THERMODYNAMIC SOLVER ENGINE */
+    function runSimulation() {
+      const pStart = Math.max(0, parseFloat(state.pStartBar));
+      const pTarget = Math.max(pStart + 1, parseFloat(state.pTargetBar));
+      const deltaP = pTarget - pStart;
+      const boostRate = Math.max(0.1, parseFloat(state.boostRateBarMin));
+      const fillDurationMins = deltaP / boostRate;
+      const fillDurationSec = fillDurationMins * 60;
+
+      const volM3 = state.volumeL / 1000.0;
+      const T_start_K = state.startTankTempC + 273.15;
+      const T_amb_K = state.ambTempC + 273.15;
+      const T_in_K = state.inletTempC + 273.15;
+      const mat = MAT_PROPS[state.material];
+      const h_coeff = state.isSubmerged ? H_WATER : H_AIR;
+
+      // Gas Composition Calculations
+      const f_he = state.hePct / 100.0;
+      const f_o2 = state.o2Pct / 100.0;
+      const f_n2 = Math.max(0, 1.0 - f_he - f_o2);
+
+      // Molar heat capacities
+      const cv_mix = (f_he * 12.47) + ((f_o2 + f_n2) * 20.78); // J/(mol K)
+      const cp_mix = (f_he * 20.78) + ((f_o2 + f_n2) * 29.10); // J/(mol K)
+      const mw_mix = (f_he * 0.004) + (f_o2 * 0.032) + (f_n2 * 0.028); // kg/mol
+
+      // Specific heat capacity per kg
+      const Cv_gas_kg = cv_mix / mw_mix; // J/(kg K)
+      const Cp_gas_kg = cp_mix / mw_mix; // J/(kg K)
+      const R_specific = R_GAS / mw_mix; // J/(kg K)
+
+      // Timestep setup
+      const dt = 0.5; // seconds per integration step
+      const totalSteps = Math.ceil(fillDurationSec / dt);
+
+      let currentT_K = T_start_K; // Start tank at specified start temperature
+      let currentP_bar = pStart;
+
+      // Absolute pressures for gas mass calculation
+      const pStartAbs = pStart + 1.0;
+      const pTargetAbs = pTarget + 1.0;
+
+      // Gas mass tracking (Ideal gas law with absolute pressure)
+      let m_gas = (pStartAbs * 1e5 * volM3) / (R_specific * currentT_K);
+      const target_m_gas = (pTargetAbs * 1e5 * volM3) / (R_specific * T_amb_K);
+      const dm_dt = (target_m_gas - m_gas) / fillDurationSec; // kg/s added
+
+      let totalHeatWorkJ = 0;
+      let totalHeatDissipatedJ = 0;
+
+      // Arrays for Charting
+      const timeLabels = [];
+      const tempPoints = [];
+      const pressurePoints = [];
+      const phaseSegmentMarkers = []; // Visual markers for fill end and wait end
+
+      // 1. FILL PHASE NUMERICAL INTEGRATION (Corrected First Law Open-System ODE)
+      for (let step = 0; step <= totalSteps; step++) {
+        const timeSec = step * dt;
+        const timeMin = timeSec / 60.0;
+
+        timeLabels.push(`Fill: ${timeMin.toFixed(1)}m`);
+        tempPoints.push(parseFloat((currentT_K - 273.15).toFixed(2)));
+        pressurePoints.push(parseFloat(currentP_bar.toFixed(2)));
+        phaseSegmentMarkers.push('fill');
+
+        if (step === totalSteps) break;
+
+        // Flow work / energy entering vessel via incoming gas minus current internal energy rate
+        const dQ_in = dm_dt * (Cp_gas_kg * T_in_K - Cv_gas_kg * currentT_K) * dt;
+
+        // Convective heat loss to exterior relative to ambient temperature
+        const dQ_loss = h_coeff * mat.areaM2 * (currentT_K - T_amb_K) * dt;
+
+        totalHeatWorkJ += dm_dt * R_specific * T_in_K * dt;
+        totalHeatDissipatedJ += dQ_loss;
+
+        // Combined heat capacity of cylinder metal + gas mass inside
+        const C_total = (mat.massKg * mat.cMetal) + (m_gas * Cv_gas_kg);
+
+        const dT = (dQ_in - dQ_loss) / C_total;
+        currentT_K += dT;
+
+        m_gas += dm_dt * dt;
+
+        // Gauge pressure update: P_gauge = (m * R * T / V) - 1 bar
+        currentP_bar = Math.max(0, ((m_gas * R_specific * currentT_K) / (volM3 * 1e5)) - 1.0);
+      }
+
+      const peakTempC = currentT_K - 273.15;
+      const peakPressureBar = pTarget; // Explicitly enforce target pressure at end of fill
+
+      // 2. EXPONENTIAL COOLING PARAMETERS
+      const finalC_total = (mat.massKg * mat.cMetal) + (m_gas * Cv_gas_kg);
+      const tauSec = finalC_total / (h_coeff * mat.areaM2);
+      const tauMin = tauSec / 60.0;
+
+      // PHASE 2: LINEAR SCALE FOR USER WAIT DURATION (high resolution)
+      const waitMins = Math.max(1, parseFloat(state.postTimeMins));
+      const waitStepMins = Math.max(0.2, waitMins / 15); // ~15 linear steps during user wait
+      let currentWaitMin = 0;
+      let tempAtWaitEndC = peakTempC;
+      let pSettledWaitBar = peakPressureBar;
+
+      while (currentWaitMin < waitMins) {
+        currentWaitMin += waitStepMins;
+        if (currentWaitMin > waitMins) currentWaitMin = waitMins;
+
+        const coolTempC = state.ambTempC + (peakTempC - state.ambTempC) * Math.exp(-currentWaitMin / tauMin);
+        const coolTempK = coolTempC + 273.15;
+        const settledPAbs = (peakPressureBar + 1.0) * (coolTempK / (peakTempC + 273.15));
+        const settledP = Math.max(0, settledPAbs - 1.0);
+
+        timeLabels.push(`Wait: +${currentWaitMin.toFixed(1)}m`);
+        tempPoints.push(parseFloat(coolTempC.toFixed(2)));
+        pressurePoints.push(parseFloat(settledP.toFixed(2)));
+        phaseSegmentMarkers.push('wait');
+
+        if (Math.abs(currentWaitMin - waitMins) < 0.01) {
+          tempAtWaitEndC = coolTempC;
+          pSettledWaitBar = settledP;
+        }
+      }
+
+      // PHASE 3: COMPRESSED SCALE FOR LONG-TERM SETTLING TO AMBIENT
+      const extendedTimeoutsMins = [5, 15, 30, 60, 120, 180];
+      for (const addMin of extendedTimeoutsMins) {
+        const totalPostMin = waitMins + addMin;
+        const coolTempC = state.ambTempC + (peakTempC - state.ambTempC) * Math.exp(-totalPostMin / tauMin);
+        const coolTempK = coolTempC + 273.15;
+        const settledPAbs = (peakPressureBar + 1.0) * (coolTempK / (peakTempC + 273.15));
+        const settledP = Math.max(0, settledPAbs - 1.0);
+
+        timeLabels.push(`Settling: +${totalPostMin.toFixed(0)}m`);
+        tempPoints.push(parseFloat(coolTempC.toFixed(2)));
+        pressurePoints.push(parseFloat(settledP.toFixed(2)));
+        phaseSegmentMarkers.push('compressed');
+      }
+
+      // Final settled state at full ambient return (T = T_ambient)
+      const pSettledAmbientBar = Math.max(0, ((peakPressureBar + 1.0) * (T_amb_K / (peakTempC + 273.15))) - 1.0);
+      const pressureDropWaitBar = peakPressureBar - pSettledWaitBar;
+      const pressureDropAmbBar = peakPressureBar - pSettledAmbientBar;
+
+      // Time to return to within 1°C of ambient
+      const deltaTPeak = Math.max(0.1, Math.abs(peakTempC - state.ambTempC));
+      const timeToAmbientMin = -tauMin * Math.log(1.0 / deltaTPeak);
+
+      // Render Outputs
+      updateUI({
+        peakTempC,
+        fillDurationMins,
+        tempAtWaitEndC,
+        pSettledWaitBar,
+        pSettledAmbientBar,
+        pressureDropWaitBar,
+        pressureDropAmbBar,
+        tauMin,
+        timeToAmbientMin,
+        totalHeatWorkJ,
+        totalHeatDissipatedJ,
+        timeLabels,
+        tempPoints,
+        pressurePoints,
+        phaseSegmentMarkers,
+        pStart
+      });
+    }
+
+    /* UI UPDATE & CHART RENDERING */
+    function updateUI(res) {
+      // Metric Cards
+      document.getElementById('metricPeakTemp').innerText = `${res.peakTempC.toFixed(1)} °C`;
+      document.getElementById('metricFillDuration').innerText = `In ${res.fillDurationMins.toFixed(1)} min fill`;
+
+      document.getElementById('metricPostTimeLabel').innerText = `Temp @ ${state.postTimeMins} min`;
+      document.getElementById('metricPostTemp').innerText = `${res.tempAtWaitEndC.toFixed(1)} °C`;
+      const coolDelta = res.tempAtWaitEndC - state.ambTempC;
+      document.getElementById('metricCoolingDelta').innerText = `${coolDelta >= 0 ? '+' : ''}${coolDelta.toFixed(1)} °C vs amb`;
+
+      // Separated Settled Pressures
+      document.getElementById('metricPWaitLabel').innerText = `P_settled @ ${state.postTimeMins}m`;
+      document.getElementById('metricSettledPWait').innerText = `${res.pSettledWaitBar.toFixed(1)} bar`;
+      document.getElementById('metricPDropWait').innerText = `Drop: -${res.pressureDropWaitBar.toFixed(1)} bar`;
+
+      document.getElementById('metricSettledPAmb').innerText = `${res.pSettledAmbientBar.toFixed(1)} bar`;
+      document.getElementById('metricPDropAmb').innerText = `Total Drop: -${res.pressureDropAmbBar.toFixed(1)} bar`;
+
+      document.getElementById('metricTau').innerText = `${res.tauMin.toFixed(1)} min`;
+      document.getElementById('metricFullCoolTime').innerText = `Ambient in ~${Math.max(0, res.timeToAmbientMin).toFixed(0)} min`;
+
+      document.getElementById('metricHeatWork').innerText = `${(res.totalHeatWorkJ / 1000).toFixed(1)} kJ`;
+      document.getElementById('metricHeatDissipated').innerText = `Dissipated: ${(res.totalHeatDissipatedJ / 1000).toFixed(1)} kJ`;
+
+      document.getElementById('chartPeakText').innerText = `${res.peakTempC.toFixed(1)}°C`;
+      document.getElementById('chartWaitPText').innerText = `${res.pSettledWaitBar.toFixed(1)} bar`;
+      document.getElementById('chartAmbPText').innerText = `${res.pSettledAmbientBar.toFixed(1)} bar`;
+
+      // Render Chart.js
+      renderCharts(res);
+    }
+
+    function renderCharts(res) {
+      // Chart 1: Temperature Chart
+      const ctxTemp = document.getElementById('tempChart').getContext('2d');
+      if (tempChart) tempChart.destroy();
+
+      tempChart = new Chart(ctxTemp, {
+        type: 'line',
+        data: {
+          labels: res.timeLabels,
+          datasets: [
+            {
+              label: 'Cylinder Temp (°C)',
+              data: res.tempPoints,
+              borderColor: '#f43f5e',
+              backgroundColor: 'rgba(244, 63, 94, 0.1)',
+              fill: true,
+              borderWidth: 2.5,
+              tension: 0.2,
+              pointRadius: (ctx) => {
+                const idx = ctx.dataIndex;
+                const marker = res.phaseSegmentMarkers[idx];
+                return (marker === 'wait' && idx === res.phaseSegmentMarkers.indexOf('compressed') - 1) ? 5 : 0;
+              },
+              pointBackgroundColor: '#fbbf24',
+              pointHoverRadius: 6
+            },
+            {
+              label: 'Ambient Temp (°C)',
+              data: Array(res.timeLabels.length).fill(state.ambTempC),
+              borderColor: '#64748b',
+              borderDash: [4, 4],
+              borderWidth: 1.5,
+              pointRadius: 0
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: { labels: { color: '#94a3b8', font: { size: 11 } } },
+            tooltip: {
+              callbacks: {
+                title: (items) => `Phase Step: ${items[0].label}`
+              }
+            }
+          },
+          scales: {
+            x: {
+              title: { display: true, text: 'Phase Timeline [ Fill (Linear) | User Wait (Linear) | Extended Settling (Compressed Scale) ]', color: '#64748b' },
+              ticks: { color: '#94a3b8', maxTicksLimit: 14 },
+              grid: { color: '#1e293b' }
+            },
+            y: {
+              title: { display: true, text: 'Temperature (°C)', color: '#64748b' },
+              ticks: { color: '#94a3b8' },
+              grid: { color: '#1e293b' }
+            }
+          }
+        }
+      });
+
+      // Chart 2: Pressure Chart
+      const ctxPressure = document.getElementById('pressureChart').getContext('2d');
+      if (pressureChart) pressureChart.destroy();
+
+      pressureChart = new Chart(ctxPressure, {
+        type: 'line',
+        data: {
+          labels: res.timeLabels,
+          datasets: [
+            {
+              label: 'Cylinder Pressure (bar)',
+              data: res.pressurePoints,
+              borderColor: '#38bdf8',
+              backgroundColor: 'rgba(56, 189, 248, 0.1)',
+              fill: true,
+              borderWidth: 2.5,
+              tension: 0.1,
+              pointRadius: 0,
+              pointHoverRadius: 6
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: { labels: { color: '#94a3b8', font: { size: 11 } } },
+            tooltip: {
+              callbacks: {
+                title: (items) => `Phase Step: ${items[0].label}`
+              }
+            }
+          },
+          scales: {
+            x: {
+              title: { display: true, text: 'Phase Timeline [ Fill | User Wait | Compressed Scale ]', color: '#64748b' },
+              ticks: { color: '#94a3b8', maxTicksLimit: 14 },
+              grid: { color: '#1e293b' }
+            },
+            y: {
+              title: { display: true, text: 'Pressure (bar)', color: '#64748b' },
+              ticks: { color: '#94a3b8' },
+              grid: { color: '#1e293b' }
+            }
+          }
+        }
+      });
+    }
+
+    /* CONTROL PANEL INTERACTIVITY & EVENT LISTENERS */
+    function setMaterial(mat) {
+      state.material = mat;
+      const btnSteel = document.getElementById('matSteelBtn');
+      const btnAlu = document.getElementById('matAluBtn');
+
+      if (mat === 'steel') {
+        btnSteel.className = "py-2.5 px-3 rounded-xl border text-center font-medium transition-all flex items-center justify-center gap-2 bg-brand-500/20 border-brand-500 text-brand-400";
+        btnAlu.className = "py-2.5 px-3 rounded-xl border border-darkborder bg-slate-800 text-slate-400 text-center font-medium transition-all hover:bg-slate-700 flex items-center justify-center gap-2";
+      } else {
+        btnAlu.className = "py-2.5 px-3 rounded-xl border text-center font-medium transition-all flex items-center justify-center gap-2 bg-brand-500/20 border-brand-500 text-brand-400";
+        btnSteel.className = "py-2.5 px-3 rounded-xl border border-darkborder bg-slate-800 text-slate-400 text-center font-medium transition-all hover:bg-slate-700 flex items-center justify-center gap-2";
+      }
+      runSimulation();
+    }
+
+    function setMedium(isWater) {
+      state.isSubmerged = isWater;
+      const btnAir = document.getElementById('mediumAirBtn');
+      const btnWater = document.getElementById('mediumWaterBtn');
+
+      if (!isWater) {
+        btnAir.className = "py-2 px-3 rounded-xl border text-center font-medium transition-all flex items-center justify-center gap-1.5 bg-brand-500/20 border-brand-500 text-brand-400";
+        btnWater.className = "py-2 px-3 rounded-xl border border-darkborder bg-slate-800 text-slate-400 text-center font-medium transition-all hover:bg-slate-700 flex items-center justify-center gap-1.5";
+      } else {
+        btnWater.className = "py-2 px-3 rounded-xl border text-center font-medium transition-all flex items-center justify-center gap-1.5 bg-brand-500/20 border-brand-500 text-brand-400";
+        btnAir.className = "py-2 px-3 rounded-xl border border-darkborder bg-slate-800 text-slate-400 text-center font-medium transition-all hover:bg-slate-700 flex items-center justify-center gap-1.5";
+      }
+      runSimulation();
+    }
+
+    function setupEventListeners() {
+      // Volume Input
+      document.getElementById('volInput').addEventListener('input', (e) => {
+        state.volumeL = parseFloat(e.target.value);
+        document.getElementById('volVal').innerText = `${state.volumeL} L`;
+        runSimulation();
+      });
+
+      // Start Pressure
+      document.getElementById('pStartInput').addEventListener('input', (e) => {
+        state.pStartBar = parseFloat(e.target.value) || 0;
+        runSimulation();
+      });
+
+      // Target Pressure
+      document.getElementById('pTargetInput').addEventListener('input', (e) => {
+        state.pTargetBar = parseFloat(e.target.value) || 0;
+        runSimulation();
+      });
+
+      // Start Tank Temp Input
+      document.getElementById('startTempInput').addEventListener('input', (e) => {
+        state.startTankTempC = parseInt(e.target.value);
+        document.getElementById('startTempVal').innerText = `${state.startTankTempC} °C`;
+        runSimulation();
+      });
+
+      // Boost Speed
+      document.getElementById('boostRateInput').addEventListener('input', (e) => {
+        state.boostRateBarMin = parseFloat(e.target.value);
+        document.getElementById('boostRateVal').innerText = `${state.boostRateBarMin} bar/min`;
+        runSimulation();
+      });
+
+      // Helium % Slider
+      document.getElementById('heInput').addEventListener('input', (e) => {
+        state.hePct = parseInt(e.target.value);
+        document.getElementById('heVal').innerText = `${state.hePct} %`;
+        
+        if (state.hePct + state.o2Pct > 100) {
+          state.o2Pct = 100 - state.hePct;
+          document.getElementById('o2Input').value = state.o2Pct;
+          document.getElementById('o2Val').innerText = `${state.o2Pct} %`;
+        }
+        document.getElementById('n2Val').innerText = `${100 - state.hePct - state.o2Pct} %`;
+        runSimulation();
+      });
+
+      // Oxygen % Slider
+      document.getElementById('o2Input').addEventListener('input', (e) => {
+        state.o2Pct = parseInt(e.target.value);
+        if (state.hePct + state.o2Pct > 100) {
+          state.hePct = 100 - state.o2Pct;
+          document.getElementById('heInput').value = state.hePct;
+          document.getElementById('heVal').innerText = `${state.hePct} %`;
+        }
+        document.getElementById('o2Val').innerText = `${state.o2Pct} %`;
+        document.getElementById('n2Val').innerText = `${100 - state.hePct - state.o2Pct} %`;
+        runSimulation();
+      });
+
+      // Ambient Temp
+      document.getElementById('ambTempInput').addEventListener('input', (e) => {
+        state.ambTempC = parseInt(e.target.value);
+        document.getElementById('ambTempVal').innerText = `${state.ambTempC} °C`;
+        runSimulation();
+      });
+
+      // Inlet Gas Temp Input
+      document.getElementById('inletTempInput').addEventListener('input', (e) => {
+        state.inletTempC = parseInt(e.target.value);
+        document.getElementById('inletTempVal').innerText = `${state.inletTempC} °C`;
+        runSimulation();
+      });
+
+      // Post Boost Time Slider
+      document.getElementById('postTimeInput').addEventListener('input', (e) => {
+        state.postTimeMins = parseInt(e.target.value);
+        document.getElementById('postTimeVal').innerText = `${state.postTimeMins} min`;
+        runSimulation();
+      });
+
+      // Reset Button
+      document.getElementById('resetBtn').addEventListener('click', () => {
+        state.material = 'steel';
+        state.volumeL = 12;
+        state.pStartBar = 0;
+        state.pTargetBar = 210;
+        state.boostRateBarMin = 10;
+        state.hePct = 0;
+        state.o2Pct = 21;
+        state.isSubmerged = false;
+        state.startTankTempC = 20;
+        state.ambTempC = 20;
+        state.inletTempC = 20;
+        state.postTimeMins = 15;
+
+        // Reset UI Elements
+        setMaterial('steel');
+        setMedium(false);
+        document.getElementById('volInput').value = 12;
+        document.getElementById('volVal').innerText = '12 L';
+        document.getElementById('pStartInput').value = 0;
+        document.getElementById('pTargetInput').value = 210;
+        document.getElementById('boostRateInput').value = 10;
+        document.getElementById('boostRateVal').innerText = '10 bar/min';
+        document.getElementById('heInput').value = 0;
+        document.getElementById('heVal').innerText = '0 %';
+        document.getElementById('o2Input').value = 21;
+        document.getElementById('o2Val').innerText = '21 %';
+        document.getElementById('n2Val').innerText = '79 %';
+        document.getElementById('startTempInput').value = 20;
+        document.getElementById('startTempVal').innerText = '20 °C';
+        document.getElementById('ambTempInput').value = 20;
+        document.getElementById('ambTempVal').innerText = '20 °C';
+        document.getElementById('inletTempInput').value = 20;
+        document.getElementById('inletTempVal').innerText = '20 °C';
+        document.getElementById('postTimeInput').value = 15;
+        document.getElementById('postTimeVal').innerText = '15 min';
+
+        runSimulation();
+      });
+    }
+
+    // Initialize application on window load
+    window.onload = function() {
+      setupEventListeners();
+      runSimulation();
+    };
+  </script>
+</body>
+</html>

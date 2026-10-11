@@ -5,9 +5,12 @@ const STORAGE_KEY = 'simplex-gas-remixer-banks';
 export const DEFAULT_BANKS = Object.freeze([
   Object.freeze({ id: 'bank-he', name: 'Pure Helium', volumeL: 50, pressureBar: 200, oxygenPercent: 0, heliumPercent: 100, enabled: true }),
   Object.freeze({ id: 'bank-1845', name: 'Tx 18/45 Bank', volumeL: 50, pressureBar: 200, oxygenPercent: 18, heliumPercent: 45, enabled: true }),
-  Object.freeze({ id: 'bank-o2', name: 'Pure Oxygen', volumeL: 40, pressureBar: 180, oxygenPercent: 100, heliumPercent: 0, enabled: true }),
-  Object.freeze({ id: 'bank-air', name: 'Air Top-off', volumeL: 80, pressureBar: 230, oxygenPercent: 21, heliumPercent: 0, enabled: true })
+  Object.freeze({ id: 'bank-o2', name: 'Pure Oxygen', volumeL: 40, pressureBar: 180, oxygenPercent: 100, heliumPercent: 0, enabled: true })
 ]);
+
+function isLegacyAirBank(bank) {
+  return bank?.oxygenPercent === 21 && bank?.heliumPercent === 0;
+}
 
 function copyBanks(banks) {
   return banks.map(bank => {
@@ -28,7 +31,7 @@ function copyBanks(banks) {
 
 
 function validateBanks(banks) {
-  if (!Array.isArray(banks) || banks.length === 0) return ['At least one supply bank is required.'];
+  if (!Array.isArray(banks)) return ['Supply banks must be a list.'];
 
   const ids = new Set();
   for (const bank of banks) {
@@ -58,12 +61,15 @@ export function loadSupplyBanks(storage, onFallback = () => {}) {
     return copyBanks(DEFAULT_BANKS);
   }
 
-  const errors = validateBanks(banks);
+  const normalizedBanks = Array.isArray(banks)
+    ? banks.filter(bank => !isLegacyAirBank(bank))
+    : banks;
+  const errors = validateBanks(normalizedBanks);
   if (errors.length > 0) {
     onFallback(new RangeError(errors.join(' ')));
     return copyBanks(DEFAULT_BANKS);
   }
-  return copyBanks(banks);
+  return copyBanks(normalizedBanks);
 }
 
 export function saveSupplyBanks(banks, storage) {

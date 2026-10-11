@@ -102,8 +102,9 @@ function renderVolumeRows(presets) {
 }
 
 export function renderSettingsDialog(settings) {
+  const physicsModel = document.getElementById('settings-physics-model');
+  if (physicsModel) physicsModel.value = settings.physics.model;
   renderGasRows(settings.gasPresets);
-  renderVolumeRows(settings.volumePresets);
   const boosterFields = {
     'settings-booster-min-source-pressure': settings.booster.minimumSourcePressureBar,
     'settings-booster-cylinder-volume': settings.booster.cylinderVolumeCm3,
@@ -111,7 +112,11 @@ export function renderSettingsDialog(settings) {
     'settings-booster-other-bpm': settings.booster.otherBoostBpm,
     'settings-booster-oxygen-decant-rate': settings.booster.oxygenDecantRateBarPerMin,
     'settings-booster-other-decant-rate': settings.booster.otherDecantRateBarPerMin,
-    'settings-compressor-inlet-flow': settings.booster.compressorInletFlowLPerMin
+    'settings-compressor-inlet-flow': settings.booster.compressorInletFlowLPerMin,
+    'settings-compressor-max-pressure': settings.booster.maxCompressorPressureBar,
+    'settings-booster-max-output-pressure': settings.booster.maxBoosterOutputPressureBar,
+    'settings-booster-temperature-modifier': settings.booster.boosterTemperatureModifierC,
+    'settings-compressor-temperature-modifier': settings.booster.compressorTemperatureModifierC
   };
   for (const [id, value] of Object.entries(boosterFields)) {
     const input = document.getElementById(id);

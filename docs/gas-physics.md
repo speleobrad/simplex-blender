@@ -2,6 +2,8 @@
 
 `js/physics.js` exports the gas-property functions used by both the optimizer and supply-bank display. Pressure is in bar, volume in litres, molar density in mol/L, and temperature input in °C; equations convert temperature with `T = temperatureC + 273.15`. The gas constant is `R = 0.083144626 bar·L/(mol·K)`.
 
+The browser UI stores the selected model in Settings. It uses the working-tank ambient temperature as the calculation temperature for the initial gas state; direct callers may still provide a separate `temperatureC` value.
+
 ## Ideal gas
 
 For molar density `ρ`:
@@ -36,6 +38,6 @@ These are the model assumptions implemented by the app, not a general-purpose ga
 
 Air-compressor inlet flow is interpreted at 1.01325 bar, ambient temperature, and air composition (21% oxygen, 0% helium), then converted with the same `Z`-aware molar-flow and receiver-rate equations.
 
-Transfer heating is an estimate for every positive booster, compressor, decant, or equalize pressure increase. It uses `ΔT = addedPressureBar × kSize × (1 + 0.45 × heliumFraction) / (kMaterial + 0.15 × fillTimeMinutes)`, where `kSize` is 0.85 at volumes up to 7 L, 1.15 at volumes at least 15 L, and one otherwise. Steel and aluminum material factors are 1.8 and 2.6 respectively; water multiplies the material factor by 2.8. Cooling follows Newton's law, `T_after = T_ambient + (T_end - T_ambient) × exp(-wait/tau)`. The time constants in minutes are 18 (air/steel), 25 (air/aluminum), 3.5 (water/steel), and 5 (water/aluminum). A target-temperature wait is `tau × ln((T_end - T_ambient) / (T_target - T_ambient))`, or zero when already at/below target.
+During every positive booster, compressor, decant, or equalize pressure increase, the module numerically integrates a lumped-capacitance energy balance with 0.5-second Euler steps. The inlet gas temperature is configurable independently from ambient temperature. Booster and compressor settings can add a signed temperature modifier to that inlet value; the default modifiers are 0°C. Gauge start and target pressures are converted to absolute pressure by adding 1 bar when estimating gas mass and mass flow. For current temperature `T`, inlet temperature `T_in`, incoming mass flow `m_dot`, gas heat capacities `Cv` and `Cp`, metal heat capacity `C_metal`, gas mass `m_gas`, heat-transfer area `A`, and coefficient `h`, the integrated equation is `dT/dt = (m_dot × (C…`
 
 To project pressure after a temperature change, the module solves the hot-state molar density with `calcMolarDensity` and evaluates that unchanged density at the new temperature with `calcPressure`. Thus ideal and Van der Waals compressibility continue to come exclusively from `js/physics.js`. These thermodynamic outputs are estimates, not a calibrated tank simulation.

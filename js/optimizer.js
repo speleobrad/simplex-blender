@@ -122,15 +122,17 @@ function solveTargetBlendAtMoles({
     })
   ];
   const decisionCosts = [
-    prioritizeTransferSafety ? 0 : -5,
+    -5,
     ...activeBanks.map(bank => {
+      const oxygenFraction = bank.oxygenPercent / 100;
+      const heliumFraction = bank.heliumPercent / 100;
       if (prioritizeTransferSafety) {
-        if (bank.oxygenPercent <= 25) return 0;
+        if (bank.oxygenPercent <= 25) {
+          return heliumFraction * heliumFraction * 100 + oxygenFraction * 0.4 + 1;
+        }
         if (bank.id === preferredBankId) return -10_000;
         return -bank.pressureBar + 1 / bank.volumeL;
       }
-      const oxygenFraction = bank.oxygenPercent / 100;
-      const heliumFraction = bank.heliumPercent / 100;
       return heliumFraction * heliumFraction * 100 + oxygenFraction * 0.4 + 1;
     })
   ];
@@ -200,11 +202,29 @@ function boostPriority(bank) {
   if (bank.oxygenPercent === 21 && bank.heliumPercent === 0) return 4;
   return 2;
 }
-function isAirBank(bank) {
-  return bank.oxygenPercent === 21 && bank.heliumPercent === 0;
+const COMPRESSOR_AIR_ID = 'compressor-air';
+
+function compressorAirBank(maxPressureBar) {
+  return {
+    id: COMPRESSOR_AIR_ID,
+    name: 'Compressor Air',
+    volumeL: 1,
+    pressureBar: maxPressureBar,
+    oxygenPercent: 21,
+    heliumPercent: 0,
+    enabled: true,
+    isCompressor: true
+  };
 }
 
-function activeBoostsFor(solverResult, activeBanks) {
+function isAirBank(bank) {
+  return bank?.isCompressor === true;
+}
+function isCompressorAir(bank) {
+  return bank?.isCompressor === true;
+}
+
+function activeBoostsFor(solverResult, activeBanks, { airFirst = false } = {}) {
   const boosts = [];
   activeBanks.forEach((bank, index) => {
     const variableName = solverResult.variableNames[index + 1];
@@ -213,7 +233,9 @@ function activeBoostsFor(solverResult, activeBanks) {
 
     boosts.push({ bank, addedMoles, priority: boostPriority(bank) });
   });
-  boosts.sort((a, b) => Number(isAirBank(a.bank)) - Number(isAirBank(b.bank))
+  boosts.sort((a, b) => (airFirst
+    ? Number(isAirBank(b.bank)) - Number(isAirBank(a.bank))
+    : Number(isAirBank(a.bank)) - Number(isAirBank(b.bank)))
     || b.bank.oxygenPercent - a.bank.oxygenPercent
     || a.priority - b.priority
     || b.addedMoles - a.addedMoles);
@@ -240,6 +262,7 @@ function protocolOperation(stage, bank) {
 }
 
 function sourceResidualPressureAfterTransfer(bank, addedMoles, bankDensityByBankId, temperatureC, useVdw) {
+  if (bank.isCompressor) return bank.pressureBar;
   const residualDensity = Math.max(
     0,
     bankDensityByBankId.get(bank.id) - addedMoles / bank.volumeL
@@ -381,15 +404,18 @@ function transferSafety({
   initialHeliumPercent,
   volumeL,
   temperatureC,
-  useVdw
+  useVdw,
+  targetPressureBar,
+  maxCompressorPressureBar
 }) {
   let cumulativeMoles = solverResult.solution.x_cyl || 0;
   let cumulativeOxygenMoles = cumulativeMoles * (initialOxygenPercent / 100);
   let cumulativeHeliumMoles = cumulativeMoles * (initialHeliumPercent / 100);
+  const airFirst = targetPressureBar > maxCompressorPressureBar;
   let worstMargin = Infinity;
   let worstError = null;
 
-  for (const { bank, addedMoles } of activeBoostsFor(solverResult, activeBanks)) {
+  for (const { bank, addedMoles } of activeBoostsFor(solverResult, activeBanks, { airFirst })) {
     cumulativeMoles += addedMoles;
     cumulativeOxygenMoles += addedMoles * (bank.oxygenPercent / 100);
     cumulativeHeliumMoles += addedMoles * (bank.heliumPercent / 100);
@@ -413,6 +439,67 @@ function transferSafety({
     if (margin < worstMargin) {
       worstMargin = margin;
       worstError = `Unsafe ${bank.oxygenPercent}% O₂ transfer from ${bank.name}: receiving cylinder would reach ${receiverPressure.toFixed(1)} bar while the source bank would fall to ${sourceResidualPressure.toFixed(1)} bar, exceeding the 4:1 limit.`;
+    }
+  }
+
+  return {
+    margin: worstMargin,
+    error: worstMargin < -1e-9 ? worstError : null
+  };
+}
+function equipmentSafety({
+  solverResult,
+  activeBanks,
+  bankDensityByBankId,
+  initialOxygenPercent,
+  initialHeliumPercent,
+  volumeL,
+  temperatureC,
+  useVdw,
+  targetPressureBar,
+  maxCompressorPressureBar,
+  maxBoosterOutputPressureBar
+}) {
+  let cumulativeMoles = solverResult.solution.x_cyl || 0;
+  let cumulativeOxygenMoles = cumulativeMoles * (initialOxygenPercent / 100);
+  let cumulativeHeliumMoles = cumulativeMoles * (initialHeliumPercent / 100);
+  const airFirst = targetPressureBar > maxCompressorPressureBar;
+  let worstMargin = Infinity;
+  let worstError = null;
+
+  for (const { bank, addedMoles } of activeBoostsFor(solverResult, activeBanks, { airFirst })) {
+    const stages = pressureTransferStages({
+      cumulativeMoles,
+      cumulativeOxygenMoles,
+      cumulativeHeliumMoles,
+      addedMoles,
+      bank,
+      bankDensityByBankId,
+      volumeL,
+      temperatureC,
+      useVdw,
+      airTopUp: isCompressorAir(bank)
+    });
+
+    for (const stage of stages) {
+      const stageAddedMoles = addedMoles * (stage.endFraction - stage.startFraction);
+      const receiverEndPressureBar = stage.receiverEndPressureBar;
+      if (isCompressorAir(bank)) {
+        const margin = maxCompressorPressureBar - receiverEndPressureBar;
+        if (margin < worstMargin) {
+          worstMargin = margin;
+          worstError = `Compressor Air cannot top up above ${maxCompressorPressureBar.toFixed(1)} bar.`;
+        }
+      } else if (stage.type === 'boost') {
+        const margin = maxBoosterOutputPressureBar - receiverEndPressureBar;
+        if (margin < worstMargin) {
+          worstMargin = margin;
+          worstError = `Booster output cannot exceed ${maxBoosterOutputPressureBar.toFixed(1)} bar.`;
+        }
+      }
+      cumulativeMoles += stageAddedMoles;
+      cumulativeOxygenMoles += stageAddedMoles * (bank.oxygenPercent / 100);
+      cumulativeHeliumMoles += stageAddedMoles * (bank.heliumPercent / 100);
     }
   }
 
@@ -671,6 +758,7 @@ function createBlendDiagnostics(
   const exhaustedBanks = [];
   if (solverResult?.solution && solverResult.variableNames) {
     activeBanks.forEach((bank, index) => {
+      if (bank.isCompressor) return;
       const availableMoles = bankMaxMoles[index];
       if (availableMoles <= 1e-9) return;
       const variableName = solverResult.variableNames[index + 1];
@@ -693,6 +781,7 @@ function createBlendDiagnostics(
     let sourceBank = null;
     let greatestDrawnComponentMoles = 0;
     activeBanks.forEach((bank, index) => {
+      if (bank.isCompressor) return;
       const fraction = componentFraction(shortfall.component, bank);
       if (fraction <= 1e-9 || bank.volumeL <= 0) return;
       const variableName = solverResult?.variableNames?.[index + 1];
@@ -707,6 +796,7 @@ function createBlendDiagnostics(
     if (!sourceBank) {
       let greatestAvailableComponentMoles = 0;
       activeBanks.forEach((bank, index) => {
+        if (bank.isCompressor) return;
         const fraction = componentFraction(shortfall.component, bank);
         if (fraction <= 1e-9 || bank.volumeL <= 0) return;
         const availableComponentMoles = bankMaxMoles[index] * fraction;
@@ -767,7 +857,7 @@ function validateBlendInput(input) {
   const { cylinder, physics, banks } = input;
   if (!cylinder || typeof cylinder !== 'object') return ['Cylinder input is missing.'];
 
-  const errors = validateCalculatorInputs(cylinder, physics);
+  const errors = validateCalculatorInputs(cylinder, physics, input.thermal);
   if (!isValidGasComposition(cylinder.initialOxygenPercent, cylinder.initialHeliumPercent)) {
     errors.push('Initial gas composition must total at most 100% O₂ and He.');
   }
@@ -793,36 +883,6 @@ function validateBlendInput(input) {
   return errors;
 }
 
-function validateThermalInput(thermal) {
-  if (!thermal || typeof thermal !== 'object') return ['Thermal input must be an object.'];
-
-  const errors = [];
-  if (!['steel', 'aluminum'].includes(thermal.tankMaterial)) {
-    errors.push('Thermal tank material must be steel or aluminum.');
-  }
-  if (!['air', 'water'].includes(thermal.coolingMedium)) {
-    errors.push('Thermal cooling medium must be air or water.');
-  }
-  if (!Number.isFinite(thermal.ambientTemperatureC)
-    || thermal.ambientTemperatureC < 0 || thermal.ambientTemperatureC > 50) {
-    errors.push('Thermal ambient temperature must be between 0 and 50°C.');
-  }
-  if (!['minutes', 'temperature'].includes(thermal.waitMode)) {
-    errors.push('Thermal wait mode must be minutes or temperature.');
-  }
-  if (!Number.isFinite(thermal.waitMinutes)
-    || thermal.waitMinutes < 0 || thermal.waitMinutes > 1440) {
-    errors.push('Thermal wait minutes must be between 0 and 1440.');
-  }
-  if (!Number.isFinite(thermal.targetTemperatureC)
-    || thermal.targetTemperatureC < 0 || thermal.targetTemperatureC > 100) {
-    errors.push('Thermal target temperature must be between 0 and 100°C.');
-  } else if (Number.isFinite(thermal.ambientTemperatureC)
-    && thermal.targetTemperatureC <= thermal.ambientTemperatureC) {
-    errors.push('Thermal target temperature must be above ambient temperature.');
-  }
-  return errors;
-}
 
 function optimizeBlendWithoutThermal(input) {
   const inputErrors = validateBlendInput(input);
@@ -831,6 +891,12 @@ function optimizeBlendWithoutThermal(input) {
   }
   const { cylinder, physics, banks, settings } = input;
   const configuredMinimumSourcePressureBar = settings?.booster?.minimumSourcePressureBar;
+  const maxCompressorPressureBar = Number.isFinite(settings?.booster?.maxCompressorPressureBar)
+    ? settings.booster.maxCompressorPressureBar
+    : 232;
+  const maxBoosterOutputPressureBar = Number.isFinite(settings?.booster?.maxBoosterOutputPressureBar)
+    ? settings.booster.maxBoosterOutputPressureBar
+    : 200;
   const minimumSourcePressureFor = bank => Number.isFinite(configuredMinimumSourcePressureBar)
     ? configuredMinimumSourcePressureBar
     : (Number.isFinite(bank.minimumPressureBar) ? bank.minimumPressureBar : 20);
@@ -855,9 +921,18 @@ function optimizeBlendWithoutThermal(input) {
   const targetZ = calcZFromDensity(targetPressureBar, targetDensity, temperatureC, useVdw);
   const gas = { initialPressureBar, initialMoles, initialZ, targetPressureBar, targetMoles, targetZ };
 
+  const solverBanks = [...banks, compressorAirBank(maxCompressorPressureBar)];
   const availableMolesByBankId = new Map();
   const bankDensityByBankId = new Map();
-  for (const bank of banks) {
+  for (const bank of solverBanks) {
+    if (bank.isCompressor) {
+      bankDensityByBankId.set(
+        bank.id,
+        calcMolarDensity(bank.pressureBar, bank.oxygenPercent, bank.heliumPercent, temperatureC, useVdw)
+      );
+      availableMolesByBankId.set(bank.id, targetMoles);
+      continue;
+    }
     const minimumSourcePressureBar = minimumSourcePressureFor(bank);
     const hasAvailableGas = bank.enabled && bank.pressureBar > minimumSourcePressureBar;
     const currentDensity = hasAvailableGas
@@ -875,7 +950,7 @@ function optimizeBlendWithoutThermal(input) {
       : 0;
     availableMolesByBankId.set(bank.id, availableMoles);
   }
-  const activeBanks = banks.filter(bank => bank.enabled);
+  const activeBanks = solverBanks.filter(bank => bank.enabled);
   const bankMaxMoles = activeBanks.map(bank => availableMolesByBankId.get(bank.id));
 
   const componentShortfalls = componentShortfallsFor({
@@ -911,24 +986,42 @@ function optimizeBlendWithoutThermal(input) {
       excludedBankId
     });
   };
-  const safetyFor = result => transferSafety({
-    solverResult: result,
-    activeBanks,
-    bankDensityByBankId,
-    initialOxygenPercent,
-    initialHeliumPercent,
-    volumeL,
-    temperatureC,
-    useVdw
-  });
-  const isUnsafe = result => safetyFor(result).error;
+  const safetyFor = (result, pressureBar = targetPressureBar) => {
+    const transferResult = transferSafety({
+      solverResult: result,
+      activeBanks,
+      bankDensityByBankId,
+      initialOxygenPercent,
+      initialHeliumPercent,
+      volumeL,
+      temperatureC,
+      useVdw,
+      targetPressureBar: pressureBar,
+      maxCompressorPressureBar
+    });
+    if (transferResult.error) return transferResult;
+    return equipmentSafety({
+      solverResult: result,
+      activeBanks,
+      bankDensityByBankId,
+      initialOxygenPercent,
+      initialHeliumPercent,
+      volumeL,
+      temperatureC,
+      useVdw,
+      targetPressureBar: pressureBar,
+      maxCompressorPressureBar,
+      maxBoosterOutputPressureBar
+    });
+  };
+  const isUnsafe = (result, pressureBar = targetPressureBar) => safetyFor(result, pressureBar).error;
   const safeAtPressure = (pressureBar, seedResult = null) => {
     const oxygenRichBanks = activeBanks.filter((bank, index) => bank.oxygenPercent > 25 && bankMaxMoles[index] > 1e-9);
     let feasibleSeedResult = seedResult?.feasible ? seedResult : null;
     let candidate = solveAtPressure(pressureBar, { prioritizeTransferSafety: true });
     if (candidate.feasible) {
       feasibleSeedResult ??= candidate;
-      if (!isUnsafe(candidate)) return candidate;
+      if (!isUnsafe(candidate, pressureBar)) return candidate;
     }
 
     for (const bank of oxygenRichBanks) {
@@ -938,7 +1031,7 @@ function optimizeBlendWithoutThermal(input) {
       });
       if (candidate.feasible) {
         feasibleSeedResult ??= candidate;
-        if (!isUnsafe(candidate)) return candidate;
+        if (!isUnsafe(candidate, pressureBar)) return candidate;
       }
     }
 
@@ -949,7 +1042,7 @@ function optimizeBlendWithoutThermal(input) {
       });
       if (candidate.feasible) {
         feasibleSeedResult ??= candidate;
-        if (!isUnsafe(candidate)) return candidate;
+        if (!isUnsafe(candidate, pressureBar)) return candidate;
       }
     }
 
@@ -969,7 +1062,7 @@ function optimizeBlendWithoutThermal(input) {
     });
     if (candidate.feasible) {
       feasibleSeedResult ??= candidate;
-      if (!isUnsafe(candidate)) return candidate;
+      if (!isUnsafe(candidate, pressureBar)) return candidate;
     }
 
     const oxygenShares = [0.5, 0.4, 0.6, 0.3, 0.7, 0.2, 0.8, 0.1, 0.9];
@@ -989,7 +1082,7 @@ function optimizeBlendWithoutThermal(input) {
       });
       return {
         result,
-        margin: result.feasible ? safetyFor(result).margin : -Infinity
+        margin: result.feasible ? safetyFor(result, pressureBar).margin : -Infinity
       };
     };
 
@@ -1187,7 +1280,7 @@ function optimizeBlendWithoutThermal(input) {
       temperatureC,
       useVdw
     );
-    const maximumRecipeError = isUnsafe(maximumResult);
+    const maximumRecipeError = isUnsafe(maximumResult, inventoryMaximumPressure);
     let safeSolverResult = null;
     if (inventoryMaximumPressure <= targetPressureBar) {
       safeSolverResult = maximumRecipeError
@@ -1238,7 +1331,9 @@ function optimizeBlendWithoutThermal(input) {
     useVdw
   );
   const drainPressure = Math.max(0, initialPressureBar - retainedPressure);
-  const recipeBoosts = activeBoostsFor(recipeSolverResult, activeBanks);
+  const recipeBoosts = activeBoostsFor(recipeSolverResult, activeBanks, {
+    airFirst: recipeTargetPressureBar > maxCompressorPressureBar
+  });
   const retainedHeliumMoles = retainedMoles * (initialHeliumPercent / 100);
   const salvagedSupplyHeliumMoles = recipeBoosts
     .filter(({ bank }) => bank.heliumPercent < 100)
@@ -1308,7 +1403,7 @@ function optimizeBlendWithoutThermal(input) {
       volumeL,
       temperatureC,
       useVdw,
-      airTopUp: Boolean(input.thermal && isAirBank(bank))
+      airTopUp: isCompressorAir(bank)
     });
 
     for (const stage of transferStages) {
@@ -1523,10 +1618,7 @@ function thermalLimitResult(input, requested, maximum) {
 }
 
 function optimizeThermalBlend(input, optimizeStatic) {
-  const inputErrors = [
-    ...validateBlendInput(input),
-    ...validateThermalInput(input?.thermal)
-  ];
+  const inputErrors = validateBlendInput(input);
   if (inputErrors.length > 0) {
     return failedResult(`Invalid blend input: ${inputErrors.join(' ')}`, null, []);
   }

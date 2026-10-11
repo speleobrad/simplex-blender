@@ -28,6 +28,24 @@ test('booster rate uses displacement, BPM, and receiver/source compressibility',
   assert.ok(rate.fillRateBarPerMin > 7 && rate.fillRateBarPerMin < 8);
   assert.equal(rate.volumetricEfficiency, 1);
 });
+test('booster molar flow uses absolute source pressure', () => {
+  const rate = calculateBoosterFillRate({
+    cylinderVolumeCm3: 9,
+    bpm: 50,
+    sourcePressureBar: 200,
+    receiverPressureBar: 100,
+    sourceOxygenPercent: 21,
+    sourceHeliumPercent: 0,
+    receiverOxygenPercent: 21,
+    receiverHeliumPercent: 0,
+    receiverVolumeL: 12,
+    temperatureC: 20,
+    useVdw: false
+  });
+
+  const expectedMolesPerMin = (201 * 0.45) / (0.083144626 * 293.15);
+  assert.ok(Math.abs(rate.molesPerMin - expectedMolesPerMin) < 1e-12);
+});
 
 test('booster clearance efficiency falls when receiver pressure exceeds source pressure', () => {
   const rate = calculateBoosterFillRate({
@@ -129,6 +147,98 @@ test('transfer temperature increases with pressure and is cooled faster in water
   assert.ok(airSteel > 20);
   assert.ok(heliumAluminumWater > 20);
   assert.ok(heliumAluminumWater < airSteel);
+});
+
+test('transfer heat loss uses the ambient gradient during filling', () => {
+  const common = {
+    startTemperatureC: 24,
+    addedPressureBar: 100,
+    fillTimeMinutes: 10,
+    volumeL: 12,
+    heliumFraction: 1,
+    tankMaterial: 'steel',
+    coolingMedium: 'air'
+  };
+  const matchedAmbient = estimateTransferTemperature({
+    ...common,
+    ambientTemperatureC: 24
+  });
+  const coolerAmbient = estimateTransferTemperature({
+    ...common,
+    ambientTemperatureC: 0
+  });
+
+  assert.ok(coolerAmbient < matchedAmbient - 1);
+});
+
+test('matches the corrected reference 12 L steel air-fill integration', () => {
+  const temperatureC = estimateTransferTemperature({
+    startTemperatureC: 28,
+    startPressureBar: 80,
+    addedPressureBar: 100,
+    fillTimeMinutes: 20,
+    volumeL: 12,
+    heliumFraction: 0.35,
+    tankMaterial: 'steel',
+    coolingMedium: 'air',
+    ambientTemperatureC: 28,
+    inletTemperatureC: 28
+  });
+
+  assert.ok(Math.abs(temperatureC - 37.8424) < 0.01);
+});
+
+test('inlet gas temperature changes the transfer-end temperature', () => {
+  const common = {
+    startTemperatureC: 20,
+    startPressureBar: 0,
+    addedPressureBar: 210,
+    fillTimeMinutes: 20,
+    volumeL: 12,
+    heliumFraction: 0,
+    tankMaterial: 'steel',
+    coolingMedium: 'air',
+    ambientTemperatureC: 20
+  };
+
+  const chilledInletC = estimateTransferTemperature({ ...common, inletTemperatureC: 0 });
+  const warmInletC = estimateTransferTemperature({ ...common, inletTemperatureC: 40 });
+
+  assert.ok(warmInletC > chilledInletC + 5);
+});
+
+test('compressor temperature modifier is added to the configured inlet temperature', () => {
+  const input = {
+    protocolSteps: [{
+      type: 'boost',
+      operation: 'Top-up',
+      resultingPressureBar: 150,
+      resultingMix: { oxygenPercent: 21, heliumPercent: 0 },
+      receiverStartPressureBar: 100,
+      receiverEndPressureBar: 150
+    }],
+    cylinder: { initialPressureBar: 100, volumeL: 12 },
+    physics: { model: 'ideal', temperatureC: 20 },
+    thermal: {
+      tankMaterial: 'steel',
+      coolingMedium: 'air',
+      ambientTemperatureC: 20,
+      inletTemperatureC: 20,
+      waitMode: 'minutes',
+      waitMinutes: 0,
+      targetTemperatureC: 25
+    },
+    settings: {
+      booster: {
+        compressorInletFlowLPerMin: 100,
+        compressorTemperatureModifierC: 15
+      }
+    }
+  };
+
+  const simulation = simulateThermalProtocol(input);
+
+  assert.equal(simulation.protocolSteps[0].thermal.inletTemperatureC, 35);
 });
 
 test('sequential simulation carries post-wait pressure and temperature into the next stage', () => {

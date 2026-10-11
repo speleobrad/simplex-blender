@@ -2,6 +2,7 @@ import { isValidGasComposition } from './gas-input.js';
 const STORAGE_KEY = 'simplex-gas-remixer-settings';
 
 export const DEFAULT_SETTINGS = Object.freeze({
+  physics: Object.freeze({ model: 'vdw' }),
   gasPresets: Object.freeze([
     Object.freeze({ name: 'Air', oxygenPercent: 21, heliumPercent: 0 }),
     Object.freeze({ name: 'EAN32', oxygenPercent: 32, heliumPercent: 0 }),
@@ -18,12 +19,17 @@ export const DEFAULT_SETTINGS = Object.freeze({
     otherBoostBpm: 50,
     oxygenDecantRateBarPerMin: 5,
     otherDecantRateBarPerMin: 5,
-    compressorInletFlowLPerMin: 100
+    compressorInletFlowLPerMin: 100,
+    maxCompressorPressureBar: 232,
+    maxBoosterOutputPressureBar: 200,
+    boosterTemperatureModifierC: 0,
+    compressorTemperatureModifierC: 0
   })
 });
 
 function copySettings(settings) {
   return {
+    physics: { model: settings.physics.model },
     gasPresets: settings.gasPresets.map(({ name, oxygenPercent, heliumPercent }) => ({
       name,
       oxygenPercent,
@@ -37,7 +43,11 @@ function copySettings(settings) {
       otherBoostBpm: settings.booster.otherBoostBpm,
       oxygenDecantRateBarPerMin: settings.booster.oxygenDecantRateBarPerMin,
       otherDecantRateBarPerMin: settings.booster.otherDecantRateBarPerMin,
-      compressorInletFlowLPerMin: settings.booster.compressorInletFlowLPerMin
+      compressorInletFlowLPerMin: settings.booster.compressorInletFlowLPerMin,
+      maxCompressorPressureBar: settings.booster.maxCompressorPressureBar,
+      maxBoosterOutputPressureBar: settings.booster.maxBoosterOutputPressureBar,
+      boosterTemperatureModifierC: settings.booster.boosterTemperatureModifierC,
+      compressorTemperatureModifierC: settings.booster.compressorTemperatureModifierC
     }
   };
 }
@@ -54,11 +64,26 @@ function addDefaultBooster(settings) {
     }
   };
 }
+function addDefaultPhysics(settings) {
+  const physics = settings?.physics && typeof settings.physics === 'object'
+    ? settings.physics
+    : {};
+  return {
+    ...settings,
+    physics: {
+      ...DEFAULT_SETTINGS.physics,
+      ...physics
+    }
+  };
+}
 
 export function validateSettings(settings) {
   const errors = [];
   if (!settings || !Array.isArray(settings.gasPresets) || !Array.isArray(settings.volumePresets)) {
     return ['Settings must contain gas and volume preset lists.'];
+  }
+  if (!['ideal', 'vdw'].includes(settings.physics?.model)) {
+    errors.push('Gas model must be either ideal or vdw.');
   }
   const booster = settings.booster;
   if (!booster || !Number.isFinite(booster.minimumSourcePressureBar)
@@ -95,6 +120,22 @@ export function validateSettings(settings) {
     || booster.compressorInletFlowLPerMin < 0.1
     || booster.compressorInletFlowLPerMin > 10000) {
     errors.push('Compressor inlet flow must be between 0.1 and 10000 L/min.');
+  }
+  for (const [field, label] of [
+    ['maxCompressorPressureBar', 'Maximum compressor pressure'],
+    ['maxBoosterOutputPressureBar', 'Maximum booster output pressure']
+  ]) {
+    if (!Number.isFinite(booster?.[field]) || booster[field] < 10 || booster[field] > 350) {
+      errors.push(`${label} must be between 10 and 350 bar.`);
+    }
+  }
+  for (const [field, label] of [
+    ['boosterTemperatureModifierC', 'Booster temperature modifier'],
+    ['compressorTemperatureModifierC', 'Compressor temperature modifier']
+  ]) {
+    if (!Number.isFinite(booster?.[field]) || booster[field] < -100 || booster[field] > 100) {
+      errors.push(`${label} must be between -100 and 100°C.`);
+    }
   }
 
   const names = new Set();
@@ -142,7 +183,7 @@ export function loadSettings(storage, onFallback = () => {}) {
     return copySettings(DEFAULT_SETTINGS);
   }
 
-  const normalized = addDefaultBooster(saved);
+  const normalized = addDefaultPhysics(addDefaultBooster(saved));
   const errors = validateSettings(normalized);
   if (errors.length > 0) {
     onFallback(new RangeError(errors.join(' ')));
@@ -152,9 +193,10 @@ export function loadSettings(storage, onFallback = () => {}) {
 }
 
 export function saveSettings(settings, storage) {
-  const errors = validateSettings(settings);
+  const normalized = addDefaultPhysics(settings);
+  const errors = validateSettings(normalized);
   if (errors.length > 0) throw new RangeError(errors.join(' '));
-  storage.setItem(STORAGE_KEY, JSON.stringify(copySettings(settings)));
+  storage.setItem(STORAGE_KEY, JSON.stringify(copySettings(normalized)));
 }
 
 export function applyGasPresetToBank(bank, preset) {

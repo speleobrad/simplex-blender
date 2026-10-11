@@ -6,9 +6,13 @@ import {
 } from './physics.js';
 
 const ATMOSPHERIC_PRESSURE_BAR = 1.01325;
+const GAUGE_PRESSURE_OFFSET_BAR = 1;
 const CLEARANCE_RATIO = 0.05;
 const GAMMA = 1.4;
 const OXYGEN_RICH_THRESHOLD = 40;
+
+const PASCALS_PER_BAR = 100000;
+const THERMAL_INTEGRATION_STEP_SECONDS = 0.5;
 
 function clamp(value, minimum, maximum) {
   return Math.min(maximum, Math.max(minimum, value));
@@ -27,24 +31,26 @@ export function calculateBoosterFillRate({
   temperatureC,
   useVdw
 }) {
+  const sourceAbsolutePressureBar = Math.max(0, sourcePressureBar + GAUGE_PRESSURE_OFFSET_BAR);
+  const receiverAbsolutePressureBar = Math.max(0, receiverPressureBar + GAUGE_PRESSURE_OFFSET_BAR);
   const zSource = calcZ(
-    sourcePressureBar,
+    sourceAbsolutePressureBar,
     sourceOxygenPercent,
     sourceHeliumPercent,
     temperatureC,
     useVdw
   );
   const zReceiver = calcZ(
-    receiverPressureBar,
+    receiverAbsolutePressureBar,
     receiverOxygenPercent,
     receiverHeliumPercent,
     temperatureC,
     useVdw
   );
-  const compressionRatio = sourcePressureBar > 0
-    ? receiverPressureBar / sourcePressureBar
+  const compressionRatio = sourceAbsolutePressureBar > 0
+    ? receiverAbsolutePressureBar / sourceAbsolutePressureBar
     : Infinity;
-  const volumetricEfficiency = receiverPressureBar <= sourcePressureBar
+  const volumetricEfficiency = receiverAbsolutePressureBar <= sourceAbsolutePressureBar
     ? 1
     : clamp(
       1 - CLEARANCE_RATIO * (Math.pow(compressionRatio, 1 / GAMMA) - 1),
@@ -53,7 +59,7 @@ export function calculateBoosterFillRate({
     );
   const effectiveFlowLPerMin = cylinderVolumeCm3 / 1000 * bpm * volumetricEfficiency;
   const temperatureK = temperatureC + 273.15;
-  const molesPerMin = sourcePressureBar * effectiveFlowLPerMin
+  const molesPerMin = sourceAbsolutePressureBar * effectiveFlowLPerMin
     / (zSource * GAS_CONSTANT * temperatureK);
   const fillRateBarPerMin = molesPerMin * zReceiver * GAS_CONSTANT * temperatureK
     / receiverVolumeL;
@@ -151,21 +157,68 @@ export function calculatePressureAtTemperature({
 
 export function estimateTransferTemperature({
   startTemperatureC,
+  startPressureBar = 0,
   addedPressureBar,
   fillTimeMinutes,
   volumeL,
   heliumFraction,
+  oxygenFraction = 0.21,
   tankMaterial,
-  coolingMedium
+  coolingMedium,
+  ambientTemperatureC = startTemperatureC,
+  inletTemperatureC = ambientTemperatureC
 }) {
-  const sizeFactor = volumeL <= 7 ? 0.85 : volumeL >= 15 ? 1.15 : 1;
-  const materialFactor = tankMaterial === 'aluminum' ? 2.6 : 1.8;
-  const coolingFactor = coolingMedium === 'water' ? materialFactor * 2.8 : materialFactor;
-  const gasFactor = 1 + 0.45 * heliumFraction;
-  const deltaTemperatureC = addedPressureBar * sizeFactor * gasFactor
-    / (coolingFactor + 0.15 * fillTimeMinutes);
+  const pressureRiseBar = Math.max(0, Number(addedPressureBar) || 0);
+  const fillTimeSeconds = Math.max(0, Number(fillTimeMinutes) || 0) * 60;
+  if (pressureRiseBar <= 0 || fillTimeSeconds <= 0) return startTemperatureC;
 
-  return startTemperatureC + deltaTemperatureC;
+  const tankVolumeL = Math.max(0.1, Number(volumeL) || 0.1);
+  const startTemperatureK = startTemperatureC + 273.15;
+  const ambientTemperatureK = ambientTemperatureC + 273.15;
+  const inletTemperatureK = inletTemperatureC + 273.15;
+  const fHe = clamp(Number(heliumFraction) || 0, 0, 1);
+  const fOxygen = clamp(Number(oxygenFraction) || 0, 0, 1 - fHe);
+  const fNitrogen = Math.max(0, 1 - fHe - fOxygen);
+  const cvMolar = fHe * 12.47 + (fOxygen + fNitrogen) * 20.78;
+  const cpMolar = fHe * 20.78 + (fOxygen + fNitrogen) * 29.10;
+  const averageMolarMassKg = fHe * 0.004 + fOxygen * 0.032 + fNitrogen * 0.028;
+  const cvKg = cvMolar / averageMolarMassKg;
+  const cpKg = cpMolar / averageMolarMassKg;
+  const specificGasConstant = 8.314 / averageMolarMassKg;
+
+  const isSteel = tankMaterial !== 'aluminum';
+  const tankMassKg = isSteel ? 14 : 14.2;
+  const metalSpecificHeat = isSteel ? 490 : 900;
+  const areaM2 = isSteel ? 0.45 : 0.48;
+  const heatTransferCoefficient = coolingMedium === 'water' ? 250 : 12;
+  const heatTransferArea = heatTransferCoefficient * areaM2;
+  const volumeM3 = tankVolumeL * 0.001;
+  const initialPressureBar = Math.max(0, Number(startPressureBar) || 0);
+  const targetPressureBar = initialPressureBar + pressureRiseBar;
+  let gasMassKg = (initialPressureBar + 1) * PASCALS_PER_BAR * volumeM3
+    / (specificGasConstant * startTemperatureK);
+  const targetGasMassKg = (targetPressureBar + 1) * PASCALS_PER_BAR * volumeM3
+    / (specificGasConstant * ambientTemperatureK);
+  const massFlowKgPerSecond = (targetGasMassKg - gasMassKg) / fillTimeSeconds;
+  let temperatureK = startTemperatureK;
+  let elapsedSeconds = 0;
+
+  while (elapsedSeconds < fillTimeSeconds) {
+    const stepSeconds = Math.min(
+      THERMAL_INTEGRATION_STEP_SECONDS,
+      fillTimeSeconds - elapsedSeconds
+    );
+    const thermalCapacityJPerK = tankMassKg * metalSpecificHeat + gasMassKg * cvKg;
+    const flowWorkWatts = massFlowKgPerSecond
+      * (cpKg * inletTemperatureK - cvKg * temperatureK);
+    const heatLossWatts = heatTransferArea * (temperatureK - ambientTemperatureK);
+    temperatureK += (flowWorkWatts - heatLossWatts)
+      / thermalCapacityJPerK * stepSeconds;
+    gasMassKg += massFlowKgPerSecond * stepSeconds;
+    elapsedSeconds += stepSeconds;
+  }
+
+  return temperatureK - 273.15;
 }
 
 const DEFAULT_BOOSTER_SETTINGS = {
@@ -174,7 +227,9 @@ const DEFAULT_BOOSTER_SETTINGS = {
   otherBoostBpm: 50,
   oxygenDecantRateBarPerMin: 5,
   otherDecantRateBarPerMin: 5,
-  compressorInletFlowLPerMin: 100
+  compressorInletFlowLPerMin: 100,
+  boosterTemperatureModifierC: 0,
+  compressorTemperatureModifierC: 0
 };
 
 function coolingTimeConstantMinutes(tankMaterial, coolingMedium) {
@@ -191,6 +246,19 @@ function thermalBoosterSettings(settings) {
     ])
   );
 }
+function inletTemperatureFor(rateSource, thermal, booster) {
+  const baseTemperatureC = Number.isFinite(thermal.inletTemperatureC)
+    ? thermal.inletTemperatureC
+    : thermal.ambientTemperatureC;
+  if (rateSource === 'booster') {
+    return baseTemperatureC + booster.boosterTemperatureModifierC;
+  }
+  if (rateSource === 'compressor') {
+    return baseTemperatureC + booster.compressorTemperatureModifierC;
+  }
+  return baseTemperatureC;
+}
+
 
 function stepTransferEndPressure(step, currentPressureBar) {
   if (Number.isFinite(step.receiverEndPressureBar)) return step.receiverEndPressureBar;
@@ -341,17 +409,22 @@ export function simulateThermalProtocol({
       ? transfer.pressureIncreaseBar / transfer.rateBarPerMin
       : 0;
     const receiverMix = stepMix(step);
+    const inletTemperatureC = inletTemperatureFor(transfer.rateSource, thermal, booster);
     const temperatureAtTransferEndC = transfer.rateSource === 'booster'
       || transfer.rateSource === 'compressor'
       || transfer.rateSource === 'decant-rate'
       ? estimateTransferTemperature({
         startTemperatureC: currentTemperatureC,
+        startPressureBar: currentPressureBar,
         addedPressureBar: transfer.pressureIncreaseBar,
         fillTimeMinutes: durationMinutes,
         volumeL: cylinder.volumeL,
-        heliumFraction: receiverMix.heliumPercent / 100,
+        heliumFraction: (step.sourceHeliumPercent ?? receiverMix.heliumPercent) / 100,
+        oxygenFraction: (step.sourceOxygenPercent ?? receiverMix.oxygenPercent) / 100,
         tankMaterial: thermal.tankMaterial,
-        coolingMedium: thermal.coolingMedium
+        coolingMedium: thermal.coolingMedium,
+        ambientTemperatureC: thermal.ambientTemperatureC,
+        inletTemperatureC
       })
       : currentTemperatureC;
     const isFinalStep = index === protocolSteps.length - 1;
@@ -386,6 +459,7 @@ export function simulateThermalProtocol({
       rateSource: transfer.rateSource,
       rateBarPerMin: transfer.rateBarPerMin,
       durationMinutes,
+      inletTemperatureC,
       temperatureStartC: currentTemperatureC,
       temperatureAtTransferEndC,
       waitMinutes,

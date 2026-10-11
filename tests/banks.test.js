@@ -17,6 +17,33 @@ test('missing saved banks return independent copies of all default fields', () =
   assert.deepEqual(next, DEFAULT_BANKS);
   assert.equal(next[0].enabled, true);
 });
+test('default banks exclude compressor Air', () => {
+  assert.equal(DEFAULT_BANKS.some(bank => bank.oxygenPercent === 21 && bank.heliumPercent === 0), false);
+});
+
+test('empty saved bank list is valid', () => {
+  const storage = memoryStorage([['simplex-gas-remixer-banks', '[]']]);
+  assert.deepEqual(loadSupplyBanks(storage), []);
+});
+
+test('legacy Air records are removed when banks are loaded', () => {
+  const storage = memoryStorage([[
+    'simplex-gas-remixer-banks',
+    JSON.stringify([
+      { ...DEFAULT_BANKS[0], id: 'bank-heirloom' },
+      {
+        id: 'bank-air',
+        name: 'Air Top-off',
+        volumeL: 80,
+        pressureBar: 230,
+        oxygenPercent: 21,
+        heliumPercent: 0,
+        enabled: true
+      }
+    ])
+  ]]);
+  assert.deepEqual(loadSupplyBanks(storage).map(bank => bank.id), ['bank-heirloom']);
+});
 
 test('saved banks preserve gas, pressure, volume, enable, and preset state', () => {
   const storage = memoryStorage();

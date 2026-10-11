@@ -151,7 +151,7 @@ Run: `git add js/settings.js js/ui/settings-dialog.js js/main.js scuba_gas_remix
 - `calculateCoolingTime({ transferEndTemperatureC, ambientTemperatureC, targetTemperatureC, tauMinutes })` returns minutes or zero.
 - `calculateTemperatureAfterWait({ transferEndTemperatureC, ambientTemperatureC, waitMinutes, tauMinutes })` returns °C.
 - `calculatePressureAtTemperature({ pressureBar, oxygenPercent, heliumPercent, fromTemperatureC, toTemperatureC, volumeL, useVdw })` preserves hot-state density and evaluates pressure at the new temperature.
-- `estimateTransferTemperature({ startTemperatureC, addedPressureBar, fillTimeMinutes, volumeL, heliumFraction, tankMaterial, coolingMedium })` returns transfer-end °C for any positive pressure-increasing transfer.
+- `estimateTransferTemperature({ startTemperatureC, startPressureBar, addedPressureBar, fillTimeMinutes, volumeL, heliumFraction, tankMaterial, coolingMedium, ambientTemperatureC })` integrates transfer heating and simultaneous ambient heat loss and returns transfer-end °C for any positive pressure-increasing transfer.
 
 - [ ] **Step 1: Write the failing pure-model tests**
 

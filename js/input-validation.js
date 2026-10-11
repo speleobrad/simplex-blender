@@ -33,6 +33,11 @@ export function validateCalculatorInputs(cylinder, physics, thermal) {
     || thermal.ambientTemperatureC < 0 || thermal.ambientTemperatureC > 50) {
     errors.push('Thermal ambient temperature must be between 0 and 50°C.');
   }
+  if (thermal.inletTemperatureC !== undefined
+    && (!Number.isFinite(thermal.inletTemperatureC)
+      || thermal.inletTemperatureC < -20 || thermal.inletTemperatureC > 100)) {
+    errors.push('Thermal inlet gas temperature must be between -20 and 100°C.');
+  }
   if (!['minutes', 'temperature'].includes(thermal.waitMode)) {
     errors.push('Thermal wait mode must be minutes or temperature.');
   }
@@ -43,7 +48,8 @@ export function validateCalculatorInputs(cylinder, physics, thermal) {
   if (!Number.isFinite(thermal.targetTemperatureC)
     || thermal.targetTemperatureC < 0 || thermal.targetTemperatureC > 100) {
     errors.push('Thermal target temperature must be between 0 and 100°C.');
-  } else if (Number.isFinite(thermal.ambientTemperatureC)
+  } else if (thermal.waitMode === 'temperature'
+    && Number.isFinite(thermal.ambientTemperatureC)
     && thermal.targetTemperatureC <= thermal.ambientTemperatureC) {
     errors.push('Thermal target temperature must be above ambient temperature.');
   }
@@ -55,6 +61,9 @@ export function validateSupplyBankInput(bank) {
   if (typeof bank.name !== 'string' || !bank.name.trim() || typeof bank.enabled !== 'boolean') {
     return ['Supply bank names must be non-empty text and enabled states must be boolean.'];
   }
+  if (bank.oxygenPercent === 21 && bank.heliumPercent === 0) {
+    return ['Air is supplied by the implicit compressor and cannot be a finite supply bank.'];
+  }
 
   const numericFields = [
     ['volumeL', 1, 200],
@@ -63,7 +72,7 @@ export function validateSupplyBankInput(bank) {
   for (const [field, minimum, maximum] of numericFields) {
     if (!Number.isFinite(bank[field])) return ['Supply bank values must be finite numbers.'];
     if (bank[field] < minimum || bank[field] > maximum) {
-      return ['Supply bank volume must be 1–200 L; pressure 1–350 bar; minimum pressure 0–100 bar.'];
+      return ['Supply bank volume must be 1–200 L; pressure 1–350 bar.'];
     }
   }
   if (!isValidGasComposition(bank.oxygenPercent, bank.heliumPercent)) {

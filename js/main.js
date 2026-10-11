@@ -60,6 +60,7 @@ const numberValue = id => parseNumericInput(byId(id).value);
 
 function copySettings(settings) {
   return {
+    physics: { ...settings.physics },
     gasPresets: settings.gasPresets.map(preset => ({ ...preset })),
     volumePresets: [...settings.volumePresets],
     booster: { ...settings.booster }
@@ -153,8 +154,11 @@ function updateSettingsDraft(input) {
   const collection = input.dataset.settingsCollection;
   const index = Number(input.dataset.settingsIndex);
   const field = input.dataset.settingsField;
-  const value = field === 'name' ? input.value : Number.parseFloat(input.value);
-  if (collection === 'volumePresets') state.settingsDraft.volumePresets[index] = value;
+  const value = collection === 'physics' || field === 'name'
+    ? input.value
+    : Number.parseFloat(input.value);
+  if (collection === 'physics') state.settingsDraft.physics[field] = value;
+  else if (collection === 'volumePresets') state.settingsDraft.volumePresets[index] = value;
   else if (collection === 'booster') state.settingsDraft.booster[field] = value;
   else state.settingsDraft.gasPresets[index][field] = value;
 }
@@ -277,13 +281,14 @@ function readInput() {
       targetHeliumPercent: numberValue('target-he')
     },
     physics: {
-      model: byId('gas-physics-model').value === 'vdw' ? 'vdw' : 'ideal',
-      temperatureC: numberValue('blend-temp')
+      model: state.settings.physics.model,
+      temperatureC: numberValue('ambient-temperature')
     },
     thermal: {
       tankMaterial: byId('tank-material').value,
       coolingMedium: byId('cooling-medium').value,
       ambientTemperatureC: numberValue('ambient-temperature'),
+      inletTemperatureC: numberValue('inlet-gas-temperature'),
       waitMode: byId('wait-mode').value,
       waitMinutes: numberValue('wait-minutes'),
       targetTemperatureC: numberValue('wait-target-temperature')
@@ -377,13 +382,14 @@ function stepTableau(delta) {
 }
 
 function addBank() {
+  const defaultGas = { oxygenPercent: 32, heliumPercent: 0 };
   state.banks.push({
     id: `bank-${Date.now()}`,
     name: 'New Mix',
     volumeL: 50,
     pressureBar: 200,
-    oxygenPercent: 21,
-    heliumPercent: 0,
+    oxygenPercent: defaultGas.oxygenPercent,
+    heliumPercent: defaultGas.heliumPercent,
     enabled: true
   });
   persistSupplyBanks();
@@ -391,7 +397,6 @@ function addBank() {
 }
 
 function removeBank(bankId) {
-  if (state.banks.length <= 1) return;
   const index = state.banks.findIndex(bank => bank.id === bankId);
   if (index < 0) return;
   clearBankInputFailure(bankId);
@@ -421,6 +426,15 @@ function selectBankGasPreset(select) {
     persistSupplyBanks();
     return;
   }
+  if (preset.oxygenPercent === 21 && preset.heliumPercent === 0) {
+    select.value = 'custom';
+    state.bankInputFailure = {
+      bankId: bank.id,
+      message: `${bank.name}: Air is supplied by the compressor and cannot be a finite supply bank.`
+    };
+    updateStorageWarning();
+    return;
+  }
   applyGasPresetToBank(bank, preset);
   bank.gasPresetName = preset.name;
   clearBankInputFailure(bank.id);
@@ -448,6 +462,16 @@ function updateBankFromInput(input) {
     if (bankField === 'oxygenPercent' || bankField === 'heliumPercent') updatedBank.gasPresetName = null;
   }
 
+  if (updatedBank.oxygenPercent === 21 && updatedBank.heliumPercent === 0) {
+    input.value = String(bank[bankField]);
+    state.bankInputFailure = {
+      bankId: bank.id,
+      message: `${bank.name}: Air is supplied by the compressor and cannot be a finite supply bank.`
+    };
+    updateStorageWarning();
+    return;
+  }
+
   const errors = validateSupplyBankInput(updatedBank);
   if (errors.length > 0) {
     input.value = String(bank[bankField]);
@@ -463,7 +487,7 @@ function updateBankFromInput(input) {
 
 function handleInputOrChange(event) {
   const target = event.target;
-  if (event.type === 'input' && target.dataset.settingsCollection) {
+  if ((event.type === 'input' || event.type === 'change') && target.dataset.settingsCollection) {
     updateSettingsDraft(target);
     return;
   }

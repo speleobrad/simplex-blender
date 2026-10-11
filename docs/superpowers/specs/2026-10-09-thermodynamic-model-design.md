@@ -153,38 +153,16 @@ Drain, keep, and zero-change stages have no transfer rate. They still participat
 
 ## Temperature model
 
-The model is an estimate based on the supplied reference model, not a calibrated tank simulation.
-
-For the working-tank volume:
-
-- `kSize = 0.85` for volume ≤ 7 L;
-- `kSize = 1.15` for volume ≥ 15 L;
-- otherwise `kSize = 1.0`.
-
-Material factors:
-
-- steel: `1.8`;
-- aluminum: `2.6`.
-
-Water multiplies the material factor by `2.8`; air leaves it unchanged.
-
-Gas factor is:
+The model is an estimate based on the supplied reference model, not a calibrated tank simulation. During each positive pressure increase, it integrates a lumped-capacitance energy balance with 0.5-second Euler steps:
 
 ```text
-kGas = 1 + 0.45 × heliumFraction
+dT/dt = (m_dot × Cp × T_ambient - h × A × (T - T_ambient))
+        / (C_metal + m_gas × Cv)
 ```
 
-Every positive booster, compressor, decant, or equalize pressure increase generates transfer heating. The positive pressure increase is used as `addedPressureBar`:
+The integration increases gas mass as pressure is transferred and estimates incoming mass from the pressure increase, cylinder volume, mixture molar mass, and ambient temperature. It uses the reference model's fixed material properties: steel is 14 kg with `C=490 J/(kg·K)` and `A=0.45 m²`; aluminum is 14.2 kg with `C=900 J/(kg·K)` and `A=0.48 m²`; air and water use `h=12 W/(m²·K)` and `h=250 W/(m²·K)` respectively. The supplied He/O₂/N₂ fractions determine gas heat capacities and molar mass. The incoming gas composition uses the source fractions when available, with the receiver mix as the fallback.
 
-```text
-deltaT = addedPressureBar × kSize × kGas
-         / (kMaterial + 0.15 × fillTimeMinutes)
-T_transferEnd = T_start + deltaT
-```
-
-Drain, keep, and zero-change stages do not add transfer heat.
-
-Cooling uses Newton's law. Time constants are:
+Drain, keep, and zero-change stages do not add transfer heat. Post-transfer cooling remains exponential with time constants:
 
 - air + aluminum: 25 minutes;
 - air + steel: 18 minutes;
@@ -197,13 +175,6 @@ For a finite wait:
 T_after = ambient + (T_transferEnd - ambient) × exp(-waitMinutes / tau)
 ```
 
-For target-temperature mode:
-
-```text
-waitMinutes = tau × ln((T_transferEnd - ambient) / (target - ambient))
-```
-
-If the transfer-end temperature is already at or below the target, wait is zero.
 
 ## Sequential pressure simulation
 
