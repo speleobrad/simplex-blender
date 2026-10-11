@@ -44,14 +44,24 @@ const state = {
 };
 
 
-function cylinderVolumeValue() {
-  const preset = byId('cyl-vol-preset').value;
-  if (preset === 'custom') return numberValue('cyl-vol-custom');
-  return preset ? numberValue('cyl-vol-preset') : 12;
+const DEFAULT_CYLINDER_PRESET_NAME = '12 L Steel 232 bar';
+
+function selectedCylinderPreset() {
+  const selectedName = byId('cylinder-preset')?.value;
+  return state.settings.cylinderPresets.find(preset => preset.name === selectedName)
+    ?? state.settings.cylinderPresets.find(preset => preset.name === DEFAULT_CYLINDER_PRESET_NAME)
+    ?? state.settings.cylinderPresets[0];
 }
 
-function refreshPresetOptions() {
-  renderPresetOptions(state.settings, cylinderVolumeValue());
+function updateCylinderRatingHint(preset) {
+  const hint = byId('cylinder-rating-hint');
+  if (!hint || !preset) return;
+  hint.textContent = `${preset.volumeL} L ${preset.material} cylinder, ${preset.massKg} kg empty assembly, rated to ${preset.workingPressureBar} bar.`;
+}
+
+function refreshPresetOptions(selectedCylinderName = byId('cylinder-preset')?.value || DEFAULT_CYLINDER_PRESET_NAME) {
+  renderPresetOptions(state.settings, selectedCylinderName);
+  updateCylinderRatingHint(selectedCylinderPreset());
 }
 
 
@@ -62,7 +72,7 @@ function copySettings(settings) {
   return {
     physics: { ...settings.physics },
     gasPresets: settings.gasPresets.map(preset => ({ ...preset })),
-    volumePresets: [...settings.volumePresets],
+    cylinderPresets: settings.cylinderPresets.map(preset => ({ ...preset })),
     booster: { ...settings.booster }
   };
 }
@@ -154,11 +164,11 @@ function updateSettingsDraft(input) {
   const collection = input.dataset.settingsCollection;
   const index = Number(input.dataset.settingsIndex);
   const field = input.dataset.settingsField;
-  const value = collection === 'physics' || field === 'name'
+  const value = collection === 'physics' || field === 'name' || field === 'material'
     ? input.value
     : Number.parseFloat(input.value);
   if (collection === 'physics') state.settingsDraft.physics[field] = value;
-  else if (collection === 'volumePresets') state.settingsDraft.volumePresets[index] = value;
+  else if (collection === 'cylinderPresets') state.settingsDraft.cylinderPresets[index][field] = value;
   else if (collection === 'booster') state.settingsDraft.booster[field] = value;
   else state.settingsDraft.gasPresets[index][field] = value;
 }
@@ -172,9 +182,18 @@ function addGasPreset() {
   renderSettingsDialog(state.settingsDraft);
 }
 
-function addVolumePreset() {
-  const nextVolume = Math.max(0, ...state.settingsDraft.volumePresets) + 1;
-  state.settingsDraft.volumePresets.push(nextVolume);
+function addCylinderPreset() {
+  const names = new Set(state.settingsDraft.cylinderPresets.map(preset => preset.name.trim().toLocaleLowerCase()));
+  let name = 'New cylinder';
+  let suffix = 2;
+  while (names.has(name.toLocaleLowerCase())) name = `New cylinder ${suffix++}`;
+  state.settingsDraft.cylinderPresets.push({
+    name,
+    volumeL: 12,
+    material: 'steel',
+    massKg: 14,
+    workingPressureBar: 232
+  });
   renderSettingsDialog(state.settingsDraft);
 }
 
@@ -190,6 +209,7 @@ function saveSettingsDraft() {
     return;
   }
 
+  const selectedCylinderName = byId('cylinder-preset')?.value || DEFAULT_CYLINDER_PRESET_NAME;
   try {
     saveSettings(state.settingsDraft, settingsStorage);
   } catch (error) {
@@ -203,7 +223,7 @@ function saveSettingsDraft() {
   updateStorageWarning();
   state.settingsDraft = null;
   byId('settings-dialog').close();
-  refreshPresetOptions();
+  refreshPresetOptions(selectedCylinderName);
   recalculate();
 }
 
@@ -218,11 +238,9 @@ function applyCylinderGasPreset(select) {
   recalculate();
 }
 
-function selectCylinderVolume(select) {
-  const customInput = byId('cyl-vol-custom');
-  const isCustom = select.value === 'custom';
-  customInput.classList.toggle('hidden', !isCustom);
-  if (!isCustom) customInput.value = select.value;
+function selectCylinderPreset(select) {
+  const preset = state.settings.cylinderPresets.find(candidate => candidate.name === select.value);
+  updateCylinderRatingHint(preset);
   recalculate();
 }
 
@@ -270,9 +288,12 @@ function updateWaitModeFields() {
 
 
 function readInput() {
+  const cylinderPreset = selectedCylinderPreset();
   return {
     cylinder: {
-      volumeL: cylinderVolumeValue(),
+      presetName: cylinderPreset.name,
+      volumeL: cylinderPreset.volumeL,
+      workingPressureBar: cylinderPreset.workingPressureBar,
       initialPressureBar: numberValue('init-p'),
       initialOxygenPercent: numberValue('init-o2'),
       initialHeliumPercent: numberValue('init-he'),
@@ -285,7 +306,8 @@ function readInput() {
       temperatureC: numberValue('ambient-temperature')
     },
     thermal: {
-      tankMaterial: byId('tank-material').value,
+      tankMaterial: cylinderPreset.material,
+      tankMassKg: cylinderPreset.massKg,
       coolingMedium: byId('cooling-medium').value,
       ambientTemperatureC: numberValue('ambient-temperature'),
       inletTemperatureC: numberValue('inlet-gas-temperature'),
@@ -497,14 +519,13 @@ function handleInputOrChange(event) {
     applyCylinderGasPreset(target);
     return;
   }
-  if (event.type === 'change' && target.dataset.action === 'select-cylinder-volume') {
-    selectCylinderVolume(target);
+  if (event.type === 'change' && target.dataset.action === 'select-cylinder-preset') {
+    selectCylinderPreset(target);
     return;
   }
 
   if (target.dataset.recalculate === event.type) {
     markGasPresetCustom(target);
-    if (target.id === 'cyl-vol-custom') byId('cyl-vol-preset').value = 'custom';
     if (target.id === 'wait-mode') updateWaitModeFields();
     recalculate();
     return;
@@ -547,17 +568,11 @@ function handleClick(event) {
     case 'cancel-settings':
       byId('settings-dialog').close();
       break;
-    case 'add-gas-preset':
-      addGasPreset();
+    case 'add-cylinder-preset':
+      addCylinderPreset();
       break;
-    case 'remove-gas-preset':
-      removeSettingsPreset('gasPresets', Number(actionElement.dataset.settingsIndex));
-      break;
-    case 'add-volume-preset':
-      addVolumePreset();
-      break;
-    case 'remove-volume-preset':
-      removeSettingsPreset('volumePresets', Number(actionElement.dataset.settingsIndex));
+    case 'remove-cylinder-preset':
+      removeSettingsPreset('cylinderPresets', Number(actionElement.dataset.settingsIndex));
       break;
     case 'save-settings':
       saveSettingsDraft();

@@ -70,12 +70,13 @@
           </div>
           <div id="settings-gas-presets" class="space-y-2"></div>
         </section>
-        <section>
+        <section class="sm:col-span-2">
           <div class="mb-3 flex items-center justify-between gap-2">
-            <h3 class="text-sm font-semibold text-slate-200">Cylinder sizes (L)</h3>
-            <button type="button" data-action="add-volume-preset" class="rounded-lg border border-ocean-700 px-2.5 py-1 text-xs text-cyan-300 hover:bg-ocean-800">Add size</button>
+            <h3 class="text-sm font-semibold text-slate-200">Cylinder presets</h3>
+            <button type="button" data-action="add-cylinder-preset" class="rounded-lg border border-ocean-700 px-2.5 py-1 text-xs text-cyan-300 hover:bg-ocean-800">Add cylinder</button>
           </div>
-          <div id="settings-volume-presets" class="space-y-2"></div>
+          <p class="mb-2 text-[10px] text-slate-500">Each preset defines the working tank volume, material, empty assembly mass, and rated working pressure.</p>
+          <div id="settings-cylinder-presets" class="space-y-2"></div>
         </section>
         <section>
           <h3 class="mb-3 text-sm font-semibold text-slate-200">Booster</h3>
@@ -186,25 +187,15 @@
         </div>
 
         <div class="grid grid-cols-2 gap-4 text-xs">
-          <!-- Cylinder Volume -->
+          <!-- Cylinder preset -->
           <div class="col-span-2 bg-ocean-950/60 p-3 rounded-xl border border-ocean-800/80">
-            <label for="cyl-vol-preset" class="block text-slate-400 font-medium mb-1">Cylinder capacity</label>
-            <div class="flex items-center gap-2">
-              <select id="cyl-vol-preset" aria-label="Cylinder capacity preset" data-action="select-cylinder-volume" data-recalculate="change" class="min-w-0 flex-1 bg-ocean-900 border border-ocean-700 rounded-lg px-2.5 py-1.5 font-mono text-cyan-300 font-bold focus:outline-none focus:border-cyan-400"></select>
-              <input type="number" id="cyl-vol-custom" value="12" min="0.1" step="0.1" aria-label="Custom cylinder capacity in litres" data-recalculate="input" class="hidden w-24 bg-ocean-900 border border-ocean-700 rounded-lg px-2.5 py-1.5 font-mono text-cyan-300 font-bold focus:outline-none focus:border-cyan-400">
-              <span class="text-slate-400 font-mono">L</span>
-            </div>
+            <label for="cylinder-preset" class="block text-slate-400 font-medium mb-1">Cylinder</label>
+            <select id="cylinder-preset" aria-label="Working tank cylinder preset" data-action="select-cylinder-preset" data-recalculate="change" class="w-full bg-ocean-900 border border-ocean-700 rounded-lg px-2.5 py-1.5 font-mono text-cyan-300 font-bold focus:outline-none focus:border-cyan-400"></select>
+            <p id="cylinder-rating-hint" class="mt-1 text-[10px] text-slate-500">Volume, material, mass, and working pressure come from the selected preset.</p>
           </div>
 
           <div class="col-span-2 grid grid-cols-1 gap-3 rounded-xl border border-ocean-800/80 bg-ocean-950/60 p-3 sm:grid-cols-2">
-            <div>
-              <label for="tank-material" class="mb-1 block text-slate-400 font-medium">Tank material</label>
-              <select id="tank-material" data-recalculate="change" class="w-full rounded-lg border border-ocean-700 bg-ocean-900 px-2.5 py-1.5 text-slate-100 focus:border-cyan-400 focus:outline-none">
-                <option value="steel">Steel</option>
-                <option value="aluminum">Aluminum</option>
-              </select>
-            </div>
-            <div>
+            <div class="sm:col-span-2">
               <label for="cooling-medium" class="mb-1 block text-slate-400 font-medium">Surrounding medium</label>
               <select id="cooling-medium" data-recalculate="change" class="w-full rounded-lg border border-ocean-700 bg-ocean-900 px-2.5 py-1.5 text-slate-100 focus:border-cyan-400 focus:outline-none">
                 <option value="air">Air</option>
