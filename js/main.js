@@ -59,8 +59,9 @@ function updateCylinderRatingHint(preset) {
   hint.textContent = `${preset.volumeL} L ${preset.material} cylinder, ${preset.massKg} kg empty assembly, rated to ${preset.workingPressureBar} bar.`;
 }
 
-function refreshPresetOptions(selectedCylinderName = byId('cylinder-preset')?.value || DEFAULT_CYLINDER_PRESET_NAME) {
-  renderPresetOptions(state.settings, selectedCylinderName);
+function refreshPresetOptions(selectedCylinderName = null) {
+  const requestedName = selectedCylinderName ?? (byId('cylinder-preset')?.value || undefined);
+  renderPresetOptions(state.settings, requestedName);
   updateCylinderRatingHint(selectedCylinderPreset());
 }
 
@@ -567,6 +568,12 @@ function handleClick(event) {
       break;
     case 'cancel-settings':
       byId('settings-dialog').close();
+      break;
+    case 'add-gas-preset':
+      addGasPreset();
+      break;
+    case 'remove-gas-preset':
+      removeSettingsPreset('gasPresets', Number(actionElement.dataset.settingsIndex));
       break;
     case 'add-cylinder-preset':
       addCylinderPreset();

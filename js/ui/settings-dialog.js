@@ -171,7 +171,7 @@ function renderCylinderRows(presets) {
 
 export function renderSettingsDialog(settings) {
   const physicsModel = document.getElementById('settings-physics-model');
-  if (physicsModel) physicsModel.value = settings.physics.model;
+  renderGasRows(settings.gasPresets);
   renderCylinderRows(settings.cylinderPresets);
   const boosterFields = {
     'settings-booster-min-source-pressure': settings.booster.minimumSourcePressureBar,
@@ -223,8 +223,9 @@ export function renderPresetOptions(settings, selectedCylinderName) {
       `${preset.name} — ${preset.volumeL} L / ${preset.material} / ${preset.workingPressureBar} bar`
     ));
   select.replaceChildren(...options);
-  const selected = settings.cylinderPresets.find(preset => preset.name === selectedCylinderName)
-    ?? settings.cylinderPresets.find(preset => preset.name === '12 L Steel 232 bar')
-    ?? sortCylinderPresetEntries(settings.cylinderPresets)[0]?.preset;
+  const requested = selectedCylinderName === undefined
+    ? settings.cylinderPresets.find(preset => preset.name === '12 L Steel 232 bar')
+    : settings.cylinderPresets.find(preset => preset.name === selectedCylinderName);
+  const selected = requested ?? sortCylinderPresetEntries(settings.cylinderPresets)[0]?.preset;
   if (selected) select.value = selected.name;
 }
