@@ -35,7 +35,7 @@
 - `saveSettings(settings, storage)` writes normalized settings without `volumePresets`.
 - `sortCylinderPresetEntries(presets)` returns `{ preset, index }` entries sorted by volume, then original index.
 
-- [ ] **Step 1: Add failing settings tests for the normalized preset shape.**
+- [x] **Step 1: Add failing settings tests for the normalized preset shape.**
 
 Add tests in `tests/settings.test.js` that assert:
 
@@ -57,7 +57,7 @@ Also add tests asserting:
 - a saved object containing both `volumePresets` and `cylinderPresets` uses `cylinderPresets` and does not retain `volumePresets` after save;
 - cylinder preset sorting is numeric and stable.
 
-- [ ] **Step 2: Run the focused settings tests and verify the new assertions fail.**
+- [x] **Step 2: Run the focused settings tests and verify the new assertions fail.**
 
 Run:
 
@@ -67,7 +67,7 @@ node --test tests/settings.test.js
 
 Expected: failures because the current settings schema still requires `volumePresets` and has no cylinder preset validator or migration.
 
-- [ ] **Step 3: Implement the settings schema and migration.**
+- [x] **Step 3: Implement the settings schema and migration.**
 
 In `js/settings.js`:
 
@@ -79,7 +79,7 @@ In `js/settings.js`:
 6. Add `sortCylinderPresetEntries` and remove the obsolete volume sorter.
 7. Keep gas, physics, booster defaults and validation unchanged.
 
-- [ ] **Step 4: Run the focused settings tests and verify they pass.**
+- [x] **Step 4: Run the focused settings tests and verify they pass.**
 
 Run:
 
@@ -89,7 +89,7 @@ node --test tests/settings.test.js
 
 Expected: PASS, including all existing gas/physics/booster tests updated to use `cylinderPresets`.
 
-- [ ] **Step 5: Commit the settings model.**
+- [x] **Step 5: Commit the settings model.**
 
 ```bash
 git add js/settings.js tests/settings.test.js
@@ -111,7 +111,7 @@ git commit -m "feat: add saved cylinder preset settings"
 - `estimateTransferTemperature({ ..., tankMassKg, ... })` uses the supplied positive mass in the tank heat-capacity term.
 - `simulateThermalProtocol` passes `thermal.tankMassKg` into every transfer-temperature estimate.
 
-- [ ] **Step 1: Add failing pressure and mass-behavior tests.**
+- [x] **Step 1: Add failing pressure and mass-behavior tests.**
 
 In `tests/input-validation.test.js`, add cases that assert:
 
@@ -137,7 +137,7 @@ Add a boundary case for target pressure exactly equal to 232 bar.
 
 In `tests/thermodynamics.test.js`, call `estimateTransferTemperature` with equal inputs and `tankMassKg: 10` versus `tankMassKg: 20`, and assert the lighter tank reaches a higher transfer-end temperature. Add a `simulateThermalProtocol` case whose output contains the configured mass-sensitive result.
 
-- [ ] **Step 2: Run focused validation and thermodynamics tests to verify failure.**
+- [x] **Step 2: Run focused validation and thermodynamics tests to verify failure.**
 
 Run:
 
@@ -147,7 +147,7 @@ node --test tests/input-validation.test.js tests/thermodynamics.test.js
 
 Expected: failures because working-pressure validation and the explicit mass parameter do not exist.
 
-- [ ] **Step 3: Implement pressure validation and explicit tank mass.**
+- [x] **Step 3: Implement pressure validation and explicit tank mass.**
 
 In `js/input-validation.js`:
 
@@ -163,7 +163,7 @@ In `js/thermodynamics.js`:
 3. Add `tankMassKg` to the `simulateThermalProtocol` thermal input flow and pass it to `estimateTransferTemperature`.
 4. Leave material-specific heat, area, and cooling-time behavior unchanged.
 
-- [ ] **Step 4: Run the focused tests and verify they pass.**
+- [x] **Step 4: Run the focused tests and verify they pass.**
 
 Run:
 
@@ -173,7 +173,7 @@ node --test tests/input-validation.test.js tests/thermodynamics.test.js
 
 Expected: PASS, including old direct thermodynamics callers and new preset-mass behavior.
 
-- [ ] **Step 5: Commit the calculation changes.**
+- [x] **Step 5: Commit the calculation changes.**
 
 ```bash
 git add js/input-validation.js js/thermodynamics.js tests/input-validation.test.js tests/thermodynamics.test.js
@@ -195,7 +195,7 @@ git commit -m "feat: apply cylinder ratings and mass to calculations"
 - `renderPresetOptions(settings, selectedCylinderName)` renders the working-tank cylinder selector and gas preset selectors, preserving the requested cylinder name when it exists and otherwise selecting the first cylinder preset.
 - `main.js` resolves `#cylinder-preset` to a normalized settings preset and uses its volume/material/mass/rating.
 
-- [ ] **Step 1: Update the settings dialog markup and working-tank markup.**
+- [x] **Step 1: Update the settings dialog markup and working-tank markup.**
 
 In `scuba_gas_remixer_simplex_optimizer.html`:
 
@@ -205,7 +205,7 @@ In `scuba_gas_remixer_simplex_optimizer.html`:
 4. Keep the cooling-medium selector, ambient/calc temperature, wait mode, and wait target unchanged.
 5. Keep the existing pressure and gas composition fields unchanged.
 
-- [ ] **Step 2: Update the settings renderer for cylinder rows.**
+- [x] **Step 2: Update the settings renderer for cylinder rows.**
 
 In `js/ui/settings-dialog.js`:
 
@@ -215,7 +215,7 @@ In `js/ui/settings-dialog.js`:
 4. Render cylinder options sorted by volume while preserving the original settings array order.
 5. Render option text in a readable form such as `${preset.name} — ${preset.volumeL} L / ${preset.material} / ${preset.workingPressureBar} bar`.
 
-- [ ] **Step 3: Update the controller state and event handlers.**
+- [x] **Step 3: Update the controller state and event handlers.**
 
 In `js/main.js`:
 
@@ -230,7 +230,7 @@ In `js/main.js`:
 9. Update event routing for the new cylinder selection action and remove custom-volume event handling.
 10. Keep gas preset, supply-bank, theme, settings-save, and recalculate behavior unchanged.
 
-- [ ] **Step 4: Run JavaScript syntax checks and the existing test suite.**
+- [x] **Step 4: Run JavaScript syntax checks and the existing test suite.**
 
 Run:
 
@@ -244,7 +244,7 @@ npm test
 
 Expected: syntax checks pass; any remaining test failures should be limited to tests or docs still referring to `volumePresets` or the removed material/custom-volume IDs, which must be updated before continuing.
 
-- [ ] **Step 5: Commit the UI and browser-controller changes.**
+- [x] **Step 5: Commit the UI and browser-controller changes.**
 
 ```bash
 git add scuba_gas_remixer_simplex_optimizer.html js/ui/settings-dialog.js js/main.js tests
@@ -267,7 +267,7 @@ git add scuba_gas_remixer_simplex_optimizer.html js/ui/settings-dialog.js js/mai
 - Documentation describes `cylinderPresets` and the selected working-tank preset as the source of volume, thermal properties, and pressure rating.
 - Existing optimizer tests continue to exercise `cylinder.volumeL`; browser-level selection supplies that value from Settings.
 
-- [ ] **Step 1: Search current documentation and tests for obsolete volume/material UI contracts.**
+- [x] **Step 1: Search current documentation and tests for obsolete volume/material UI contracts.**
 
 Run:
 
@@ -277,7 +277,7 @@ grep -RIn --exclude-dir=.git --exclude='*.html' -E 'volumePresets|tank-material|
 
 Update only current behavior documentation and implementation-plan references that would mislead maintainers. Leave historical completed specs intact unless they claim to define the current schema.
 
-- [ ] **Step 2: Add or update regression fixtures.**
+- [x] **Step 2: Add or update regression fixtures.**
 
 Ensure browser-facing calculation fixtures include:
 
@@ -292,7 +292,7 @@ cylinder: {
 
 Keep direct optimizer tests that intentionally exercise the lower-level `volumeL` contract unchanged unless the new rating is required by the specific validation path.
 
-- [ ] **Step 3: Run the complete Node suite.**
+- [x] **Step 3: Run the complete Node suite.**
 
 Run:
 
@@ -302,7 +302,7 @@ npm test
 
 Expected: all tests pass.
 
-- [ ] **Step 4: Run syntax and diff checks.**
+- [x] **Step 4: Run syntax and diff checks.**
 
 Run:
 
@@ -313,7 +313,7 @@ node --check js/main.js && node --check js/settings.js && node --check js/ui/set
 
 Expected: no syntax errors and no whitespace errors.
 
-- [ ] **Step 5: Commit documentation and regression updates.**
+- [x] **Step 5: Commit documentation and regression updates.**
 
 ```bash
 git add docs README.md tests
@@ -330,7 +330,7 @@ git add docs README.md tests
 **Interfaces:**
 - The actual browser surface must expose Settings cylinder management and Working tank selection.
 
-- [ ] **Step 1: Start the local static server.**
+- [x] **Step 1: Start the local static server.**
 
 Run:
 
@@ -340,7 +340,7 @@ python3 -m http.server 8002
 
 Serve the repository root and open `scuba_gas_remixer_simplex_optimizer.html` in the browser.
 
-- [ ] **Step 2: Verify the default working-tank selector.**
+- [x] **Step 2: Verify the default working-tank selector.**
 
 Confirm visually and via DOM inspection that:
 
@@ -349,22 +349,22 @@ Confirm visually and via DOM inspection that:
 - no independent tank-material selector exists;
 - the settings dialog contains Cylinder presets with all five fields.
 
-- [ ] **Step 3: Verify preset selection changes calculations.**
+- [x] **Step 3: Verify preset selection changes calculations.**
 
 Select a different-volume preset and confirm the result recalculates. Select an aluminum or different-mass preset and confirm the thermal result changes while the gas composition controls and supply-bank behavior remain available.
 
-- [ ] **Step 4: Verify settings CRUD and persistence.**
+- [x] **Step 4: Verify settings CRUD and persistence.**
 
 Add a cylinder preset, edit its name/volume/material/mass/working pressure, save Settings, reopen Settings, and confirm the values persist. Remove the currently selected preset and confirm the selector falls back to another preset without a browser error.
 
-- [ ] **Step 5: Verify overfill prevention.**
+- [x] **Step 5: Verify overfill prevention.**
 
 Select a preset rated at 232 bar, set target pressure above 232 bar, and confirm the result becomes an invalid-input error mentioning working pressure. Set target pressure exactly to 232 bar and confirm the pressure-rating validation no longer reports an overfill error.
 
-- [ ] **Step 6: Verify browser errors and close the smoke-test server.**
+- [x] **Step 6: Verify browser errors and close the smoke-test server.**
 
 Confirm no console errors occurred, then stop the server. Record only observed test and smoke results.
 
-- [ ] **Step 7: Mark the implementation complete.**
+- [x] **Step 7: Mark the implementation complete.**
 
 After all tests and the browser smoke test pass, update the task checklist and report the exact commands and observed behavior.
