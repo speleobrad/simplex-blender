@@ -58,7 +58,7 @@ physics: { model: 'vdw' | 'ideal', temperatureC: number }
 
 ## UI behavior
 
-The Settings dialog includes a calculation section with a `Gas model` select. The model is not recalculated while editing the draft; Save applies it, while Cancel discards it. The working-tank thermal section labels ambient temperature as the value used for both ambient conditions and the initial gas calculation state. The inlet gas temperature field remains unchanged.
+The Settings dialog includes a calculation section with a `Gas model` select. The model is not recalculated while editing the draft; Save applies it, while Cancel discards it. The working-tank thermal section labels ambient temperature as the value used for both ambient conditions and the initial gas calculation state. The Supply banks card contains a `Transfer conditions` subsection with the shared incoming gas temperature; it remains independent from ambient temperature.
 
 ## Tests and verification
 

@@ -271,7 +271,7 @@ Delete the header `gas-physics-model` select and `blend-temp` input. Keep the he
 
 - [ ] **Step 6: Clarify ambient temperature in the thermal UI**
 
-Change the label to `Ambient / calculation temperature` and add helper text explaining that it is used for the surrounding temperature and starting gas calculation state. Keep the inlet gas-temperature control independent.
+Change the label to `Incoming gas temperature`, move this control into the Supply banks card under a `Transfer conditions` subsection, and explain that it is shared by compressor and supply-bank transfers while source-specific modifiers still apply. Keep the inlet value independent from ambient temperature.
 
 - [ ] **Step 7: Update documentation**
 
