@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applyGasPresetToBank, DEFAULT_SETTINGS, getSelectedGasPreset, loadSettings, saveSettings, sortGasPresetEntries, sortVolumePresetEntries } from '../js/settings.js';
+import { applyGasPresetToBank, DEFAULT_SETTINGS, getSelectedGasPreset, loadSettings, saveSettings, sortCylinderPresetEntries, sortGasPresetEntries } from '../js/settings.js';
 
 function memoryStorage(initialEntries = []) {
   const values = new Map(initialEntries);
@@ -15,7 +15,7 @@ test('missing settings return independent copies of the built-in presets', () =>
   first.gasPresets[0].name = 'Changed';
   const second = loadSettings(memoryStorage());
   assert.equal(second.gasPresets[0].name, DEFAULT_SETTINGS.gasPresets[0].name);
-  assert.deepEqual(second.volumePresets, [3, 5, 7, 10, 12, 15, 18, 24]);
+  assert.equal(second.cylinderPresets[0].name, DEFAULT_SETTINGS.cylinderPresets[0].name);
 });
 
 test('settings default to the real-gas physics model', () => {
@@ -55,7 +55,7 @@ test('pressure ceilings survive settings round trip', () => {
   const settings = {
     ...DEFAULT_SETTINGS,
     gasPresets: DEFAULT_SETTINGS.gasPresets.map(preset => ({ ...preset })),
-    volumePresets: [...DEFAULT_SETTINGS.volumePresets],
+    cylinderPresets: DEFAULT_SETTINGS.cylinderPresets.map(preset => ({ ...preset })),
     booster: {
       ...DEFAULT_SETTINGS.booster,
       maxCompressorPressureBar: 240,
@@ -86,7 +86,7 @@ test('selected gas model survives a settings round trip', () => {
     ...DEFAULT_SETTINGS,
     physics: { model: 'ideal' },
     gasPresets: DEFAULT_SETTINGS.gasPresets.map(preset => ({ ...preset })),
-    volumePresets: [...DEFAULT_SETTINGS.volumePresets],
+    cylinderPresets: DEFAULT_SETTINGS.cylinderPresets.map(preset => ({ ...preset })),
     booster: { ...DEFAULT_SETTINGS.booster }
   };
 
@@ -105,12 +105,18 @@ test('unsupported gas models are rejected before storage changes', () => {
   assert.equal(storage.getItem('simplex-gas-remixer-settings'), null);
 });
 
-test('saved gas and volume presets survive a load/save round trip', () => {
+test('saved gas and cylinder presets survive a load/save round trip', () => {
   const storage = memoryStorage();
   const settings = {
     physics: { model: 'vdw' },
     gasPresets: [{ name: 'Tx 16/50', oxygenPercent: 16, heliumPercent: 50 }],
-    volumePresets: [11, 22],
+    cylinderPresets: [{
+      name: 'Custom 11 L',
+      volumeL: 11,
+      material: 'aluminum',
+      massKg: 12.4,
+      workingPressureBar: 300
+    }],
     booster: { ...DEFAULT_SETTINGS.booster }
   };
   saveSettings(settings, storage);
@@ -122,7 +128,13 @@ test('saved settings preserve the shared booster minimum source pressure', () =>
   const settings = {
     physics: { model: 'vdw' },
     gasPresets: [{ name: 'Tx 16/50', oxygenPercent: 16, heliumPercent: 50 }],
-    volumePresets: [11, 22],
+    cylinderPresets: [{
+      name: '11 L Steel',
+      volumeL: 11,
+      material: 'steel',
+      massKg: 14,
+      workingPressureBar: 232
+    }],
     booster: { ...DEFAULT_SETTINGS.booster, minimumSourcePressureBar: 27 }
   };
   saveSettings(settings, storage);
@@ -171,7 +183,7 @@ test('temperature modifiers survive settings round trip', () => {
   const settings = {
     ...DEFAULT_SETTINGS,
     gasPresets: DEFAULT_SETTINGS.gasPresets.map(preset => ({ ...preset })),
-    volumePresets: [...DEFAULT_SETTINGS.volumePresets],
+    cylinderPresets: DEFAULT_SETTINGS.cylinderPresets.map(preset => ({ ...preset })),
     booster: {
       ...DEFAULT_SETTINGS.booster,
       boosterTemperatureModifierC: 12,
@@ -213,7 +225,7 @@ test('thermodynamic booster settings survive a save/load round trip', () => {
   const settings = {
     ...DEFAULT_SETTINGS,
     gasPresets: DEFAULT_SETTINGS.gasPresets.map(preset => ({ ...preset })),
-    volumePresets: [...DEFAULT_SETTINGS.volumePresets],
+    cylinderPresets: DEFAULT_SETTINGS.cylinderPresets.map(preset => ({ ...preset })),
     booster: {
       ...DEFAULT_SETTINGS.booster,
       minimumSourcePressureBar: 18,
@@ -258,19 +270,23 @@ test('invalid preset lists are rejected before storage is changed', () => {
         { name: 'Air', oxygenPercent: 21, heliumPercent: 0 },
         { name: 'air', oxygenPercent: 20, heliumPercent: 0 }
       ],
-      volumePresets: [12]
+      cylinderPresets: [DEFAULT_SETTINGS.cylinderPresets[0]]
     },
     {
       gasPresets: [{ name: 'Invalid', oxygenPercent: 70, heliumPercent: 40 }],
-      volumePresets: [12]
+      cylinderPresets: [DEFAULT_SETTINGS.cylinderPresets[0]]
     },
     {
       gasPresets: [{ name: 'Air', oxygenPercent: 21, heliumPercent: 0 }],
-      volumePresets: [12, 0]
+      cylinderPresets: [{ ...DEFAULT_SETTINGS.cylinderPresets[0], material: 'carbon' }]
     },
     {
       gasPresets: [{ name: 'Air', oxygenPercent: 21, heliumPercent: 0 }],
-      volumePresets: [0.05]
+      cylinderPresets: [{ ...DEFAULT_SETTINGS.cylinderPresets[0], massKg: 0 }]
+    },
+    {
+      gasPresets: [{ name: 'Air', oxygenPercent: 21, heliumPercent: 0 }],
+      cylinderPresets: [{ ...DEFAULT_SETTINGS.cylinderPresets[0], workingPressureBar: 351 }]
     }
   ];
 
@@ -340,9 +356,34 @@ test('gas presets are ordered by increasing helium while retaining tie order', (
   assert.deepEqual(presets.map(preset => preset.name), ['Pure He', 'Air', 'Tx 18/30', 'Tx 21/30']);
 });
 
-test('cylinder sizes are ordered numerically without losing duplicate edit indices', () => {
-  const sizes = [24, 7, 12, 7];
-  const ordered = sortVolumePresetEntries(sizes);
-  assert.deepEqual(ordered.map(entry => [entry.volume, entry.index]), [[7, 1], [7, 3], [12, 2], [24, 0]]);
-  assert.deepEqual(sizes, [24, 7, 12, 7]);
+test('cylinder presets are ordered numerically without losing duplicate edit indices', () => {
+  const presets = [
+    { name: '24 L', volumeL: 24 },
+    { name: '7 L A', volumeL: 7 },
+    { name: '12 L', volumeL: 12 },
+    { name: '7 L B', volumeL: 7 }
+  ];
+  const ordered = sortCylinderPresetEntries(presets);
+  assert.deepEqual(ordered.map(entry => [entry.preset.name, entry.index]), [
+    ['7 L A', 1],
+    ['7 L B', 3],
+    ['12 L', 2],
+    ['24 L', 0]
+  ]);
+  assert.deepEqual(presets.map(preset => preset.name), ['24 L', '7 L A', '12 L', '7 L B']);
+});
+
+test('legacy volume settings migrate to steel cylinder presets', () => {
+  const storage = memoryStorage([[
+    'simplex-gas-remixer-settings',
+    JSON.stringify({
+      gasPresets: [{ name: 'Air', oxygenPercent: 21, heliumPercent: 0 }],
+      volumePresets: [12, 24]
+    })
+  ]]);
+
+  assert.deepEqual(loadSettings(storage).cylinderPresets, [
+    { name: '12 L Steel 232 bar', volumeL: 12, material: 'steel', massKg: 14, workingPressureBar: 232 },
+    { name: '24 L Steel 232 bar', volumeL: 24, material: 'steel', massKg: 14, workingPressureBar: 232 }
+  ]);
 });

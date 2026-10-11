@@ -13,6 +13,22 @@ export function validateCalculatorInputs(cylinder, physics, thermal) {
     || cylinder.targetPressureBar < 10 || cylinder.targetPressureBar > 350) {
     errors.push('Target pressure must be between 10 and 350 bar.');
   }
+  if (cylinder?.workingPressureBar !== undefined) {
+    if (!Number.isFinite(cylinder.workingPressureBar)
+      || cylinder.workingPressureBar < 10
+      || cylinder.workingPressureBar > 350) {
+      errors.push('Cylinder working pressure must be between 10 and 350 bar.');
+    } else {
+      if (Number.isFinite(cylinder.initialPressureBar)
+        && cylinder.initialPressureBar > cylinder.workingPressureBar) {
+        errors.push(`Initial pressure cannot exceed the selected cylinder working pressure of ${cylinder.workingPressureBar} bar.`);
+      }
+      if (Number.isFinite(cylinder.targetPressureBar)
+        && cylinder.targetPressureBar > cylinder.workingPressureBar) {
+        errors.push(`Target pressure cannot exceed the selected cylinder working pressure of ${cylinder.workingPressureBar} bar.`);
+      }
+    }
+  }
   if (!Number.isFinite(physics?.temperatureC)
     || physics.temperatureC < 0 || physics.temperatureC > 50) {
     errors.push('Temperature must be between 0 and 50°C.');

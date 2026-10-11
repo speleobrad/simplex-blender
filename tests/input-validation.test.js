@@ -35,6 +35,34 @@ test('rejects blank and out-of-range cylinder inputs', () => {
     assert.match(validateCalculatorInputs(cylinder, physics).join(' '), expectedMessage);
   }
 });
+test('enforces the selected cylinder working pressure', () => {
+  const thermal = {
+    tankMaterial: 'steel',
+    coolingMedium: 'air',
+    ambientTemperatureC: 20,
+    waitMode: 'minutes',
+    waitMinutes: 10,
+    targetTemperatureC: 25
+  };
+  const ratedCylinder = {
+    ...defaultCylinder,
+    workingPressureBar: 232
+  };
+
+  assert.deepEqual(validateCalculatorInputs(
+    { ...ratedCylinder, targetPressureBar: 232 },
+    defaultPhysics,
+    thermal
+  ), []);
+  assert.match(
+    validateCalculatorInputs({ ...ratedCylinder, targetPressureBar: 232.1 }, defaultPhysics, thermal).join(' '),
+    /working pressure/i
+  );
+  assert.match(
+    validateCalculatorInputs({ ...ratedCylinder, initialPressureBar: 232.1 }, defaultPhysics, thermal).join(' '),
+    /working pressure/i
+  );
+});
 
 test('rejects a temperature wait target at or below ambient', () => {
   const errors = validateCalculatorInputs(

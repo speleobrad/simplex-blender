@@ -165,6 +165,7 @@ export function estimateTransferTemperature({
   oxygenFraction = 0.21,
   tankMaterial,
   coolingMedium,
+  tankMassKg: configuredTankMassKg,
   ambientTemperatureC = startTemperatureC,
   inletTemperatureC = ambientTemperatureC
 }) {
@@ -187,7 +188,8 @@ export function estimateTransferTemperature({
   const specificGasConstant = 8.314 / averageMolarMassKg;
 
   const isSteel = tankMaterial !== 'aluminum';
-  const tankMassKg = isSteel ? 14 : 14.2;
+  const defaultTankMassKg = isSteel ? 14 : 14.2;
+  const tankMassKg = Math.max(0.1, Number(configuredTankMassKg) || defaultTankMassKg);
   const metalSpecificHeat = isSteel ? 490 : 900;
   const areaM2 = isSteel ? 0.45 : 0.48;
   const heatTransferCoefficient = coolingMedium === 'water' ? 250 : 12;
@@ -423,6 +425,7 @@ export function simulateThermalProtocol({
         oxygenFraction: (step.sourceOxygenPercent ?? receiverMix.oxygenPercent) / 100,
         tankMaterial: thermal.tankMaterial,
         coolingMedium: thermal.coolingMedium,
+        tankMassKg: thermal.tankMassKg,
         ambientTemperatureC: thermal.ambientTemperatureC,
         inletTemperatureC
       })

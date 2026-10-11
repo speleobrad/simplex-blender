@@ -206,6 +206,76 @@ test('inlet gas temperature changes the transfer-end temperature', () => {
 
   assert.ok(warmInletC > chilledInletC + 5);
 });
+test('cylinder mass changes transfer-end temperature', () => {
+  const common = {
+    startTemperatureC: 20,
+    startPressureBar: 0,
+    addedPressureBar: 210,
+    fillTimeMinutes: 20,
+    volumeL: 12,
+    heliumFraction: 0,
+    tankMaterial: 'steel',
+    coolingMedium: 'air',
+    ambientTemperatureC: 20,
+    inletTemperatureC: 20
+  };
+
+  const lightTank = estimateTransferTemperature({ ...common, tankMassKg: 10 });
+  const heavyTank = estimateTransferTemperature({ ...common, tankMassKg: 20 });
+
+  assert.ok(lightTank > heavyTank);
+});
+
+test('thermal simulation passes the selected cylinder mass to transfer heating', () => {
+  const common = {
+    protocolSteps: [{
+      type: 'boost',
+      operation: 'Boost',
+      resultingPressureBar: 180,
+      resultingMix: { oxygenPercent: 21, heliumPercent: 0 },
+      receiverStartPressureBar: 0,
+      receiverEndPressureBar: 180,
+      sourceStartPressureBar: 200,
+      sourceEndPressureBar: 20,
+      sourceOxygenPercent: 21,
+      sourceHeliumPercent: 0
+    }],
+    cylinder: { initialPressureBar: 0, volumeL: 12 },
+    physics: { model: 'ideal', temperatureC: 20 },
+    thermal: {
+      tankMaterial: 'steel',
+      coolingMedium: 'air',
+      ambientTemperatureC: 20,
+      inletTemperatureC: 20,
+      waitMode: 'minutes',
+      waitMinutes: 0,
+      targetTemperatureC: 25
+    },
+    settings: {
+      booster: {
+        compressorInletFlowLPerMin: 100,
+        oxygenBoostBpm: 50,
+        otherBoostBpm: 50,
+        oxygenDecantRateBarPerMin: 5,
+        otherDecantRateBarPerMin: 5
+      }
+    }
+  };
+
+  const lightTank = simulateThermalProtocol({
+    ...common,
+    thermal: { ...common.thermal, tankMassKg: 10 }
+  });
+  const heavyTank = simulateThermalProtocol({
+    ...common,
+    thermal: { ...common.thermal, tankMassKg: 20 }
+  });
+
+  assert.ok(
+    lightTank.protocolSteps[0].thermal.temperatureAtTransferEndC
+      > heavyTank.protocolSteps[0].thermal.temperatureAtTransferEndC
+  );
+});
 
 test('compressor temperature modifier is added to the configured inlet temperature', () => {
   const input = {

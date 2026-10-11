@@ -11,7 +11,16 @@ export const DEFAULT_SETTINGS = Object.freeze({
     Object.freeze({ name: 'Pure O₂', oxygenPercent: 100, heliumPercent: 0 }),
     Object.freeze({ name: 'Pure He', oxygenPercent: 0, heliumPercent: 100 })
   ]),
-  volumePresets: Object.freeze([3, 5, 7, 10, 12, 15, 18, 24]),
+  cylinderPresets: Object.freeze([
+    Object.freeze({ name: '12 L Steel 232 bar', volumeL: 12, material: 'steel', massKg: 14, workingPressureBar: 232 }),
+    Object.freeze({ name: '3 L Steel 232 bar', volumeL: 3, material: 'steel', massKg: 14, workingPressureBar: 232 }),
+    Object.freeze({ name: '5 L Steel 232 bar', volumeL: 5, material: 'steel', massKg: 14, workingPressureBar: 232 }),
+    Object.freeze({ name: '7 L Steel 232 bar', volumeL: 7, material: 'steel', massKg: 14, workingPressureBar: 232 }),
+    Object.freeze({ name: '10 L Steel 232 bar', volumeL: 10, material: 'steel', massKg: 14, workingPressureBar: 232 }),
+    Object.freeze({ name: '15 L Steel 232 bar', volumeL: 15, material: 'steel', massKg: 14, workingPressureBar: 232 }),
+    Object.freeze({ name: '18 L Steel 232 bar', volumeL: 18, material: 'steel', massKg: 14, workingPressureBar: 232 }),
+    Object.freeze({ name: '24 L Steel 232 bar', volumeL: 24, material: 'steel', massKg: 14, workingPressureBar: 232 })
+  ]),
   booster: Object.freeze({
     minimumSourcePressureBar: 20,
     cylinderVolumeCm3: 9,
@@ -30,12 +39,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
 function copySettings(settings) {
   return {
     physics: { model: settings.physics.model },
-    gasPresets: settings.gasPresets.map(({ name, oxygenPercent, heliumPercent }) => ({
-      name,
-      oxygenPercent,
-      heliumPercent
-    })),
-    volumePresets: [...settings.volumePresets],
+    gasPresets: settings.gasPresets.map(preset => ({ ...preset })),
+    cylinderPresets: settings.cylinderPresets.map(preset => ({ ...preset })),
     booster: {
       minimumSourcePressureBar: settings.booster.minimumSourcePressureBar,
       cylinderVolumeCm3: settings.booster.cylinderVolumeCm3,
@@ -50,6 +55,25 @@ function copySettings(settings) {
       compressorTemperatureModifierC: settings.booster.compressorTemperatureModifierC
     }
   };
+}
+
+function legacyVolumePresetsToCylinders(volumePresets) {
+  return volumePresets.map(volume => ({
+    name: `${volume} L Steel 232 bar`,
+    volumeL: volume,
+    material: 'steel',
+    massKg: 14,
+    workingPressureBar: 232
+  }));
+}
+
+function addDefaultCylinderPresets(settings) {
+  const cylinderPresets = Array.isArray(settings?.cylinderPresets)
+    ? settings.cylinderPresets
+    : Array.isArray(settings?.volumePresets)
+      ? legacyVolumePresetsToCylinders(settings.volumePresets)
+      : undefined;
+  return { ...settings, cylinderPresets };
 }
 
 function addDefaultBooster(settings) {
@@ -79,8 +103,11 @@ function addDefaultPhysics(settings) {
 
 export function validateSettings(settings) {
   const errors = [];
-  if (!settings || !Array.isArray(settings.gasPresets) || !Array.isArray(settings.volumePresets)) {
-    return ['Settings must contain gas and volume preset lists.'];
+  if (!settings || !Array.isArray(settings.gasPresets) || !Array.isArray(settings.cylinderPresets)) {
+    return ['Settings must contain gas and cylinder preset lists.'];
+  }
+  if (settings.cylinderPresets.length === 0) {
+    errors.push('At least one cylinder preset is required.');
   }
   if (!['ideal', 'vdw'].includes(settings.physics?.model)) {
     errors.push('Gas model must be either ideal or vdw.');
@@ -155,12 +182,30 @@ export function validateSettings(settings) {
     }
   }
 
-  const volumes = new Set();
-  for (const volume of settings.volumePresets) {
-    if (!Number.isFinite(volume) || volume < 0.1 || volumes.has(volume)) {
-      errors.push('Cylinder volumes must be at least 0.1 L, finite, and unique.');
+  const cylinderNames = new Set();
+  for (const preset of settings.cylinderPresets) {
+    if (!preset || typeof preset.name !== 'string' || !preset.name.trim()) {
+      errors.push('Every cylinder preset needs a name.');
+      continue;
     }
-    volumes.add(volume);
+    const normalizedName = preset.name.trim().toLocaleLowerCase();
+    if (cylinderNames.has(normalizedName)) errors.push('Cylinder preset names must be unique.');
+    cylinderNames.add(normalizedName);
+
+    if (!Number.isFinite(preset.volumeL) || preset.volumeL < 0.1) {
+      errors.push(`Cylinder preset “${preset.name}” volume must be at least 0.1 L.`);
+    }
+    if (!['steel', 'aluminum'].includes(preset.material)) {
+      errors.push(`Cylinder preset “${preset.name}” material must be steel or aluminum.`);
+    }
+    if (!Number.isFinite(preset.massKg) || preset.massKg <= 0) {
+      errors.push(`Cylinder preset “${preset.name}” mass must be greater than 0 kg.`);
+    }
+    if (!Number.isFinite(preset.workingPressureBar)
+      || preset.workingPressureBar < 10
+      || preset.workingPressureBar > 350) {
+      errors.push(`Cylinder preset “${preset.name}” working pressure must be between 10 and 350 bar.`);
+    }
   }
   return errors;
 }
@@ -183,7 +228,7 @@ export function loadSettings(storage, onFallback = () => {}) {
     return copySettings(DEFAULT_SETTINGS);
   }
 
-  const normalized = addDefaultPhysics(addDefaultBooster(saved));
+  const normalized = addDefaultCylinderPresets(addDefaultPhysics(addDefaultBooster(saved)));
   const errors = validateSettings(normalized);
   if (errors.length > 0) {
     onFallback(new RangeError(errors.join(' ')));
@@ -193,7 +238,7 @@ export function loadSettings(storage, onFallback = () => {}) {
 }
 
 export function saveSettings(settings, storage) {
-  const normalized = addDefaultPhysics(settings);
+  const normalized = addDefaultCylinderPresets(addDefaultPhysics(addDefaultBooster(settings)));
   const errors = validateSettings(normalized);
   if (errors.length > 0) throw new RangeError(errors.join(' '));
   storage.setItem(STORAGE_KEY, JSON.stringify(copySettings(normalized)));
@@ -221,8 +266,8 @@ export function sortGasPresetEntries(presets) {
     .sort((left, right) => left.preset.heliumPercent - right.preset.heliumPercent || left.index - right.index);
 }
 
-export function sortVolumePresetEntries(volumes) {
-  return volumes
-    .map((volume, index) => ({ volume, index }))
-    .sort((left, right) => left.volume - right.volume || left.index - right.index);
+export function sortCylinderPresetEntries(presets) {
+  return presets
+    .map((preset, index) => ({ preset, index }))
+    .sort((left, right) => left.preset.volumeL - right.preset.volumeL || left.index - right.index);
 }
