@@ -37,7 +37,7 @@ The thermodynamic model uses the selected material for material-specific behavio
 6. Initial and target pressure must each be no greater than the selected cylinder's working pressure. The existing generic limits of 0–350 bar for initial pressure and 10–350 bar for target pressure remain in force. Equality with the working pressure is valid.
 7. The thermodynamic transfer-temperature calculation uses the preset `massKg` rather than a material-based hard-coded mass. Material-specific cooling behavior remains unchanged.
 8. Existing saved settings containing `volumePresets` migrate on load to generated cylinder presets using the saved volumes, steel, 14 kg, and 232 bar. New saves contain `cylinderPresets` only.
-9. The selected cylinder is a current recipe input, not a separate persisted user preference. If saving Settings removes the selected preset, the first available preset becomes selected before recalculation.
+9. The default Working tank selection is the `12 L Steel 232 bar` preset. The selected cylinder is a current recipe input, not a separate persisted user preference. If saving Settings removes the selected preset, the first available preset becomes selected before recalculation.
 10. Existing supply-bank behavior, gas presets, gas inlet temperature, calculation temperature, gas model, and optimizer equations remain otherwise unchanged.
 
 ## Data flow
