@@ -169,10 +169,116 @@ function renderCylinderRows(presets) {
   container.replaceChildren(...rows);
 }
 
+function renderEquipmentPresetSelector(id, presets, matchesActiveFields) {
+  const select = document.getElementById(id);
+  if (!select) return;
+  const options = presets.map(preset => createOption(preset.name, preset.name));
+  select.replaceChildren(...options);
+  const selected = presets.find(matchesActiveFields) ?? presets[0];
+  if (selected) select.value = selected.name;
+}
+
+function compressorPresetMatchesActiveFields(booster, preset) {
+  return preset.inletFlowLPerMin === booster.compressorInletFlowLPerMin
+    && preset.maxPressureBar === booster.maxCompressorPressureBar
+    && preset.temperatureModifierC === booster.compressorTemperatureModifierC;
+}
+
+function boosterPresetMatchesActiveFields(booster, preset) {
+  return preset.minimumSourcePressureBar === booster.minimumSourcePressureBar
+    && preset.cylinderVolumeCm3 === booster.cylinderVolumeCm3
+    && preset.oxygenBoostBpm === booster.oxygenBoostBpm
+    && preset.otherBoostBpm === booster.otherBoostBpm
+    && preset.oxygenDecantRateBarPerMin === booster.oxygenDecantRateBarPerMin
+    && preset.otherDecantRateBarPerMin === booster.otherDecantRateBarPerMin
+    && preset.maxOutputPressureBar === booster.maxBoosterOutputPressureBar
+    && preset.temperatureModifierC === booster.boosterTemperatureModifierC
+    && preset.drainingRateBarPerMin === booster.drainingRateBarPerMin;
+}
+
+export function clearPresetImport() {
+  const list = document.getElementById('settings-preset-import-list');
+  const status = document.getElementById('settings-preset-import-status');
+  if (list) list.replaceChildren();
+  if (status) status.textContent = '';
+}
+
+function importCategoryLabel(category) {
+  return {
+    gasPresets: 'Gas presets',
+    cylinderPresets: 'Cylinder presets',
+    compressorPresets: 'Compressor presets',
+    boosterPresets: 'Booster presets'
+  }[category] ?? category;
+}
+
+function importPresetSummary(category, preset) {
+  if (category === 'gasPresets') return `${preset.oxygenPercent}% O₂ / ${preset.heliumPercent}% He`;
+  if (category === 'cylinderPresets') return `${preset.volumeL} L / ${preset.material} / ${preset.workingPressureBar} bar`;
+  if (category === 'compressorPresets') return `${preset.inletFlowLPerMin} L/min / ${preset.maxPressureBar} bar`;
+  if (category === 'boosterPresets') return `${preset.cylinderVolumeCm3} cm³ / ${preset.maxOutputPressureBar} bar`;
+  return '';
+}
+
+export function renderPresetImport(entries, status) {
+  const list = document.getElementById('settings-preset-import-list');
+  const statusElement = document.getElementById('settings-preset-import-status');
+  if (statusElement) statusElement.textContent = status ?? '';
+  if (!list) return;
+
+  const groups = new Map();
+  entries.forEach((entry, index) => {
+    const group = groups.get(entry.category) ?? [];
+    group.push({ entry, index });
+    groups.set(entry.category, group);
+  });
+  const sections = [];
+  for (const [category, groupedEntries] of groups) {
+    const section = document.createElement('section');
+    section.className = 'space-y-1';
+    const heading = document.createElement('h4');
+    heading.className = 'text-xs font-semibold text-slate-300';
+    heading.textContent = importCategoryLabel(category);
+    section.append(heading);
+    for (const { entry, index } of groupedEntries) {
+      const label = document.createElement('label');
+      label.className = entry.duplicate
+        ? 'flex items-start gap-2 rounded border border-ocean-800 bg-ocean-950/40 p-2 text-xs text-slate-500'
+        : 'flex items-start gap-2 rounded border border-ocean-800 bg-ocean-950/40 p-2 text-xs text-slate-200';
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = !entry.duplicate;
+      checkbox.disabled = entry.duplicate;
+      checkbox.dataset.presetImportIndex = String(index);
+      const details = document.createElement('span');
+      details.textContent = `${entry.preset.name} — ${importPresetSummary(category, entry.preset)}`;
+      label.append(checkbox, details);
+      if (entry.duplicate) {
+        const reason = document.createElement('span');
+        reason.className = 'text-slate-500';
+        reason.textContent = `Duplicate: ${entry.duplicateReason}`;
+        label.append(reason);
+      }
+      section.append(label);
+    }
+    sections.push(section);
+  }
+  list.replaceChildren(...sections);
+}
+
 export function renderSettingsDialog(settings) {
-  const physicsModel = document.getElementById('settings-physics-model');
   renderGasRows(settings.gasPresets);
   renderCylinderRows(settings.cylinderPresets);
+  renderEquipmentPresetSelector(
+    'settings-compressor-preset',
+    settings.compressorPresets,
+    preset => compressorPresetMatchesActiveFields(settings.booster, preset)
+  );
+  renderEquipmentPresetSelector(
+    'settings-booster-preset',
+    settings.boosterPresets,
+    preset => boosterPresetMatchesActiveFields(settings.booster, preset)
+  );
   const boosterFields = {
     'settings-booster-min-source-pressure': settings.booster.minimumSourcePressureBar,
     'settings-booster-cylinder-volume': settings.booster.cylinderVolumeCm3,
@@ -190,6 +296,7 @@ export function renderSettingsDialog(settings) {
     const input = document.getElementById(id);
     if (input) input.value = String(value);
   }
+  clearPresetImport();
 }
 
 function createOption(value, label) {
