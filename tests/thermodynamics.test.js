@@ -7,6 +7,7 @@ import {
   calculatePressureAtTemperature,
   calculateTemperatureAfterWait,
   estimateTransferTemperature,
+  projectPressureAtTemperatures,
   simulateThermalProtocol
 } from '../js/thermodynamics.js';
 
@@ -526,6 +527,85 @@ test('40 percent source oxygen selects oxygen-rich rates while lower concentrati
   assert.equal(simulation.protocolSteps[3].thermal.rateBarPerMin, 3);
 });
 
+test('draining uses the configured rate and cools the tank as pressure falls', () => {
+  const simulation = simulateThermalProtocol({
+    protocolSteps: [{
+      type: 'drain',
+      operation: 'Drain / Vent',
+      resultingPressureBar: 50,
+      resultingMix: { oxygenPercent: 21, heliumPercent: 0 },
+      receiverStartPressureBar: 100,
+      receiverEndPressureBar: 50
+    }],
+    cylinder: { initialPressureBar: 100, volumeL: 12 },
+    physics: { model: 'ideal', temperatureC: 40 },
+    thermal: {
+      tankMaterial: 'steel',
+      coolingMedium: 'air',
+      ambientTemperatureC: 20,
+      inletTemperatureC: 20,
+      waitMode: 'minutes',
+      waitMinutes: 0,
+      targetTemperatureC: 25
+    },
+    settings: {
+      booster: {
+        drainingRateBarPerMin: 10
+      }
+    }
+  });
+
+  const thermal = simulation.protocolSteps[0].thermal;
+  assert.equal(thermal.rateSource, 'draining-rate');
+  assert.equal(thermal.rateBarPerMin, 10);
+  assert.equal(thermal.durationMinutes, 5);
+  assert.ok(thermal.temperatureAtTransferEndC < thermal.temperatureStartC);
+});
+test('preserving the original gas does not consume a fixed wait', () => {
+  const simulation = simulateThermalProtocol({
+    protocolSteps: [
+      {
+        type: 'keep',
+        operation: 'Preserve',
+        resultingPressureBar: 100,
+        resultingMix: { oxygenPercent: 21, heliumPercent: 0 },
+        receiverStartPressureBar: 100,
+        receiverEndPressureBar: 100
+      },
+      {
+        type: 'decant',
+        operation: 'Decant',
+        resultingPressureBar: 110,
+        resultingMix: { oxygenPercent: 21, heliumPercent: 0 },
+        receiverStartPressureBar: 100,
+        receiverEndPressureBar: 110,
+        sourceOxygenPercent: 21,
+        sourceHeliumPercent: 0,
+        sourceStartPressureBar: 200,
+        sourceEndPressureBar: 190
+      }
+    ],
+    cylinder: { initialPressureBar: 100, volumeL: 12 },
+    physics: { model: 'ideal', temperatureC: 40 },
+    thermal: {
+      tankMaterial: 'steel',
+      coolingMedium: 'air',
+      ambientTemperatureC: 20,
+      waitMode: 'minutes',
+      waitMinutes: 10,
+      targetTemperatureC: 25
+    },
+    settings: {
+      booster: {
+        otherDecantRateBarPerMin: 5
+      }
+    }
+  });
+
+  assert.equal(simulation.protocolSteps[0].thermal.waitMinutes, 0);
+  assert.equal(simulation.protocolSteps[0].thermal.temperatureAfterWaitC, 40);
+});
+
 test('zero-change stages have no transfer rate', () => {
   const simulation = simulateThermalProtocol({
     protocolSteps: [{
@@ -580,4 +660,24 @@ test('an empty protocol cools the initial tank state to ambient', () => {
   assert.equal(simulation.final.finalTransferEndTemperatureC, 60);
   assert.equal(simulation.final.finalAmbientTemperatureC, 20);
   assert.ok(Math.abs(simulation.final.finalAmbientPressureBar - 175.989) < 0.01);
+});
+
+test('projects final gauge pressure across the requested water temperatures', () => {
+  const projections = projectPressureAtTemperatures({
+    pressureBar: 200,
+    oxygenPercent: 18,
+    heliumPercent: 45,
+    fromTemperatureC: 20,
+    temperaturesC: [6, 8, 10, 12, 20, 22, 24],
+    volumeL: 12,
+    useVdw: false
+  });
+
+  assert.deepEqual(
+    projections.map(({ temperatureC }) => temperatureC),
+    [6, 8, 10, 12, 20, 22, 24]
+  );
+  assert.ok(Math.abs(projections[4].pressureBar - 200) < 1e-9);
+  assert.ok(projections[0].pressureBar < projections[4].pressureBar);
+  assert.ok(projections[6].pressureBar > projections[4].pressureBar);
 });

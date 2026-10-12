@@ -4,6 +4,16 @@ import { isValidGasComposition } from './gas-input.js';
 import { validateCalculatorInputs, validateSupplyBankInput } from './input-validation.js';
 import { simulateThermalProtocol } from './thermodynamics.js';
 
+const NORMAL_RETAINED_GAS_COST = -5;
+const SAFETY_SOURCE_COST_RANGE = 10_101;
+
+function retainedGasCost(targetMoles, prioritizeTransferSafety) {
+  if (!prioritizeTransferSafety) return NORMAL_RETAINED_GAS_COST;
+  // The total-moles equality bounds every source allocation by targetMoles.
+  // This makes safety source-selection costs strictly secondary to retaining gas.
+  return -(targetMoles * SAFETY_SOURCE_COST_RANGE + 1);
+}
+
 function bankVariableNames(activeBanks) {
   return activeBanks.map((bank, index) => `x_b${index + 1}_${bank.name.split(' ')[0]}`);
 }
@@ -122,7 +132,7 @@ function solveTargetBlendAtMoles({
     })
   ];
   const decisionCosts = [
-    -5,
+    retainedGasCost(targetMoles, prioritizeTransferSafety),
     ...activeBanks.map(bank => {
       const oxygenFraction = bank.oxygenPercent / 100;
       const heliumFraction = bank.heliumPercent / 100;

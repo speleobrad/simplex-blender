@@ -37,6 +37,7 @@ test('settings default to the real-gas physics model', () => {
 test('settings include compressor and booster pressure ceilings, temperature modifiers, and draining rate', () => {
   assert.equal(DEFAULT_SETTINGS.booster.maxCompressorPressureBar, 232);
   assert.equal(DEFAULT_SETTINGS.booster.maxBoosterOutputPressureBar, 200);
+  assert.equal(DEFAULT_SETTINGS.booster.drainingRateBarPerMin, 5);
   assert.equal(DEFAULT_SETTINGS.booster.boosterTemperatureModifierC, 0);
   assert.equal(DEFAULT_SETTINGS.booster.compressorTemperatureModifierC, 0);
   assert.equal(DEFAULT_SETTINGS.booster.drainingRateBarPerMin, 5);
@@ -364,6 +365,7 @@ test('old settings gain all thermodynamic booster defaults', () => {
     otherBoostBpm: 50,
     oxygenDecantRateBarPerMin: 5,
     otherDecantRateBarPerMin: 5,
+    drainingRateBarPerMin: 5,
     compressorInletFlowLPerMin: 100,
     maxCompressorPressureBar: 232,
     maxBoosterOutputPressureBar: 200,
@@ -429,6 +431,7 @@ test('thermodynamic booster settings survive a save/load round trip', () => {
       otherBoostBpm: 55,
       oxygenDecantRateBarPerMin: 3,
       otherDecantRateBarPerMin: 7,
+      drainingRateBarPerMin: 2.5,
       compressorInletFlowLPerMin: 160,
       maxCompressorPressureBar: 245,
       maxBoosterOutputPressureBar: 185,

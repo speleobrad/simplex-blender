@@ -1,3 +1,5 @@
+import { renderWaterPressurePane as renderWaterPressurePaneView } from './water-pressure.js';
+
 function setText(id, value) {
   const element = document.getElementById(id);
   if (element) element.textContent = value;
@@ -61,6 +63,18 @@ function renderInfeasible(error, maximumPressure, requestedPressureBar, oxygenPe
 function formatThermalValue(value) {
   return Number.isFinite(value) ? value.toFixed(1) : '—';
 }
+
+
+function renderWaterPressurePane(data) {
+  const container = document.getElementById('water-pressure-container');
+  if (!container) return;
+  if (!data) {
+    container.replaceChildren();
+    return;
+  }
+  renderWaterPressurePaneView({ container, ...data });
+}
+
 
 function renderThermalDetails(thermal, isFinalStep) {
   if (!thermal) return null;
@@ -153,7 +167,8 @@ function renderThermalSummary(thermal) {
   if (summary) summary.hidden = false;
 }
 
-export function renderResults(result) {
+export function renderResults(result, calculation = null) {
+  renderWaterPressurePane(null);
   if (result.gas) {
     setText('lbl-init-p', result.gas.initialPressureBar);
     setText(
@@ -170,6 +185,13 @@ export function renderResults(result) {
     const thermal = result.thermal ?? maximum?.thermal;
     renderThermalSummary(thermal);
     if (maximum) {
+      renderWaterPressurePane({
+        thermal,
+        blend: maximum.blend,
+        volumeL: calculation?.cylinder?.volumeL,
+        workingPressureBar: calculation?.cylinder?.workingPressureBar,
+        useVdw: calculation?.physics?.model === 'vdw'
+      });
       renderBlendSummary(maximum.blend);
       renderProtocol(
         maximum.protocolSteps,
@@ -202,5 +224,12 @@ export function renderResults(result) {
 
   renderBlendSummary(result.blend);
   renderThermalSummary(result.thermal);
+  renderWaterPressurePane({
+    thermal: result.thermal,
+    blend: result.blend,
+    volumeL: calculation?.cylinder?.volumeL,
+    workingPressureBar: calculation?.cylinder?.workingPressureBar,
+    useVdw: calculation?.physics?.model === 'vdw'
+  });
   renderProtocol(result.protocolSteps);
 }

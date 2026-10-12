@@ -74,13 +74,18 @@ function renderGasRows(presets) {
   container.replaceChildren(...rows);
 }
 
-function createUnitField({ value, collection, index, field, label, min, max, step, unit }) {
-  const wrapper = document.createElement('div');
-  wrapper.className = 'flex items-center gap-1';
+function createTableCell(content, className = '') {
+  const cell = document.createElement('td');
+  cell.className = className;
+  cell.append(content);
+  return cell;
+}
+
+function createCylinderNumberInput({ value, index, field, label, min, max, step }) {
   const input = createPresetInput({
     value,
     type: 'number',
-    collection,
+    collection: 'cylinderPresets',
     index,
     field,
     label,
@@ -89,11 +94,7 @@ function createUnitField({ value, collection, index, field, label, min, max, ste
     step
   });
   input.classList.add('w-full');
-  const suffix = document.createElement('span');
-  suffix.className = 'text-[10px] text-slate-400';
-  suffix.textContent = unit;
-  wrapper.append(input, suffix);
-  return wrapper;
+  return input;
 }
 
 function createMaterialSelect(preset, index) {
@@ -116,9 +117,33 @@ function createMaterialSelect(preset, index) {
 function renderCylinderRows(presets) {
   const container = document.getElementById('settings-cylinder-presets');
   if (!container) return;
-  const rows = sortCylinderPresetEntries(presets).map(({ preset, index }) => {
-    const row = document.createElement('div');
-    row.className = 'grid grid-cols-[minmax(0,1fr)_4.5rem_5.5rem_4.5rem_5rem_auto] items-center gap-1.5';
+
+  const table = document.createElement('table');
+  table.className = 'w-full table-fixed text-left text-xs';
+  const thead = document.createElement('thead');
+  const headerRow = document.createElement('tr');
+  headerRow.className = 'text-[10px] uppercase tracking-wide text-slate-400';
+  for (const [label, className, ariaLabel] of [
+    ['Name', 'min-w-[8.5rem]'],
+    ['Material', 'w-20'],
+    ['Volume (L)', 'w-14'],
+    ['Mass (kg)', 'w-14'],
+    ['Max pressure (bar)', 'w-20'],
+    ['', 'w-6', 'Actions']
+  ]) {
+    const header = document.createElement('th');
+    header.scope = 'col';
+    header.className = `px-1.5 pb-1 text-left font-medium ${className}`;
+    header.textContent = label;
+    if (ariaLabel) header.setAttribute('aria-label', ariaLabel);
+    headerRow.append(header);
+  }
+  thead.append(headerRow);
+
+  const tbody = document.createElement('tbody');
+  for (const { preset, index } of sortCylinderPresetEntries(presets)) {
+    const row = document.createElement('tr');
+    row.className = 'border-t border-ocean-800/70 align-middle';
     const name = createPresetInput({
       value: preset.name,
       type: 'text',
@@ -129,44 +154,46 @@ function renderCylinderRows(presets) {
     });
     name.classList.add('w-full');
     row.append(
-      name,
-      createUnitField({
+      createTableCell(name, 'px-1.5 py-1'),
+      createTableCell(createMaterialSelect(preset, index), 'px-1.5 py-1'),
+      createTableCell(createCylinderNumberInput({
         value: preset.volumeL,
-        collection: 'cylinderPresets',
         index,
         field: 'volumeL',
         label: `${preset.name || 'Cylinder'} internal volume in litres`,
         min: 0.1,
-        step: 0.1,
-        unit: 'L'
-      }),
-      createMaterialSelect(preset, index),
-      createUnitField({
+        step: 0.1
+      }), 'px-1.5 py-1'),
+      createTableCell(createCylinderNumberInput({
         value: preset.massKg,
-        collection: 'cylinderPresets',
         index,
         field: 'massKg',
         label: `${preset.name || 'Cylinder'} mass in kilograms`,
         min: 0.1,
-        step: 0.1,
-        unit: 'kg'
-      }),
-      createUnitField({
+        step: 0.1
+      }), 'px-1.5 py-1'),
+      createTableCell(createCylinderNumberInput({
         value: preset.workingPressureBar,
-        collection: 'cylinderPresets',
         index,
         field: 'workingPressureBar',
         label: `${preset.name || 'Cylinder'} working pressure in bar`,
         min: 10,
         max: 350,
-        step: 1,
-        unit: 'bar'
-      }),
-      createRemoveButton('remove-cylinder-preset', index, `Remove ${preset.name || 'cylinder preset'}`)
+        step: 1
+      }), 'px-1.5 py-1'),
+      createTableCell(
+        createRemoveButton('remove-cylinder-preset', index, `Remove ${preset.name || 'cylinder preset'}`),
+        'px-0 py-1 text-center'
+      )
     );
-    return row;
-  });
-  container.replaceChildren(...rows);
+    tbody.append(row);
+  }
+  table.append(thead, tbody);
+
+  const scrollContainer = document.createElement('div');
+  scrollContainer.className = 'overflow-x-auto';
+  scrollContainer.append(table);
+  container.replaceChildren(scrollContainer);
 }
 
 function renderEquipmentPresetSelector(id, presets, matchesActiveFields) {

@@ -155,6 +155,29 @@ export function calculatePressureAtTemperature({
   );
 }
 
+export function projectPressureAtTemperatures({
+  pressureBar,
+  oxygenPercent,
+  heliumPercent,
+  fromTemperatureC,
+  temperaturesC,
+  volumeL,
+  useVdw
+}) {
+  return temperaturesC.map(temperatureC => ({
+    temperatureC,
+    pressureBar: calculatePressureAtTemperature({
+      pressureBar,
+      oxygenPercent,
+      heliumPercent,
+      fromTemperatureC,
+      toTemperatureC: temperatureC,
+      volumeL,
+      useVdw
+    })
+  }));
+}
+
 export function estimateTransferTemperature({
   startTemperatureC,
   startPressureBar = 0,
@@ -169,9 +192,10 @@ export function estimateTransferTemperature({
   ambientTemperatureC = startTemperatureC,
   inletTemperatureC = ambientTemperatureC
 }) {
-  const pressureRiseBar = Math.max(0, Number(addedPressureBar) || 0);
+  const pressureChangeBar = Number(addedPressureBar) || 0;
+  const pressureMagnitudeBar = Math.abs(pressureChangeBar);
   const fillTimeSeconds = Math.max(0, Number(fillTimeMinutes) || 0) * 60;
-  if (pressureRiseBar <= 0 || fillTimeSeconds <= 0) return startTemperatureC;
+  if (pressureMagnitudeBar <= 0 || fillTimeSeconds <= 0) return startTemperatureC;
 
   const tankVolumeL = Math.max(0.1, Number(volumeL) || 0.1);
   const startTemperatureK = startTemperatureC + 273.15;
@@ -196,7 +220,7 @@ export function estimateTransferTemperature({
   const heatTransferArea = heatTransferCoefficient * areaM2;
   const volumeM3 = tankVolumeL * 0.001;
   const initialPressureBar = Math.max(0, Number(startPressureBar) || 0);
-  const targetPressureBar = initialPressureBar + pressureRiseBar;
+  const targetPressureBar = Math.max(0, initialPressureBar + pressureChangeBar);
   let gasMassKg = (initialPressureBar + 1) * PASCALS_PER_BAR * volumeM3
     / (specificGasConstant * startTemperatureK);
   const targetGasMassKg = (targetPressureBar + 1) * PASCALS_PER_BAR * volumeM3
@@ -204,7 +228,6 @@ export function estimateTransferTemperature({
   const massFlowKgPerSecond = (targetGasMassKg - gasMassKg) / fillTimeSeconds;
   let temperatureK = startTemperatureK;
   let elapsedSeconds = 0;
-
   while (elapsedSeconds < fillTimeSeconds) {
     const stepSeconds = Math.min(
       THERMAL_INTEGRATION_STEP_SECONDS,
@@ -219,7 +242,6 @@ export function estimateTransferTemperature({
     gasMassKg += massFlowKgPerSecond * stepSeconds;
     elapsedSeconds += stepSeconds;
   }
-
   return temperatureK - 273.15;
 }
 
@@ -229,6 +251,7 @@ const DEFAULT_BOOSTER_SETTINGS = {
   otherBoostBpm: 50,
   oxygenDecantRateBarPerMin: 5,
   otherDecantRateBarPerMin: 5,
+  drainingRateBarPerMin: 5,
   compressorInletFlowLPerMin: 100,
   boosterTemperatureModifierC: 0,
   compressorTemperatureModifierC: 0
@@ -263,9 +286,9 @@ function inletTemperatureFor(rateSource, thermal, booster) {
 
 
 function stepTransferEndPressure(step, currentPressureBar) {
-  if (Number.isFinite(step.receiverEndPressureBar)) return step.receiverEndPressureBar;
-  if (Number.isFinite(step.resultingPressureBar)) return step.resultingPressureBar;
-  return currentPressureBar;
+  if (Number.isFinite(step.receiverEndPressureBar)) return Math.max(0, step.receiverEndPressureBar);
+  if (Number.isFinite(step.resultingPressureBar)) return Math.max(0, step.resultingPressureBar);
+  return Math.max(0, currentPressureBar);
 }
 
 function stepMix(step) {
@@ -289,12 +312,22 @@ function rateForProtocolStep({
   const sourceOxygenPercent = step.sourceOxygenPercent ?? receiverMix.oxygenPercent;
   const sourceHeliumPercent = step.sourceHeliumPercent ?? receiverMix.heliumPercent;
   const isOxygenRich = sourceOxygenPercent >= OXYGEN_RICH_THRESHOLD;
+  const pressureDecreaseBar = Math.max(0, currentPressureBar - transferEndPressureBar);
+  if (step.type === 'drain' && pressureDecreaseBar > 0) {
+    return {
+      rateSource: 'draining-rate',
+      rateBarPerMin: booster.drainingRateBarPerMin,
+      pressureIncreaseBar: pressureDecreaseBar,
+      pressureChangeBar: -pressureDecreaseBar
+    };
+  }
   const pressureIncreaseBar = Math.max(0, transferEndPressureBar - currentPressureBar);
   if (pressureIncreaseBar <= 0) {
     return {
       rateSource: 'none',
       rateBarPerMin: null,
-      pressureIncreaseBar
+      pressureIncreaseBar,
+      pressureChangeBar: 0
     };
   }
   const useVdw = physics.model === 'vdw';
@@ -366,10 +399,10 @@ export function simulateThermalProtocol({
   const booster = thermalBoosterSettings(settings);
   const tauMinutes = coolingTimeConstantMinutes(thermal.tankMaterial, thermal.coolingMedium);
   const useVdw = physics.model === 'vdw';
-  let currentPressureBar = cylinder.initialPressureBar
+  let currentPressureBar = Math.max(0, cylinder.initialPressureBar
     ?? protocolSteps[0]?.receiverStartPressureBar
     ?? protocolSteps[0]?.resultingPressureBar
-    ?? 0;
+    ?? 0);
   let currentTemperatureC = physics.temperatureC;
   if (protocolSteps.length === 0) {
     const initialOxygenPercent = cylinder.initialOxygenPercent ?? 0;
@@ -415,10 +448,11 @@ export function simulateThermalProtocol({
     const temperatureAtTransferEndC = transfer.rateSource === 'booster'
       || transfer.rateSource === 'compressor'
       || transfer.rateSource === 'decant-rate'
+      || transfer.rateSource === 'draining-rate'
       ? estimateTransferTemperature({
         startTemperatureC: currentTemperatureC,
         startPressureBar: currentPressureBar,
-        addedPressureBar: transfer.pressureIncreaseBar,
+        addedPressureBar: transfer.pressureChangeBar ?? transfer.pressureIncreaseBar,
         fillTimeMinutes: durationMinutes,
         volumeL: cylinder.volumeL,
         heliumFraction: (step.sourceHeliumPercent ?? receiverMix.heliumPercent) / 100,
@@ -431,25 +465,30 @@ export function simulateThermalProtocol({
       })
       : currentTemperatureC;
     const isFinalStep = index === protocolSteps.length - 1;
-    const waitMinutes = isFinalStep
-      ? 4.6 * tauMinutes
-      : thermal.waitMode === 'temperature'
-        ? calculateCoolingTime({
+    const skipsConfiguredWait = !isFinalStep && index === 0 && step.type === 'keep';
+    const waitMinutes = skipsConfiguredWait
+      ? 0
+      : isFinalStep
+        ? 4.6 * tauMinutes
+        : thermal.waitMode === 'temperature'
+          ? calculateCoolingTime({
+            transferEndTemperatureC: temperatureAtTransferEndC,
+            ambientTemperatureC: thermal.ambientTemperatureC,
+            targetTemperatureC: thermal.targetTemperatureC,
+            tauMinutes
+          })
+          : thermal.waitMinutes;
+    const temperatureAfterWaitC = skipsConfiguredWait
+      ? temperatureAtTransferEndC
+      : isFinalStep
+        ? thermal.ambientTemperatureC
+        : calculateTemperatureAfterWait({
           transferEndTemperatureC: temperatureAtTransferEndC,
           ambientTemperatureC: thermal.ambientTemperatureC,
-          targetTemperatureC: thermal.targetTemperatureC,
+          waitMinutes,
           tauMinutes
-        })
-        : thermal.waitMinutes;
-    const temperatureAfterWaitC = isFinalStep
-      ? thermal.ambientTemperatureC
-      : calculateTemperatureAfterWait({
-        transferEndTemperatureC: temperatureAtTransferEndC,
-        ambientTemperatureC: thermal.ambientTemperatureC,
-        waitMinutes,
-        tauMinutes
-      });
-    const pressureAfterWaitBar = calculatePressureAtTemperature({
+        });
+    const pressureAfterWaitBar = Math.max(0, calculatePressureAtTemperature({
       pressureBar: transferEndPressureBar,
       oxygenPercent: receiverMix.oxygenPercent,
       heliumPercent: receiverMix.heliumPercent,
@@ -457,7 +496,7 @@ export function simulateThermalProtocol({
       toTemperatureC: temperatureAfterWaitC,
       volumeL: cylinder.volumeL,
       useVdw
-    });
+    }));
     const thermalStep = {
       rateSource: transfer.rateSource,
       rateBarPerMin: transfer.rateBarPerMin,
@@ -471,7 +510,7 @@ export function simulateThermalProtocol({
       pressureAfterWaitBar
     };
 
-    currentPressureBar = pressureAfterWaitBar;
+    currentPressureBar = Math.max(0, pressureAfterWaitBar);
     currentTemperatureC = temperatureAfterWaitC;
     return { ...step, thermal: thermalStep };
   });

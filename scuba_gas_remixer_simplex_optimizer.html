@@ -3,11 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Scuba Gas Remixer</title>
+  <title>Kinetic Ratio Weight Algorithm Mixer (KRWA-Mixer)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <script src="js/tailwind-config.js"></script>
   <link rel="stylesheet" href="css/app.css">
 </head>
@@ -23,9 +24,10 @@
           </svg>
         </div>
         <div>
-          <div class="flex items-center gap-2">
-            <h1 class="text-base font-bold text-slate-100 tracking-tight">Scuba Gas Remixer</h1>
-        </div>
+          <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <h1 class="text-base font-bold text-slate-100 tracking-tight">Kinetic Ratio Weight Algorithm Mixer</h1>
+            <span class="text-xs font-medium text-slate-400">(KRWA-Mixer)</span>
+          </div>
       </div>
       </div>
 
@@ -53,146 +55,180 @@
         <h2 id="settings-dialog-title" class="text-base font-bold">Settings</h2>
         <button type="button" data-action="cancel-settings" aria-label="Close settings" class="rounded-lg px-2 py-1 text-slate-400 hover:bg-ocean-800 hover:text-white">✕</button>
       </div>
-      <div class="grid grid-cols-1 gap-6 py-5 sm:grid-cols-2">
-        <section>
-          <h3 class="mb-3 text-sm font-semibold text-slate-200">Calculation</h3>
-          <label for="settings-physics-model" class="block text-xs text-slate-400">Gas model</label>
-          <select id="settings-physics-model" data-settings-collection="physics" data-settings-field="model" aria-label="Gas model" class="mt-1 w-full rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-xs text-slate-100">
-            <option value="vdw">Real gas</option>
-            <option value="ideal">Ideal gas</option>
-          </select>
-          <p class="mt-1 text-[10px] text-slate-500">Real gas uses the Van der Waals model; ideal gas uses PV = nRT.</p>
-        </section>
-        <section>
-          <div class="mb-3 flex items-center justify-between gap-2">
-            <h3 class="text-sm font-semibold text-slate-200">Gas presets</h3>
-            <button type="button" data-action="add-gas-preset" class="rounded-lg border border-ocean-700 px-2.5 py-1 text-xs text-cyan-300 hover:bg-ocean-800">Add gas</button>
-          </div>
-          <div id="settings-gas-presets" class="space-y-2"></div>
-        </section>
-        <section class="sm:col-span-2">
-          <div class="mb-3 flex items-center justify-between gap-2">
-            <h3 class="text-sm font-semibold text-slate-200">Cylinder presets</h3>
-            <button type="button" data-action="add-cylinder-preset" class="rounded-lg border border-ocean-700 px-2.5 py-1 text-xs text-cyan-300 hover:bg-ocean-800">Add cylinder</button>
-          </div>
-          <p class="mb-2 text-[10px] text-slate-500">Each preset defines the working tank volume, material, empty assembly mass, and rated working pressure.</p>
-          <div id="settings-cylinder-presets" class="space-y-2"></div>
-        </section>
-        <section>
-          <h3 class="mb-3 text-sm font-semibold text-slate-200">Booster</h3>
-          <label for="settings-booster-preset" class="block text-xs text-slate-400">Booster preset</label>
-          <select id="settings-booster-preset" data-action="select-booster-preset" class="mb-3 mt-1 w-full rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-xs text-slate-100"></select>
-          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div>
-              <label for="settings-booster-min-source-pressure" class="block text-xs text-slate-400">Min source gas pressure</label>
-              <div class="mt-1 flex items-center gap-2">
-                <input type="number" id="settings-booster-min-source-pressure" value="20" min="0" max="100" step="1" data-settings-collection="booster" data-settings-field="minimumSourcePressureBar" aria-label="Booster minimum source gas pressure" class="w-24 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-center font-mono text-xs text-slate-100">
-                <span class="text-xs text-slate-400">bar</span>
+      <div class="grid grid-cols-1 gap-5 py-5 sm:grid-cols-[10rem_minmax(0,1fr)]">
+        <nav aria-label="Settings categories" class="settings-category-list flex gap-2 overflow-x-auto sm:flex-col sm:overflow-visible">
+          <button type="button" data-action="select-settings-category" data-settings-category="model" aria-controls="settings-pane-model" aria-selected="true" class="settings-category-button settings-category-selected shrink-0 rounded-lg border border-cyan-500/40 px-3 py-2 text-left text-xs font-semibold text-cyan-300 transition hover:bg-ocean-800/70">Model</button>
+          <button type="button" data-action="select-settings-category" data-settings-category="gas-presets" aria-controls="settings-pane-gas-presets" aria-selected="false" class="settings-category-button shrink-0 rounded-lg border border-transparent px-3 py-2 text-left text-xs font-semibold text-slate-400 transition hover:border-ocean-700 hover:bg-ocean-800/70 hover:text-slate-200">Gas presets</button>
+          <button type="button" data-action="select-settings-category" data-settings-category="cylinder-presets" aria-controls="settings-pane-cylinder-presets" aria-selected="false" class="settings-category-button shrink-0 rounded-lg border border-transparent px-3 py-2 text-left text-xs font-semibold text-slate-400 transition hover:border-ocean-700 hover:bg-ocean-800/70 hover:text-slate-200">Cylinder presets</button>
+          <button type="button" data-action="select-settings-category" data-settings-category="equipment" aria-controls="settings-pane-equipment" aria-selected="false" class="settings-category-button shrink-0 rounded-lg border border-transparent px-3 py-2 text-left text-xs font-semibold text-slate-400 transition hover:border-ocean-700 hover:bg-ocean-800/70 hover:text-slate-200">Equipment</button>
+        </nav>
+
+        <div class="min-w-0">
+          <section id="settings-pane-model" aria-labelledby="settings-pane-model-title">
+            <h3 id="settings-pane-model-title" class="mb-3 text-sm font-semibold text-slate-200">Model</h3>
+            <label for="settings-physics-model" class="block text-xs text-slate-400">Gas model</label>
+            <select id="settings-physics-model" data-settings-collection="physics" data-settings-field="model" aria-label="Gas model" class="mt-1 w-full rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-xs text-slate-100">
+              <option value="vdw">Real gas</option>
+              <option value="ideal">Ideal gas</option>
+            </select>
+            <p class="mt-1 text-[10px] text-slate-500">Real gas uses the Van der Waals model; ideal gas uses PV = nRT.</p>
+          </section>
+
+          <section id="settings-pane-gas-presets" aria-labelledby="settings-pane-gas-presets-title" class="hidden">
+            <div class="mb-3 flex items-center justify-between gap-2">
+              <h3 id="settings-pane-gas-presets-title" class="text-sm font-semibold text-slate-200">Gas presets</h3>
+              <button type="button" data-action="add-gas-preset" class="rounded-lg border border-ocean-700 px-2.5 py-1 text-xs text-cyan-300 hover:bg-ocean-800">Add gas</button>
+            </div>
+            <div id="settings-gas-presets" class="space-y-2"></div>
+          </section>
+
+          <section id="settings-pane-cylinder-presets" aria-labelledby="settings-pane-cylinder-presets-title" class="hidden">
+            <div class="mb-3 flex items-center justify-between gap-2">
+              <h3 id="settings-pane-cylinder-presets-title" class="text-sm font-semibold text-slate-200">Cylinder presets</h3>
+              <button type="button" data-action="add-cylinder-preset" class="rounded-lg border border-ocean-700 px-2.5 py-1 text-xs text-cyan-300 hover:bg-ocean-800">Add cylinder</button>
+            </div>
+            <p class="mb-2 text-[10px] text-slate-500">Each preset defines the working tank volume, material, empty assembly mass, and rated working pressure.</p>
+            <div id="settings-cylinder-presets" class="space-y-2"></div>
+          </section>
+
+          <section id="settings-pane-equipment" aria-labelledby="settings-pane-equipment-title" class="hidden">
+            <h3 id="settings-pane-equipment-title" class="mb-3 text-sm font-semibold text-slate-200">Equipment</h3>
+            <div class="space-y-4">
+              <section class="rounded-xl border border-ocean-800/80 bg-ocean-950/50 p-3">
+                <div class="mb-3 flex items-center justify-between gap-3">
+                  <h4 class="text-xs font-semibold text-slate-300">Compressor</h4>
+                  <label class="flex items-center gap-2 text-[10px] text-slate-400" for="settings-compressor-preset">
+                    Preset
+                    <select id="settings-compressor-preset" data-action="select-compressor-preset" aria-label="Compressor preset" class="max-w-[11rem] rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-xs text-slate-100"></select>
+                  </label>
+                </div>
+                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div>
+                    <label for="settings-compressor-inlet-flow" class="block text-xs text-slate-400">Compressor inlet flow</label>
+                    <div class="mt-1 flex items-center gap-2">
+                      <input type="number" id="settings-compressor-inlet-flow" value="100" min="0.1" max="10000" step="0.1" data-settings-collection="booster" data-settings-field="compressorInletFlowLPerMin" aria-label="Compressor inlet flow" class="w-24 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-center font-mono text-xs text-slate-100">
+                      <span class="text-xs text-slate-400">L/min</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label for="settings-compressor-max-pressure" class="block text-xs text-slate-400">Max compressor pressure</label>
+                    <div class="mt-1 flex items-center gap-2">
+                      <input type="number" id="settings-compressor-max-pressure" value="232" min="10" max="350" step="1" data-settings-collection="booster" data-settings-field="maxCompressorPressureBar" aria-label="Maximum compressor pressure" class="w-24 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-center font-mono text-xs text-slate-100">
+                      <span class="text-xs text-slate-400">bar</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label for="settings-compressor-temperature-modifier" class="block text-xs text-slate-400">Compressor temperature modifier</label>
+                    <div class="mt-1 flex items-center gap-2">
+                      <input type="number" id="settings-compressor-temperature-modifier" value="0" min="-100" max="100" step="1" data-settings-collection="booster" data-settings-field="compressorTemperatureModifierC" aria-label="Compressor temperature modifier" class="w-24 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-center font-mono text-xs text-slate-100">
+                      <span class="text-xs text-slate-400">°C</span>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section class="rounded-xl border border-ocean-800/80 bg-ocean-950/50 p-3">
+                <div class="mb-3 flex items-center justify-between gap-3">
+                  <h4 class="text-xs font-semibold text-slate-300">Booster</h4>
+                  <label class="flex items-center gap-2 text-[10px] text-slate-400" for="settings-booster-preset">
+                    Preset
+                    <select id="settings-booster-preset" data-action="select-booster-preset" aria-label="Booster preset" class="max-w-[11rem] rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-xs text-slate-100"></select>
+                  </label>
+                </div>
+                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div>
+                    <label for="settings-booster-cylinder-volume" class="block text-xs text-slate-400">Booster cylinder volume</label>
+                    <div class="mt-1 flex items-center gap-2">
+                      <input type="number" id="settings-booster-cylinder-volume" value="9" min="0.1" max="1000" step="0.1" data-settings-collection="booster" data-settings-field="cylinderVolumeCm3" aria-label="Booster cylinder volume" class="w-24 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-center font-mono text-xs text-slate-100">
+                      <span class="text-xs text-slate-400">cm³</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label for="settings-booster-min-source-pressure" class="block text-xs text-slate-400">Mix source gas pressure (minimum)</label>
+                    <div class="mt-1 flex items-center gap-2">
+                      <input type="number" id="settings-booster-min-source-pressure" value="20" min="0" max="100" step="1" data-settings-collection="booster" data-settings-field="minimumSourcePressureBar" aria-label="Mix source gas minimum pressure" class="w-24 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-center font-mono text-xs text-slate-100">
+                      <span class="text-xs text-slate-400">bar</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label for="settings-booster-oxygen-bpm" class="block text-xs text-slate-400">Oxygen boost speed</label>
+                    <div class="mt-1 flex items-center gap-2">
+                      <input type="number" id="settings-booster-oxygen-bpm" value="50" min="1" max="1000" step="1" data-settings-collection="booster" data-settings-field="oxygenBoostBpm" aria-label="Oxygen booster speed" class="w-24 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-center font-mono text-xs text-slate-100">
+                      <span class="text-xs text-slate-400">BPM</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label for="settings-booster-other-bpm" class="block text-xs text-slate-400">Other-gas boost speed</label>
+                    <div class="mt-1 flex items-center gap-2">
+                      <input type="number" id="settings-booster-other-bpm" value="50" min="1" max="1000" step="1" data-settings-collection="booster" data-settings-field="otherBoostBpm" aria-label="Other-gas booster speed" class="w-24 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-center font-mono text-xs text-slate-100">
+                      <span class="text-xs text-slate-400">BPM</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label for="settings-booster-max-output-pressure" class="block text-xs text-slate-400">Max booster output pressure</label>
+                    <div class="mt-1 flex items-center gap-2">
+                      <input type="number" id="settings-booster-max-output-pressure" value="200" min="10" max="350" step="1" data-settings-collection="booster" data-settings-field="maxBoosterOutputPressureBar" aria-label="Maximum booster output pressure" class="w-24 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-center font-mono text-xs text-slate-100">
+                      <span class="text-xs text-slate-400">bar</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label for="settings-booster-temperature-modifier" class="block text-xs text-slate-400">Booster temperature modifier</label>
+                    <div class="mt-1 flex items-center gap-2">
+                      <input type="number" id="settings-booster-temperature-modifier" value="0" min="-100" max="100" step="1" data-settings-collection="booster" data-settings-field="boosterTemperatureModifierC" aria-label="Booster temperature modifier" class="w-24 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-center font-mono text-xs text-slate-100">
+                      <span class="text-xs text-slate-400">°C</span>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section class="rounded-xl border border-ocean-800/80 bg-ocean-950/50 p-3">
+                <h4 class="mb-3 text-xs font-semibold text-slate-300">Decanting hose</h4>
+                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div>
+                    <label for="settings-booster-oxygen-decant-rate" class="block text-xs text-slate-400">Oxygen manual decant rate</label>
+                    <div class="mt-1 flex items-center gap-2">
+                      <input type="number" id="settings-booster-oxygen-decant-rate" value="5" min="0.01" max="1000" step="0.01" data-settings-collection="booster" data-settings-field="oxygenDecantRateBarPerMin" aria-label="Oxygen manual decant rate" class="w-24 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-center font-mono text-xs text-slate-100">
+                      <span class="text-xs text-slate-400">bar/min</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label for="settings-booster-other-decant-rate" class="block text-xs text-slate-400">Other-gas manual decant rate</label>
+                    <div class="mt-1 flex items-center gap-2">
+                      <input type="number" id="settings-booster-other-decant-rate" value="5" min="0.01" max="1000" step="0.01" data-settings-collection="booster" data-settings-field="otherDecantRateBarPerMin" aria-label="Other-gas manual decant rate" class="w-24 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-center font-mono text-xs text-slate-100">
+                      <span class="text-xs text-slate-400">bar/min</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label for="settings-booster-draining-rate" class="block text-xs text-slate-400">Draining rate</label>
+                    <div class="mt-1 flex items-center gap-2">
+                      <input type="number" id="settings-booster-draining-rate" value="5" min="0.01" max="1000" step="0.01" data-settings-collection="booster" data-settings-field="drainingRateBarPerMin" aria-label="Draining rate" class="w-24 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-center font-mono text-xs text-slate-100">
+                      <span class="text-xs text-slate-400">bar/min</span>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </div>
+            <p class="mt-1 text-[10px] text-slate-500">Compressor Air and non-Air booster output use separate pressure limits; decanting remains source-pressure limited.</p>
+          </section>
+          <section class="sm:col-span-2">
+            <h3 class="mb-3 text-sm font-semibold text-slate-200">Import presets</h3>
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label for="settings-preset-url" class="block text-xs text-slate-400">Preset URL</label>
+                <div class="mt-1 flex gap-2">
+                  <input type="url" id="settings-preset-url" placeholder="https://example.com/presets.json" class="min-w-0 flex-1 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-xs text-slate-100">
+                  <button type="button" id="settings-load-preset-url" data-action="load-preset-url" class="rounded border border-ocean-700 px-2.5 py-1 text-xs text-cyan-300 hover:bg-ocean-800">Load from URL</button>
+                </div>
+              </div>
+              <div>
+                <label for="settings-preset-file" class="block text-xs text-slate-400">Preset JSON file</label>
+                <input type="file" id="settings-preset-file" accept="application/json,.json" data-action="load-preset-file" class="mt-1 block w-full text-xs text-slate-300 file:mr-2 file:rounded file:border-0 file:bg-ocean-800 file:px-2 file:py-1 file:text-xs file:text-cyan-300">
               </div>
             </div>
-            <div>
-              <label for="settings-booster-cylinder-volume" class="block text-xs text-slate-400">Booster cylinder volume</label>
-              <div class="mt-1 flex items-center gap-2">
-                <input type="number" id="settings-booster-cylinder-volume" value="9" min="0.1" max="1000" step="0.1" data-settings-collection="booster" data-settings-field="cylinderVolumeCm3" aria-label="Booster cylinder volume" class="w-24 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-center font-mono text-xs text-slate-100">
-                <span class="text-xs text-slate-400">cm³</span>
-              </div>
-            </div>
-            <div>
-              <label for="settings-booster-oxygen-bpm" class="block text-xs text-slate-400">Oxygen boost speed</label>
-              <div class="mt-1 flex items-center gap-2">
-                <input type="number" id="settings-booster-oxygen-bpm" value="50" min="1" max="1000" step="1" data-settings-collection="booster" data-settings-field="oxygenBoostBpm" aria-label="Oxygen booster speed" class="w-24 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-center font-mono text-xs text-slate-100">
-                <span class="text-xs text-slate-400">BPM</span>
-              </div>
-            </div>
-            <div>
-              <label for="settings-booster-other-bpm" class="block text-xs text-slate-400">Other-gas boost speed</label>
-              <div class="mt-1 flex items-center gap-2">
-                <input type="number" id="settings-booster-other-bpm" value="50" min="1" max="1000" step="1" data-settings-collection="booster" data-settings-field="otherBoostBpm" aria-label="Other-gas booster speed" class="w-24 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-center font-mono text-xs text-slate-100">
-                <span class="text-xs text-slate-400">BPM</span>
-              </div>
-            </div>
-            <div>
-              <label for="settings-booster-oxygen-decant-rate" class="block text-xs text-slate-400">Oxygen manual decant rate</label>
-              <div class="mt-1 flex items-center gap-2">
-                <input type="number" id="settings-booster-oxygen-decant-rate" value="5" min="0.01" max="1000" step="0.01" data-settings-collection="booster" data-settings-field="oxygenDecantRateBarPerMin" aria-label="Oxygen manual decant rate" class="w-24 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-center font-mono text-xs text-slate-100">
-                <span class="text-xs text-slate-400">bar/min</span>
-              </div>
-            </div>
-            <div>
-              <label for="settings-booster-other-decant-rate" class="block text-xs text-slate-400">Other-gas manual decant rate</label>
-              <div class="mt-1 flex items-center gap-2">
-                <input type="number" id="settings-booster-other-decant-rate" value="5" min="0.01" max="1000" step="0.01" data-settings-collection="booster" data-settings-field="otherDecantRateBarPerMin" aria-label="Other-gas manual decant rate" class="w-24 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-center font-mono text-xs text-slate-100">
-                <span class="text-xs text-slate-400">bar/min</span>
-              </div>
-            </div>
-            <div>
-              <label for="settings-booster-draining-rate" class="block text-xs text-slate-400">Tank draining rate</label>
-              <div class="mt-1 flex items-center gap-2">
-                <input type="number" id="settings-booster-draining-rate" value="5" min="0.01" max="1000" step="0.01" data-settings-collection="booster" data-settings-field="drainingRateBarPerMin" aria-label="Tank draining rate" class="w-24 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-center font-mono text-xs text-slate-100">
-                <span class="text-xs text-slate-400">bar/min</span>
-              </div>
-            </div>
-            <div class="sm:col-span-2">
-              <label for="settings-compressor-preset" class="block text-xs text-slate-400">Compressor preset</label>
-              <select id="settings-compressor-preset" data-action="select-compressor-preset" class="mt-1 w-full rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-xs text-slate-100"></select>
-            </div>
-            <div>
-              <label for="settings-compressor-inlet-flow" class="block text-xs text-slate-400">Compressor inlet flow</label>
-              <div class="mt-1 flex items-center gap-2">
-                <input type="number" id="settings-compressor-inlet-flow" value="100" min="0.1" max="10000" step="0.1" data-settings-collection="booster" data-settings-field="compressorInletFlowLPerMin" aria-label="Compressor inlet flow" class="w-24 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-center font-mono text-xs text-slate-100">
-                <span class="text-xs text-slate-400">L/min</span>
-              </div>
-            </div>
-            <div>
-              <label for="settings-compressor-max-pressure" class="block text-xs text-slate-400">Max compressor pressure</label>
-              <div class="mt-1 flex items-center gap-2">
-                <input type="number" id="settings-compressor-max-pressure" value="232" min="10" max="350" step="1" data-settings-collection="booster" data-settings-field="maxCompressorPressureBar" aria-label="Maximum compressor pressure" class="w-24 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-center font-mono text-xs text-slate-100">
-                <span class="text-xs text-slate-400">bar</span>
-              </div>
-            </div>
-            <div>
-              <label for="settings-booster-max-output-pressure" class="block text-xs text-slate-400">Max booster output pressure</label>
-              <div class="mt-1 flex items-center gap-2">
-                <input type="number" id="settings-booster-max-output-pressure" value="200" min="10" max="350" step="1" data-settings-collection="booster" data-settings-field="maxBoosterOutputPressureBar" aria-label="Maximum booster output pressure" class="w-24 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-center font-mono text-xs text-slate-100">
-                <span class="text-xs text-slate-400">bar</span>
-              </div>
-            </div>
-            <div>
-              <label for="settings-booster-temperature-modifier" class="block text-xs text-slate-400">Booster temperature modifier</label>
-              <div class="mt-1 flex items-center gap-2">
-                <input type="number" id="settings-booster-temperature-modifier" value="0" min="-100" max="100" step="1" data-settings-collection="booster" data-settings-field="boosterTemperatureModifierC" aria-label="Booster temperature modifier" class="w-24 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-center font-mono text-xs text-slate-100">
-                <span class="text-xs text-slate-400">°C</span>
-              </div>
-            </div>
-            <div>
-              <label for="settings-compressor-temperature-modifier" class="block text-xs text-slate-400">Compressor temperature modifier</label>
-              <div class="mt-1 flex items-center gap-2">
-                <input type="number" id="settings-compressor-temperature-modifier" value="0" min="-100" max="100" step="1" data-settings-collection="booster" data-settings-field="compressorTemperatureModifierC" aria-label="Compressor temperature modifier" class="w-24 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-center font-mono text-xs text-slate-100">
-                <span class="text-xs text-slate-400">°C</span>
-              </div>
-            </div>
-          </div>
-          <p class="mt-1 text-[10px] text-slate-500">Compressor Air and non-Air booster output use separate pressure limits; decanting remains source-pressure limited.</p>
-        </section>
-        <section class="sm:col-span-2">
-          <h3 class="mb-3 text-sm font-semibold text-slate-200">Import presets</h3>
-          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div>
-              <label for="settings-preset-url" class="block text-xs text-slate-400">Preset URL</label>
-              <div class="mt-1 flex gap-2">
-                <input type="url" id="settings-preset-url" placeholder="https://example.com/presets.json" class="min-w-0 flex-1 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-xs text-slate-100">
-                <button type="button" id="settings-load-preset-url" data-action="load-preset-url" class="rounded border border-ocean-700 px-2.5 py-1 text-xs text-cyan-300 hover:bg-ocean-800">Load from URL</button>
-              </div>
-            </div>
-            <div>
-              <label for="settings-preset-file" class="block text-xs text-slate-400">Preset JSON file</label>
-              <input type="file" id="settings-preset-file" accept="application/json,.json" data-action="load-preset-file" class="mt-1 block w-full text-xs text-slate-300 file:mr-2 file:rounded file:border-0 file:bg-ocean-800 file:px-2 file:py-1 file:text-xs file:text-cyan-300">
-            </div>
-          </div>
-          <p id="settings-preset-import-status" aria-live="polite" class="mt-3 text-xs text-slate-400"></p>
-          <div id="settings-preset-import-list" class="mt-2 space-y-3"></div>
-          <button type="button" id="settings-import-selected" data-action="import-selected-presets" class="mt-3 rounded-lg border border-ocean-700 px-2.5 py-1 text-xs text-cyan-300 hover:bg-ocean-800">Import selected</button>
-        </section>
+            <p id="settings-preset-import-status" aria-live="polite" class="mt-3 text-xs text-slate-400"></p>
+            <div id="settings-preset-import-list" class="mt-2 space-y-3"></div>
+            <button type="button" id="settings-import-selected" data-action="import-selected-presets" class="mt-3 rounded-lg border border-ocean-700 px-2.5 py-1 text-xs text-cyan-300 hover:bg-ocean-800">Import selected</button>
+          </section>
       </div>
       <div id="settings-errors" role="alert" class="mb-4 hidden rounded-lg border border-rose-500/40 bg-rose-500/10 p-3 text-xs text-rose-300"></div>
       <div class="flex justify-end gap-2 border-t border-ocean-800 pt-4">
@@ -227,7 +263,7 @@
           </div>
 
           <div class="col-span-2 grid grid-cols-1 gap-3 rounded-xl border border-ocean-800/80 bg-ocean-950/60 p-3 sm:grid-cols-2">
-            <div class="sm:col-span-2">
+            <div>
               <label for="cooling-medium" class="mb-1 block text-slate-400 font-medium">Surrounding medium</label>
               <select id="cooling-medium" data-recalculate="change" class="w-full rounded-lg border border-ocean-700 bg-ocean-900 px-2.5 py-1.5 text-slate-100 focus:border-cyan-400 focus:outline-none">
                 <option value="air">Air</option>
@@ -340,7 +376,7 @@
             Add Bank
           </button>
         </div>
-        <section class="mb-3 rounded-xl border border-ocean-800/80 bg-ocean-950/60 p-3">
+        <section class="mb-3 rounded-xl border border-ocean-800/80 bg-ocean-950/60 p-3 font-sans">
           <h3 class="text-xs font-semibold text-slate-200">Transfer conditions</h3>
           <div class="mt-2 max-w-xs">
             <label for="inlet-gas-temperature" class="mb-1 block text-slate-400 font-medium">Incoming gas temperature</label>
@@ -377,7 +413,7 @@
 
     </div>
 
-    <!-- RIGHT COLUMN: Recipe, Diagram and Solver -->
+    <!-- RIGHT COLUMN: Recipe, Diagram, Thermal Graphs and Tank Summary -->
     <div class="lg:col-span-7 flex flex-col gap-6">
 
       <!-- Navigation Tabs for Results & Inspector -->
@@ -390,11 +426,14 @@
             <button id="tab-btn-ternary" data-action="select-tab" data-tab="ternary" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-slate-200 transition">
               Diagram
             </button>
-            <button id="tab-btn-simplex" data-action="select-tab" data-tab="simplex" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-slate-200 transition">
-              Solver
+            <button id="tab-btn-thermal" data-action="select-tab" data-tab="thermal" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-slate-200 transition">
+              Thermal graphs
             </button>
             <button id="tab-btn-summary" data-action="select-tab" data-tab="summary" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-slate-200 transition">
               Tank summary
+            </button>
+            <button id="tab-btn-water-pressure" data-action="select-tab" data-tab="water-pressure" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-slate-200 transition">
+              In water pressure
             </button>
           </div>
         </div>
@@ -437,6 +476,15 @@
           </div>
         </div>
 
+        <!-- In-water pressure pane -->
+        <div id="tab-pane-water-pressure" class="pt-4 hidden flex flex-col gap-4">
+          <div>
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300">In water pressure</h3>
+            <p class="py-2 text-slate-400 text-xs">Estimated pressure-gauge readings after the cylinder equilibrates at each water temperature.</p>
+          </div>
+          <div id="water-pressure-container"></div>
+        </div>
+
         <!-- Diagram pane -->
         <div id="tab-pane-ternary" class="pt-4 hidden flex flex-col gap-4">
           <div class="flex items-center justify-between text-xs text-slate-400">
@@ -466,6 +514,19 @@
           </div>
 
         </div>
+        <!-- Thermal graphs pane -->
+        <div id="tab-pane-thermal" class="pt-4 hidden flex flex-col gap-4">
+          <div>
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300">Blending thermal history</h3>
+            <p id="thermal-chart-status" class="py-2 text-slate-400 text-xs">
+              Temperature and pressure history appears when a completed blend protocol is available.
+            </p>
+          </div>
+          <div id="thermal-temperature-chart" class="rounded-xl border border-ocean-800 bg-ocean-950/60 p-2" aria-label="Temperature history chart"></div>
+          <div id="thermal-pressure-chart" class="rounded-xl border border-ocean-800 bg-ocean-950/60 p-2" aria-label="Pressure history chart"></div>
+          <div id="thermal-chart-data" class="overflow-x-auto rounded-xl border border-ocean-800 bg-ocean-950/60 p-2"></div>
+        </div>
+
         <div id="tab-pane-summary" class="pt-4 hidden flex flex-col gap-4">
           <div>
             <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300">Tank summary</h3>
@@ -498,35 +559,6 @@
           </div>
         </div>
 
-        <!-- Solver pane -->
-        <div id="tab-pane-simplex" class="pt-4 hidden flex flex-col gap-4">
-          <div class="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h3 class="text-xs font-bold text-slate-200 uppercase tracking-wider font-mono">Solver details</h3>
-            </div>
-            <div class="flex items-center gap-2">
-              <button data-action="tableau-step" data-delta="-1" id="btn-tableau-prev" class="px-2.5 py-1 bg-ocean-800 hover:bg-ocean-700 text-slate-200 border border-ocean-700 rounded-lg text-xs font-mono transition">
-                ◀ Prev
-              </button>
-              <span id="tableau-step-label" class="text-xs font-mono text-cyan-300 font-bold px-2">Step 0 / 0</span>
-              <button data-action="tableau-step" data-delta="1" id="btn-tableau-next" class="px-2.5 py-1 bg-ocean-800 hover:bg-ocean-700 text-slate-200 border border-ocean-700 rounded-lg text-xs font-mono transition">
-                Next ▶
-              </button>
-            </div>
-          </div>
-
-          <div id="tableau-meta-info" class="p-2.5 bg-ocean-950/80 rounded-xl border border-ocean-800 text-[11px] font-mono text-slate-300">
-            <!-- Dynamic step description -->
-          </div>
-
-          <!-- Tableau Table -->
-          <div class="overflow-x-auto border border-ocean-800 rounded-xl bg-ocean-950">
-            <table class="w-full text-left tableau-table font-mono" id="tableau-display-table">
-              <!-- Dynamically populated -->
-            </table>
-          </div>
-
-        </div>
 
       </div>
 

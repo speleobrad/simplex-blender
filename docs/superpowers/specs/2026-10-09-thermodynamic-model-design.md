@@ -149,7 +149,7 @@ rate_bar_per_min = n_dot × Z_receiver × R × T_receiver / receiverVolumeL
 
 Duration uses the stage receiver pressure change and the current receiver state. In thermal mode, a single air-bank transfer is kept as one compressor top-up stage; compressor flow does not depend on the nominal air-bank/receiver pressure crossover.
 
-Drain, keep, and zero-change stages have no transfer rate. They still participate in the configured post-step wait.
+Drain and zero-change stages have no transfer rate but still participate in the configured post-step wait. The initial keep stage preserves the original gas without a transfer and therefore has no post-step wait.
 
 ## Temperature model
 
@@ -187,7 +187,7 @@ At each stage:
 3. Estimate transfer-end temperature.
 4. Treat the stage receiver-end pressure as the hot gauge stop value.
 5. Calculate gas density/moles at the hot stop pressure and transfer-end temperature using the existing gas model.
-6. Apply the configured wait and evaluate pressure at the post-wait temperature while preserving density/moles.
+6. Apply the configured wait, except for the initial keep stage, and evaluate pressure at the post-wait temperature while preserving density/moles.
 7. Store both hot-stop and post-wait pressure/temperature for the UI.
 
 Each step receives:

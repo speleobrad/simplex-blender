@@ -1,4 +1,4 @@
-# Scuba Gas Remixer
+# Kinetic Ratio Weight Algorithm Mixer (KRWA-Mixer)
 
 The app calculates a minimum-helium gas re-blend using gas-bank availability, a two-phase simplex solver, and either ideal-gas or Van der Waals calculations. Start at the [application page](../scuba_gas_remixer_simplex_optimizer.html).
 

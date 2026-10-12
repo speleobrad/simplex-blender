@@ -2,7 +2,7 @@
 
 ## Status
 
-Approved design; pending written-spec review.
+Implemented.
 
 ## Goal
 

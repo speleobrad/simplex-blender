@@ -143,4 +143,37 @@
 ::-webkit-scrollbar-track { background: rgb(var(--scrollbar-track)); }
 ::-webkit-scrollbar-thumb { background: rgb(var(--scrollbar-thumb)); border-radius: 9999px; }
 ::-webkit-scrollbar-thumb:hover { background: rgb(var(--scrollbar-thumb-hover)); }
-.tableau-table td, .tableau-table th { padding: 5px 8px; font-size: 11px; white-space: nowrap; }
+
+.settings-category-list {
+  scrollbar-width: thin;
+}
+
+.settings-category-selected {
+  color: rgb(var(--cyan-300));
+  background: rgb(var(--ocean-800) / 0.7);
+  border-color: rgb(var(--cyan-500) / 0.45);
+}
+
+.thermal-point-active {
+  outline: 2px solid rgb(var(--cyan-400));
+  outline-offset: 2px;
+  filter: brightness(1.2);
+}
+
+circle.thermal-point-active {
+  r: 7;
+}
+
+tr.thermal-point-active {
+  background: rgb(var(--ocean-800) / 0.7);
+  color: rgb(var(--slate-100));
+}
+
+
+@media (max-width: 639px) {
+  .settings-category-list {
+    display: flex;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+}

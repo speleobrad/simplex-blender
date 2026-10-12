@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { optimizeBlend } from '../js/optimizer.js';
+import { DEFAULT_BANKS } from '../js/bank-storage.js';
+import { DEFAULT_SETTINGS } from '../js/settings.js';
 
 const defaultInput = {
   cylinder: {
@@ -25,6 +27,31 @@ const defaultInput = {
     }
   }
 };
+
+test('default example keeps the cylinder gas when the safety ceiling is active', () => {
+  const result = optimizeBlend({
+    cylinder: {
+      volumeL: 12,
+      initialPressureBar: 80,
+      initialOxygenPercent: 21,
+      initialHeliumPercent: 35,
+      targetPressureBar: 210,
+      targetOxygenPercent: 18,
+      targetHeliumPercent: 45
+    },
+    physics: { model: DEFAULT_SETTINGS.physics.model, temperatureC: 20 },
+    banks: DEFAULT_BANKS.map(bank => ({ ...bank })),
+    settings: DEFAULT_SETTINGS
+  });
+
+  assert.equal(result.feasible, true);
+  assert.ok(result.solution.x_cyl > result.gas.initialMoles * 0.99);
+  assert.ok(Math.abs(result.blend.retainedPressureBar - 80) < 0.1);
+  assert.ok(Math.abs(result.blend.ventedPressureBar) < 0.1);
+  assert.ok(result.blend.heliumSalvagedLitres > 300);
+  assert.equal(result.protocolSteps[0].type, 'keep');
+});
+
 test('safety fallback preserves working gas and uses available premixes before pure helium', () => {
   const result = optimizeBlend({
     cylinder: {

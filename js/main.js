@@ -16,7 +16,7 @@ import { renderResults } from './ui/results.js';
 import { clearPresetImport, renderPresetImport, renderSettingsDialog, renderPresetOptions } from './ui/settings-dialog.js';
 import { renderSupplyBanks } from './ui/supply-banks.js';
 import { renderStorageWarning } from './ui/storage-warning.js';
-import { renderTableau } from './ui/tableau.js';
+import { renderThermalCharts } from './ui/thermal-charts.js';
 import { clearTernaryDiagram, observeTernaryCanvas, renderTernaryDiagram } from './ui/ternary.js';
 import {
   getImportEntries,
@@ -50,13 +50,12 @@ const state = {
   presetImportStatus: '',
   presetImportLoad: 0,
   settingsSession: 0,
+  settingsCategory: 'model',
   theme: loadTheme(settingsStorage),
   settingsLoadFailure,
   banksLoadFailure,
   bankSaveFailure: null,
   bankInputFailure: null,
-  tableauSteps: [],
-  tableauIndex: 0,
   activeTab: 'recipe',
   lastInput: null,
   lastResult: null
@@ -161,6 +160,21 @@ function toggleTheme() {
 }
 
 
+function setSettingsCategory(category) {
+  const categories = ['model', 'gas-presets', 'cylinder-presets', 'equipment'];
+  if (!categories.includes(category)) return;
+  state.settingsCategory = category;
+  for (const candidate of categories) {
+    const button = document.querySelector(`[data-settings-category="${candidate}"]`);
+    const pane = byId(`settings-pane-${candidate}`);
+    if (!button || !pane) continue;
+    const selected = candidate === category;
+    button.setAttribute('aria-selected', String(selected));
+    button.classList.toggle('settings-category-selected', selected);
+    pane.classList.toggle('hidden', !selected);
+  }
+}
+
 function openSettings() {
   state.settingsSession += 1;
   state.settingsDraft = copySettings(state.settings);
@@ -168,6 +182,7 @@ function openSettings() {
   byId('settings-preset-file').value = '';
   byId('settings-load-preset-url').disabled = false;
   renderSettingsDraft();
+  setSettingsCategory(state.settingsCategory);
   clearSettingsErrors();
   if (state.settingsLoadFailure) {
     displaySettingsErrors(['Saved presets could not be loaded; built-in defaults are in use. Saving will replace the unreadable saved presets.']);
@@ -335,6 +350,7 @@ function addGasPreset() {
   while (names.has(normalizePresetName(name))) name = `New gas ${suffix++}`;
   state.settingsDraft.gasPresets.push({ name, oxygenPercent: 21, heliumPercent: 0 });
   renderSettingsDraft();
+  setSettingsCategory(state.settingsCategory);
 }
 
 function addCylinderPreset() {
@@ -350,11 +366,13 @@ function addCylinderPreset() {
     workingPressureBar: 232
   });
   renderSettingsDraft();
+  setSettingsCategory(state.settingsCategory);
 }
 
 function removeSettingsPreset(collection, index) {
   state.settingsDraft[collection].splice(index, 1);
   renderSettingsDraft();
+  setSettingsCategory(state.settingsCategory);
 }
 
 function saveSettingsDraft() {
@@ -368,7 +386,7 @@ function saveSettingsDraft() {
   try {
     saveSettings(state.settingsDraft, settingsStorage);
   } catch (error) {
-    console.warn('Gas remixer settings were not saved.', error);
+    console.warn('KRWA-Mixer settings were not saved.', error);
     displaySettingsErrors(['Settings were not saved. Check that browser storage is enabled and has space, then try again.']);
     return;
   }
@@ -524,21 +542,19 @@ function recalculate() {
   const result = inputErrors.length > 0 ? invalidInputResult(inputErrors) : optimizeBlend(input);
   state.lastInput = input;
   state.lastResult = result;
-  state.tableauSteps = result.tableauSteps;
-  state.tableauIndex = result.feasible ? state.tableauSteps.length - 1 : 0;
 
   renderSupplyBanks(state.banks, state.settings.gasPresets);
-  renderResults(result);
-  renderTableau(state.tableauSteps, state.tableauIndex);
+  renderResults(result, input);
+  renderThermalCharts(result, input);
   if (result.feasible) renderTernary();
   else clearTernaryDiagram(byId('ternary-canvas'));
 }
 
 function setTab(tabId) {
-  if (!['recipe', 'ternary', 'summary', 'simplex'].includes(tabId)) return;
+  if (!['recipe', 'ternary', 'thermal', 'summary', 'water-pressure'].includes(tabId)) return;
   state.activeTab = tabId;
 
-  for (const paneName of ['recipe', 'ternary', 'summary', 'simplex']) {
+  for (const paneName of ['recipe', 'ternary', 'thermal', 'summary', 'water-pressure']) {
     const pane = byId(`tab-pane-${paneName}`);
     const button = byId(`tab-btn-${paneName}`);
     if (!pane || !button) continue;
@@ -554,12 +570,8 @@ function setTab(tabId) {
 }
 
 
-function stepTableau(delta) {
-  const nextIndex = state.tableauIndex + delta;
-  if (nextIndex < 0 || nextIndex >= state.tableauSteps.length) return;
-  state.tableauIndex = nextIndex;
-  renderTableau(state.tableauSteps, state.tableauIndex);
-}
+
+
 
 function addBank() {
   const defaultGas = { oxygenPercent: 32, heliumPercent: 0 };
@@ -743,6 +755,9 @@ function handleClick(event) {
     case 'cancel-settings':
       byId('settings-dialog').close();
       break;
+    case 'select-settings-category':
+      setSettingsCategory(actionElement.dataset.settingsCategory);
+      break;
     case 'add-gas-preset':
       addGasPreset();
       break;
@@ -766,9 +781,6 @@ function handleClick(event) {
       break;
     case 'select-tab':
       setTab(actionElement.dataset.tab);
-      break;
-    case 'tableau-step':
-      stepTableau(Number(actionElement.dataset.delta));
       break;
   }
 }
