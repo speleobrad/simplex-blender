@@ -56,7 +56,16 @@ test('marks an exhausted transfer source before its source-end pressure', () => 
   try {
     renderResults({
       feasible: true,
-      blend: {},
+      blend: {
+        retainedPressureBar: 0,
+        retainedPercent: 0,
+        ventedPressureBar: 0,
+        ventedGasLitres: 0,
+        heliumSalvagedLitres: 0,
+        finalPressureBar: 100,
+        finalOxygenPercent: 21,
+        finalHeliumPercent: 0
+      },
       thermal: null,
       protocolSteps: [{
         title: 'Add helium',
