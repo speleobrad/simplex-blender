@@ -179,8 +179,9 @@ test('merges selected equipment presets into their category collections', () => 
     duplicate: false
   }]);
 
-  assert.deepEqual(merged.compressorPresets, [{
-    name: 'High flow', inletFlowLPerMin: 160, maxPressureBar: 250, temperatureModifierC: 4
-  }]);
-  assert.equal(DEFAULT_SETTINGS.compressorPresets, undefined);
+  assert.deepEqual(merged.compressorPresets, [
+    DEFAULT_SETTINGS.compressorPresets[0],
+    { name: 'High flow', inletFlowLPerMin: 160, maxPressureBar: 250, temperatureModifierC: 4 }
+  ]);
+  assert.notStrictEqual(merged.compressorPresets, DEFAULT_SETTINGS.compressorPresets);
 });

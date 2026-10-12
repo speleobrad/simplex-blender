@@ -1,6 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applyGasPresetToBank, DEFAULT_SETTINGS, getSelectedGasPreset, loadSettings, saveSettings, sortCylinderPresetEntries, sortGasPresetEntries } from '../js/settings.js';
+import {
+  applyBoosterPresetToSettings,
+  applyCompressorPresetToSettings,
+  applyGasPresetToBank,
+  DEFAULT_SETTINGS,
+  getSelectedGasPreset,
+  loadSettings,
+  saveSettings,
+  sortCylinderPresetEntries,
+  sortGasPresetEntries
+} from '../js/settings.js';
 
 function memoryStorage(initialEntries = []) {
   const values = new Map(initialEntries);
@@ -26,6 +36,126 @@ test('settings include compressor and booster pressure ceilings and temperature 
   assert.equal(DEFAULT_SETTINGS.booster.maxBoosterOutputPressureBar, 200);
   assert.equal(DEFAULT_SETTINGS.booster.boosterTemperatureModifierC, 0);
   assert.equal(DEFAULT_SETTINGS.booster.compressorTemperatureModifierC, 0);
+});
+
+test('default settings expose named compressor and booster presets', () => {
+  assert.equal(DEFAULT_SETTINGS.compressorPresets.length, 1);
+  assert.equal(DEFAULT_SETTINGS.boosterPresets.length, 1);
+  assert.equal(DEFAULT_SETTINGS.compressorPresets[0].inletFlowLPerMin, 100);
+  assert.equal(DEFAULT_SETTINGS.boosterPresets[0].maxOutputPressureBar, 200);
+});
+
+test('legacy settings migrate active equipment values into preset collections', () => {
+  const loaded = loadSettings(memoryStorage([[
+    'simplex-gas-remixer-settings',
+    JSON.stringify({
+      gasPresets: [{ name: 'Air', oxygenPercent: 21, heliumPercent: 0 }],
+      volumePresets: [12],
+      booster: { ...DEFAULT_SETTINGS.booster, compressorInletFlowLPerMin: 160 }
+    })
+  ]]));
+
+  assert.equal(loaded.compressorPresets[0].inletFlowLPerMin, 160);
+  assert.equal(loaded.boosterPresets[0].cylinderVolumeCm3, 9);
+});
+
+test('equipment preset collections survive a settings round trip', () => {
+  const settings = {
+    ...DEFAULT_SETTINGS,
+    gasPresets: DEFAULT_SETTINGS.gasPresets.map(preset => ({ ...preset })),
+    cylinderPresets: DEFAULT_SETTINGS.cylinderPresets.map(preset => ({ ...preset })),
+    booster: { ...DEFAULT_SETTINGS.booster },
+    compressorPresets: DEFAULT_SETTINGS.compressorPresets.map(preset => ({ ...preset })),
+    boosterPresets: DEFAULT_SETTINGS.boosterPresets.map(preset => ({ ...preset }))
+  };
+  settings.compressorPresets.push({
+    name: 'High flow', inletFlowLPerMin: 160, maxPressureBar: 250, temperatureModifierC: 4
+  });
+  const storage = memoryStorage();
+
+  saveSettings(settings, storage);
+
+  assert.deepEqual(loadSettings(storage).compressorPresets, settings.compressorPresets);
+});
+
+test('invalid equipment preset collections are rejected before storage changes', () => {
+  const storage = memoryStorage();
+  const invalidSettings = [
+    {
+      ...DEFAULT_SETTINGS,
+      compressorPresets: [{ ...DEFAULT_SETTINGS.compressorPresets[0], inletFlowLPerMin: 0 }]
+    },
+    {
+      ...DEFAULT_SETTINGS,
+      boosterPresets: [{ ...DEFAULT_SETTINGS.boosterPresets[0], maxOutputPressureBar: 351 }]
+    },
+    {
+      ...DEFAULT_SETTINGS,
+      compressorPresets: [
+        DEFAULT_SETTINGS.compressorPresets[0],
+        { ...DEFAULT_SETTINGS.compressorPresets[0], name: 'standard compressor' }
+      ]
+    },
+    {
+      ...DEFAULT_SETTINGS,
+      boosterPresets: [
+        DEFAULT_SETTINGS.boosterPresets[0],
+        { ...DEFAULT_SETTINGS.boosterPresets[0], name: 'standard booster' }
+      ]
+    },
+    { ...DEFAULT_SETTINGS, compressorPresets: {} },
+    { ...DEFAULT_SETTINGS, boosterPresets: {} }
+  ];
+
+  for (const settings of invalidSettings) {
+    assert.throws(() => saveSettings(settings, storage), RangeError);
+    assert.equal(storage.getItem('simplex-gas-remixer-settings'), null);
+  }
+});
+
+test('applying equipment presets copies only their active booster fields', () => {
+  const settings = {
+    ...DEFAULT_SETTINGS,
+    booster: { ...DEFAULT_SETTINGS.booster },
+    compressorPresets: DEFAULT_SETTINGS.compressorPresets.map(preset => ({ ...preset })),
+    boosterPresets: DEFAULT_SETTINGS.boosterPresets.map(preset => ({ ...preset }))
+  };
+  const compressor = {
+    name: 'High flow', inletFlowLPerMin: 160, maxPressureBar: 250, temperatureModifierC: 4
+  };
+  const booster = {
+    ...DEFAULT_SETTINGS.boosterPresets[0],
+    name: 'Rapid booster',
+    cylinderVolumeCm3: 12,
+    minimumSourcePressureBar: 25,
+    oxygenBoostBpm: 75,
+    otherBoostBpm: 80,
+    maxOutputPressureBar: 240,
+    temperatureModifierC: 3,
+    oxygenDecantRateBarPerMin: 7,
+    otherDecantRateBarPerMin: 8
+  };
+
+  const withCompressor = applyCompressorPresetToSettings(settings, compressor);
+  const withBooster = applyBoosterPresetToSettings(withCompressor, booster);
+
+  assert.notStrictEqual(withCompressor, settings);
+  assert.notStrictEqual(withCompressor.booster, settings.booster);
+  assert.deepEqual(withBooster.booster, {
+    ...settings.booster,
+    compressorInletFlowLPerMin: 160,
+    maxCompressorPressureBar: 250,
+    compressorTemperatureModifierC: 4,
+    cylinderVolumeCm3: 12,
+    minimumSourcePressureBar: 25,
+    oxygenBoostBpm: 75,
+    otherBoostBpm: 80,
+    maxBoosterOutputPressureBar: 240,
+    boosterTemperatureModifierC: 3,
+    oxygenDecantRateBarPerMin: 7,
+    otherDecantRateBarPerMin: 8
+  });
+  assert.deepEqual(settings.booster, DEFAULT_SETTINGS.booster);
 });
 
 test('old settings gain both pressure ceiling defaults', () => {
@@ -117,7 +247,9 @@ test('saved gas and cylinder presets survive a load/save round trip', () => {
       massKg: 12.4,
       workingPressureBar: 300
     }],
-    booster: { ...DEFAULT_SETTINGS.booster }
+    booster: { ...DEFAULT_SETTINGS.booster },
+    compressorPresets: DEFAULT_SETTINGS.compressorPresets.map(preset => ({ ...preset })),
+    boosterPresets: DEFAULT_SETTINGS.boosterPresets.map(preset => ({ ...preset }))
   };
   saveSettings(settings, storage);
   assert.deepEqual(loadSettings(storage), settings);
@@ -135,7 +267,12 @@ test('saved settings preserve the shared booster minimum source pressure', () =>
       massKg: 14,
       workingPressureBar: 232
     }],
-    booster: { ...DEFAULT_SETTINGS.booster, minimumSourcePressureBar: 27 }
+    booster: { ...DEFAULT_SETTINGS.booster, minimumSourcePressureBar: 27 },
+    compressorPresets: DEFAULT_SETTINGS.compressorPresets.map(preset => ({ ...preset })),
+    boosterPresets: DEFAULT_SETTINGS.boosterPresets.map(preset => ({
+      ...preset,
+      minimumSourcePressureBar: 27
+    }))
   };
   saveSettings(settings, storage);
   assert.deepEqual(loadSettings(storage), settings);

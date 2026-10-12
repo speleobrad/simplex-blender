@@ -1,4 +1,9 @@
-import { validateCylinderPreset, validateGasPreset } from './preset-validation.js';
+import {
+  validateBoosterPreset,
+  validateCompressorPreset,
+  validateCylinderPreset,
+  validateGasPreset
+} from './preset-validation.js';
 const STORAGE_KEY = 'simplex-gas-remixer-settings';
 
 export const DEFAULT_SETTINGS = Object.freeze({
@@ -21,6 +26,28 @@ export const DEFAULT_SETTINGS = Object.freeze({
     Object.freeze({ name: '18 L Steel 232 bar', volumeL: 18, material: 'steel', massKg: 14, workingPressureBar: 232 }),
     Object.freeze({ name: '24 L Steel 232 bar', volumeL: 24, material: 'steel', massKg: 14, workingPressureBar: 232 })
   ]),
+  compressorPresets: Object.freeze([
+    Object.freeze({
+      name: 'Standard compressor',
+      inletFlowLPerMin: 100,
+      maxPressureBar: 232,
+      temperatureModifierC: 0
+    })
+  ]),
+  boosterPresets: Object.freeze([
+    Object.freeze({
+      name: 'Standard booster',
+      minimumSourcePressureBar: 20,
+      cylinderVolumeCm3: 9,
+      oxygenBoostBpm: 50,
+      otherBoostBpm: 50,
+      oxygenDecantRateBarPerMin: 5,
+      otherDecantRateBarPerMin: 5,
+      maxOutputPressureBar: 200,
+      temperatureModifierC: 0,
+      drainingRateBarPerMin: 5
+    })
+  ]),
   booster: Object.freeze({
     minimumSourcePressureBar: 20,
     cylinderVolumeCm3: 9,
@@ -40,6 +67,8 @@ function copySettings(settings) {
   return {
     physics: { model: settings.physics.model },
     gasPresets: settings.gasPresets.map(preset => ({ ...preset })),
+    compressorPresets: settings.compressorPresets.map(preset => ({ ...preset })),
+    boosterPresets: settings.boosterPresets.map(preset => ({ ...preset })),
     cylinderPresets: settings.cylinderPresets.map(preset => ({ ...preset })),
     booster: {
       minimumSourcePressureBar: settings.booster.minimumSourcePressureBar,
@@ -165,6 +194,11 @@ export function validateSettings(settings) {
     }
   }
 
+  errors.push(
+    ...validatePresetCollection(settings.compressorPresets, 'compressor', validateCompressorPreset),
+    ...validatePresetCollection(settings.boosterPresets, 'booster', validateBoosterPreset)
+  );
+
   const names = new Set();
   for (const preset of settings.gasPresets) {
     const presetErrors = validateGasPreset(preset);
@@ -193,6 +227,55 @@ export function validateSettings(settings) {
   return errors;
 }
 
+function addDefaultEquipmentPresets(settings) {
+  const source = settings ?? {};
+  const booster = source.booster;
+  return {
+    ...source,
+    compressorPresets: Object.hasOwn(source, 'compressorPresets')
+      ? source.compressorPresets
+      : [{
+          name: 'Standard compressor',
+          inletFlowLPerMin: booster.compressorInletFlowLPerMin,
+          maxPressureBar: booster.maxCompressorPressureBar,
+          temperatureModifierC: booster.compressorTemperatureModifierC
+        }],
+    boosterPresets: Object.hasOwn(source, 'boosterPresets')
+      ? source.boosterPresets
+      : [{
+          name: 'Standard booster',
+          minimumSourcePressureBar: booster.minimumSourcePressureBar,
+          cylinderVolumeCm3: booster.cylinderVolumeCm3,
+          oxygenBoostBpm: booster.oxygenBoostBpm,
+          otherBoostBpm: booster.otherBoostBpm,
+          oxygenDecantRateBarPerMin: booster.oxygenDecantRateBarPerMin,
+          otherDecantRateBarPerMin: booster.otherDecantRateBarPerMin,
+          maxOutputPressureBar: booster.maxBoosterOutputPressureBar,
+          temperatureModifierC: booster.boosterTemperatureModifierC,
+          drainingRateBarPerMin: 5
+        }]
+  };
+}
+
+function validatePresetCollection(presets, category, validator) {
+  const errors = [];
+  if (!Array.isArray(presets)) return [`Settings must contain a ${category} preset list.`];
+
+  const names = new Set();
+  for (const preset of presets) {
+    const presetErrors = validator(preset);
+    if (!preset || typeof preset.name !== 'string' || !preset.name.trim()) {
+      errors.push(...presetErrors.filter(error => /needs a name/.test(error)));
+      continue;
+    }
+    const normalizedName = preset.name.trim().toLocaleLowerCase();
+    if (names.has(normalizedName)) errors.push(`${category[0].toUpperCase()}${category.slice(1)} preset names must be unique.`);
+    names.add(normalizedName);
+    errors.push(...presetErrors);
+  }
+  return errors;
+}
+
 export function loadSettings(storage, onFallback = () => {}) {
   let serialized;
   try {
@@ -211,7 +294,7 @@ export function loadSettings(storage, onFallback = () => {}) {
     return copySettings(DEFAULT_SETTINGS);
   }
 
-  const normalized = addDefaultCylinderPresets(addDefaultPhysics(addDefaultBooster(saved)));
+  const normalized = addDefaultEquipmentPresets(addDefaultCylinderPresets(addDefaultPhysics(addDefaultBooster(saved))));
   const errors = validateSettings(normalized);
   if (errors.length > 0) {
     onFallback(new RangeError(errors.join(' ')));
@@ -221,10 +304,31 @@ export function loadSettings(storage, onFallback = () => {}) {
 }
 
 export function saveSettings(settings, storage) {
-  const normalized = addDefaultCylinderPresets(addDefaultPhysics(addDefaultBooster(settings)));
+  const normalized = addDefaultEquipmentPresets(addDefaultCylinderPresets(addDefaultPhysics(addDefaultBooster(settings))));
   const errors = validateSettings(normalized);
   if (errors.length > 0) throw new RangeError(errors.join(' '));
   storage.setItem(STORAGE_KEY, JSON.stringify(copySettings(normalized)));
+}
+
+export function applyCompressorPresetToSettings(settings, preset) {
+  const copied = copySettings(settings);
+  copied.booster.compressorInletFlowLPerMin = preset.inletFlowLPerMin;
+  copied.booster.maxCompressorPressureBar = preset.maxPressureBar;
+  copied.booster.compressorTemperatureModifierC = preset.temperatureModifierC;
+  return copied;
+}
+
+export function applyBoosterPresetToSettings(settings, preset) {
+  const copied = copySettings(settings);
+  copied.booster.minimumSourcePressureBar = preset.minimumSourcePressureBar;
+  copied.booster.cylinderVolumeCm3 = preset.cylinderVolumeCm3;
+  copied.booster.oxygenBoostBpm = preset.oxygenBoostBpm;
+  copied.booster.otherBoostBpm = preset.otherBoostBpm;
+  copied.booster.oxygenDecantRateBarPerMin = preset.oxygenDecantRateBarPerMin;
+  copied.booster.otherDecantRateBarPerMin = preset.otherDecantRateBarPerMin;
+  copied.booster.maxBoosterOutputPressureBar = preset.maxOutputPressureBar;
+  copied.booster.boosterTemperatureModifierC = preset.temperatureModifierC;
+  return copied;
 }
 
 export function applyGasPresetToBank(bank, preset) {
