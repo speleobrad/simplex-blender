@@ -5,6 +5,7 @@ import {
   applyGasPresetToBank,
   copySettings,
   loadSettings,
+  normalizePresetName,
   saveSettings,
   selectEquipmentPreset,
   validateSettings
@@ -45,6 +46,9 @@ const state = {
   settings: initialSettings,
   settingsDraft: null,
   presetImportEntries: [],
+  presetImportSelectedIndexes: new Set(),
+  presetImportStatus: '',
+  presetImportLoad: 0,
   settingsSession: 0,
   theme: loadTheme(settingsStorage),
   settingsLoadFailure,
@@ -160,10 +164,10 @@ function toggleTheme() {
 function openSettings() {
   state.settingsSession += 1;
   state.settingsDraft = copySettings(state.settings);
-  state.presetImportEntries = [];
+  clearPresetImportState();
   byId('settings-preset-file').value = '';
   byId('settings-load-preset-url').disabled = false;
-  renderSettingsDialog(state.settingsDraft);
+  renderSettingsDraft();
   clearSettingsErrors();
   if (state.settingsLoadFailure) {
     displaySettingsErrors(['Saved presets could not be loaded; built-in defaults are in use. Saving will replace the unreadable saved presets.']);
@@ -175,36 +179,72 @@ function isActiveSettingsSession(session) {
   return session === state.settingsSession && state.settingsDraft !== null;
 }
 
+function isActivePresetImportLoad(session, load) {
+  return isActiveSettingsSession(session) && load === state.presetImportLoad;
+}
+
+function clearPresetImportState() {
+  state.presetImportEntries = [];
+  state.presetImportSelectedIndexes = new Set();
+  state.presetImportStatus = '';
+}
+
+function renderSettingsDraft() {
+  renderSettingsDialog(state.settingsDraft);
+  renderPresetImport(
+    state.presetImportEntries,
+    state.presetImportStatus,
+    state.presetImportSelectedIndexes
+  );
+}
+
 function setPresetImportStatus(message) {
+  state.presetImportStatus = message;
   byId('settings-preset-import-status').textContent = message;
 }
 
-function renderLoadedPresetDocument(document, session) {
-  if (!isActiveSettingsSession(session)) return;
+function renderLoadedPresetDocument(document, session, load) {
+  if (!isActivePresetImportLoad(session, load)) return;
   const parsed = parsePresetDocument(document);
-  if (!isActiveSettingsSession(session)) return;
+  if (!isActivePresetImportLoad(session, load)) return;
   state.presetImportEntries = getImportEntries(parsed, state.settingsDraft);
+  state.presetImportSelectedIndexes = new Set(
+    state.presetImportEntries.flatMap((entry, index) => entry.duplicate ? [] : [index])
+  );
   const loaded = `Loaded ${state.presetImportEntries.length} preset${state.presetImportEntries.length === 1 ? '' : 's'}.`;
-  const status = parsed.errors.length > 0 ? `${loaded} ${parsed.errors.join(' ')}` : loaded;
-  renderPresetImport(state.presetImportEntries, status);
+  state.presetImportStatus = parsed.errors.length > 0 ? `${loaded} ${parsed.errors.join(' ')}` : loaded;
+  renderPresetImport(
+    state.presetImportEntries,
+    state.presetImportStatus,
+    state.presetImportSelectedIndexes
+  );
 }
 
-function reportPresetImportError(error, session) {
-  if (isActiveSettingsSession(session)) setPresetImportStatus(`Unable to load presets: ${error.message}`);
+function reportPresetImportError(error, session, load) {
+  if (isActivePresetImportLoad(session, load)) {
+    setPresetImportStatus(`Unable to load presets: ${error.message}`);
+  }
+}
+
+function startPresetImportLoad() {
+  state.presetImportLoad += 1;
+  return state.presetImportLoad;
 }
 
 async function loadPresetFile(input) {
   const session = state.settingsSession;
   const file = input.files?.[0];
   if (!file || !isActiveSettingsSession(session)) return;
+  const load = startPresetImportLoad();
+  byId('settings-load-preset-url').disabled = false;
   try {
     const text = await file.text();
-    if (!isActiveSettingsSession(session)) return;
-    renderLoadedPresetDocument(JSON.parse(text), session);
+    if (!isActivePresetImportLoad(session, load)) return;
+    renderLoadedPresetDocument(JSON.parse(text), session, load);
   } catch (error) {
-    reportPresetImportError(error, session);
+    reportPresetImportError(error, session, load);
   } finally {
-    if (isActiveSettingsSession(session)) input.value = '';
+    if (isActivePresetImportLoad(session, load)) input.value = '';
   }
 }
 
@@ -217,33 +257,32 @@ async function loadPresetUrl() {
     return;
   }
 
+  const load = startPresetImportLoad();
+  byId('settings-preset-file').value = '';
   const button = byId('settings-load-preset-url');
   button.disabled = true;
   try {
     const response = await fetch(url);
-    if (!isActiveSettingsSession(session)) return;
+    if (!isActivePresetImportLoad(session, load)) return;
     if (!response.ok) {
       throw new Error(`The server returned ${response.status}${response.statusText ? ` ${response.statusText}` : ''}.`);
     }
     const document = await response.json();
-    if (!isActiveSettingsSession(session)) return;
-    renderLoadedPresetDocument(document, session);
+    if (!isActivePresetImportLoad(session, load)) return;
+    renderLoadedPresetDocument(document, session, load);
   } catch (error) {
-    reportPresetImportError(error, session);
+    reportPresetImportError(error, session, load);
   } finally {
-    if (isActiveSettingsSession(session)) button.disabled = false;
+    if (isActivePresetImportLoad(session, load)) button.disabled = false;
   }
 }
 
 function importSelectedPresets() {
   if (!state.settingsDraft) return;
-  const list = byId('settings-preset-import-list');
-  const selectedIndexes = new Set(
-    [...list.querySelectorAll('[data-preset-import-index]')]
-      .filter(input => input.checked && !input.disabled)
-      .map(input => Number(input.dataset.presetImportIndex))
+  const selectedEntries = selectPresetImportEntries(
+    state.presetImportEntries,
+    state.presetImportSelectedIndexes
   );
-  const selectedEntries = selectPresetImportEntries(state.presetImportEntries, selectedIndexes);
   if (selectedEntries.length === 0) {
     setPresetImportStatus('Select at least one new preset to import.');
     return;
@@ -256,8 +295,8 @@ function importSelectedPresets() {
     return;
   }
 
-  state.presetImportEntries = [];
-  renderSettingsDialog(state.settingsDraft);
+  clearPresetImportState();
+  renderSettingsDraft();
   setPresetImportStatus(`Imported ${selectedEntries.length} preset${selectedEntries.length === 1 ? '' : 's'}. Save settings to keep the changes.`);
 }
 
@@ -265,14 +304,14 @@ function selectCompressorPreset(select) {
   const settings = selectEquipmentPreset(state.settingsDraft, 'compressorPresets', select.value);
   if (!settings) return;
   state.settingsDraft = settings;
-  renderSettingsDialog(state.settingsDraft);
+  renderSettingsDraft();
 }
 
 function selectBoosterPreset(select) {
   const settings = selectEquipmentPreset(state.settingsDraft, 'boosterPresets', select.value);
   if (!settings) return;
   state.settingsDraft = settings;
-  renderSettingsDialog(state.settingsDraft);
+  renderSettingsDraft();
 }
 
 function updateSettingsDraft(input) {
@@ -290,19 +329,19 @@ function updateSettingsDraft(input) {
 }
 
 function addGasPreset() {
-  const names = new Set(state.settingsDraft.gasPresets.map(preset => preset.name.trim().toLocaleLowerCase()));
+  const names = new Set(state.settingsDraft.gasPresets.map(preset => normalizePresetName(preset.name)));
   let name = 'New gas';
   let suffix = 2;
-  while (names.has(name.toLocaleLowerCase())) name = `New gas ${suffix++}`;
+  while (names.has(normalizePresetName(name))) name = `New gas ${suffix++}`;
   state.settingsDraft.gasPresets.push({ name, oxygenPercent: 21, heliumPercent: 0 });
-  renderSettingsDialog(state.settingsDraft);
+  renderSettingsDraft();
 }
 
 function addCylinderPreset() {
-  const names = new Set(state.settingsDraft.cylinderPresets.map(preset => preset.name.trim().toLocaleLowerCase()));
+  const names = new Set(state.settingsDraft.cylinderPresets.map(preset => normalizePresetName(preset.name)));
   let name = 'New cylinder';
   let suffix = 2;
-  while (names.has(name.toLocaleLowerCase())) name = `New cylinder ${suffix++}`;
+  while (names.has(normalizePresetName(name))) name = `New cylinder ${suffix++}`;
   state.settingsDraft.cylinderPresets.push({
     name,
     volumeL: 12,
@@ -310,12 +349,12 @@ function addCylinderPreset() {
     massKg: 14,
     workingPressureBar: 232
   });
-  renderSettingsDialog(state.settingsDraft);
+  renderSettingsDraft();
 }
 
 function removeSettingsPreset(collection, index) {
   state.settingsDraft[collection].splice(index, 1);
-  renderSettingsDialog(state.settingsDraft);
+  renderSettingsDraft();
 }
 
 function saveSettingsDraft() {
@@ -393,7 +432,7 @@ function markGasPresetCustom(input) {
 function handleSettingsClosed() {
   state.settingsSession += 1;
   state.settingsDraft = null;
-  state.presetImportEntries = [];
+  clearPresetImportState();
   clearPresetImport();
   clearSettingsErrors();
 }
@@ -630,6 +669,12 @@ function handleInputOrChange(event) {
   const target = event.target;
   if (event.type === 'change' && target.id === 'settings-preset-file') {
     void loadPresetFile(target);
+    return;
+  }
+  if (event.type === 'change' && target.dataset.presetImportIndex !== undefined) {
+    const index = Number(target.dataset.presetImportIndex);
+    if (!target.disabled && target.checked) state.presetImportSelectedIndexes.add(index);
+    else state.presetImportSelectedIndexes.delete(index);
     return;
   }
   if ((event.type === 'input' || event.type === 'change') && target.dataset.settingsCollection) {

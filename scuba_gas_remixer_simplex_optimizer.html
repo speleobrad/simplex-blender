@@ -125,6 +125,13 @@
                 <span class="text-xs text-slate-400">bar/min</span>
               </div>
             </div>
+            <div>
+              <label for="settings-booster-draining-rate" class="block text-xs text-slate-400">Tank draining rate</label>
+              <div class="mt-1 flex items-center gap-2">
+                <input type="number" id="settings-booster-draining-rate" value="5" min="0.01" max="1000" step="0.01" data-settings-collection="booster" data-settings-field="drainingRateBarPerMin" aria-label="Tank draining rate" class="w-24 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-center font-mono text-xs text-slate-100">
+                <span class="text-xs text-slate-400">bar/min</span>
+              </div>
+            </div>
             <div class="sm:col-span-2">
               <label for="settings-compressor-preset" class="block text-xs text-slate-400">Compressor preset</label>
               <select id="settings-compressor-preset" data-action="select-compressor-preset" class="mt-1 w-full rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-xs text-slate-100"></select>

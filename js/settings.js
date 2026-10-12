@@ -6,6 +6,10 @@ import {
 } from './preset-validation.js';
 const STORAGE_KEY = 'simplex-gas-remixer-settings';
 
+export function normalizePresetName(name) {
+  return typeof name === 'string' ? name.trim().toLowerCase() : '';
+}
+
 export const DEFAULT_SETTINGS = Object.freeze({
   physics: Object.freeze({ model: 'vdw' }),
   gasPresets: Object.freeze([
@@ -213,7 +217,7 @@ export function validateSettings(settings) {
       errors.push(...presetErrors.filter(error => /needs a name/.test(error)));
       continue;
     }
-    const normalizedName = preset.name.trim().toLocaleLowerCase();
+    const normalizedName = normalizePresetName(preset.name);
     if (names.has(normalizedName)) errors.push('Gas preset names must be unique.');
     names.add(normalizedName);
     errors.push(...presetErrors);
@@ -226,7 +230,7 @@ export function validateSettings(settings) {
       errors.push(...presetErrors.filter(error => /needs a name/.test(error)));
       continue;
     }
-    const normalizedName = preset.name.trim().toLocaleLowerCase();
+    const normalizedName = normalizePresetName(preset.name);
     if (cylinderNames.has(normalizedName)) errors.push('Cylinder preset names must be unique.');
     cylinderNames.add(normalizedName);
     errors.push(...presetErrors);
@@ -275,7 +279,7 @@ function validatePresetCollection(presets, category, validator) {
       errors.push(...presetErrors.filter(error => /needs a name/.test(error)));
       continue;
     }
-    const normalizedName = preset.name.trim().toLocaleLowerCase();
+    const normalizedName = normalizePresetName(preset.name);
     if (names.has(normalizedName)) errors.push(`${category[0].toUpperCase()}${category.slice(1)} preset names must be unique.`);
     names.add(normalizedName);
     errors.push(...presetErrors);

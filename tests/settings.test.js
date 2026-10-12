@@ -8,6 +8,7 @@ import {
   DEFAULT_SETTINGS,
   getSelectedGasPreset,
   loadSettings,
+  normalizePresetName,
   saveSettings,
   selectEquipmentPreset,
   sortCylinderPresetEntries,
@@ -206,6 +207,11 @@ test('selecting named equipment presets changes only copied draft active fields'
   assert.deepEqual(withBooster.compressorPresets, draft.compressorPresets);
   assert.deepEqual(withBooster.boosterPresets, draft.boosterPresets);
   assert.deepEqual(draft.booster, DEFAULT_SETTINGS.booster);
+});
+
+test('normalizes preset names with locale-independent case folding', () => {
+  assert.equal(normalizePresetName('  I  '), 'i');
+  assert.equal(normalizePresetName(' EAN32 '), 'ean32');
 });
 
 test('old settings gain both pressure ceiling defaults', () => {

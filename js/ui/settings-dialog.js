@@ -220,7 +220,7 @@ function importPresetSummary(category, preset) {
   return '';
 }
 
-export function renderPresetImport(entries, status) {
+export function renderPresetImport(entries, status, selectedIndexes) {
   const list = document.getElementById('settings-preset-import-list');
   const statusElement = document.getElementById('settings-preset-import-status');
   if (statusElement) statusElement.textContent = status ?? '';
@@ -247,7 +247,7 @@ export function renderPresetImport(entries, status) {
         : 'flex items-start gap-2 rounded border border-ocean-800 bg-ocean-950/40 p-2 text-xs text-slate-200';
       const checkbox = document.createElement('input');
       checkbox.type = 'checkbox';
-      checkbox.checked = !entry.duplicate;
+      checkbox.checked = !entry.duplicate && (selectedIndexes?.has(index) ?? true);
       checkbox.disabled = entry.duplicate;
       checkbox.dataset.presetImportIndex = String(index);
       const details = document.createElement('span');
@@ -286,6 +286,7 @@ export function renderSettingsDialog(settings) {
     'settings-booster-other-bpm': settings.booster.otherBoostBpm,
     'settings-booster-oxygen-decant-rate': settings.booster.oxygenDecantRateBarPerMin,
     'settings-booster-other-decant-rate': settings.booster.otherDecantRateBarPerMin,
+    'settings-booster-draining-rate': settings.booster.drainingRateBarPerMin,
     'settings-compressor-inlet-flow': settings.booster.compressorInletFlowLPerMin,
     'settings-compressor-max-pressure': settings.booster.maxCompressorPressureBar,
     'settings-booster-max-output-pressure': settings.booster.maxBoosterOutputPressureBar,

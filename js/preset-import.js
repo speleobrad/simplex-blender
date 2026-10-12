@@ -1,5 +1,5 @@
 import { validatePreset } from './preset-validation.js';
-import { validateSettings } from './settings.js';
+import { normalizePresetName, validateSettings } from './settings.js';
 
 export const PRESET_CATEGORIES = Object.freeze({
   gasPresets: Object.freeze({ fields: Object.freeze(['name', 'oxygenPercent', 'heliumPercent']) }),
@@ -53,9 +53,6 @@ export function parsePresetDocument(document) {
   return { entries, errors };
 }
 
-function normalizedName(preset) {
-  return preset.name.trim().toLocaleLowerCase();
-}
 
 export function canonicalPresetContent(category, preset) {
   const metadata = PRESET_CATEGORIES[category];
@@ -74,7 +71,7 @@ export function getImportEntries(parsed, settings) {
   const knownNames = Object.fromEntries(Object.keys(PRESET_CATEGORIES).map(category => [
     category,
     new Set(localPresets[category].filter(preset => preset && typeof preset.name === 'string' && preset.name.trim())
-      .map(normalizedName))
+      .map(preset => normalizePresetName(preset.name)))
   ]));
   const knownContent = Object.fromEntries(Object.keys(PRESET_CATEGORIES).map(category => [
     category,
@@ -82,7 +79,7 @@ export function getImportEntries(parsed, settings) {
   ]));
 
   return parsed.entries.map(entry => {
-    const name = normalizedName(entry.preset);
+    const name = normalizePresetName(entry.preset.name);
     const content = canonicalPresetContent(entry.category, entry.preset);
     let duplicateReason = null;
     if (knownNames[entry.category].has(name)) duplicateReason = 'same name';

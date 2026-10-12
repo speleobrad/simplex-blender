@@ -82,6 +82,7 @@ function createFakeDocument() {
     'settings-booster-other-bpm',
     'settings-booster-oxygen-decant-rate',
     'settings-booster-other-decant-rate',
+    'settings-booster-draining-rate',
     'settings-compressor-inlet-flow',
     'settings-compressor-max-pressure',
     'settings-booster-max-output-pressure',
@@ -144,6 +145,7 @@ test('renders equipment selectors and active values', () => {
   assert.equal(compressor.value, 'Standard compressor');
   assert.equal(booster.value, 'Standard booster');
   assert.equal(elements.get('settings-compressor-inlet-flow').value, '100');
+  assert.equal(elements.get('settings-booster-draining-rate').value, '5');
 });
 
 test('renders duplicate import entries as disabled checkboxes', () => {
@@ -164,6 +166,28 @@ test('renders duplicate import entries as disabled checkboxes', () => {
   assert.equal(checkbox.dataset.presetImportIndex, '0');
   assert.match(row.textContent, /same name/);
   assert.equal(elements.get('settings-preset-import-status').textContent, 'Loaded 1 preset');
+});
+
+test('renders preserved import checkbox state', () => {
+  const { document, elements } = createFakeDocument();
+  globalThis.document = document;
+
+  renderPresetImport([
+    {
+      category: 'gasPresets',
+      preset: { name: 'EAN32', oxygenPercent: 32, heliumPercent: 0 },
+      duplicate: false
+    },
+    {
+      category: 'gasPresets',
+      preset: { name: 'Tx 18/45', oxygenPercent: 18, heliumPercent: 45 },
+      duplicate: false
+    }
+  ], 'Loaded 2 presets', new Set([1]));
+
+  const section = elements.get('settings-preset-import-list').children[0];
+  assert.equal(section.children[1].querySelector('input').checked, false);
+  assert.equal(section.children[2].querySelector('input').checked, true);
 });
 
 test('clears stale import entries when the settings dialog rerenders', () => {
