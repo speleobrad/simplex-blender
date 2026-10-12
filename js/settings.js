@@ -1,4 +1,4 @@
-import { isValidGasComposition } from './gas-input.js';
+import { validateCylinderPreset, validateGasPreset } from './preset-validation.js';
 const STORAGE_KEY = 'simplex-gas-remixer-settings';
 
 export const DEFAULT_SETTINGS = Object.freeze({
@@ -167,45 +167,28 @@ export function validateSettings(settings) {
 
   const names = new Set();
   for (const preset of settings.gasPresets) {
+    const presetErrors = validateGasPreset(preset);
     if (!preset || typeof preset.name !== 'string' || !preset.name.trim()) {
-      errors.push('Every gas preset needs a name.');
+      errors.push(...presetErrors.filter(error => /needs a name/.test(error)));
       continue;
     }
     const normalizedName = preset.name.trim().toLocaleLowerCase();
     if (names.has(normalizedName)) errors.push('Gas preset names must be unique.');
     names.add(normalizedName);
-
-    const oxygen = preset.oxygenPercent;
-    const helium = preset.heliumPercent;
-    if (!isValidGasComposition(oxygen, helium)) {
-      errors.push(`Gas preset “${preset.name}” must total at most 100% O₂ and He.`);
-    }
+    errors.push(...presetErrors);
   }
 
   const cylinderNames = new Set();
   for (const preset of settings.cylinderPresets) {
+    const presetErrors = validateCylinderPreset(preset);
     if (!preset || typeof preset.name !== 'string' || !preset.name.trim()) {
-      errors.push('Every cylinder preset needs a name.');
+      errors.push(...presetErrors.filter(error => /needs a name/.test(error)));
       continue;
     }
     const normalizedName = preset.name.trim().toLocaleLowerCase();
     if (cylinderNames.has(normalizedName)) errors.push('Cylinder preset names must be unique.');
     cylinderNames.add(normalizedName);
-
-    if (!Number.isFinite(preset.volumeL) || preset.volumeL < 0.1) {
-      errors.push(`Cylinder preset “${preset.name}” volume must be at least 0.1 L.`);
-    }
-    if (!['steel', 'aluminum'].includes(preset.material)) {
-      errors.push(`Cylinder preset “${preset.name}” material must be steel or aluminum.`);
-    }
-    if (!Number.isFinite(preset.massKg) || preset.massKg <= 0) {
-      errors.push(`Cylinder preset “${preset.name}” mass must be greater than 0 kg.`);
-    }
-    if (!Number.isFinite(preset.workingPressureBar)
-      || preset.workingPressureBar < 10
-      || preset.workingPressureBar > 350) {
-      errors.push(`Cylinder preset “${preset.name}” working pressure must be between 10 and 350 bar.`);
-    }
+    errors.push(...presetErrors);
   }
   return errors;
 }
