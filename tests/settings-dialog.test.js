@@ -13,7 +13,9 @@ class FakeElement {
     this.children = [];
     this.className = '';
     this.classList = {
-      add: () => {},
+      add: (...classes) => {
+        this.className = `${this.className} ${classes.join(' ')}`.trim();
+      },
       toggle: () => {}
     };
     this.dataset = {};
@@ -55,6 +57,15 @@ class FakeElement {
     }
     return matches;
   }
+}
+
+function findElement(root, predicate) {
+  if (predicate(root)) return root;
+  for (const child of root.children) {
+    const match = findElement(child, predicate);
+    if (match) return match;
+  }
+  return null;
 }
 
 function createFakeDocument() {
@@ -146,6 +157,33 @@ test('renders equipment selectors and active values', () => {
   assert.equal(booster.value, 'Standard booster');
   assert.equal(elements.get('settings-compressor-inlet-flow').value, '100');
   assert.equal(elements.get('settings-booster-draining-rate').value, '5');
+});
+
+test('renders compact cylinder mass and pressure controls', () => {
+  const { document, elements } = createFakeDocument();
+  globalThis.document = document;
+  const settings = settingsWithEquipmentPresets();
+  settings.cylinderPresets = [{
+    name: 'AL80',
+    material: 'aluminum',
+    volumeL: 11.1,
+    massKg: 14.3,
+    workingPressureBar: 207
+  }];
+
+  renderSettingsDialog(settings);
+
+  const table = elements.get('settings-cylinder-presets').children[0].children[0];
+  const massInput = findElement(table, element => element.dataset.settingsField === 'massKg');
+  const pressureHeader = findElement(table, element => element.tagName === 'th'
+    && element.textContent === 'Max pressure (bar)');
+  const massHeader = findElement(table, element => element.tagName === 'th'
+    && element.textContent === 'Mass (kg)');
+
+  assert.equal(massInput.value, '14.3');
+  assert.match(massInput.className, /\bpx-0\.5\b/);
+  assert.match(massHeader.className, /\bw-16\b/);
+  assert.match(pressureHeader.className, /\bw-16\b/);
 });
 
 test('renders duplicate import entries as disabled checkboxes', () => {

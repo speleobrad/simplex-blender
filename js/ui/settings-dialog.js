@@ -93,6 +93,7 @@ function createCylinderNumberInput({ value, index, field, label, min, max, step 
     max,
     step
   });
+  input.className = input.className.replace('px-1', 'px-0.5');
   input.classList.add('w-full');
   return input;
 }
@@ -127,8 +128,8 @@ function renderCylinderRows(presets) {
     ['Name', 'min-w-[8.5rem]'],
     ['Material', 'w-20'],
     ['Volume (L)', 'w-14'],
-    ['Mass (kg)', 'w-14'],
-    ['Max pressure (bar)', 'w-20'],
+    ['Mass (kg)', 'w-16'],
+    ['Max pressure (bar)', 'w-16'],
     ['', 'w-6', 'Actions']
   ]) {
     const header = document.createElement('th');
