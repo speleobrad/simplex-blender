@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { calculateMaxZoom, createVertices, formatGasMix, getNextZoom, toCanvasPoint, transformPointForZoom } from '../js/ui/ternary.js';
+import { calculateMaxZoom, createVertices, formatGasMix, getInfeasibleRegionVertices, getNextZoom, toCanvasPoint, transformPointForZoom } from '../js/ui/ternary.js';
 
 test('air is the solid-region vertex on the O2/N2 edge', () => {
   const vertices = createVertices(300, 300);
@@ -8,6 +8,16 @@ test('air is the solid-region vertex on the O2/N2 edge', () => {
   assert.ok(Math.abs(air.x - vertices.air.x) < 1e-9);
   assert.ok(Math.abs(air.y - vertices.air.y) < 1e-9);
   assert.notDeepEqual(air, vertices.nitrogen);
+});
+
+test('infeasible region uses nitrogen, air, and helium vertices in drawing order', () => {
+  const vertices = createVertices(300, 300);
+
+  assert.deepEqual(getInfeasibleRegionVertices(vertices), [
+    toCanvasPoint(0, 0, 100, vertices),
+    toCanvasPoint(21, 0, 79, vertices),
+    toCanvasPoint(0, 100, 0, vertices)
+  ]);
 });
 
 test('15/0 lies beyond the feasible Air/O2 edge', () => {

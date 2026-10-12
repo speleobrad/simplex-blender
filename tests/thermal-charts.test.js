@@ -73,6 +73,15 @@ test('thermal series includes drain, transfer, and settled points in order', () 
   ]);
 });
 
+test('thermal bands alternate caption rows', () => {
+  const series = buildThermalSeries([...protocolSteps, protocolSteps[1]], {
+    initialPressureBar: 80,
+    initialTemperatureC: 20
+  });
+
+  assert.deepEqual(series.bands.map(band => band.labelRow), [0, 1, 0]);
+});
+
 test('thermal series omits the preserve-only step', () => {
   const preserveStep = {
     type: 'keep',

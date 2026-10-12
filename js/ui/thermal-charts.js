@@ -64,7 +64,8 @@ export function buildThermalSeries(protocolSteps, initial = {}) {
       step: stepNumber,
       title,
       startMinute: elapsedMinutes,
-      endMinute: settledMinutes
+      endMinute: settledMinutes,
+      labelRow: index % 2
     });
     elapsedMinutes = settledMinutes;
     previousPressureBar = settledPressureBar;
@@ -223,7 +224,7 @@ function renderChart(container, { title, unit, key, color, points, bands }) {
       fill: index % 2 === 0 ? 'var(--chart-grid)' : 'rgb(var(--ocean-850))',
       opacity: index % 2 === 0 ? 0.5 : 0.35
     }));
-    svg.append(textNode(x + width / 2, CHART_MARGIN.top + 14, band.title, {
+    svg.append(textNode(x + width / 2, CHART_MARGIN.top + 14 + band.labelRow * 12, band.title, {
       fill: 'currentColor',
       'font-size': 10,
       'text-anchor': 'middle'

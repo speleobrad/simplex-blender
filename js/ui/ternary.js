@@ -59,6 +59,10 @@ export function createVertices(width, height) {
   return vertices;
 }
 
+export function getInfeasibleRegionVertices(vertices) {
+  return [vertices.nitrogen, vertices.air, vertices.helium];
+}
+
 
 function getTrajectoryViewport(trajectory, project, width, height, margin) {
   if (!trajectory?.length) return { center: null, maxZoom: 1 };
@@ -472,6 +476,18 @@ export function renderTernaryDiagram(canvas, { banks, initialMix, targetMix, tra
   activeCanvases.add(canvas);
 
   const palette = getChartPalette();
+  const infeasibleRegion = getInfeasibleRegionVertices(vertices);
+  context.save();
+  context.fillStyle = palette.fullBoundary;
+  context.globalAlpha = 0.12;
+  context.beginPath();
+  context.moveTo(infeasibleRegion[0].x, infeasibleRegion[0].y);
+  context.lineTo(infeasibleRegion[1].x, infeasibleRegion[1].y);
+  context.lineTo(infeasibleRegion[2].x, infeasibleRegion[2].y);
+  context.closePath();
+  context.fill();
+  context.restore();
+
   drawGrid(context, toPoint, palette);
 
   context.strokeStyle = palette.fullBoundary;
@@ -483,7 +499,6 @@ export function renderTernaryDiagram(canvas, { banks, initialMix, targetMix, tra
   context.lineTo(vertices.nitrogen.x, vertices.nitrogen.y);
   context.closePath();
   context.stroke();
-  context.setLineDash([]);
 
   context.strokeStyle = palette.feasible;
   context.lineWidth = 2.5;
@@ -493,6 +508,7 @@ export function renderTernaryDiagram(canvas, { banks, initialMix, targetMix, tra
   context.lineTo(vertices.helium.x, vertices.helium.y);
   context.closePath();
   context.stroke();
+  context.setLineDash([]);
   drawVertexLabels(context, vertices, palette);
 
   const air = vertices.air;
