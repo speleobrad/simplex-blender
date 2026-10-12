@@ -386,7 +386,7 @@ function saveSettingsDraft() {
   try {
     saveSettings(state.settingsDraft, settingsStorage);
   } catch (error) {
-    console.warn('KRWA-Mixer settings were not saved.', error);
+    console.warn('Simplex blender settings were not saved.', error);
     displaySettingsErrors(['Settings were not saved. Check that browser storage is enabled and has space, then try again.']);
     return;
   }

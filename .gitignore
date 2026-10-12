@@ -1,1 +1,26 @@
+# Dependencies
+node_modules/
+
+# Test and build output
+coverage/
+dist/
+build/
+
+# Logs and local environment
+*.log
+npm-debug.log*
+.env
+.env.*
+!.env.example
+
+# Operating system and editor files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# Local worktrees and agent session artifacts
 .worktrees/
+.superpowers/

@@ -2,7 +2,7 @@
 
 ## Runtime assets
 
-`scuba_gas_remixer_simplex_optimizer.html` owns the page markup and relative asset references. `css/app.css` contains theme color variables for both appearances and custom table/scrollbar rules. The page loads Tailwind from its existing CDN, then `js/tailwind-config.js` maps utility colors to those variables, followed by the native-module entry `js/main.js`.
+`index.html` owns the page markup and relative asset references. `css/app.css` contains theme color variables for both appearances and custom table/scrollbar rules. The page loads Tailwind from its existing CDN, then `js/tailwind-config.js` maps utility colors to those variables, followed by the native-module entry `js/main.js`.
 
 ## JavaScript boundaries
 

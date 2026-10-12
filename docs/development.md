@@ -8,7 +8,7 @@ The page uses browser-native ES modules, which require HTTP rather than direct `
 python3 -m http.server 8000
 ```
 
-Open `http://127.0.0.1:8000/scuba_gas_remixer_simplex_optimizer.html`. Tailwind CSS and web fonts continue to load from their existing CDNs, so internet access is needed for the existing styling and fonts.
+Open `http://127.0.0.1:8000/index.html`. Tailwind CSS and web fonts continue to load from their existing CDNs, so internet access is needed for the existing styling and fonts.
 
 ## Tests
 
