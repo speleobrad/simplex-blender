@@ -1,7 +1,7 @@
 import { optimizeBlend } from './optimizer.js';
 import { parseNumericInput, splitGasInput } from './gas-input.js';
 import { validateCalculatorInputs, validateSupplyBankInput } from './input-validation.js';
-import { applyGasPresetToBank, loadSettings, saveSettings, validateSettings } from './settings.js';
+import { applyGasPresetToBank, copySettings, loadSettings, saveSettings, validateSettings } from './settings.js';
 import { loadSupplyBanks, saveSupplyBanks } from './bank-storage.js';
 import { loadTheme, saveTheme } from './theme.js';
 import { renderResults } from './ui/results.js';
@@ -69,14 +69,6 @@ function refreshPresetOptions(selectedCylinderName = null) {
 const byId = id => document.getElementById(id);
 const numberValue = id => parseNumericInput(byId(id).value);
 
-function copySettings(settings) {
-  return {
-    physics: { ...settings.physics },
-    gasPresets: settings.gasPresets.map(preset => ({ ...preset })),
-    cylinderPresets: settings.cylinderPresets.map(preset => ({ ...preset })),
-    booster: { ...settings.booster }
-  };
-}
 
 function displaySettingsErrors(messages) {
   const container = byId('settings-errors');

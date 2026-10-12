@@ -64,7 +64,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   })
 });
 
-function copySettings(settings) {
+export function copySettings(settings) {
   return {
     physics: { model: settings.physics.model },
     gasPresets: settings.gasPresets.map(preset => ({ ...preset })),

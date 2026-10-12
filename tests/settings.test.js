@@ -4,6 +4,7 @@ import {
   applyBoosterPresetToSettings,
   applyCompressorPresetToSettings,
   applyGasPresetToBank,
+  copySettings,
   DEFAULT_SETTINGS,
   getSelectedGasPreset,
   loadSettings,
@@ -529,4 +530,15 @@ test('legacy volume settings migrate to steel cylinder presets', () => {
     { name: '12 L Steel 232 bar', volumeL: 12, material: 'steel', massKg: 14, workingPressureBar: 232 },
     { name: '24 L Steel 232 bar', volumeL: 24, material: 'steel', massKg: 14, workingPressureBar: 232 }
   ]);
+});
+
+test('settings draft copies own independent equipment preset collections', () => {
+  const source = loadSettings(memoryStorage());
+
+  const draft = copySettings(source);
+  draft.compressorPresets[0].name = 'Draft compressor';
+  draft.boosterPresets[0].maxOutputPressureBar = 250;
+
+  assert.equal(source.compressorPresets[0].name, 'Standard compressor');
+  assert.equal(source.boosterPresets[0].maxOutputPressureBar, 200);
 });
