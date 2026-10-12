@@ -1431,7 +1431,12 @@ function optimizeBlendWithoutThermal(input) {
       const oxygenCompressionRatio = stage.type === 'boost' && bank.oxygenPercent > 40 && stage.sourceEndPressureBar > 0
         ? currentPressure / stage.sourceEndPressureBar
         : null;
-      stepNumber++;
+      const minimumSourcePressureBar = isCompressorAir(bank) ? null : minimumSourcePressureFor(bank);
+      const sourcePressureTolerance = minimumSourcePressureBar === null
+        ? 0
+        : Math.max(1e-9, Math.max(Math.abs(stage.sourceEndPressureBar), Math.abs(minimumSourcePressureBar)) * 1e-9);
+      const sourceExhausted = minimumSourcePressureBar !== null
+        && Math.abs(stage.sourceEndPressureBar - minimumSourcePressureBar) <= sourcePressureTolerance;
       const color = stepColors[(stepNumber - 1) % stepColors.length];
 
       trajectory.push({
@@ -1456,11 +1461,15 @@ function optimizeBlendWithoutThermal(input) {
       const leftoverPressure = stage.sourceEndPressureBar.toFixed(1);
       const descriptionParts = [
         `${operation} ${pressureAmount.toFixed(1)} bar from ${bank.name} to ${targetPressure} bar.`,
-        `This will leave ${leftoverPressure} bar of ${bank.name}.`,
+        sourceExhausted
+          ? `This empties ${bank.name} and leaves only ${minimumSourcePressureBar.toFixed(1)} bar of gas.`
+          : `This will leave ${leftoverPressure} bar of ${bank.name}.`,
         `Interim mix is ${oxygenPercent.toFixed(1)}/${heliumPercent.toFixed(1)}.`
       ];
       if (Number.isFinite(oxygenCompressionRatio)) {
-        descriptionParts.push(`O2 compression ratio is ${oxygenCompressionRatio.toFixed(2)}:1.`);
+        descriptionParts.push(
+          `O2 compression ratio is ${oxygenCompressionRatio.toFixed(2)}:1 (source ${stage.sourceEndPressureBar.toFixed(1)} bar to receiver ${stage.receiverEndPressureBar.toFixed(1)} bar).`
+        );
       }
       protocolSteps.push({
         type: stage.type,
@@ -1481,6 +1490,8 @@ function optimizeBlendWithoutThermal(input) {
           sourceOxygenPercent: bank.oxygenPercent,
           sourceHeliumPercent: bank.heliumPercent
         } : {}),
+        minimumSourcePressureBar,
+        sourceExhausted,
         oxygenCompressionRatio,
         badgeClass: bank.heliumPercent > 0
           ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'

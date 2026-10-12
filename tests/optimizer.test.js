@@ -134,6 +134,8 @@ test('uses implicit unlimited Air without an Air bank', () => {
 
   assert.equal(result.feasible, true);
   assert.equal(result.protocolSteps.at(-1).operation, 'Top-up');
+  assert.equal(result.protocolSteps.at(-1).minimumSourcePressureBar, null);
+  assert.equal(result.protocolSteps.at(-1).sourceExhausted, false);
 });
 
 test('rejects finite Air banks in favor of the implicit compressor source', () => {
@@ -1278,18 +1280,62 @@ test('does not apply the oxygen compression limit to source gas at exactly 25 pe
   assert.equal(result.feasible, true);
   assert.equal(result.blend.finalPressureBar, 200);
 });
+test('reports the configured minimum when a finite boost source is exhausted', () => {
+  const result = optimizeBlend({
+    cylinder: {
+      volumeL: 10,
+      initialPressureBar: 0,
+      initialOxygenPercent: 0,
+      initialHeliumPercent: 0,
+      targetPressureBar: 80,
+      targetOxygenPercent: 100,
+      targetHeliumPercent: 0
+    },
+    physics: { model: 'ideal', temperatureC: 20 },
+    banks: [{
+      id: 'oxygen',
+      name: 'Oxygen bank',
+      volumeL: 10,
+      pressureBar: 100,
+      minimumPressureBar: 0,
+      oxygenPercent: 100,
+      heliumPercent: 0,
+      enabled: true
+    }],
+    settings: {
+      booster: {
+        minimumSourcePressureBar: 20,
+        maxCompressorPressureBar: 232,
+        maxBoosterOutputPressureBar: 200
+      }
+    }
+  });
+
+  assert.equal(result.feasible, true);
+  const step = result.protocolSteps.find(candidate => candidate.type === 'boost');
+  assert.ok(step);
+  assert.equal(step.minimumSourcePressureBar, 20);
+  assert.equal(step.sourceExhausted, true);
+  assert.match(step.description, /This empties Oxygen bank and leaves only 20\.0 bar of gas\./);
+});
+
 test('reports the end-of-boost compression ratio only above 40 percent oxygen', () => {
   const highOxygenResult = optimizeBlend(oxygenTransferInput(100, 41));
   const highOxygenBoost = highOxygenResult.protocolSteps.find(step => step.type === 'boost');
   assert.equal(highOxygenResult.feasible, true);
   assert.ok(highOxygenBoost);
   assert.ok(Math.abs(highOxygenBoost.oxygenCompressionRatio - 4) < 1e-6);
+  assert.match(
+    highOxygenBoost.description,
+    /O2 compression ratio is 4\.00:1 \(source 50\.0 bar to receiver 200\.0 bar\)\./
+  );
 
   const thresholdResult = optimizeBlend(oxygenTransferInput(100, 40));
   const thresholdBoost = thresholdResult.protocolSteps.find(step => step.type === 'boost');
   assert.equal(thresholdResult.feasible, true);
   assert.ok(thresholdBoost);
   assert.equal(thresholdBoost.oxygenCompressionRatio, null);
+  assert.doesNotMatch(thresholdBoost.description, /O2 compression ratio/);
 });
 test('rejects impossible target gas composition without returning a recipe', () => {
   const result = optimizeBlend({
