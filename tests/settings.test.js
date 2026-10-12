@@ -9,6 +9,7 @@ import {
   getSelectedGasPreset,
   loadSettings,
   saveSettings,
+  selectEquipmentPreset,
   sortCylinderPresetEntries,
   sortGasPresetEntries
 } from '../js/settings.js';
@@ -160,6 +161,51 @@ test('applying equipment presets copies only their active booster fields', () =>
     drainingRateBarPerMin: 9
   });
   assert.deepEqual(settings.booster, DEFAULT_SETTINGS.booster);
+});
+
+test('selecting named equipment presets changes only copied draft active fields', () => {
+  const draft = copySettings(DEFAULT_SETTINGS);
+  draft.compressorPresets.push({
+    name: 'High flow', inletFlowLPerMin: 160, maxPressureBar: 250, temperatureModifierC: 4
+  });
+  draft.boosterPresets.push({
+    name: 'Rapid booster',
+    minimumSourcePressureBar: 25,
+    cylinderVolumeCm3: 12,
+    oxygenBoostBpm: 75,
+    otherBoostBpm: 80,
+    oxygenDecantRateBarPerMin: 7,
+    otherDecantRateBarPerMin: 8,
+    maxOutputPressureBar: 240,
+    temperatureModifierC: 3,
+    drainingRateBarPerMin: 9
+  });
+  const withCompressor = selectEquipmentPreset(draft, 'compressorPresets', 'High flow');
+  const withBooster = selectEquipmentPreset(withCompressor, 'boosterPresets', 'Rapid booster');
+
+  assert.deepEqual(withCompressor.booster, {
+    ...draft.booster,
+    compressorInletFlowLPerMin: 160,
+    maxCompressorPressureBar: 250,
+    compressorTemperatureModifierC: 4
+  });
+  assert.deepEqual(withBooster.booster, {
+    ...withCompressor.booster,
+    minimumSourcePressureBar: 25,
+    cylinderVolumeCm3: 12,
+    oxygenBoostBpm: 75,
+    otherBoostBpm: 80,
+    oxygenDecantRateBarPerMin: 7,
+    otherDecantRateBarPerMin: 8,
+    maxBoosterOutputPressureBar: 240,
+    boosterTemperatureModifierC: 3,
+    drainingRateBarPerMin: 9
+  });
+  assert.deepEqual(withBooster.gasPresets, draft.gasPresets);
+  assert.deepEqual(withBooster.cylinderPresets, draft.cylinderPresets);
+  assert.deepEqual(withBooster.compressorPresets, draft.compressorPresets);
+  assert.deepEqual(withBooster.boosterPresets, draft.boosterPresets);
+  assert.deepEqual(draft.booster, DEFAULT_SETTINGS.booster);
 });
 
 test('old settings gain both pressure ceiling defaults', () => {

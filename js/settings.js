@@ -339,6 +339,15 @@ export function applyBoosterPresetToSettings(settings, preset) {
   return copied;
 }
 
+export function selectEquipmentPreset(settings, category, presetName) {
+  if (!settings || (category !== 'compressorPresets' && category !== 'boosterPresets')) return null;
+  const preset = settings[category].find(candidate => candidate.name === presetName);
+  if (!preset) return null;
+  return category === 'compressorPresets'
+    ? applyCompressorPresetToSettings(settings, preset)
+    : applyBoosterPresetToSettings(settings, preset);
+}
+
 export function applyGasPresetToBank(bank, preset) {
   bank.name = preset.name;
   bank.oxygenPercent = preset.oxygenPercent;
