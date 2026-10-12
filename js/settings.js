@@ -55,6 +55,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
     otherBoostBpm: 50,
     oxygenDecantRateBarPerMin: 5,
     otherDecantRateBarPerMin: 5,
+    drainingRateBarPerMin: 5,
     compressorInletFlowLPerMin: 100,
     maxCompressorPressureBar: 232,
     maxBoosterOutputPressureBar: 200,
@@ -77,6 +78,7 @@ function copySettings(settings) {
       otherBoostBpm: settings.booster.otherBoostBpm,
       oxygenDecantRateBarPerMin: settings.booster.oxygenDecantRateBarPerMin,
       otherDecantRateBarPerMin: settings.booster.otherDecantRateBarPerMin,
+      drainingRateBarPerMin: settings.booster.drainingRateBarPerMin,
       compressorInletFlowLPerMin: settings.booster.compressorInletFlowLPerMin,
       maxCompressorPressureBar: settings.booster.maxCompressorPressureBar,
       maxBoosterOutputPressureBar: settings.booster.maxBoosterOutputPressureBar,
@@ -172,6 +174,11 @@ export function validateSettings(settings) {
     || booster.otherDecantRateBarPerMin > 1000) {
     errors.push('Other-gas manual decant rate must be between 0.01 and 1000 bar/min.');
   }
+  if (!Number.isFinite(booster?.drainingRateBarPerMin)
+    || booster.drainingRateBarPerMin < 0.01
+    || booster.drainingRateBarPerMin > 1000) {
+    errors.push('Draining rate must be between 0.01 and 1000 bar/min.');
+  }
   if (!Number.isFinite(booster?.compressorInletFlowLPerMin)
     || booster.compressorInletFlowLPerMin < 0.1
     || booster.compressorInletFlowLPerMin > 10000) {
@@ -252,7 +259,7 @@ function addDefaultEquipmentPresets(settings) {
           otherDecantRateBarPerMin: booster.otherDecantRateBarPerMin,
           maxOutputPressureBar: booster.maxBoosterOutputPressureBar,
           temperatureModifierC: booster.boosterTemperatureModifierC,
-          drainingRateBarPerMin: 5
+          drainingRateBarPerMin: booster.drainingRateBarPerMin
         }]
   };
 }
@@ -328,6 +335,7 @@ export function applyBoosterPresetToSettings(settings, preset) {
   copied.booster.otherDecantRateBarPerMin = preset.otherDecantRateBarPerMin;
   copied.booster.maxBoosterOutputPressureBar = preset.maxOutputPressureBar;
   copied.booster.boosterTemperatureModifierC = preset.temperatureModifierC;
+  copied.booster.drainingRateBarPerMin = preset.drainingRateBarPerMin;
   return copied;
 }
 

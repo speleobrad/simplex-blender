@@ -31,11 +31,12 @@ test('missing settings return independent copies of the built-in presets', () =>
 test('settings default to the real-gas physics model', () => {
   assert.deepEqual(DEFAULT_SETTINGS.physics, { model: 'vdw' });
 });
-test('settings include compressor and booster pressure ceilings and temperature modifiers', () => {
+test('settings include compressor and booster pressure ceilings, temperature modifiers, and draining rate', () => {
   assert.equal(DEFAULT_SETTINGS.booster.maxCompressorPressureBar, 232);
   assert.equal(DEFAULT_SETTINGS.booster.maxBoosterOutputPressureBar, 200);
   assert.equal(DEFAULT_SETTINGS.booster.boosterTemperatureModifierC, 0);
   assert.equal(DEFAULT_SETTINGS.booster.compressorTemperatureModifierC, 0);
+  assert.equal(DEFAULT_SETTINGS.booster.drainingRateBarPerMin, 5);
 });
 
 test('default settings expose named compressor and booster presets', () => {
@@ -133,7 +134,8 @@ test('applying equipment presets copies only their active booster fields', () =>
     maxOutputPressureBar: 240,
     temperatureModifierC: 3,
     oxygenDecantRateBarPerMin: 7,
-    otherDecantRateBarPerMin: 8
+    otherDecantRateBarPerMin: 8,
+    drainingRateBarPerMin: 9
   };
 
   const withCompressor = applyCompressorPresetToSettings(settings, compressor);
@@ -153,7 +155,8 @@ test('applying equipment presets copies only their active booster fields', () =>
     maxBoosterOutputPressureBar: 240,
     boosterTemperatureModifierC: 3,
     oxygenDecantRateBarPerMin: 7,
-    otherDecantRateBarPerMin: 8
+    otherDecantRateBarPerMin: 8,
+    drainingRateBarPerMin: 9
   });
   assert.deepEqual(settings.booster, DEFAULT_SETTINGS.booster);
 });
@@ -312,7 +315,8 @@ test('old settings gain all thermodynamic booster defaults', () => {
     maxCompressorPressureBar: 232,
     maxBoosterOutputPressureBar: 200,
     boosterTemperatureModifierC: 0,
-    compressorTemperatureModifierC: 0
+    compressorTemperatureModifierC: 0,
+    drainingRateBarPerMin: 5
   });
 });
 
@@ -352,9 +356,10 @@ test('invalid thermodynamic booster settings are rejected before storage changes
     booster: {
       ...DEFAULT_SETTINGS.booster,
       cylinderVolumeCm3: 0,
-      oxygenDecantRateBarPerMin: -1
+      oxygenDecantRateBarPerMin: -1,
+      drainingRateBarPerMin: 0
     }
-  }, storage), /cylinder.*cm|decant/i);
+  }, storage), /cylinder.*cm|decant|draining/i);
   assert.equal(storage.getItem('simplex-gas-remixer-settings'), null);
 });
 
@@ -373,7 +378,8 @@ test('thermodynamic booster settings survive a save/load round trip', () => {
       otherDecantRateBarPerMin: 7,
       compressorInletFlowLPerMin: 160,
       maxCompressorPressureBar: 245,
-      maxBoosterOutputPressureBar: 185
+      maxBoosterOutputPressureBar: 185,
+      drainingRateBarPerMin: 9
     }
   };
   const storage = memoryStorage();
