@@ -1,13 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { DEFAULT_SETTINGS } from '../js/settings.js';
+import { copySettings, DEFAULT_SETTINGS } from '../js/settings.js';
 import {
   DEFAULT_PRESET_URLS,
   PRESET_CATEGORIES,
   canonicalPresetContent,
   getImportEntries,
   mergeSelectedPresets,
-  parsePresetDocument
+  parsePresetDocument,
+  selectPresetImportEntries
 } from '../js/preset-import.js';
 
 test('parses a gas-only document', () => {
@@ -147,6 +148,30 @@ test('canonicalizes functional fields in category order without names', () => {
     canonicalPresetContent('gasPresets', { name: 'EAN32', oxygenPercent: 32, heliumPercent: 0 }),
     canonicalPresetContent('gasPresets', { name: 'EAN32', oxygenPercent: 32, heliumPercent: 1 })
   );
+});
+
+test('selects only checked new imports without mutating loaded entries or committed settings', () => {
+  const committed = {
+    ...DEFAULT_SETTINGS,
+    gasPresets: DEFAULT_SETTINGS.gasPresets.map(preset => ({ ...preset }))
+  };
+  const parsed = parsePresetDocument({
+    gasPresets: [
+      { name: 'Air', oxygenPercent: 21, heliumPercent: 0 },
+      { name: 'Travel 36', oxygenPercent: 36, heliumPercent: 0 }
+    ]
+  });
+  const entries = getImportEntries(parsed, committed);
+  const selected = selectPresetImportEntries(entries, new Set([0, 1]));
+  const merged = mergeSelectedPresets(copySettings(committed), selected);
+
+  assert.deepEqual(committed.gasPresets, DEFAULT_SETTINGS.gasPresets);
+  assert.equal(entries[0].duplicate, true);
+  assert.equal(entries[0].selected, undefined);
+  assert.equal(selected.length, 1);
+  assert.equal(selected[0].preset.name, 'Travel 36');
+  assert.equal(merged.gasPresets.length, committed.gasPresets.length + 1);
+  assert.equal(merged.gasPresets.at(-1).name, 'Travel 36');
 });
 
 test('merges only selected non-duplicates into a copied draft', () => {

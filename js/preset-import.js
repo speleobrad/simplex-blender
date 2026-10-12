@@ -93,6 +93,12 @@ export function getImportEntries(parsed, settings) {
   });
 }
 
+export function selectPresetImportEntries(entries, selectedIndexes) {
+  return entries.flatMap((entry, index) => (
+    selectedIndexes.has(index) && !entry.duplicate ? [{ ...entry, selected: true }] : []
+  ));
+}
+
 function copySettingsDraft(settings) {
   return {
     ...settings,

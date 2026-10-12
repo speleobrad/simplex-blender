@@ -40,4 +40,6 @@ After serving the page, verify that:
 
 14. Set thermal tank inputs and run a recipe with at least one transfer. Each thermal step reports its rate source/rate/duration, transfer-end pressure and temperature, wait, and post-wait pressure and temperature. Transfer temperature includes numerical heat loss to the configured air/water medium during filling; the post-transfer wait applies additional exponential cooling. The final step labels its full ambient cool-off. Confirm the final hot transfer-end pressure is above the requested target and the final ambient-settled pressure returns to the requested target. Treat these values as estimates: actual transfer rate, compression heat, and cooling vary with equipment, gas flow, fill technique, and environment.
 
+15. In Settings → Import presets, load a valid four-category JSON source from a local file, then load one from a URL. Confirm each source renders grouped choices without changing saved settings. Confirm same-name and same-content entries remain visible but are disabled. Select new entries, import them, then Save settings and reload to confirm they persist. Import compressor and booster presets, select each active preset, and confirm its active equipment values—including booster draining rate—survive Save and reload.
+
 See [Architecture](architecture.md) for runtime module responsibilities.
