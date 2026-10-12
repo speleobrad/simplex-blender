@@ -1431,6 +1431,7 @@ function optimizeBlendWithoutThermal(input) {
       const oxygenCompressionRatio = stage.type === 'boost' && bank.oxygenPercent > 40 && stage.sourceEndPressureBar > 0
         ? currentPressure / stage.sourceEndPressureBar
         : null;
+      stepNumber++;
       const minimumSourcePressureBar = isCompressorAir(bank) ? null : minimumSourcePressureFor(bank);
       const sourcePressureTolerance = minimumSourcePressureBar === null
         ? 0
