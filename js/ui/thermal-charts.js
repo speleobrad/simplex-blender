@@ -28,8 +28,7 @@ export function buildThermalSeries(protocolSteps, initial = {}) {
   const points = [];
   const bands = [];
 
-  for (let index = 0; index < protocolSteps.length; index++) {
-    const step = protocolSteps[index];
+  for (const step of protocolSteps) {
     if (step?.type === 'keep') continue;
     const thermal = step?.thermal;
     if (!thermal) return { points: [], bands: [], final: null };
@@ -65,7 +64,7 @@ export function buildThermalSeries(protocolSteps, initial = {}) {
       title,
       startMinute: elapsedMinutes,
       endMinute: settledMinutes,
-      labelRow: index % 2
+      labelRow: bands.length % 2
     });
     elapsedMinutes = settledMinutes;
     previousPressureBar = settledPressureBar;

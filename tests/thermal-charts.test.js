@@ -82,7 +82,7 @@ test('thermal bands alternate caption rows', () => {
   assert.deepEqual(series.bands.map(band => band.labelRow), [0, 1, 0]);
 });
 
-test('thermal series omits the preserve-only step', () => {
+test('thermal series omits a preserve-only step without interrupting caption rows', () => {
   const preserveStep = {
     type: 'keep',
     recipeLabel: 'Preserve 100% of Cylinder Gas',
@@ -96,14 +96,16 @@ test('thermal series omits the preserve-only step', () => {
       pressureAfterWaitBar: 80
     }
   };
-  const series = buildThermalSeries([preserveStep, protocolSteps[1]], {
+  const series = buildThermalSeries([protocolSteps[0], preserveStep, protocolSteps[1]], {
     initialPressureBar: 80,
     initialTemperatureC: 20
   });
 
   assert.deepEqual(series.bands.map(band => [band.step, band.title, band.startMinute, band.endMinute]), [
-    [1, 'Decant Supply Bank', 0, 13]
+    [1, 'Drain / Vent Cylinder Gas', 0, 10],
+    [2, 'Decant Supply Bank', 10, 23]
   ]);
+  assert.deepEqual(series.bands.map(band => band.labelRow), [0, 1]);
 });
 
 test('thermal series ends at the final ambient-settled state', () => {
