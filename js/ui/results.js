@@ -133,6 +133,26 @@ function renderProtocol(protocolSteps, alertMessage = null) {
     pressure.textContent = `${step.resultingPressureBar.toFixed(1)} bar`;
 
     result.append(label, pressure);
+    if (Number.isFinite(step.sourceEndPressureBar)) {
+      const sourceEnd = document.createElement('div');
+      sourceEnd.className = 'mt-1 text-[10px] text-slate-400';
+      const sourceEndLabel = document.createElement('span');
+      sourceEndLabel.textContent = 'Source end: ';
+      sourceEnd.append(sourceEndLabel);
+      if (step.sourceExhausted) {
+        const warning = document.createElement('i');
+        const minimumSourcePressureBar = step.minimumSourcePressureBar.toFixed(1);
+        warning.className = 'fa-solid fa-circle-exclamation text-orange-400';
+        warning.setAttribute('role', 'img');
+        warning.setAttribute('aria-label', `Source has reached its ${minimumSourcePressureBar} bar minimum pressure`);
+        warning.title = `Source has reached its ${minimumSourcePressureBar} bar minimum pressure`;
+        sourceEnd.append(warning);
+      }
+      const sourceEndPressure = document.createElement('span');
+      sourceEndPressure.textContent = `${step.sourceEndPressureBar.toFixed(1)} bar`;
+      sourceEnd.append(sourceEndPressure);
+      result.append(sourceEnd);
+    }
     card.append(details, result);
     return card;
   });

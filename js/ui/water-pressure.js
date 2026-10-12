@@ -62,17 +62,18 @@ export function buildPressureProjectionData({
 
 
 function appendPressureValue(cell, projection, workingPressureBar) {
+  if (projection.exceedsWorkingPressure) {
+    const warning = document.createElement('i');
+    warning.className = 'fa-solid fa-triangle-exclamation mr-1 text-[10px] text-rose-400 align-middle';
+    warning.setAttribute('role', 'img');
+    warning.setAttribute('aria-label', `Exceeds cylinder working pressure of ${workingPressureBar.toFixed(1)} bar`);
+    warning.title = `Exceeds cylinder working pressure of ${workingPressureBar.toFixed(1)} bar`;
+    cell.append(warning);
+  }
+
   const value = document.createElement('span');
   value.textContent = `${projection.pressureBar.toFixed(1)} bar`;
   cell.append(value);
-  if (!projection.exceedsWorkingPressure) return;
-
-  const warning = document.createElement('i');
-  warning.className = 'fa-solid fa-triangle-exclamation ml-1 text-[10px] text-rose-400 align-middle';
-  warning.setAttribute('role', 'img');
-  warning.setAttribute('aria-label', `Exceeds cylinder working pressure of ${workingPressureBar.toFixed(1)} bar`);
-  warning.title = `Exceeds cylinder working pressure of ${workingPressureBar.toFixed(1)} bar`;
-  cell.append(warning);
 }
 
 function renderPressureTable(title, projections, workingPressureBar) {

@@ -2,8 +2,81 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildPressureProjectionData,
-  isPressureAboveWorkingPressure
+  isPressureAboveWorkingPressure,
+  renderWaterPressurePane
 } from '../js/ui/water-pressure.js';
+
+class FakeElement {
+  constructor(tagName = 'div') {
+    this.tagName = tagName;
+    this.attributes = new Map();
+    this.children = [];
+    this.className = '';
+    this._textContent = '';
+  }
+
+  get textContent() {
+    return this._textContent + this.children.map(child => child.textContent).join('');
+  }
+
+  set textContent(value) {
+    this._textContent = String(value);
+  }
+
+  append(...children) {
+    this.children.push(...children);
+  }
+
+  replaceChildren(...children) {
+    this.children = children;
+  }
+
+  setAttribute(name, value) {
+    this.attributes.set(name, String(value));
+  }
+
+  querySelectorAll(tagName) {
+    return this.children.flatMap(child => [
+      ...(child.tagName === tagName ? [child] : []),
+      ...child.querySelectorAll(tagName)
+    ]);
+  }
+}
+
+test('places the water-pressure warning icon before the pressure value', () => {
+  const previousDocument = globalThis.document;
+  globalThis.document = {
+    createElement(tagName) {
+      return new FakeElement(tagName);
+    }
+  };
+
+  try {
+    const container = new FakeElement();
+    renderWaterPressurePane({
+      container,
+      thermal: {
+        finalAmbientPressureBar: 250,
+        finalAmbientTemperatureC: 20
+      },
+      blend: {
+        finalOxygenPercent: 21,
+        finalHeliumPercent: 0
+      },
+      volumeL: 12,
+      workingPressureBar: 232,
+      useVdw: false
+    });
+
+    const pressureCell = container.querySelectorAll('td').find(cell => cell.children[0]?.tagName === 'i');
+    assert.ok(pressureCell);
+    assert.deepEqual(pressureCell.children.map(child => child.tagName), ['i', 'span']);
+    assert.match(pressureCell.children[0].className, /\bmr-1\b/);
+    assert.doesNotMatch(pressureCell.children[0].className, /\bml-1\b/);
+  } finally {
+    globalThis.document = previousDocument;
+  }
+});
 
 test('builds water and car pressure series with working-pressure flags', () => {
   const data = buildPressureProjectionData({
