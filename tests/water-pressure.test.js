@@ -29,3 +29,16 @@ test('builds water and car pressure series with working-pressure flags', () => {
   assert.equal(isPressureAboveWorkingPressure(220, 220), false);
   assert.equal(isPressureAboveWorkingPressure(220.1, 220), true);
 });
+
+test('splits projection rows into balanced contiguous table columns', async () => {
+  const { splitPressureProjections } = await import('../js/ui/water-pressure.js');
+  const projections = Array.from({ length: 13 }, (_, index) => ({ temperatureC: index }));
+
+  assert.deepEqual(
+    splitPressureProjections(projections),
+    [
+      projections.slice(0, 7),
+      projections.slice(7)
+    ]
+  );
+});

@@ -5,6 +5,7 @@ import { buildThermalSeries, calculateChartDomain } from '../js/ui/thermal-chart
 const protocolSteps = [
   {
     title: 'Drain / Vent Cylinder Gas',
+    recipeLabel: 'Drain / Vent Cylinder Gas',
     receiverStartPressureBar: 80,
     receiverEndPressureBar: 60,
     thermal: {
@@ -19,6 +20,9 @@ const protocolSteps = [
   },
   {
     title: 'Step 1: Decant Supply Bank to 100 bar',
+    recipeLabel: 'Decant Supply Bank',
+    recipeAction: 'Decant',
+    recipeGas: 'Supply Bank',
     receiverStartPressureBar: 60,
     receiverEndPressureBar: 100,
     thermal: {
@@ -45,12 +49,51 @@ test('thermal series includes drain, transfer, and settled points in order', () 
   ]);
   assert.deepEqual(series.points.map(point => point.pressureBar), [80, 60, 60, 60, 100, 90]);
   assert.deepEqual(series.points.map(point => point.temperatureC), [20, 20, 20, 20, 35, 25]);
-  assert.deepEqual(series.points.map(point => point.elapsedMinutes), [0, 0, 10, 10, 13, 23]);
+  assert.deepEqual(series.points.map(point => point.title), [
+    'Drain / Vent Cylinder Gas',
+    'Drain / Vent Cylinder Gas',
+    'Drain / Vent Cylinder Gas',
+    'Decant Supply Bank',
+    'Decant Supply Bank',
+    'Decant Supply Bank'
+  ]);
+  assert.deepEqual(series.points.map(point => [point.recipeAction, point.recipeGas]), [
+    [undefined, undefined],
+    [undefined, undefined],
+    [undefined, undefined],
+    ['Decant', 'Supply Bank'],
+    ['Decant', 'Supply Bank'],
+    ['Decant', 'Supply Bank']
+  ]);
   assert.equal(series.points[0].step, 1);
   assert.equal(series.points.at(-1).step, 2);
-  assert.deepEqual(series.bands.map(band => [band.step, band.startMinute, band.endMinute]), [
-    [1, 0, 10],
-    [2, 10, 23]
+  assert.deepEqual(series.bands.map(band => [band.step, band.title, band.startMinute, band.endMinute]), [
+    [1, 'Drain / Vent Cylinder Gas', 0, 10],
+    [2, 'Decant Supply Bank', 10, 23]
+  ]);
+});
+
+test('thermal series omits the preserve-only step', () => {
+  const preserveStep = {
+    type: 'keep',
+    recipeLabel: 'Preserve 100% of Cylinder Gas',
+    thermal: {
+      durationMinutes: 0,
+      waitMinutes: 0,
+      temperatureStartC: 20,
+      temperatureAtTransferEndC: 20,
+      pressureAtTransferEndBar: 80,
+      temperatureAfterWaitC: 20,
+      pressureAfterWaitBar: 80
+    }
+  };
+  const series = buildThermalSeries([preserveStep, protocolSteps[1]], {
+    initialPressureBar: 80,
+    initialTemperatureC: 20
+  });
+
+  assert.deepEqual(series.bands.map(band => [band.step, band.title, band.startMinute, band.endMinute]), [
+    [1, 'Decant Supply Bank', 0, 13]
   ]);
 });
 

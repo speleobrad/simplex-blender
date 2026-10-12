@@ -138,6 +138,12 @@
   --chart-path-5: #be185d;
 }
 
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
 /* Custom scrollbar and subtle transitions */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: rgb(var(--scrollbar-track)); }
@@ -170,6 +176,34 @@ tr.thermal-point-active {
 }
 
 
+.thermal-band-even {
+  background-color: var(--chart-grid);
+}
+
+.thermal-band-odd {
+  background-color: rgb(var(--ocean-850) / 0.35);
+}
+
+.thermal-time-cell {
+  width: 5.25rem;
+  min-width: 5.25rem;
+  text-align: right;
+}
+
+.thermal-step-cell {
+  width: 2.5rem;
+  min-width: 2.5rem;
+  vertical-align: middle;
+  text-align: center;
+}
+
+.thermal-step-cell > span {
+  display: block;
+  margin: 0 auto;
+  white-space: nowrap;
+  writing-mode: vertical-rl;
+  transform: rotate(190deg);
+}
 @media (max-width: 639px) {
   .settings-category-list {
     display: flex;

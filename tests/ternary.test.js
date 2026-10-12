@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { calculateMaxZoom, createVertices, formatGasMix, toCanvasPoint, transformPointForZoom } from '../js/ui/ternary.js';
+import { calculateMaxZoom, createVertices, formatGasMix, getNextZoom, toCanvasPoint, transformPointForZoom } from '../js/ui/ternary.js';
 
 test('air is the solid-region vertex on the O2/N2 edge', () => {
   const vertices = createVertices(300, 300);
@@ -47,6 +47,12 @@ test('zoom preserves the full view at 1x and centers the path at maximum zoom', 
   const center = { x: 40, y: 35 };
   assert.deepEqual(transformPointForZoom(point, center, 1, 9, 220, 140), { x: 30, y: 30 });
   assert.deepEqual(transformPointForZoom(point, center, 9, 9, 220, 140), { x: 20, y: 25 });
+});
+
+test('zoom controls change zoom within the diagram bounds', () => {
+  assert.equal(getNextZoom(1, 3, 1), 1.25);
+  assert.equal(getNextZoom(2.8, 3, 1), 3);
+  assert.equal(getNextZoom(1.1, 3, -1), 1);
 });
 
 test('formats gas composition as O2/He without redundant decimal zeros', () => {

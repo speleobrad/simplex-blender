@@ -8,6 +8,15 @@ function finite(value) {
   return Number.isFinite(value);
 }
 
+export function splitPressureProjections(projections) {
+  const midpoint = Math.ceil(projections.length / 2);
+  return [
+    projections.slice(0, midpoint),
+    projections.slice(midpoint)
+  ];
+}
+
+
 export function isPressureAboveWorkingPressure(pressureBar, workingPressureBar) {
   return finite(pressureBar) && finite(workingPressureBar) && pressureBar > workingPressureBar;
 }
@@ -114,6 +123,23 @@ function renderPressureTable(title, projections, workingPressureBar) {
   return table;
 }
 
+function renderPressureTables(title, projections, workingPressureBar) {
+  const tables = document.createElement('div');
+  tables.className = 'grid grid-cols-1 gap-3 sm:grid-cols-2';
+  for (const [index, column] of splitPressureProjections(projections).entries()) {
+    tables.append(
+      renderPressureTable(
+        `${title} (${index + 1} of 2)`,
+        column,
+        workingPressureBar
+      )
+    );
+  }
+  return tables;
+}
+
+
+
 export function renderWaterPressurePane({
   container,
   thermal,
@@ -142,14 +168,14 @@ export function renderWaterPressurePane({
   const waterHeading = document.createElement('h4');
   waterHeading.className = 'mb-2 text-xs font-bold uppercase tracking-wider text-slate-300';
   waterHeading.textContent = 'Water temperatures';
-  waterTableSection.append(waterHeading, renderPressureTable('Water temperature', data.water, workingPressureBar));
+  waterTableSection.append(waterHeading, renderPressureTables('Water temperature', data.water, workingPressureBar));
 
   const carTableSection = document.createElement('section');
   carTableSection.className = 'rounded-xl border border-ocean-800 bg-ocean-950/60 p-3';
   const carHeading = document.createElement('h4');
   carHeading.className = 'mb-2 text-xs font-bold uppercase tracking-wider text-slate-300';
   carHeading.textContent = 'Car temperatures';
-  carTableSection.append(carHeading, renderPressureTable('Car temperatures', data.car, workingPressureBar));
+  carTableSection.append(carHeading, renderPressureTables('Car temperatures', data.car, workingPressureBar));
 
   container.append(waterTableSection, carTableSection);
 }

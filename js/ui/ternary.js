@@ -29,6 +29,25 @@ export function formatGasMix(oxygenPercent, heliumPercent) {
 }
 
 const zoomByCanvas = new WeakMap();
+const ZOOM_FACTOR = 1.25;
+
+export function getNextZoom(currentZoom, maximumZoom, direction) {
+  const safeMaximum = Number.isFinite(maximumZoom) ? Math.max(1, maximumZoom) : 1;
+  const safeCurrent = Number.isFinite(currentZoom)
+    ? Math.max(1, Math.min(safeMaximum, currentZoom))
+    : 1;
+  if (direction === 0) return 1;
+  const requested = direction > 0 ? safeCurrent * ZOOM_FACTOR : safeCurrent / ZOOM_FACTOR;
+  return Math.max(1, Math.min(safeMaximum, requested));
+}
+
+export function changeTernaryZoom(canvas, redraw, direction) {
+  if (!canvas) return;
+  const currentZoom = zoomByCanvas.get(canvas) ?? 1;
+  const maximumZoom = maximumZoomByCanvas.get(canvas) ?? 1;
+  zoomByCanvas.set(canvas, getNextZoom(currentZoom, maximumZoom, direction));
+  redraw();
+}
 
 export function createVertices(width, height) {
   const vertices = {
@@ -154,9 +173,8 @@ function attachWheelZoom(canvas, redraw) {
   canvas.addEventListener('wheel', event => {
     if (!activeCanvases.has(canvas) || event.deltaY === 0) return;
     const currentZoom = zoomByCanvas.get(canvas) ?? 1;
-    const maximumZoom = maximumZoomByCanvas.get(canvas) ?? 1;
-    const requestedZoom = event.deltaY < 0 ? currentZoom * 1.1 : currentZoom / 1.1;
-    const nextZoom = Math.max(1, Math.min(maximumZoom, requestedZoom));
+    const direction = event.deltaY < 0 ? 1 : -1;
+    const nextZoom = getNextZoom(currentZoom, maximumZoomByCanvas.get(canvas) ?? 1, direction);
     if (nextZoom === currentZoom) return;
     event.preventDefault();
     zoomByCanvas.set(canvas, nextZoom);

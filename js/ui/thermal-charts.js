@@ -7,8 +7,8 @@ function finite(value) {
   return Number.isFinite(value);
 }
 
-function point(step, phase, label, pressureBar, temperatureC, elapsedMinutes) {
-  return { step, phase, label, pressureBar, temperatureC, elapsedMinutes };
+function point(step, phase, title, label, recipeAction, recipeGas, pressureBar, temperatureC, elapsedMinutes) {
+  return { step, phase, title, label, recipeAction, recipeGas, pressureBar, temperatureC, elapsedMinutes };
 }
 
 function phaseLabel(phase) {
@@ -30,6 +30,7 @@ export function buildThermalSeries(protocolSteps, initial = {}) {
 
   for (let index = 0; index < protocolSteps.length; index++) {
     const step = protocolSteps[index];
+    if (step?.type === 'keep') continue;
     const thermal = step?.thermal;
     if (!thermal) return { points: [], bands: [], final: null };
 
@@ -50,14 +51,14 @@ export function buildThermalSeries(protocolSteps, initial = {}) {
       return { points: [], bands: [], final: null };
     }
 
-    const stepNumber = index + 1;
-    const title = step.title || `Step ${stepNumber}`;
+    const stepNumber = points.length / 3 + 1;
+    const title = step.recipeLabel || step.title || `Step ${stepNumber}`;
     const transferEndMinutes = elapsedMinutes + durationMinutes;
     const settledMinutes = transferEndMinutes + waitMinutes;
     points.push(
-      point(stepNumber, 'start', `${title} · ${phaseLabel('start')}`, startPressureBar, startTemperatureC, elapsedMinutes),
-      point(stepNumber, 'transfer-end', `${title} · ${phaseLabel('transfer-end')}`, transferPressureBar, transferTemperatureC, transferEndMinutes),
-      point(stepNumber, 'settled', `${title} · ${phaseLabel('settled')}`, settledPressureBar, settledTemperatureC, settledMinutes)
+      point(stepNumber, 'start', title, `${title} · ${phaseLabel('start')}`, step.recipeAction, step.recipeGas, startPressureBar, startTemperatureC, elapsedMinutes),
+      point(stepNumber, 'transfer-end', title, `${title} · ${phaseLabel('transfer-end')}`, step.recipeAction, step.recipeGas, transferPressureBar, transferTemperatureC, transferEndMinutes),
+      point(stepNumber, 'settled', title, `${title} · ${phaseLabel('settled')}`, step.recipeAction, step.recipeGas, settledPressureBar, settledTemperatureC, settledMinutes)
     );
     bands.push({
       step: stepNumber,
@@ -115,7 +116,7 @@ const THERMAL_CONTAINER_IDS = [
 let thermalInteractionsBound = false;
 
 function pointDescription(pointValue) {
-  return `Step ${pointValue.step}, ${phaseLabel(pointValue.phase)}, ${pointValue.elapsedMinutes.toFixed(1)} minutes, ${pointValue.temperatureC.toFixed(1)} degrees Celsius, ${pointValue.pressureBar.toFixed(1)} bar`;
+  return `${pointValue.label || pointValue.title}, ${phaseLabel(pointValue.phase)}, ${pointValue.elapsedMinutes.toFixed(1)} minutes, ${pointValue.temperatureC.toFixed(1)} degrees Celsius, ${pointValue.pressureBar.toFixed(1)} bar`;
 }
 
 function setActiveThermalPoint(index) {
@@ -222,7 +223,7 @@ function renderChart(container, { title, unit, key, color, points, bands }) {
       fill: index % 2 === 0 ? 'var(--chart-grid)' : 'rgb(var(--ocean-850))',
       opacity: index % 2 === 0 ? 0.5 : 0.35
     }));
-    svg.append(textNode(x + width / 2, CHART_MARGIN.top + 14, `Step ${band.step}`, {
+    svg.append(textNode(x + width / 2, CHART_MARGIN.top + 14, band.title, {
       fill: 'currentColor',
       'font-size': 10,
       'text-anchor': 'middle'
@@ -323,6 +324,25 @@ function renderChart(container, { title, unit, key, color, points, bands }) {
   container.append(svg);
 }
 
+function appendThermalTableCells(row, pointValue, stepCell = null) {
+  const timeCell = document.createElement('td');
+  timeCell.className = 'thermal-time-cell px-2 py-1 text-right text-slate-300';
+  timeCell.textContent = `${pointValue.elapsedMinutes.toFixed(1)} min`;
+  row.append(timeCell);
+  if (stepCell) row.append(stepCell);
+
+  for (const value of [
+    phaseLabel(pointValue.phase),
+    `${pointValue.temperatureC.toFixed(1)} °C`,
+    `${pointValue.pressureBar.toFixed(1)} bar`
+  ]) {
+    const cell = document.createElement('td');
+    cell.className = 'px-2 py-1 text-slate-300';
+    cell.textContent = value;
+    row.append(cell);
+  }
+}
+
 function renderDataTable(container, points) {
   container.replaceChildren();
   if (!points.length) return;
@@ -337,31 +357,49 @@ function renderDataTable(container, points) {
   for (const label of ['Time', 'Step', 'Phase', 'Temperature', 'Pressure']) {
     const cell = document.createElement('th');
     cell.scope = 'col';
-    cell.className = 'px-2 py-1';
+    cell.className = label === 'Time'
+      ? 'thermal-time-cell px-2 py-1 text-right'
+      : 'px-2 py-1';
     cell.textContent = label;
     headerRow.append(cell);
   }
   head.append(headerRow);
   const body = document.createElement('tbody');
-  for (const [index, pointValue] of points.entries()) {
+  for (let index = 0; index < points.length;) {
+    const pointValue = points[index];
     const row = document.createElement('tr');
-    row.className = 'border-b border-ocean-800/60 last:border-0';
+    const bandIndex = pointValue.step - 1;
+    row.className = `thermal-band-${bandIndex % 2 === 0 ? 'even' : 'odd'} border-b border-ocean-800/60 last:border-0`;
     row.dataset.thermalPointIndex = String(index);
     row.tabIndex = 0;
     row.setAttribute('aria-label', pointDescription(pointValue));
-    for (const value of [
-      `${pointValue.elapsedMinutes.toFixed(1)} min`,
-      `Step ${pointValue.step}`,
-      phaseLabel(pointValue.phase),
-      `${pointValue.temperatureC.toFixed(1)} °C`,
-      `${pointValue.pressureBar.toFixed(1)} bar`
-    ]) {
-      const cell = document.createElement('td');
-      cell.className = 'px-2 py-1 text-slate-300';
-      cell.textContent = value;
-      row.append(cell);
+
+    const stepCell = document.createElement('th');
+    stepCell.scope = 'rowgroup';
+    stepCell.rowSpan = 3;
+    stepCell.className = 'thermal-step-cell px-2 py-1 text-slate-300';
+    const stepLabel = document.createElement('span');
+    if (pointValue.recipeAction && pointValue.recipeGas) {
+      stepLabel.append(pointValue.recipeAction, document.createElement('br'), pointValue.recipeGas);
+    } else {
+      stepLabel.textContent = pointValue.title;
     }
+    stepCell.append(stepLabel);
+
+    appendThermalTableCells(row, pointValue, stepCell);
     body.append(row);
+
+    for (let rowOffset = 1; rowOffset < 3; rowOffset++) {
+      const followingPoint = points[index + rowOffset];
+      const followingRow = document.createElement('tr');
+      followingRow.className = `thermal-band-${bandIndex % 2 === 0 ? 'even' : 'odd'} border-b border-ocean-800/60 last:border-0`;
+      followingRow.dataset.thermalPointIndex = String(index + rowOffset);
+      followingRow.tabIndex = 0;
+      followingRow.setAttribute('aria-label', pointDescription(followingPoint));
+      appendThermalTableCells(followingRow, followingPoint);
+      body.append(followingRow);
+    }
+    index += 3;
   }
   table.append(caption, head, body);
   container.append(table);

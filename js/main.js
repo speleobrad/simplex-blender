@@ -17,7 +17,7 @@ import { clearPresetImport, renderPresetImport, renderSettingsDialog, renderPres
 import { renderSupplyBanks } from './ui/supply-banks.js';
 import { renderStorageWarning } from './ui/storage-warning.js';
 import { renderThermalCharts } from './ui/thermal-charts.js';
-import { clearTernaryDiagram, observeTernaryCanvas, renderTernaryDiagram } from './ui/ternary.js';
+import { changeTernaryZoom, clearTernaryDiagram, observeTernaryCanvas, renderTernaryDiagram } from './ui/ternary.js';
 import {
   getImportEntries,
   mergeSelectedPresets,
@@ -781,6 +781,15 @@ function handleClick(event) {
       break;
     case 'select-tab':
       setTab(actionElement.dataset.tab);
+      break;
+    case 'ternary-zoom-in':
+      changeTernaryZoom(byId('ternary-canvas'), renderTernary, 1);
+      break;
+    case 'ternary-zoom-out':
+      changeTernaryZoom(byId('ternary-canvas'), renderTernary, -1);
+      break;
+    case 'ternary-zoom-reset':
+      changeTernaryZoom(byId('ternary-canvas'), renderTernary, 0);
       break;
   }
 }
