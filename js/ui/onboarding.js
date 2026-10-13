@@ -111,6 +111,7 @@ export function createOnboardingController({
     const targetRect = target.getBoundingClientRect();
     const targetRight = rectEdge(targetRect, 'right');
     const targetBottom = rectEdge(targetRect, 'bottom');
+    callout.classList.remove('onboarding-callout--bottom-sheet');
     const calloutRect = callout.getBoundingClientRect();
     const calloutWidth = calloutRect.width;
     const calloutHeight = calloutRect.height;
@@ -241,7 +242,7 @@ export function createOnboardingController({
     progress = createElement(document, 'p', { className: 'onboarding-progress', attributes: { 'aria-live': 'polite' } });
     notice = createElement(document, 'p', {
       className: 'onboarding-notice',
-      text: 'Your consent preference is stored locally on this device.'
+      text: 'Simplex Blender stores settings, supply banks, theme, and onboarding state in this browser. Your consent preference is stored locally on this device.'
     });
     error = createElement(document, 'p', { className: 'onboarding-error', attributes: { role: 'alert' } });
     controls = createElement(document, 'div', { className: 'onboarding-controls' });
@@ -290,7 +291,11 @@ export function createOnboardingController({
     if (mode === 'closed') return;
     if (markSeen) {
       const nextState = { ...state, wizardSeen: true };
-      saveOnboardingState(nextState, storage);
+      try {
+        saveOnboardingState(nextState, storage);
+      } catch {
+        // Dismiss the current session even when persistent storage is unavailable.
+      }
       state = nextState;
     }
     mode = 'closed';

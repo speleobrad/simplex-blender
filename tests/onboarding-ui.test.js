@@ -223,14 +223,16 @@ function dialog(document) {
   return root;
 }
 
-test('consent mode presents an accessible local-storage notice without a target spotlight', () => {
+test('consent mode presents an accessible browser-storage disclosure without a target spotlight', () => {
   const fixture = createController({ initialState: { consentAccepted: false, wizardSeen: false } });
 
   fixture.controller.open({ requireConsent: true });
 
   const root = dialog(fixture.document);
   assert.equal(root.getAttribute('aria-modal'), 'true');
-  assert.equal(root.textContent.includes('stored locally on this device'), true);
+  for (const detail of ['settings', 'supply banks', 'theme', 'onboarding state', 'this browser']) {
+    assert.equal(root.textContent.includes(detail), true, `expected disclosure to name ${detail}`);
+  }
   assert.equal(findElement(root, element => element.getAttribute('data-onboarding-highlight') === 'true'), null);
   assert.equal(findElement(root, element => element.tagName === 'button' && element.textContent === 'Skip'), null);
 });
@@ -259,6 +261,16 @@ test('failed consent persistence remains visible and does not enable analytics',
   assert.equal(root.textContent.includes('Storage unavailable'), true);
   assert.ok(findButton(root, 'Accept and continue'));
   assert.equal(fixture.consentAccepted, 0);
+});
+
+test('Skip closes the wizard even when dismissal persistence is unavailable', () => {
+  const fixture = createController({ storage: memoryStorage({ failWrites: true }) });
+  fixture.controller.open();
+
+  findButton(dialog(fixture.document), 'Skip').dispatchEvent({ type: 'click' });
+
+  assert.equal(findElement(fixture.document.body, element => element.getAttribute('role') === 'dialog'), null);
+  assert.equal(fixture.document.activeElement, fixture.launchButton);
 });
 
 test('button navigation follows tour tabs and backs up to Recipe without going negative', () => {
