@@ -182,6 +182,7 @@ test('renders compact cylinder mass and pressure controls', () => {
 
   assert.equal(massInput.value, '14.3');
   assert.match(massInput.className, /\bpx-0\.5\b/);
+  assert.match(massInput.className, /\bw-16\b/);
   assert.match(massHeader.className, /\bw-16\b/);
   assert.match(pressureHeader.className, /\bw-16\b/);
 });

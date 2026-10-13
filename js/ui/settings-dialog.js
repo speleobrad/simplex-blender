@@ -81,7 +81,7 @@ function createTableCell(content, className = '') {
   return cell;
 }
 
-function createCylinderNumberInput({ value, index, field, label, min, max, step }) {
+function createCylinderNumberInput({ value, index, field, label, min, max, step, width = 'w-full' }) {
   const input = createPresetInput({
     value,
     type: 'number',
@@ -94,7 +94,7 @@ function createCylinderNumberInput({ value, index, field, label, min, max, step 
     step
   });
   input.className = input.className.replace('px-1', 'px-0.5');
-  input.classList.add('w-full');
+  input.classList.add(width);
   return input;
 }
 
@@ -169,6 +169,7 @@ function renderCylinderRows(presets) {
         value: preset.massKg,
         index,
         field: 'massKg',
+        width: 'w-16',
         label: `${preset.name || 'Cylinder'} mass in kilograms`,
         min: 0.1,
         step: 0.1
