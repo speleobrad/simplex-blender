@@ -9,6 +9,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.9.0/dist/driver.css">
+  <script src="https://cdn.jsdelivr.net/npm/driver.js@1.9.0/dist/driver.js.iife.js"></script>
   <script src="js/tailwind-config.js"></script>
   <link rel="stylesheet" href="css/app.css">
 </head>
@@ -40,7 +42,7 @@
         <button type="button" id="wizard-launch" data-action="open-wizard" aria-label="Show the guided tour" title="Show the guided tour" class="inline-flex items-center rounded-lg border border-ocean-600/70 bg-ocean-800 px-2.5 py-1.5 text-xs text-cyan-300 transition hover:bg-ocean-700">
           <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
         </button>
-        <button type="button" data-action="open-settings" class="px-2.5 py-1.5 bg-ocean-800 hover:bg-ocean-700 text-slate-200 border border-ocean-600/70 rounded-lg text-xs transition font-medium" aria-haspopup="dialog" aria-controls="settings-dialog">
+        <button type="button" id="settings-launch" data-action="open-settings" class="px-2.5 py-1.5 bg-ocean-800 hover:bg-ocean-700 text-slate-200 border border-ocean-600/70 rounded-lg text-xs transition font-medium" aria-haspopup="dialog" aria-controls="settings-dialog">
           Settings
         </button>
       </div>
@@ -63,7 +65,7 @@
           <button type="button" data-action="select-settings-category" data-settings-category="model" aria-controls="settings-pane-model" aria-selected="true" class="settings-category-button settings-category-selected shrink-0 rounded-lg border border-cyan-500/40 px-3 py-2 text-left text-xs font-semibold text-cyan-300 transition hover:bg-ocean-800/70">Model</button>
           <button type="button" data-action="select-settings-category" data-settings-category="gas-presets" aria-controls="settings-pane-gas-presets" aria-selected="false" class="settings-category-button shrink-0 rounded-lg border border-transparent px-3 py-2 text-left text-xs font-semibold text-slate-400 transition hover:border-ocean-700 hover:bg-ocean-800/70 hover:text-slate-200">Gas presets</button>
           <button type="button" data-action="select-settings-category" data-settings-category="cylinder-presets" aria-controls="settings-pane-cylinder-presets" aria-selected="false" class="settings-category-button shrink-0 rounded-lg border border-transparent px-3 py-2 text-left text-xs font-semibold text-slate-400 transition hover:border-ocean-700 hover:bg-ocean-800/70 hover:text-slate-200">Cylinder presets</button>
-          <button type="button" data-action="select-settings-category" data-settings-category="equipment" aria-controls="settings-pane-equipment" aria-selected="false" class="settings-category-button shrink-0 rounded-lg border border-transparent px-3 py-2 text-left text-xs font-semibold text-slate-400 transition hover:border-ocean-700 hover:bg-ocean-800/70 hover:text-slate-200">Equipment</button>
+          <button type="button" id="settings-category-equipment" data-action="select-settings-category" data-settings-category="equipment" aria-controls="settings-pane-equipment" aria-selected="false" class="settings-category-button shrink-0 rounded-lg border border-transparent px-3 py-2 text-left text-xs font-semibold text-slate-400 transition hover:border-ocean-700 hover:bg-ocean-800/70 hover:text-slate-200">Equipment</button>
           <button type="button" data-action="select-settings-category" data-settings-category="preset-management" aria-controls="settings-pane-preset-management" aria-selected="false" class="settings-category-button shrink-0 rounded-lg border border-transparent px-3 py-2 text-left text-xs font-semibold text-slate-400 transition hover:border-ocean-700 hover:bg-ocean-800/70 hover:text-slate-200">Preset management</button>
         </nav>
         </div>
@@ -449,7 +451,7 @@
     <div class="lg:col-span-7 min-w-0 flex flex-col gap-6">
 
       <!-- Navigation Tabs for Results & Inspector -->
-      <div class="min-w-0 bg-ocean-900/90 border border-ocean-800 rounded-2xl p-5 shadow-xl flex flex-col">
+      <div id="results-navigation" class="min-w-0 bg-ocean-900/90 border border-ocean-800 rounded-2xl p-5 shadow-xl flex flex-col">
         <div class="min-w-0 flex items-center justify-between pb-3 border-b border-ocean-800">
           <div class="min-w-0 max-w-full flex flex-nowrap items-center gap-1 overflow-x-auto bg-ocean-950 p-1 rounded-xl border border-ocean-800">
             <button id="tab-btn-recipe" data-action="select-tab" data-tab="recipe" class="shrink-0 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm transition">

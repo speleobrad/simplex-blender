@@ -30,9 +30,9 @@ It does not change gas calculations, saved settings, supply-bank data, calculati
    2. Working tank: highlight the Working tank card; explain starting gas, target mix, cylinder type, temperature, and wait settings.
    3. Supply banks: highlight Supply banks; explain available gases and disabling banks to preserve them.
    4. Mixing steps: highlight the recipe Mixing steps; explain target pressure, temperature changes, transfer method, and waiting time.
-   5. Tank summary: select the existing `summary` tab and highlight its pane.
-   6. In-water pressure: select the existing `water-pressure` tab and highlight its pane.
-   7. Equipment: highlight the Equipment summary and explain that detailed configuration is in Settings → Equipment.
+   5. Tank summary: select the existing `summary` tab and highlight both its pane and tab button; the tab button uses a rose control ring.
+   6. In-water pressure: select the existing `water-pressure` tab and highlight both its pane and tab button; the tab button uses a rose control ring.
+   7. Equipment: first highlight the header Settings button, then open Settings, select Equipment, and highlight both the category tab and configuration pane.
    8. Explore the diagram: select the existing `ternary` tab, highlight the Diagram pane, and invite exploration.
 5. Back returns to the previous step and reverses any target-tab navigation. Welcome has Back disabled.
 6. Next advances. The final step uses Done.
@@ -62,11 +62,12 @@ Export `WIZARD_STEPS` from `js/onboarding.js`. Each entry has:
   title: 'Your starting point',
   body: '...',
   targetId: 'working-tank-section',
-  tab: null
+  tab: null,
+  settingsCategory: null
 }
 ```
 
-The Welcome entry has no target. Summary, in-water pressure, and diagram entries carry `tab: 'summary'`, `tab: 'water-pressure'`, and `tab: 'ternary'`, respectively. The step data is the source of truth for ordering, copy, target IDs, and tab destinations.
+The Welcome entry has no target. Summary and in-water pressure entries carry `spotlights` for both their panes and tab buttons. The Equipment entry carries two `views`: the first targets `settings-launch`, and the second opens `settingsCategory: 'equipment'` with spotlights for `settings-pane-equipment` and `settings-category-equipment`. The diagram entry carries `tab: 'ternary'`. Control spotlights use the rose ring; content spotlights use an unbordered carveout. The step data is the source of truth for ordering, copy, target IDs, tab destinations, Settings destinations, and staged views.
 
 ### Controller and DOM
 
@@ -79,13 +80,11 @@ The controller owns a fixed overlay containing:
 - an anchored callout with heading, body, progress, Back, Next/Done, and Skip controls;
 - a separate consent callout before the wizard starts.
 
-It exposes `open()`, `close({ markSeen })`, `next()`, `back()`, `render()`, and `destroy()`. It calls `onNavigate(tab)` for a step's tab destination and does not import `main.js` or know calculator behavior.
+It exposes `open()`, `close({ markSeen })`, `next()`, `back()`, `render()`, and `destroy()`. It calls `onNavigate({ tab, settingsCategory })` for each step view and does not import `main.js` or know calculator behavior. A view may define multiple spotlight targets; the controller renders one highlight per target and keeps the progress count at the parent step count. When a target is inside an open native dialog, the controller moves its overlay into that dialog's top layer so the target highlight remains visible.
 
-`main.js` creates the controller and supplies `setTab` as `onNavigate`. It opens the consent gate on first load when needed, opens the wizard after consent, handles the wand action, and starts the deferred Analytics loader after successful consent.
+`main.js` creates the controller and handles both tab selection and Settings navigation. Equipment first highlights the header Settings button, then opens the existing Settings dialog and selects the Equipment category. It closes that dialog when the wizard moves back to the first Equipment view or to a non-Settings destination. It opens the consent gate on first load when needed, opens the wizard after consent, handles the wand action, and starts the deferred Analytics loader after successful consent.
 
-### Spotlight positioning
-
-Use `getBoundingClientRect()` to measure the target after any tab navigation. Scroll the target into view before measuring. Position the highlight with fixed coordinates and use a large box shadow to dim all other content. Position the callout beside the highlight where there is room; otherwise use a bottom-anchored sheet on narrow screens. Recalculate on window resize and scroll. The wizard controls remain the only interactive overlay content while the tour is open.
+Use `getBoundingClientRect()` to measure every target after any tab, Settings, or view navigation. On narrow screens, scroll a compact control target into view instead of centering oversized modal content. Build explicit dim regions around all target rectangles so every highlighted target remains an unshaded carveout; content targets remain unbordered and control targets use a rose ring. Nearby vertical carveouts are joined to avoid divider lines. The introductory Settings view omits the repeated parent-step progress label; the Equipment view retains `Step 7 of 8`. Position the callout beside the primary target where there is room; otherwise use a bottom-anchored sheet on narrow screens. Recalculate on window resize and scroll. The wizard controls remain the only interactive overlay content while the tour is open.
 
 ### Analytics consent
 

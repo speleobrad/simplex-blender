@@ -11,38 +11,19 @@ class FakeElement {
     this.children = [];
     this.parentNode = null;
     this.listeners = new Map();
-    this.style = {
-      values: new Map(),
-      setProperty: (name, value) => this.style.values.set(name, String(value))
-    };
-    this.className = '';
-    this.classList = {
-      add: (...names) => this.#updateClasses(new Set([...this.#classes(), ...names])),
-      remove: (...names) => this.#updateClasses(new Set([...this.#classes()].filter(name => !names.includes(name)))),
-      toggle: (name, force) => {
-        const classes = this.#classes();
-        const enabled = force ?? !classes.has(name);
-        if (enabled) classes.add(name);
-        else classes.delete(name);
-        this.#updateClasses(classes);
-        return enabled;
-      },
-      contains: name => this.#classes().has(name)
-    };
     this.hidden = false;
     this.disabled = false;
-    this.inert = false;
-    this.tabIndex = 0;
     this._textContent = '';
-    this._rect = { top: 120, left: 100, right: 420, bottom: 280, width: 320, height: 160 };
-  }
-
-  #classes() {
-    return new Set(this.className.split(/\s+/).filter(Boolean));
-  }
-
-  #updateClasses(classes) {
-    this.className = [...classes].join(' ');
+    this.className = '';
+    this.classList = {
+      add: name => {
+        this.className = [...new Set(`${this.className} ${name}`.trim().split(/\s+/).filter(Boolean))].join(' ');
+      },
+      remove: name => {
+        this.className = this.className.split(/\s+/).filter(candidate => candidate && candidate !== name).join(' ');
+      },
+      contains: name => this.className.split(/\s+/).includes(name)
+    };
   }
 
   get textContent() {
@@ -53,26 +34,11 @@ class FakeElement {
     this._textContent = String(value);
   }
 
-  set id(value) {
-    this.setAttribute('id', value);
-  }
-
-  get id() {
-    return this.getAttribute('id') ?? '';
-  }
-
   append(...children) {
     for (const child of children) {
-      child.remove?.();
       child.parentNode = this;
       this.children.push(child);
     }
-  }
-
-  replaceChildren(...children) {
-    for (const child of this.children) child.parentNode = null;
-    this.children = [];
-    this.append(...children);
   }
 
   remove() {
@@ -81,10 +47,19 @@ class FakeElement {
     this.parentNode = null;
   }
 
+  closest(selector) {
+    if (selector !== 'dialog[open]') return null;
+    let candidate = this.parentNode;
+    while (candidate) {
+      if (candidate.tagName === 'dialog' && candidate.open) return candidate;
+      candidate = candidate.parentNode;
+    }
+    return null;
+  }
+
   setAttribute(name, value) {
-    const normalized = String(value);
-    this.attributes.set(name, normalized);
-    if (name === 'id') this.ownerDocument.elements.set(normalized, this);
+    this.attributes.set(name, String(value));
+    if (name === 'id') this.ownerDocument.elements.set(String(value), this);
   }
 
   getAttribute(name) {
@@ -97,62 +72,19 @@ class FakeElement {
     this.listeners.set(type, listeners);
   }
 
-  removeEventListener(type, listener) {
-    this.listeners.get(type)?.delete(listener);
-  }
-
   dispatchEvent(event) {
-    event.target ??= this;
-    event.currentTarget = this;
-    event.preventDefault ??= () => { event.defaultPrevented = true; };
     for (const listener of this.listeners.get(event.type) ?? []) listener(event);
-    return !event.defaultPrevented;
   }
 
   focus() {
     this.ownerDocument.activeElement = this;
   }
-
-  getBoundingClientRect() {
-    return this._rect;
-  }
-
-  scrollIntoView() {}
-}
-
-class FakeWindow {
-  constructor() {
-    this.listeners = new Map();
-    this.innerWidth = 1280;
-    this.innerHeight = 800;
-  }
-
-  addEventListener(type, listener) {
-    const listeners = this.listeners.get(type) ?? new Set();
-    listeners.add(listener);
-    this.listeners.set(type, listeners);
-  }
-
-  removeEventListener(type, listener) {
-    this.listeners.get(type)?.delete(listener);
-  }
-
-  dispatchEvent(event) {
-    event.preventDefault ??= () => { event.defaultPrevented = true; };
-    for (const listener of this.listeners.get(event.type) ?? []) listener(event);
-  }
-
-  listenerCount() {
-    return [...this.listeners.values()].reduce((total, listeners) => total + listeners.size, 0);
-  }
 }
 
 function createFakeDocument() {
-  const window = new FakeWindow();
   const document = {
     elements: new Map(),
     activeElement: null,
-    defaultView: window,
     createElement(tagName) {
       return new FakeElement(tagName, document);
     },
@@ -160,8 +92,9 @@ function createFakeDocument() {
       return document.elements.get(id) ?? null;
     }
   };
+  document.defaultView = { driver: { js: {} } };
   document.body = document.createElement('body');
-  return { document, window };
+  return document;
 }
 
 function memoryStorage({ failWrites = false } = {}) {
@@ -179,6 +112,130 @@ function memoryStorage({ failWrites = false } = {}) {
   };
 }
 
+class FakeDriver {
+  constructor(config) {
+    this.config = config;
+    this.active = false;
+    this.index = null;
+    this.destroyCount = 0;
+  }
+
+  drive(index = 0) {
+    this.active = true;
+    this.moveTo(index);
+  }
+
+  moveTo(index) {
+    this.index = index;
+    const step = this.config.steps[index];
+    this.config.onHighlightStarted?.(null, step, {
+      config: this.config,
+      state: { activeIndex: index },
+      driver: this,
+      index
+    });
+  }
+
+  moveNext() {
+    this.moveTo(this.index + 1);
+  }
+
+  movePrevious() {
+    this.moveTo(this.index - 1);
+  }
+
+  clickNext() {
+    const step = this.config.steps[this.index];
+    const callback = this.index === this.config.steps.length - 1
+      ? this.config.onDoneClick
+      : this.config.onNextClick;
+    callback?.(null, step, {
+      config: this.config,
+      state: { activeIndex: this.index },
+      driver: this,
+      index: this.index
+    });
+  }
+
+  clickPrevious() {
+    const step = this.config.steps[this.index];
+    this.config.onPrevClick?.(null, step, {
+      config: this.config,
+      state: { activeIndex: this.index },
+      driver: this,
+      index: this.index
+    });
+  }
+
+  clickClose() {
+    const step = this.config.steps[this.index];
+    this.config.onCloseClick?.(null, step, {
+      config: this.config,
+      state: { activeIndex: this.index },
+      driver: this,
+      index: this.index
+    });
+  }
+
+  destroy() {
+    this.destroyCount += 1;
+    this.active = false;
+    this.config.onDestroyed?.();
+  }
+}
+
+function createController(options = {}) {
+  const document = createFakeDocument();
+  const storage = options.storage ?? memoryStorage();
+  const launchButton = document.createElement('button');
+  document.body.append(launchButton);
+  for (const id of ['tab-btn-summary', 'tab-btn-water-pressure']) {
+    const target = document.createElement('button');
+    target.setAttribute('id', id);
+    document.body.append(target);
+  }
+  const settingsDialog = document.createElement('dialog');
+  settingsDialog.open = true;
+  const equipmentPane = document.createElement('div');
+  equipmentPane.setAttribute('id', 'settings-pane-equipment');
+  settingsDialog.append(equipmentPane);
+  document.body.append(settingsDialog);
+  const navigations = [];
+  const drivers = [];
+  let acceptedState = null;
+  const createDriver = config => {
+    const instance = new FakeDriver(config);
+    drivers.push(instance);
+    return instance;
+  };
+  document.defaultView.driver.js.driver = createDriver;
+  const controllerOptions = {
+    document,
+    storage,
+    initialState: options.initialState ?? { consentAccepted: true, wizardSeen: false },
+    launchButton,
+    onNavigate: destination => navigations.push(destination),
+    onConsentAccepted: nextState => {
+      acceptedState = nextState;
+    }
+  };
+  if (!options.useDefaultDriver) controllerOptions.createDriver = createDriver;
+  const controller = createOnboardingController(controllerOptions);
+  return {
+    controller,
+    document,
+    storage,
+    launchButton,
+    navigations,
+    drivers,
+    get acceptedState() { return acceptedState; }
+  };
+}
+
+function consentDialog(document) {
+  return document.body.children.find(element => element.getAttribute('role') === 'dialog');
+}
+
 function findElement(root, predicate) {
   if (predicate(root)) return root;
   for (const child of root.children) {
@@ -188,193 +245,203 @@ function findElement(root, predicate) {
   return null;
 }
 
-function findButton(root, name) {
-  const button = findElement(root, element => element.tagName === 'button' && element.textContent === name);
-  assert.ok(button, `expected ${name} button`);
-  return button;
+function buttonWithText(root, text) {
+  return findElement(root, element => element.tagName === 'button' && element.textContent === text);
 }
 
-function createController(options = {}) {
-  const { document, window } = createFakeDocument();
-  const storage = options.storage ?? memoryStorage();
-  const launchButton = document.createElement('button');
-  document.body.append(launchButton);
-  const navigations = [];
-  let consentAccepted = 0;
-  let acceptedState = null;
-  const controller = createOnboardingController({
-    document,
-    storage,
-    initialState: options.initialState ?? { consentAccepted: true, wizardSeen: false },
-    launchButton,
-    onNavigate: tab => navigations.push(tab),
-    onConsentAccepted: nextState => {
-      consentAccepted += 1;
-      acceptedState = nextState;
-    }
-  });
-  return {
-    controller,
-    document,
-    window,
-    storage,
-    launchButton,
-    navigations,
-    get acceptedState() { return acceptedState; },
-    get consentAccepted() { return consentAccepted; }
-  };
-}
+test('uses the browser Driver.js factory when no test adapter is supplied', () => {
+  const fixture = createController({ useDefaultDriver: true });
 
-function dialog(document) {
-  const root = findElement(document.body, element => element.getAttribute('role') === 'dialog');
-  assert.ok(root, 'expected onboarding dialog');
-  return root;
-}
+  fixture.controller.open();
 
-test('public opening keeps unaccepted users in consent mode without a target spotlight', () => {
+  assert.equal(fixture.drivers[0].active, true);
+});
+
+test('opening an accepted user creates a Driver.js tour with the existing destinations', () => {
+  const fixture = createController();
+
+  fixture.controller.open();
+
+  assert.equal(fixture.drivers.length, 1);
+  assert.equal(fixture.drivers[0].active, true);
+  assert.equal(fixture.drivers[0].index, 0);
+  assert.equal(fixture.drivers[0].config.animate, false);
+  assert.equal(fixture.drivers[0].config.steps[0].element, undefined);
+  assert.equal(fixture.drivers[0].config.steps[0].popover.title, 'Welcome to Simplex Blender');
+  assert.equal(fixture.drivers[0].config.steps[4].element, '#results-navigation');
+  assert.equal(fixture.drivers[0].config.steps[5].element, '#results-navigation');
+  assert.equal(fixture.drivers[0].config.steps[6].element, '#settings-launch');
+  assert.equal(fixture.drivers[0].config.steps[7].element, '#settings-pane-equipment');
+  assert.equal(fixture.drivers[0].config.steps[8].element, '#results-navigation');
+  assert.equal(fixture.drivers[0].config.steps[7].popover.progressText, 'Step 7 of 8');
+});
+
+test('Summary and in-water pressure steps highlight their tab controls too', () => {
+  const fixture = createController();
+  fixture.controller.open();
+  const driver = fixture.drivers[0];
+
+  for (let index = 0; index < 4; index += 1) driver.clickNext();
+
+  assert.equal(fixture.document.getElementById('tab-btn-summary').classList.contains('onboarding-secondary-highlight'), true);
+  assert.equal(fixture.document.getElementById('tab-btn-water-pressure').classList.contains('onboarding-secondary-highlight'), false);
+  driver.clickNext();
+  assert.equal(fixture.document.getElementById('tab-btn-summary').classList.contains('onboarding-secondary-highlight'), false);
+  assert.equal(fixture.document.getElementById('tab-btn-water-pressure').classList.contains('onboarding-secondary-highlight'), true);
+});
+
+test('equipment tour popover moves into the native Settings dialog layer', () => {
+  const fixture = createController();
+  fixture.controller.open();
+  const driver = fixture.drivers[0];
+
+  for (let index = 0; index < 7; index += 1) driver.clickNext();
+
+  const popover = fixture.document.createElement('div');
+  const footer = fixture.document.createElement('div');
+  driver.config.onPopoverRender(
+    { wrapper: popover, footerButtons: footer },
+    { index: 7, driver }
+  );
+
+  assert.equal(popover.parentNode.tagName, 'dialog');
+});
+
+test('Driver navigation preserves tab and settings destinations before highlighting them', () => {
+  const fixture = createController();
+  fixture.controller.open();
+  const driver = fixture.drivers[0];
+
+  driver.clickNext();
+  driver.clickNext();
+  driver.clickNext();
+  driver.clickNext();
+
+  assert.deepEqual(fixture.navigations.slice(-4), [
+    { tab: null, settingsCategory: null },
+    { tab: null, settingsCategory: null },
+    { tab: null, settingsCategory: null },
+    { tab: 'summary', settingsCategory: null }
+  ]);
+
+  driver.clickNext();
+  driver.clickNext();
+  assert.deepEqual(fixture.navigations.at(-2), { tab: 'water-pressure', settingsCategory: null });
+  assert.deepEqual(fixture.navigations.at(-1), { tab: null, settingsCategory: null });
+  driver.clickNext();
+  assert.deepEqual(fixture.navigations.at(-1), { tab: null, settingsCategory: 'equipment' });
+});
+
+test('public next and back methods move the Driver.js tour', () => {
+  const fixture = createController();
+  fixture.controller.open();
+
+  fixture.controller.next();
+  assert.equal(fixture.drivers[0].index, 1);
+  fixture.controller.back();
+  assert.equal(fixture.drivers[0].index, 0);
+});
+
+test('closing the Driver.js tour persists dismissal and restores launch focus', () => {
+  const fixture = createController();
+  fixture.controller.open();
+  const driver = fixture.drivers[0];
+
+  driver.clickClose();
+
+  assert.equal(driver.destroyCount, 1);
+  assert.deepEqual(fixture.storage.readState(), { consentAccepted: true, wizardSeen: true });
+  assert.equal(fixture.document.activeElement, fixture.launchButton);
+});
+
+test('Driver.js popover adds a Skip action that dismisses the tour', () => {
+  const fixture = createController();
+  fixture.controller.open();
+  const driver = fixture.drivers[0];
+  const footer = fixture.document.createElement('div');
+  driver.config.onPopoverRender({ footerButtons: footer }, { index: 0, driver });
+  const skip = footer.children.at(-1);
+  assert.equal(skip.className, 'onboarding-skip-button');
+  skip.dispatchEvent({ type: 'click' });
+
+  assert.equal(driver.destroyCount, 1);
+  assert.deepEqual(fixture.storage.readState(), { consentAccepted: true, wizardSeen: true });
+});
+
+test('unaccepted users receive the consent gate before Driver.js starts', () => {
   const fixture = createController({ initialState: { consentAccepted: false, wizardSeen: false } });
 
   fixture.controller.open();
 
-  const root = dialog(fixture.document);
-  assert.equal(root.getAttribute('aria-modal'), 'true');
-  for (const detail of ['settings', 'supply banks', 'theme', 'onboarding state', 'this browser']) {
-    assert.equal(root.textContent.includes(detail), true, `expected disclosure to name ${detail}`);
-  }
-  assert.equal(findElement(root, element => element.getAttribute('data-onboarding-highlight') === 'true'), null);
-  assert.equal(findElement(root, element => element.tagName === 'button' && element.textContent === 'Skip'), null);
-});
+  const dialog = consentDialog(fixture.document);
+  assert.ok(dialog);
+  assert.match(dialog.textContent, /anonymous usage analytics/i);
+  assert.equal(fixture.drivers.length, 0);
+  buttonWithText(dialog, 'Accept and continue').dispatchEvent({ type: 'click' });
 
-test('Escape keeps unaccepted consent open without persisting a dismissal or enabling analytics', () => {
-  const fixture = createController({ initialState: { consentAccepted: false, wizardSeen: false } });
-  fixture.controller.open({ requireConsent: true });
-
-  fixture.window.dispatchEvent({ type: 'keydown', key: 'Escape' });
-
-  const root = dialog(fixture.document);
-  assert.equal(root.textContent.includes('Analytics consent'), true);
-  assert.equal(fixture.storage.writeCount(), 0);
-  assert.equal(fixture.consentAccepted, 0);
-});
-
-test('consent mode presents an accessible browser-storage disclosure without a target spotlight', () => {
-  const fixture = createController({ initialState: { consentAccepted: false, wizardSeen: false } });
-
-  fixture.controller.open({ requireConsent: true });
-
-  const root = dialog(fixture.document);
-  assert.equal(root.getAttribute('aria-modal'), 'true');
-  for (const detail of ['settings', 'supply banks', 'theme', 'onboarding state', 'this browser']) {
-    assert.equal(root.textContent.includes(detail), true, `expected disclosure to name ${detail}`);
-  }
-  assert.equal(findElement(root, element => element.getAttribute('data-onboarding-highlight') === 'true'), null);
-  assert.equal(findElement(root, element => element.tagName === 'button' && element.textContent === 'Skip'), null);
-});
-
-test('consent action persists acceptance, loads analytics callback, and opens Welcome', () => {
-  const fixture = createController({ initialState: { consentAccepted: false, wizardSeen: false } });
-  fixture.controller.open({ requireConsent: true });
-
-  findButton(dialog(fixture.document), 'Accept and continue').dispatchEvent({ type: 'click' });
-
+  assert.equal(fixture.drivers.length, 1);
   assert.deepEqual(fixture.storage.readState(), { consentAccepted: true, wizardSeen: false });
-  assert.equal(fixture.consentAccepted, 1);
-  assert.equal(dialog(fixture.document).textContent.includes('Welcome to Simplex Blender'), true);
   assert.deepEqual(fixture.acceptedState, { consentAccepted: true, wizardSeen: false });
 });
 
-test('failed consent persistence remains visible and does not enable analytics', () => {
+test('consent traps focus and makes background content inert', () => {
+  const fixture = createController({ initialState: { consentAccepted: false, wizardSeen: false } });
+
+  fixture.controller.open();
+
+  const dialog = consentDialog(fixture.document);
+  const accept = buttonWithText(dialog, 'Accept and continue');
+  assert.equal(fixture.document.activeElement, accept);
+  assert.equal(fixture.launchButton.inert, true);
+
+  fixture.document.activeElement = fixture.launchButton;
+  const event = {
+    type: 'keydown',
+    key: 'Tab',
+    shiftKey: false,
+    preventDefault() {
+      this.defaultPrevented = true;
+    }
+  };
+  dialog.dispatchEvent(event);
+
+  assert.equal(event.defaultPrevented, true);
+  assert.equal(fixture.document.activeElement, accept);
+});
+
+test('failed consent persistence keeps the consent gate open and does not start Driver.js', () => {
   const fixture = createController({
     initialState: { consentAccepted: false, wizardSeen: false },
     storage: memoryStorage({ failWrites: true })
   });
-  fixture.controller.open({ requireConsent: true });
 
-  findButton(dialog(fixture.document), 'Accept and continue').dispatchEvent({ type: 'click' });
-
-  const root = dialog(fixture.document);
-  assert.equal(root.textContent.includes('Storage unavailable'), true);
-  assert.ok(findButton(root, 'Accept and continue'));
-  assert.equal(fixture.consentAccepted, 0);
-});
-
-test('Skip closes the wizard even when dismissal persistence is unavailable', () => {
-  const fixture = createController({ storage: memoryStorage({ failWrites: true }) });
   fixture.controller.open();
+  const dialog = consentDialog(fixture.document);
+  buttonWithText(dialog, 'Accept and continue').dispatchEvent({ type: 'click' });
 
-  findButton(dialog(fixture.document), 'Skip').dispatchEvent({ type: 'click' });
-
-  assert.equal(findElement(fixture.document.body, element => element.getAttribute('role') === 'dialog'), null);
-  assert.equal(fixture.document.activeElement, fixture.launchButton);
+  assert.equal(fixture.drivers.length, 0);
+  assert.match(dialog.textContent, /could not be saved/i);
 });
 
-test('button navigation follows tour tabs and backs up to Recipe without going negative', () => {
+test('reset destroys the active tour without saving dismissal and restores consent mode', () => {
   const fixture = createController();
   fixture.controller.open();
-  fixture.navigations.length = 0;
-
-  for (let index = 0; index < 5; index += 1) findButton(dialog(fixture.document), 'Next').dispatchEvent({ type: 'click' });
-  assert.deepEqual(fixture.navigations, [null, null, null, 'summary', 'water-pressure']);
-
-  findButton(dialog(fixture.document), 'Back').dispatchEvent({ type: 'click' });
-  assert.equal(fixture.navigations.at(-1), 'summary');
-  for (let index = 0; index < 4; index += 1) findButton(dialog(fixture.document), 'Back').dispatchEvent({ type: 'click' });
-  const back = findButton(dialog(fixture.document), 'Back');
-  assert.equal(back.disabled, true);
-  back.dispatchEvent({ type: 'click' });
-  assert.equal(dialog(fixture.document).textContent.includes('Welcome to Simplex Blender'), true);
-  assert.equal(fixture.navigations.at(-1), null);
-});
-
-test('closing persists dismissal, restores the launch focus, and later opens at Welcome', () => {
-  const fixture = createController();
-  fixture.controller.open();
-  fixture.controller.close({ markSeen: true });
-
-  assert.deepEqual(fixture.storage.readState(), { consentAccepted: true, wizardSeen: true });
-  assert.equal(fixture.document.activeElement, fixture.launchButton);
-  assert.equal(findElement(fixture.document.body, element => element.getAttribute('role') === 'dialog'), null);
-
-  fixture.controller.open();
-  assert.equal(dialog(fixture.document).textContent.includes('Welcome to Simplex Blender'), true);
-});
-
-test('keyboard containment cycles wizard controls and Escape dismisses the tour', () => {
-  const fixture = createController();
-  fixture.controller.open();
-  const root = dialog(fixture.document);
-  assert.equal(fixture.document.activeElement.getAttribute('id'), 'onboarding-title');
-
-  fixture.window.dispatchEvent({ type: 'keydown', key: 'Tab' });
-  assert.equal(fixture.document.activeElement, findButton(root, 'Skip'));
-  fixture.window.dispatchEvent({ type: 'keydown', key: 'Tab', shiftKey: true });
-  assert.equal(fixture.document.activeElement, findButton(root, 'Next'));
-  fixture.window.dispatchEvent({ type: 'keydown', key: 'Escape' });
-
-  assert.equal(findElement(fixture.document.body, element => element.getAttribute('role') === 'dialog'), null);
-  assert.deepEqual(fixture.storage.readState(), { consentAccepted: true, wizardSeen: true });
-});
-
-test('reset closes the tour without persisting it and restores the consent gate', () => {
-  const fixture = createController({ initialState: { consentAccepted: true, wizardSeen: true } });
-  fixture.controller.open();
+  const driver = fixture.drivers[0];
 
   fixture.controller.reset({ consentAccepted: false, wizardSeen: false });
-  assert.equal(findElement(fixture.document.body, element => element.getAttribute('role') === 'dialog'), null);
-  assert.equal(fixture.storage.writeCount(), 0);
 
+  assert.equal(driver.destroyCount, 1);
+  assert.equal(fixture.storage.writeCount(), 0);
   fixture.controller.open();
-  const root = dialog(fixture.document);
-  assert.equal(root.textContent.includes('Analytics consent'), true);
-  assert.equal(findElement(root, element => element.tagName === 'button' && element.textContent === 'Skip'), null);
+  assert.ok(consentDialog(fixture.document));
 });
-test('destroy removes the overlay and registered window listeners', () => {
+
+test('destroy removes Driver.js without persisting a seen state', () => {
   const fixture = createController();
   fixture.controller.open();
-  assert.equal(fixture.window.listenerCount(), 3);
 
   fixture.controller.destroy();
 
-  assert.equal(findElement(fixture.document.body, element => element.getAttribute('role') === 'dialog'), null);
-  assert.equal(fixture.window.listenerCount(), 0);
+  assert.equal(fixture.drivers[0].destroyCount, 1);
+  assert.equal(fixture.storage.writeCount(), 0);
 });

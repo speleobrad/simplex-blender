@@ -82,6 +82,30 @@ test('compressor inlet flow converts free-air flow to receiver pressure rate', (
   assert.ok(Math.abs(rate - 8.447) < 0.01);
 });
 
+test('compressor real-gas receiver compressibility uses absolute pressure', async () => {
+  const { GAS_CONSTANT, calcZ } = await import('../js/physics.js');
+  const input = {
+    inletFlowLPerMin: 100,
+    receiverPressureBar: 200,
+    receiverOxygenPercent: 21,
+    receiverHeliumPercent: 0,
+    receiverVolumeL: 12,
+    ambientTemperatureC: 20,
+    receiverTemperatureC: 20,
+    useVdw: true
+  };
+  const rate = calculateCompressorFillRate(input);
+  const temperatureK = input.receiverTemperatureC + 273.15;
+  const inletMolesPerMin = 1.01325 * input.inletFlowLPerMin
+    / (calcZ(1.01325, 21, 0, input.ambientTemperatureC, true) * GAS_CONSTANT * temperatureK);
+  const expected = inletMolesPerMin
+    * calcZ(input.receiverPressureBar + 1, 21, 0, input.receiverTemperatureC, true)
+    * GAS_CONSTANT * temperatureK
+    / input.receiverVolumeL;
+
+  assert.ok(Math.abs(rate - expected) < 1e-12);
+});
+
 test('cooling reaches an absolute target using Newton cooling', () => {
   const minutes = calculateCoolingTime({
     transferEndTemperatureC: 60,

@@ -15,51 +15,75 @@ export const WIZARD_STEPS = Object.freeze([
   }),
   Object.freeze({
     id: 'working-tank',
-    title: 'Set up the working tank',
-    body: 'Enter the starting gas and target mix, choose the cylinder type, then set the surrounding temperature and wait time between fills.',
+    title: 'Set up your working tank',
+    body: 'This is where you define your working tank: enter what you already have and the mix you want to make, choose the tank type, make, and model, and describe the environment where blending will happen. Temperature matters—set and respect the waiting times so the tank can cool and avoid thermal stress.',
     targetId: 'working-tank-section',
     tab: null
   }),
   Object.freeze({
     id: 'supply-banks',
-    title: 'Choose supply banks',
-    body: 'Supply banks provide the available gases. Disable a bank to preserve it while the recipe is calculated.',
+    title: 'Define your supplies',
+    body: 'This is where you list the source gases available to you. Compressor air is always assumed to be available. Set a source-gas temperature if a bank has been stored somewhere warmer or cooler. Add all your gases, then disable any you want to preserve instead of using as ingredients.',
     targetId: 'supply-banks-section',
     tab: null
   }),
   Object.freeze({
     id: 'mixing-steps',
     title: 'Follow the mixing steps',
-    body: 'Each step gives its target pressure, temperature change, transfer method, and the wait before the next fill.',
+    body: 'Your mixing recipe is here, with full details for every step: how long it takes, the tank temperature at transfer end, and the temperature after the cooling wait. Check the interim mix too if you want to analyze the blend as it develops.',
     targetId: 'mixing-steps-section',
     tab: null
   }),
   Object.freeze({
     id: 'tank-summary',
     title: 'Review the tank summary',
-    body: 'Use the tank summary to review the final mix and every stage of the completed fill.',
-    targetId: 'tab-pane-summary',
+    body: 'Tank summary gives you a quick readout of the final mix and every supply tank, including the pressure left in each one, so you can keep track of your inventory.',
+    spotlights: Object.freeze([
+      Object.freeze({ targetId: 'results-navigation' }),
+      Object.freeze({ targetId: 'tab-btn-summary', variant: 'control' })
+    ]),
     tab: 'summary'
   }),
   Object.freeze({
     id: 'water-pressure',
     title: 'Check in-water pressure',
-    body: 'See how the cylinder pressure changes after it equilibrates at different water temperatures.',
-    targetId: 'tab-pane-water-pressure',
+    body: 'Check the pressure your SPG may show once the tank is in the water or during transport. Avoid overheating tanks during transport: pressure can rise above their working rating.',
+    spotlights: Object.freeze([
+      Object.freeze({ targetId: 'results-navigation' }),
+      Object.freeze({ targetId: 'tab-btn-water-pressure', variant: 'control' })
+    ]),
     tab: 'water-pressure'
   }),
   Object.freeze({
     id: 'equipment',
-    title: 'Inspect equipment',
-    body: 'This summary shows the active equipment. Configure its details in Settings, then Equipment.',
-    targetId: 'equipment-section',
-    tab: null
+    title: 'Configure your equipment',
+    body: 'Your tanks and filling equipment behave differently, so choose the presets that match what you have—or define your own. Use Preset management to load the latest list of tanks, compressors, and boosters.',
+    views: Object.freeze([
+      Object.freeze({
+        title: 'Find Settings',
+        body: 'This is where you can change the app settings and define your preset gear. Remember that all configuration is stored locally and is not shared. Continue to open Settings and choose Equipment.',
+        targetId: 'settings-launch',
+        tab: null,
+        settingsCategory: null
+      }),
+      Object.freeze({
+        spotlights: Object.freeze([
+          Object.freeze({ targetId: 'settings-pane-equipment' }),
+          Object.freeze({ targetId: 'settings-category-equipment', variant: 'control' })
+        ]),
+        tab: null,
+        settingsCategory: 'equipment'
+      })
+    ])
   }),
   Object.freeze({
     id: 'diagram',
-    title: 'Explore the diagram',
-    body: 'Explore the diagram to see the gas-mix trajectory and how each transfer reaches the target.',
-    targetId: 'tab-pane-ternary',
+    title: 'Explore and stay safe',
+    body: 'This is the big picture: explore the visual diagram to see how your starting mix is transformed into the target. You can also inspect the graphs for expected tank temperature and pressure over time. Enjoy exploring—and stay safe.',
+    spotlights: Object.freeze([
+      Object.freeze({ targetId: 'results-navigation' }),
+      Object.freeze({ targetId: 'tab-btn-ternary', variant: 'control' })
+    ]),
     tab: 'ternary'
   })
 ]);

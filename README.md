@@ -18,7 +18,7 @@ Run the test suite with:
 npm test
 ```
 
-The app uses browser-native ES modules and has no build step. Tailwind CSS, fonts, and icons are loaded from CDNs by the page.
+The app uses browser-native ES modules and has no build step. Tailwind CSS, fonts, icons, and the Driver.js guided-tour library are loaded from pinned CDN assets by the page.
 
 Technical guides:
 

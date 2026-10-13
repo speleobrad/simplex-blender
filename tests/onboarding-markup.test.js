@@ -5,11 +5,17 @@ import { readFileSync } from 'node:fs';
 const markup = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
 const TOUR_TARGET_IDS = [
+  'settings-launch',
+  'settings-category-equipment',
   'working-tank-section',
   'supply-banks-section',
   'mixing-steps-section',
   'equipment-section',
+  'results-navigation',
+  'tab-btn-ternary',
+  'tab-btn-summary',
   'tab-pane-summary',
+  'tab-btn-water-pressure',
   'tab-pane-water-pressure',
   'tab-pane-ternary'
 ];

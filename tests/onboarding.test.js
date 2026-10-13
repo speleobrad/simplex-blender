@@ -68,8 +68,30 @@ test('wizard steps cover the ordered tour destinations', () => {
     WIZARD_STEPS.slice(1, 4).map(step => step.targetId),
     ['working-tank-section', 'supply-banks-section', 'mixing-steps-section']
   );
-  assert.equal(WIZARD_STEPS.find(step => step.id === 'equipment').targetId, 'equipment-section');
-  assert.equal(WIZARD_STEPS.find(step => step.id === 'tank-summary').tab, 'summary');
-  assert.equal(WIZARD_STEPS.find(step => step.id === 'water-pressure').tab, 'water-pressure');
-  assert.equal(WIZARD_STEPS.find(step => step.id === 'diagram').tab, 'ternary');
+  const summary = WIZARD_STEPS.find(step => step.id === 'tank-summary');
+  assert.deepEqual(summary.spotlights, [
+    { targetId: 'results-navigation' },
+    { targetId: 'tab-btn-summary', variant: 'control' }
+  ]);
+  assert.equal(summary.tab, 'summary');
+  const waterPressure = WIZARD_STEPS.find(step => step.id === 'water-pressure');
+  assert.deepEqual(waterPressure.spotlights, [
+    { targetId: 'results-navigation' },
+    { targetId: 'tab-btn-water-pressure', variant: 'control' }
+  ]);
+  assert.equal(waterPressure.tab, 'water-pressure');
+  const equipment = WIZARD_STEPS.find(step => step.id === 'equipment');
+  assert.equal(equipment.views.length, 2);
+  assert.equal(equipment.views[0].targetId, 'settings-launch');
+  assert.deepEqual(equipment.views[1].spotlights, [
+    { targetId: 'settings-pane-equipment' },
+    { targetId: 'settings-category-equipment', variant: 'control' }
+  ]);
+  assert.equal(equipment.views[1].settingsCategory, 'equipment');
+  const diagram = WIZARD_STEPS.find(step => step.id === 'diagram');
+  assert.deepEqual(diagram.spotlights, [
+    { targetId: 'results-navigation' },
+    { targetId: 'tab-btn-ternary', variant: 'control' }
+  ]);
+  assert.equal(diagram.tab, 'ternary');
 });

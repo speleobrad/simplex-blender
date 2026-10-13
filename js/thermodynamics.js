@@ -93,7 +93,7 @@ export function calculateCompressorFillRate({
     useVdw
   );
   const zReceiver = calcZ(
-    receiverPressureBar,
+    receiverPressureBar + GAUGE_PRESSURE_OFFSET_BAR,
     receiverOxygenPercent,
     receiverHeliumPercent,
     receiverTemperatureC,

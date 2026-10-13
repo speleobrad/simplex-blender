@@ -80,6 +80,8 @@ const state = {
   lastInput: null,
   lastResult: null
 };
+let onboardingSettingsOpen = false;
+
 
 
 const DEFAULT_CYLINDER_PRESET_NAME = 'Catalina S80';
@@ -114,7 +116,19 @@ state.onboardingController = createOnboardingController({
   document,
   storage: settingsStorage,
   initialState: state.onboarding,
-  onNavigate: tab => setTab(tab ?? 'recipe'),
+  onNavigate: destination => {
+    const settingsDialog = byId('settings-dialog');
+    const settingsCategory = destination?.settingsCategory ?? null;
+    if (settingsCategory) {
+      if (!settingsDialog.open) openSettings();
+      setSettingsCategory(settingsCategory);
+      onboardingSettingsOpen = true;
+    } else {
+      if (onboardingSettingsOpen && settingsDialog.open) settingsDialog.close();
+      onboardingSettingsOpen = false;
+    }
+    setTab(destination?.tab ?? 'recipe');
+  },
   onConsentAccepted: onboarding => {
     state.onboarding = onboarding;
     state.onboardingLoadFailure = null;
