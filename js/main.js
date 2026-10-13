@@ -2,6 +2,7 @@ import { optimizeBlend } from './optimizer.js';
 import { parseNumericInput, splitGasInput } from './gas-input.js';
 import { validateCalculatorInputs, validateSupplyBankInput } from './input-validation.js';
 import {
+  addEquipmentPresetToDraft,
   applyGasPresetToBank,
   copySettings,
   loadSettings,
@@ -367,6 +368,18 @@ function addCylinderPreset() {
   });
   renderSettingsDraft();
   setSettingsCategory(state.settingsCategory);
+}
+
+function addCompressorPreset() {
+  addEquipmentPresetToDraft(state.settingsDraft, 'compressorPresets', 'New compressor');
+  renderSettingsDraft();
+  setSettingsCategory('equipment');
+}
+
+function addBoosterPreset() {
+  addEquipmentPresetToDraft(state.settingsDraft, 'boosterPresets', 'New booster');
+  renderSettingsDraft();
+  setSettingsCategory('equipment');
 }
 
 function removeSettingsPreset(collection, index) {
@@ -766,6 +779,12 @@ function handleClick(event) {
       break;
     case 'add-cylinder-preset':
       addCylinderPreset();
+      break;
+    case 'add-compressor-preset':
+      addCompressorPreset();
+      break;
+    case 'add-booster-preset':
+      addBoosterPreset();
       break;
     case 'remove-cylinder-preset':
       removeSettingsPreset('cylinderPresets', Number(actionElement.dataset.settingsIndex));

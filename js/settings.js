@@ -343,6 +343,47 @@ export function applyBoosterPresetToSettings(settings, preset) {
   return copied;
 }
 
+export function createCompressorPreset(settings, name) {
+  return {
+    name,
+    inletFlowLPerMin: settings.booster.compressorInletFlowLPerMin,
+    maxPressureBar: settings.booster.maxCompressorPressureBar,
+    temperatureModifierC: settings.booster.compressorTemperatureModifierC
+  };
+}
+
+export function createBoosterPreset(settings, name) {
+  return {
+    name,
+    minimumSourcePressureBar: settings.booster.minimumSourcePressureBar,
+    cylinderVolumeCm3: settings.booster.cylinderVolumeCm3,
+    oxygenBoostBpm: settings.booster.oxygenBoostBpm,
+    otherBoostBpm: settings.booster.otherBoostBpm,
+    oxygenDecantRateBarPerMin: settings.booster.oxygenDecantRateBarPerMin,
+    otherDecantRateBarPerMin: settings.booster.otherDecantRateBarPerMin,
+    maxOutputPressureBar: settings.booster.maxBoosterOutputPressureBar,
+    temperatureModifierC: settings.booster.boosterTemperatureModifierC,
+    drainingRateBarPerMin: settings.booster.drainingRateBarPerMin
+  };
+}
+
+export function createUniquePresetName(baseName, presets) {
+  const names = new Set(presets.map(preset => normalizePresetName(preset.name)));
+  let name = baseName;
+  let suffix = 2;
+  while (names.has(normalizePresetName(name))) name = `${baseName} ${suffix++}`;
+  return name;
+}
+
+export function addEquipmentPresetToDraft(settingsDraft, category, baseName) {
+  const presets = settingsDraft[category];
+  const name = createUniquePresetName(baseName, presets);
+  presets.push(category === 'compressorPresets'
+    ? createCompressorPreset(settingsDraft, name)
+    : createBoosterPreset(settingsDraft, name));
+  return name;
+}
+
 export function selectEquipmentPreset(settings, category, presetName) {
   if (!settings || (category !== 'compressorPresets' && category !== 'boosterPresets')) return null;
   const preset = settings[category].find(candidate => candidate.name === presetName);

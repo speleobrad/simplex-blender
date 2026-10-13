@@ -1,10 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  addEquipmentPresetToDraft,
   applyBoosterPresetToSettings,
   applyCompressorPresetToSettings,
   applyGasPresetToBank,
   copySettings,
+  createBoosterPreset,
+  createCompressorPreset,
+  createUniquePresetName,
   DEFAULT_SETTINGS,
   getSelectedGasPreset,
   loadSettings,
@@ -213,6 +217,96 @@ test('selecting named equipment presets changes only copied draft active fields'
 test('normalizes preset names with locale-independent case folding', () => {
   assert.equal(normalizePresetName('  I  '), 'i');
   assert.equal(normalizePresetName(' EAN32 '), 'ean32');
+});
+
+test('creates independent equipment preset clones from active settings', () => {
+  const settings = copySettings(DEFAULT_SETTINGS);
+  settings.booster.compressorInletFlowLPerMin = 160;
+  settings.booster.maxCompressorPressureBar = 250;
+  settings.booster.compressorTemperatureModifierC = 4;
+  settings.booster.minimumSourcePressureBar = 25;
+  settings.booster.cylinderVolumeCm3 = 12;
+  settings.booster.oxygenBoostBpm = 75;
+  settings.booster.otherBoostBpm = 80;
+  settings.booster.oxygenDecantRateBarPerMin = 7;
+  settings.booster.otherDecantRateBarPerMin = 8;
+  settings.booster.maxBoosterOutputPressureBar = 240;
+  settings.booster.boosterTemperatureModifierC = 3;
+  settings.booster.drainingRateBarPerMin = 9;
+
+  const compressor = createCompressorPreset(settings, 'New compressor');
+  const booster = createBoosterPreset(settings, 'New booster');
+
+  assert.deepEqual(compressor, {
+    name: 'New compressor',
+    inletFlowLPerMin: 160,
+    maxPressureBar: 250,
+    temperatureModifierC: 4
+  });
+  assert.deepEqual(booster, {
+    name: 'New booster',
+    minimumSourcePressureBar: 25,
+    cylinderVolumeCm3: 12,
+    oxygenBoostBpm: 75,
+    otherBoostBpm: 80,
+    oxygenDecantRateBarPerMin: 7,
+    otherDecantRateBarPerMin: 8,
+    maxOutputPressureBar: 240,
+    temperatureModifierC: 3,
+    drainingRateBarPerMin: 9
+  });
+
+  compressor.inletFlowLPerMin = 1;
+  booster.cylinderVolumeCm3 = 1;
+
+  assert.equal(settings.booster.compressorInletFlowLPerMin, 160);
+  assert.equal(settings.booster.cylinderVolumeCm3, 12);
+});
+
+test('creates unique equipment names and appends active-setting clones', () => {
+  const draft = copySettings(DEFAULT_SETTINGS);
+  draft.compressorPresets.push({
+    name: 'new compressor',
+    inletFlowLPerMin: 150,
+    maxPressureBar: 240,
+    temperatureModifierC: 2
+  });
+  draft.boosterPresets.push({
+    name: 'New booster',
+    minimumSourcePressureBar: 30,
+    cylinderVolumeCm3: 10,
+    oxygenBoostBpm: 60,
+    otherBoostBpm: 60,
+    oxygenDecantRateBarPerMin: 6,
+    otherDecantRateBarPerMin: 6,
+    maxOutputPressureBar: 220,
+    temperatureModifierC: 1,
+    drainingRateBarPerMin: 6
+  });
+  const active = { ...draft.booster };
+
+  assert.equal(createUniquePresetName('New compressor', draft.compressorPresets), 'New compressor 2');
+  assert.equal(addEquipmentPresetToDraft(draft, 'compressorPresets', 'New compressor'), 'New compressor 2');
+  assert.equal(addEquipmentPresetToDraft(draft, 'boosterPresets', 'New booster'), 'New booster 2');
+  assert.deepEqual(draft.booster, active);
+  assert.deepEqual(draft.compressorPresets.at(-1), {
+    name: 'New compressor 2',
+    inletFlowLPerMin: active.compressorInletFlowLPerMin,
+    maxPressureBar: active.maxCompressorPressureBar,
+    temperatureModifierC: active.compressorTemperatureModifierC
+  });
+  assert.deepEqual(draft.boosterPresets.at(-1), {
+    name: 'New booster 2',
+    minimumSourcePressureBar: active.minimumSourcePressureBar,
+    cylinderVolumeCm3: active.cylinderVolumeCm3,
+    oxygenBoostBpm: active.oxygenBoostBpm,
+    otherBoostBpm: active.otherBoostBpm,
+    oxygenDecantRateBarPerMin: active.oxygenDecantRateBarPerMin,
+    otherDecantRateBarPerMin: active.otherDecantRateBarPerMin,
+    maxOutputPressureBar: active.maxBoosterOutputPressureBar,
+    temperatureModifierC: active.boosterTemperatureModifierC,
+    drainingRateBarPerMin: active.drainingRateBarPerMin
+  });
 });
 
 test('old settings gain both pressure ceiling defaults', () => {

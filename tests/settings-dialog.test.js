@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import {
   clearPresetImport,
@@ -157,6 +158,13 @@ test('renders equipment selectors and active values', () => {
   assert.equal(booster.value, 'Standard booster');
   assert.equal(elements.get('settings-compressor-inlet-flow').value, '100');
   assert.equal(elements.get('settings-booster-draining-rate').value, '5');
+});
+
+test('provides equipment preset clone action buttons', () => {
+  const markup = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+
+  assert.match(markup, /<button\b[^>]*data-action="add-compressor-preset"[^>]*>/);
+  assert.match(markup, /<button\b[^>]*data-action="add-booster-preset"[^>]*>/);
 });
 
 test('renders compact cylinder mass and pressure controls', () => {
