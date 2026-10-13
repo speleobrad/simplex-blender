@@ -269,4 +269,11 @@ test('renders new import candidates checked and duplicate candidates disabled', 
   });
   assert.equal(elements.get('settings-preset-import-button').disabled, true);
 });
+test('provides a factory reset action in preset management', () => {
+  const markup = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const pane = markup.match(/<section id="settings-pane-preset-management"[\s\S]*?<\/section>/)?.[0] ?? '';
+
+  assert.match(pane, /data-action="reset-factory-settings"/);
+  assert.match(pane, />Reset to factory settings</);
+});
 

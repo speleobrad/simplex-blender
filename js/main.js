@@ -11,6 +11,7 @@ import {
   selectEquipmentPreset,
   validateSettings
 } from './settings.js';
+import { resetApplicationState } from './factory-reset.js';
 import { analyzePresetSource, mergeSelectedPresets, PRESET_IMPORT_DEFAULT_URLS } from './preset-import.js';
 import { loadSupplyBanks, saveSupplyBanks } from './bank-storage.js';
 import { loadTheme, saveTheme } from './theme.js';
@@ -23,7 +24,8 @@ import { changeTernaryZoom, clearTernaryDiagram, observeTernaryCanvas, renderTer
 
 const settingsStorage = {
   getItem: key => window.localStorage.getItem(key),
-  setItem: (key, value) => window.localStorage.setItem(key, value)
+  setItem: (key, value) => window.localStorage.setItem(key, value),
+  clear: () => window.localStorage.clear()
 };
 
 let settingsLoadFailure = null;
@@ -352,6 +354,40 @@ function importSelectedPresets() {
   setSettingsCategory('preset-management');
   recalculate();
 }
+
+function resetFactorySettings() {
+  let didReset;
+  try {
+    didReset = resetApplicationState(
+      state,
+      settingsStorage,
+      () => window.confirm('Reset all saved app data to factory settings? This cannot be undone.')
+    );
+  } catch (error) {
+    displaySettingsErrors(['Factory reset failed. Saved data was not changed. Check that browser storage is enabled and try again.']);
+    return;
+  }
+  if (!didReset) return;
+
+  state.settingsDraft = copySettings(state.settings);
+  state.settingsLoadFailure = null;
+  state.banksLoadFailure = null;
+  state.bankSaveFailure = null;
+  state.bankInputFailure = null;
+  state.settingsImport = {
+    ...createPresetImportState(),
+    status: 'Factory settings restored.',
+    error: false
+  };
+  applyTheme(state.theme);
+  clearSettingsErrors();
+  updateStorageWarning();
+  refreshPresetOptions();
+  renderSettingsDraft();
+  setSettingsCategory('preset-management');
+  recalculate();
+}
+
 
 
 function selectCompressorPreset(select) {
@@ -818,6 +854,9 @@ function handleClick(event) {
       break;
     case 'import-selected-presets':
       importSelectedPresets();
+      break;
+    case 'reset-factory-settings':
+      resetFactorySettings();
       break;
     case 'add-gas-preset':
       addGasPreset();
