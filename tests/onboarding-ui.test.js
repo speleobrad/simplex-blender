@@ -368,6 +368,17 @@ test('Driver.js popover adds a Skip action that dismisses the tour', () => {
   assert.deepEqual(fixture.storage.readState(), { consentAccepted: true, wizardSeen: true });
 });
 
+test('finishing the tour with Done returns to the recipe tab', () => {
+  const fixture = createController();
+  fixture.controller.open();
+  const driver = fixture.drivers[0];
+
+  for (let index = 0; index < driver.config.steps.length - 1; index += 1) driver.clickNext();
+  driver.clickNext();
+
+  assert.deepEqual(fixture.navigations.at(-1), { tab: 'recipe', settingsCategory: null });
+});
+
 test('unaccepted users receive the consent gate before Driver.js starts', () => {
   const fixture = createController({ initialState: { consentAccepted: false, wizardSeen: false } });
 

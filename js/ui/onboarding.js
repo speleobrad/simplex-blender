@@ -288,7 +288,10 @@ export function createOnboardingController({
       onPrevClick: (_element, _step, options) => {
         moveTo((options.index ?? activeIndex) - 1, options.driver);
       },
-      onDoneClick: () => closeInternal(true, true),
+      onDoneClick: () => {
+        onNavigate({ tab: 'recipe', settingsCategory: null });
+        closeInternal(true, true);
+      },
       onCloseClick: () => closeInternal(true, true),
       onDestroyed: () => {
         if (mode === 'wizard') closeInternal(true, false);
