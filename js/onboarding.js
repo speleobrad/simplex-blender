@@ -17,21 +17,21 @@ export const WIZARD_STEPS = Object.freeze([
     id: 'working-tank',
     title: 'Set up the working tank',
     body: 'Enter the starting gas and target mix, choose the cylinder type, then set the surrounding temperature and wait time between fills.',
-    targetId: 'cylinder-preset',
+    targetId: 'working-tank-section',
     tab: null
   }),
   Object.freeze({
     id: 'supply-banks',
     title: 'Choose supply banks',
     body: 'Supply banks provide the available gases. Disable a bank to preserve it while the recipe is calculated.',
-    targetId: 'tanks-table',
+    targetId: 'supply-banks-section',
     tab: null
   }),
   Object.freeze({
     id: 'mixing-steps',
     title: 'Follow the mixing steps',
     body: 'Each step gives its target pressure, temperature change, transfer method, and the wait before the next fill.',
-    targetId: 'steps-container',
+    targetId: 'mixing-steps-section',
     tab: null
   }),
   Object.freeze({
@@ -52,7 +52,7 @@ export const WIZARD_STEPS = Object.freeze([
     id: 'equipment',
     title: 'Inspect equipment',
     body: 'This summary shows the active equipment. Configure its details in Settings, then Equipment.',
-    targetId: 'equipment-summary',
+    targetId: 'equipment-section',
     tab: null
   }),
   Object.freeze({

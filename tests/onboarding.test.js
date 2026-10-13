@@ -49,6 +49,11 @@ test('wizard steps cover the ordered tour destinations', () => {
     'tank-summary', 'water-pressure', 'equipment', 'diagram'
   ]);
   assert.equal(WIZARD_STEPS[0].targetId, null);
+  assert.deepEqual(
+    WIZARD_STEPS.slice(1, 4).map(step => step.targetId),
+    ['working-tank-section', 'supply-banks-section', 'mixing-steps-section']
+  );
+  assert.equal(WIZARD_STEPS.find(step => step.id === 'equipment').targetId, 'equipment-section');
   assert.equal(WIZARD_STEPS.find(step => step.id === 'tank-summary').tab, 'summary');
   assert.equal(WIZARD_STEPS.find(step => step.id === 'water-pressure').tab, 'water-pressure');
   assert.equal(WIZARD_STEPS.find(step => step.id === 'diagram').tab, 'ternary');
