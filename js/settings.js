@@ -14,57 +14,73 @@ export const DEFAULT_SETTINGS = Object.freeze({
   physics: Object.freeze({ model: 'vdw' }),
   gasPresets: Object.freeze([
     Object.freeze({ name: 'Air', oxygenPercent: 21, heliumPercent: 0 }),
-    Object.freeze({ name: 'EAN32', oxygenPercent: 32, heliumPercent: 0 }),
-    Object.freeze({ name: 'Tx 18/45', oxygenPercent: 18, heliumPercent: 45 }),
+    Object.freeze({ name: 'EAN 32', oxygenPercent: 32, heliumPercent: 0 }),
+    Object.freeze({ name: 'EAN 50', oxygenPercent: 50, heliumPercent: 0 }),
+    Object.freeze({ name: 'Oxygen', oxygenPercent: 100, heliumPercent: 0 }),
+    Object.freeze({ name: 'Helium', oxygenPercent: 0, heliumPercent: 100 }),
     Object.freeze({ name: 'Tx 21/35', oxygenPercent: 21, heliumPercent: 35 }),
-    Object.freeze({ name: 'Pure O₂', oxygenPercent: 100, heliumPercent: 0 }),
-    Object.freeze({ name: 'Pure He', oxygenPercent: 0, heliumPercent: 100 })
+    Object.freeze({ name: 'Tx 18/45', oxygenPercent: 18, heliumPercent: 45 }),
+    Object.freeze({ name: 'Tx 15/55', oxygenPercent: 15, heliumPercent: 55 }),
+    Object.freeze({ name: 'Tx 12/65', oxygenPercent: 12, heliumPercent: 65 }),
+    Object.freeze({ name: 'Tx 50/20', oxygenPercent: 50, heliumPercent: 20 })
   ]),
   cylinderPresets: Object.freeze([
-    Object.freeze({ name: '12 L Steel 232 bar', volumeL: 12, material: 'steel', massKg: 14, workingPressureBar: 232 }),
-    Object.freeze({ name: '3 L Steel 232 bar', volumeL: 3, material: 'steel', massKg: 14, workingPressureBar: 232 }),
-    Object.freeze({ name: '5 L Steel 232 bar', volumeL: 5, material: 'steel', massKg: 14, workingPressureBar: 232 }),
-    Object.freeze({ name: '7 L Steel 232 bar', volumeL: 7, material: 'steel', massKg: 14, workingPressureBar: 232 }),
-    Object.freeze({ name: '10 L Steel 232 bar', volumeL: 10, material: 'steel', massKg: 14, workingPressureBar: 232 }),
-    Object.freeze({ name: '15 L Steel 232 bar', volumeL: 15, material: 'steel', massKg: 14, workingPressureBar: 232 }),
-    Object.freeze({ name: '18 L Steel 232 bar', volumeL: 18, material: 'steel', massKg: 14, workingPressureBar: 232 }),
-    Object.freeze({ name: '24 L Steel 232 bar', volumeL: 24, material: 'steel', massKg: 14, workingPressureBar: 232 })
+    Object.freeze({ name: 'Faber 3L', volumeL: 3, material: 'steel', massKg: 4.4, workingPressureBar: 232 }),
+    Object.freeze({ name: 'Catalina S80', volumeL: 11.1, material: 'aluminum', massKg: 14.3, workingPressureBar: 207 })
   ]),
   compressorPresets: Object.freeze([
     Object.freeze({
-      name: 'Standard compressor',
+      name: 'Bauer Junior 2 200bar',
       inletFlowLPerMin: 100,
       maxPressureBar: 232,
-      temperatureModifierC: 0
+      temperatureModifierC: 5
+    }),
+    Object.freeze({
+      name: 'Bauer Oceanus 300bar',
+      inletFlowLPerMin: 140,
+      maxPressureBar: 300,
+      temperatureModifierC: 7
     })
   ]),
   boosterPresets: Object.freeze([
     Object.freeze({
-      name: 'Standard booster',
-      minimumSourcePressureBar: 20,
+      name: 'MPS C1 Sport light',
+      minimumSourcePressureBar: 5,
       cylinderVolumeCm3: 9,
-      oxygenBoostBpm: 50,
+      oxygenBoostBpm: 35,
       otherBoostBpm: 50,
       oxygenDecantRateBarPerMin: 5,
-      otherDecantRateBarPerMin: 5,
-      maxOutputPressureBar: 200,
+      otherDecantRateBarPerMin: 10,
+      maxOutputPressureBar: 230,
+      temperatureModifierC: 10,
+      drainingRateBarPerMin: 15
+    }),
+    Object.freeze({
+      name: 'Maximator ROB22',
+      minimumSourcePressureBar: 50,
+      cylinderVolumeCm3: 4.6,
+      oxygenBoostBpm: 30,
+      otherBoostBpm: 50,
+      oxygenDecantRateBarPerMin: 5,
+      otherDecantRateBarPerMin: 10,
+      maxOutputPressureBar: 280,
       temperatureModifierC: 0,
-      drainingRateBarPerMin: 5
+      drainingRateBarPerMin: 15
     })
   ]),
   booster: Object.freeze({
-    minimumSourcePressureBar: 20,
+    minimumSourcePressureBar: 5,
     cylinderVolumeCm3: 9,
-    oxygenBoostBpm: 50,
+    oxygenBoostBpm: 35,
     otherBoostBpm: 50,
     oxygenDecantRateBarPerMin: 5,
-    otherDecantRateBarPerMin: 5,
-    drainingRateBarPerMin: 5,
+    otherDecantRateBarPerMin: 10,
+    drainingRateBarPerMin: 15,
     compressorInletFlowLPerMin: 100,
     maxCompressorPressureBar: 232,
-    maxBoosterOutputPressureBar: 200,
-    boosterTemperatureModifierC: 0,
-    compressorTemperatureModifierC: 0
+    maxBoosterOutputPressureBar: 230,
+    boosterTemperatureModifierC: 10,
+    compressorTemperatureModifierC: 5
   })
 });
 

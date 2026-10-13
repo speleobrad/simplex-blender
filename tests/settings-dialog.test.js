@@ -1,11 +1,7 @@
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
-import {
-  clearPresetImport,
-  renderPresetImport,
-  renderSettingsDialog
-} from '../js/ui/settings-dialog.js';
+import { renderSettingsDialog } from '../js/ui/settings-dialog.js';
 
 class FakeElement {
   constructor(tagName = 'div') {
@@ -100,8 +96,6 @@ function createFakeDocument() {
     'settings-booster-max-output-pressure',
     'settings-booster-temperature-modifier',
     'settings-compressor-temperature-modifier',
-    'settings-preset-import-status',
-    'settings-preset-import-list'
   ]) {
     elements.set(id, new FakeElement());
   }
@@ -195,61 +189,3 @@ test('renders compact cylinder mass and pressure controls', () => {
   assert.match(pressureHeader.className, /\bw-16\b/);
 });
 
-test('renders duplicate import entries as disabled checkboxes', () => {
-  const { document, elements } = createFakeDocument();
-  globalThis.document = document;
-
-  renderPresetImport([{
-    category: 'gasPresets',
-    preset: { name: 'Air', oxygenPercent: 21, heliumPercent: 0 },
-    duplicate: true,
-    duplicateReason: 'same name'
-  }], 'Loaded 1 preset');
-
-  const row = elements.get('settings-preset-import-list').children[0];
-  const checkbox = row.querySelector('input');
-  assert.equal(checkbox.disabled, true);
-  assert.equal(checkbox.checked, false);
-  assert.equal(checkbox.dataset.presetImportIndex, '0');
-  assert.match(row.textContent, /same name/);
-  assert.equal(elements.get('settings-preset-import-status').textContent, 'Loaded 1 preset');
-});
-
-test('renders preserved import checkbox state', () => {
-  const { document, elements } = createFakeDocument();
-  globalThis.document = document;
-
-  renderPresetImport([
-    {
-      category: 'gasPresets',
-      preset: { name: 'EAN32', oxygenPercent: 32, heliumPercent: 0 },
-      duplicate: false
-    },
-    {
-      category: 'gasPresets',
-      preset: { name: 'Tx 18/45', oxygenPercent: 18, heliumPercent: 45 },
-      duplicate: false
-    }
-  ], 'Loaded 2 presets', new Set([1]));
-
-  const section = elements.get('settings-preset-import-list').children[0];
-  assert.equal(section.children[1].querySelector('input').checked, false);
-  assert.equal(section.children[2].querySelector('input').checked, true);
-});
-
-test('clears stale import entries when the settings dialog rerenders', () => {
-  const { document, elements } = createFakeDocument();
-  globalThis.document = document;
-
-  renderPresetImport([{
-    category: 'gasPresets',
-    preset: { name: 'Air', oxygenPercent: 21, heliumPercent: 0 },
-    duplicate: false
-  }], 'Loaded 1 preset');
-  renderSettingsDialog(settingsWithEquipmentPresets());
-
-  assert.equal(elements.get('settings-preset-import-list').children.length, 0);
-  assert.equal(elements.get('settings-preset-import-status').textContent, '');
-
-  clearPresetImport();
-});

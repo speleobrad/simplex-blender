@@ -20,6 +20,26 @@ test('missing saved banks return independent copies of all default fields', () =
 test('default banks exclude compressor Air', () => {
   assert.equal(DEFAULT_BANKS.some(bank => bank.oxygenPercent === 21 && bank.heliumPercent === 0), false);
 });
+test('built-in supply banks match the requested defaults', () => {
+  assert.deepEqual(DEFAULT_BANKS, [
+    { id: 'bank-helium', name: 'Helium', volumeL: 40, pressureBar: 150, oxygenPercent: 0, heliumPercent: 100, enabled: true },
+    { id: 'bank-oxygen', name: 'Oxygen', volumeL: 50, pressureBar: 200, oxygenPercent: 100, heliumPercent: 0, enabled: true },
+    { id: 'bank-sample-scrap', name: 'Sample scrap', volumeL: 12, pressureBar: 45, oxygenPercent: 19, heliumPercent: 40, enabled: true, gasPresetName: null }
+  ]);
+});
+
+
+test('previous built-in supply banks migrate to the current defaults', () => {
+  const storage = memoryStorage([[
+    'simplex-gas-remixer-banks',
+    JSON.stringify([
+      { id: 'bank-he', name: 'Pure Helium', volumeL: 50, pressureBar: 200, oxygenPercent: 0, heliumPercent: 100, enabled: true },
+      { id: 'bank-1845', name: 'Tx 18/45 Bank', volumeL: 50, pressureBar: 200, oxygenPercent: 18, heliumPercent: 45, enabled: true },
+      { id: 'bank-o2', name: 'Pure Oxygen', volumeL: 40, pressureBar: 180, oxygenPercent: 100, heliumPercent: 0, enabled: true }
+    ])
+  ]]);
+  assert.deepEqual(loadSupplyBanks(storage), DEFAULT_BANKS);
+});
 
 test('empty saved bank list is valid', () => {
   const storage = memoryStorage([['simplex-gas-remixer-banks', '[]']]);

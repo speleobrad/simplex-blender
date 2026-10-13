@@ -10,11 +10,11 @@ function memoryStorage(initialEntries = []) {
   };
 }
 
-test('missing or unknown theme preference uses the dark default', () => {
+test('missing or unknown theme preference uses the light default', () => {
   const storage = memoryStorage();
   assert.equal(loadTheme(storage), DEFAULT_THEME);
   storage.setItem('simplex-gas-remixer-theme', 'system');
-  assert.equal(loadTheme(storage), 'dark');
+  assert.equal(loadTheme(storage), 'light');
 });
 
 test('light and dark theme preferences survive save/load', () => {
@@ -31,7 +31,7 @@ test('invalid theme values are rejected before replacing a saved preference', ()
   assert.equal(storage.getItem('simplex-gas-remixer-theme'), 'light');
 });
 
-test('theme load falls back to dark when storage cannot be read', () => {
+test('theme load falls back to light when storage cannot be read', () => {
   const storage = { getItem() { throw new Error('storage unavailable'); } };
-  assert.equal(loadTheme(storage), 'dark');
+  assert.equal(loadTheme(storage), 'light');
 });

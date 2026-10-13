@@ -38,20 +38,83 @@ test('missing settings return independent copies of the built-in presets', () =>
 test('settings default to the real-gas physics model', () => {
   assert.deepEqual(DEFAULT_SETTINGS.physics, { model: 'vdw' });
 });
+test('built-in settings match the requested diving equipment defaults', () => {
+  assert.deepEqual(DEFAULT_SETTINGS.gasPresets, [
+    { name: 'Air', oxygenPercent: 21, heliumPercent: 0 },
+    { name: 'EAN 32', oxygenPercent: 32, heliumPercent: 0 },
+    { name: 'EAN 50', oxygenPercent: 50, heliumPercent: 0 },
+    { name: 'Oxygen', oxygenPercent: 100, heliumPercent: 0 },
+    { name: 'Helium', oxygenPercent: 0, heliumPercent: 100 },
+    { name: 'Tx 21/35', oxygenPercent: 21, heliumPercent: 35 },
+    { name: 'Tx 18/45', oxygenPercent: 18, heliumPercent: 45 },
+    { name: 'Tx 15/55', oxygenPercent: 15, heliumPercent: 55 },
+    { name: 'Tx 12/65', oxygenPercent: 12, heliumPercent: 65 },
+    { name: 'Tx 50/20', oxygenPercent: 50, heliumPercent: 20 }
+  ]);
+  assert.deepEqual(DEFAULT_SETTINGS.cylinderPresets, [
+    { name: 'Faber 3L', volumeL: 3, material: 'steel', massKg: 4.4, workingPressureBar: 232 },
+    { name: 'Catalina S80', volumeL: 11.1, material: 'aluminum', massKg: 14.3, workingPressureBar: 207 }
+  ]);
+  assert.deepEqual(DEFAULT_SETTINGS.compressorPresets, [
+    { name: 'Bauer Junior 2 200bar', inletFlowLPerMin: 100, maxPressureBar: 232, temperatureModifierC: 5 },
+    { name: 'Bauer Oceanus 300bar', inletFlowLPerMin: 140, maxPressureBar: 300, temperatureModifierC: 7 }
+  ]);
+  assert.deepEqual(DEFAULT_SETTINGS.boosterPresets, [
+    {
+      name: 'MPS C1 Sport light',
+      minimumSourcePressureBar: 5,
+      cylinderVolumeCm3: 9,
+      oxygenBoostBpm: 35,
+      otherBoostBpm: 50,
+      oxygenDecantRateBarPerMin: 5,
+      otherDecantRateBarPerMin: 10,
+      maxOutputPressureBar: 230,
+      temperatureModifierC: 10,
+      drainingRateBarPerMin: 15
+    },
+    {
+      name: 'Maximator ROB22',
+      minimumSourcePressureBar: 50,
+      cylinderVolumeCm3: 4.6,
+      oxygenBoostBpm: 30,
+      otherBoostBpm: 50,
+      oxygenDecantRateBarPerMin: 5,
+      otherDecantRateBarPerMin: 10,
+      maxOutputPressureBar: 280,
+      temperatureModifierC: 0,
+      drainingRateBarPerMin: 15
+    }
+  ]);
+  assert.deepEqual(DEFAULT_SETTINGS.booster, {
+    minimumSourcePressureBar: 5,
+    cylinderVolumeCm3: 9,
+    oxygenBoostBpm: 35,
+    otherBoostBpm: 50,
+    oxygenDecantRateBarPerMin: 5,
+    otherDecantRateBarPerMin: 10,
+    drainingRateBarPerMin: 15,
+    compressorInletFlowLPerMin: 100,
+    maxCompressorPressureBar: 232,
+    maxBoosterOutputPressureBar: 230,
+    boosterTemperatureModifierC: 10,
+    compressorTemperatureModifierC: 5
+  });
+});
+
 test('settings include compressor and booster pressure ceilings, temperature modifiers, and draining rate', () => {
   assert.equal(DEFAULT_SETTINGS.booster.maxCompressorPressureBar, 232);
-  assert.equal(DEFAULT_SETTINGS.booster.maxBoosterOutputPressureBar, 200);
-  assert.equal(DEFAULT_SETTINGS.booster.drainingRateBarPerMin, 5);
-  assert.equal(DEFAULT_SETTINGS.booster.boosterTemperatureModifierC, 0);
-  assert.equal(DEFAULT_SETTINGS.booster.compressorTemperatureModifierC, 0);
-  assert.equal(DEFAULT_SETTINGS.booster.drainingRateBarPerMin, 5);
+  assert.equal(DEFAULT_SETTINGS.booster.maxBoosterOutputPressureBar, 230);
+  assert.equal(DEFAULT_SETTINGS.booster.drainingRateBarPerMin, 15);
+  assert.equal(DEFAULT_SETTINGS.booster.boosterTemperatureModifierC, 10);
+  assert.equal(DEFAULT_SETTINGS.booster.compressorTemperatureModifierC, 5);
+  assert.equal(DEFAULT_SETTINGS.booster.drainingRateBarPerMin, 15);
 });
 
 test('default settings expose named compressor and booster presets', () => {
-  assert.equal(DEFAULT_SETTINGS.compressorPresets.length, 1);
-  assert.equal(DEFAULT_SETTINGS.boosterPresets.length, 1);
+  assert.equal(DEFAULT_SETTINGS.compressorPresets.length, 2);
+  assert.equal(DEFAULT_SETTINGS.boosterPresets.length, 2);
   assert.equal(DEFAULT_SETTINGS.compressorPresets[0].inletFlowLPerMin, 100);
-  assert.equal(DEFAULT_SETTINGS.boosterPresets[0].maxOutputPressureBar, 200);
+  assert.equal(DEFAULT_SETTINGS.boosterPresets[0].maxOutputPressureBar, 230);
 });
 
 test('legacy settings migrate active equipment values into preset collections', () => {
@@ -102,14 +165,14 @@ test('invalid equipment preset collections are rejected before storage changes',
       ...DEFAULT_SETTINGS,
       compressorPresets: [
         DEFAULT_SETTINGS.compressorPresets[0],
-        { ...DEFAULT_SETTINGS.compressorPresets[0], name: 'standard compressor' }
+        { ...DEFAULT_SETTINGS.compressorPresets[0], name: 'bauer junior 2 200bar' }
       ]
     },
     {
       ...DEFAULT_SETTINGS,
       boosterPresets: [
         DEFAULT_SETTINGS.boosterPresets[0],
-        { ...DEFAULT_SETTINGS.boosterPresets[0], name: 'standard booster' }
+        { ...DEFAULT_SETTINGS.boosterPresets[0], name: 'mps c1 sport light' }
       ]
     },
     { ...DEFAULT_SETTINGS, compressorPresets: {} },
@@ -437,7 +500,7 @@ test('old settings gain the default shared booster minimum', () => {
       volumePresets: [12]
     })
   ]]);
-  assert.equal(loadSettings(storage).booster.minimumSourcePressureBar, 20);
+  assert.equal(loadSettings(storage).booster.minimumSourcePressureBar, 5);
 });
 
 test('old settings gain all thermodynamic booster defaults', () => {
@@ -455,17 +518,16 @@ test('old settings gain all thermodynamic booster defaults', () => {
   assert.deepEqual(settings.booster, {
     minimumSourcePressureBar: 25,
     cylinderVolumeCm3: 9,
-    oxygenBoostBpm: 50,
+    oxygenBoostBpm: 35,
     otherBoostBpm: 50,
     oxygenDecantRateBarPerMin: 5,
-    otherDecantRateBarPerMin: 5,
-    drainingRateBarPerMin: 5,
+    otherDecantRateBarPerMin: 10,
+    drainingRateBarPerMin: 15,
     compressorInletFlowLPerMin: 100,
     maxCompressorPressureBar: 232,
-    maxBoosterOutputPressureBar: 200,
-    boosterTemperatureModifierC: 0,
-    compressorTemperatureModifierC: 0,
-    drainingRateBarPerMin: 5
+    maxBoosterOutputPressureBar: 230,
+    boosterTemperatureModifierC: 10,
+    compressorTemperatureModifierC: 5
   });
 });
 
@@ -688,6 +750,6 @@ test('settings draft copies own independent equipment preset collections', () =>
   draft.compressorPresets[0].name = 'Draft compressor';
   draft.boosterPresets[0].maxOutputPressureBar = 250;
 
-  assert.equal(source.compressorPresets[0].name, 'Standard compressor');
-  assert.equal(source.boosterPresets[0].maxOutputPressureBar, 200);
+  assert.equal(source.compressorPresets[0].name, 'Bauer Junior 2 200bar');
+  assert.equal(source.boosterPresets[0].maxOutputPressureBar, 230);
 });

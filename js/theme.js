@@ -1,6 +1,6 @@
 const STORAGE_KEY = 'simplex-gas-remixer-theme';
 
-export const DEFAULT_THEME = 'dark';
+export const DEFAULT_THEME = 'light';
 
 export function loadTheme(storage) {
   try {

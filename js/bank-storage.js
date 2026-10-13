@@ -3,10 +3,27 @@ import { validateSupplyBankInput } from './input-validation.js';
 const STORAGE_KEY = 'simplex-gas-remixer-banks';
 
 export const DEFAULT_BANKS = Object.freeze([
+  Object.freeze({ id: 'bank-helium', name: 'Helium', volumeL: 40, pressureBar: 150, oxygenPercent: 0, heliumPercent: 100, enabled: true }),
+  Object.freeze({ id: 'bank-oxygen', name: 'Oxygen', volumeL: 50, pressureBar: 200, oxygenPercent: 100, heliumPercent: 0, enabled: true }),
+  Object.freeze({ id: 'bank-sample-scrap', name: 'Sample scrap', volumeL: 12, pressureBar: 45, oxygenPercent: 19, heliumPercent: 40, enabled: true, gasPresetName: null })
+]);
+
+const LEGACY_DEFAULT_BANKS = Object.freeze([
   Object.freeze({ id: 'bank-he', name: 'Pure Helium', volumeL: 50, pressureBar: 200, oxygenPercent: 0, heliumPercent: 100, enabled: true }),
   Object.freeze({ id: 'bank-1845', name: 'Tx 18/45 Bank', volumeL: 50, pressureBar: 200, oxygenPercent: 18, heliumPercent: 45, enabled: true }),
   Object.freeze({ id: 'bank-o2', name: 'Pure Oxygen', volumeL: 40, pressureBar: 180, oxygenPercent: 100, heliumPercent: 0, enabled: true })
 ]);
+
+const BANK_FIELDS = ['id', 'name', 'volumeL', 'pressureBar', 'oxygenPercent', 'heliumPercent', 'enabled'];
+
+function isLegacyDefaultBanks(banks) {
+  return Array.isArray(banks)
+    && banks.length === LEGACY_DEFAULT_BANKS.length
+    && banks.every((bank, index) => (
+      Object.keys(bank).length === BANK_FIELDS.length
+      && BANK_FIELDS.every(field => bank[field] === LEGACY_DEFAULT_BANKS[index][field])
+    ));
+}
 
 function isLegacyAirBank(bank) {
   return bank?.oxygenPercent === 21 && bank?.heliumPercent === 0;
@@ -61,9 +78,10 @@ export function loadSupplyBanks(storage, onFallback = () => {}) {
     return copyBanks(DEFAULT_BANKS);
   }
 
-  const normalizedBanks = Array.isArray(banks)
+  let normalizedBanks = Array.isArray(banks)
     ? banks.filter(bank => !isLegacyAirBank(bank))
     : banks;
+  if (isLegacyDefaultBanks(normalizedBanks)) normalizedBanks = DEFAULT_BANKS;
   const errors = validateBanks(normalizedBanks);
   if (errors.length > 0) {
     onFallback(new RangeError(errors.join(' ')));
