@@ -154,6 +154,10 @@ body {
   scrollbar-width: thin;
 }
 
+.settings-category-scroll::after {
+  display: none;
+}
+
 .settings-category-selected {
   color: rgb(var(--cyan-300));
   background: rgb(var(--ocean-800) / 0.7);
@@ -205,9 +209,21 @@ tr.thermal-point-active {
   transform: rotate(190deg);
 }
 @media (max-width: 639px) {
+  .settings-category-scroll::after {
+    content: '';
+    display: block;
+    position: absolute;
+    inset: 0 0 0 auto;
+    width: 1.75rem;
+    pointer-events: none;
+    background: linear-gradient(to right, transparent, rgb(var(--ocean-900)));
+  }
+
   .settings-category-list {
     display: flex;
     overflow-x: auto;
+    padding-right: 1.75rem;
+    scroll-padding-inline: 1.75rem;
     white-space: nowrap;
   }
 }

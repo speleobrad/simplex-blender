@@ -63,6 +63,7 @@
         <button type="button" data-action="cancel-settings" aria-label="Close settings" class="rounded-lg px-2 py-1 text-slate-400 hover:bg-ocean-800 hover:text-white">✕</button>
       </div>
       <div class="grid grid-cols-1 gap-5 py-5 sm:grid-cols-[10rem_minmax(0,1fr)]">
+        <div class="settings-category-scroll relative min-w-0">
         <nav aria-label="Settings categories" class="settings-category-list flex gap-2 overflow-x-auto sm:flex-col sm:overflow-visible">
           <button type="button" data-action="select-settings-category" data-settings-category="model" aria-controls="settings-pane-model" aria-selected="true" class="settings-category-button settings-category-selected shrink-0 rounded-lg border border-cyan-500/40 px-3 py-2 text-left text-xs font-semibold text-cyan-300 transition hover:bg-ocean-800/70">Model</button>
           <button type="button" data-action="select-settings-category" data-settings-category="gas-presets" aria-controls="settings-pane-gas-presets" aria-selected="false" class="settings-category-button shrink-0 rounded-lg border border-transparent px-3 py-2 text-left text-xs font-semibold text-slate-400 transition hover:border-ocean-700 hover:bg-ocean-800/70 hover:text-slate-200">Gas presets</button>
@@ -70,6 +71,7 @@
           <button type="button" data-action="select-settings-category" data-settings-category="equipment" aria-controls="settings-pane-equipment" aria-selected="false" class="settings-category-button shrink-0 rounded-lg border border-transparent px-3 py-2 text-left text-xs font-semibold text-slate-400 transition hover:border-ocean-700 hover:bg-ocean-800/70 hover:text-slate-200">Equipment</button>
           <button type="button" data-action="select-settings-category" data-settings-category="preset-management" aria-controls="settings-pane-preset-management" aria-selected="false" class="settings-category-button shrink-0 rounded-lg border border-transparent px-3 py-2 text-left text-xs font-semibold text-slate-400 transition hover:border-ocean-700 hover:bg-ocean-800/70 hover:text-slate-200">Preset management</button>
         </nav>
+        </div>
 
         <div class="min-w-0">
           <section id="settings-pane-model" aria-labelledby="settings-pane-model-title">
@@ -103,15 +105,15 @@
             <h3 id="settings-pane-equipment-title" class="mb-3 text-sm font-semibold text-slate-200">Equipment</h3>
             <div class="space-y-4">
               <section class="rounded-xl border border-ocean-800/80 bg-ocean-950/50 p-3">
-                <div class="mb-3 flex items-center justify-between gap-3">
+                <div class="mb-3 space-y-2">
                   <h4 class="text-xs font-semibold text-slate-300">Compressor</h4>
-                  <div class="flex items-center gap-2">
-                    <label class="flex items-center gap-2 text-[10px] text-slate-400" for="settings-compressor-preset">
+                  <div data-settings-preset-actions="compressor" class="flex flex-wrap items-center gap-2">
+                    <label class="flex min-w-0 flex-1 basis-full items-center gap-2 text-[10px] text-slate-400 sm:basis-auto" for="settings-compressor-preset">
                       Preset
-                      <select id="settings-compressor-preset" data-action="select-compressor-preset" aria-label="Compressor preset" class="max-w-[11rem] rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-xs text-slate-100"></select>
+                      <select id="settings-compressor-preset" data-action="select-compressor-preset" aria-label="Compressor preset" class="min-w-0 flex-1 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-xs text-slate-100 sm:max-w-[11rem]"></select>
                     </label>
-                    <button type="button" data-action="add-compressor-preset" class="rounded-lg border border-ocean-700 px-2.5 py-1 text-xs text-cyan-300 hover:bg-ocean-800">New compressor</button>
-                    <button type="button" id="settings-remove-compressor-preset" data-action="remove-compressor-preset" disabled class="rounded-lg border border-rose-500/60 px-2.5 py-1 text-xs text-rose-300 hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-40">Remove</button>
+                    <button type="button" data-action="add-compressor-preset" class="min-w-0 flex-1 rounded-lg border border-ocean-700 px-2.5 py-1 text-xs text-cyan-300 hover:bg-ocean-800 sm:flex-none">New compressor</button>
+                    <button type="button" id="settings-remove-compressor-preset" data-action="remove-compressor-preset" disabled class="min-w-0 flex-1 rounded-lg border border-rose-500/60 px-2.5 py-1 text-xs text-rose-300 hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-40 sm:flex-none">Remove</button>
                   </div>
                 </div>
                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -140,15 +142,15 @@
               </section>
 
               <section class="rounded-xl border border-ocean-800/80 bg-ocean-950/50 p-3">
-                <div class="mb-3 flex items-center justify-between gap-3">
+                <div class="mb-3 space-y-2">
                   <h4 class="text-xs font-semibold text-slate-300">Booster</h4>
-                  <div class="flex items-center gap-2">
-                    <label class="flex items-center gap-2 text-[10px] text-slate-400" for="settings-booster-preset">
+                  <div data-settings-preset-actions="booster" class="flex flex-wrap items-center gap-2">
+                    <label class="flex min-w-0 flex-1 basis-full items-center gap-2 text-[10px] text-slate-400 sm:basis-auto" for="settings-booster-preset">
                       Preset
-                      <select id="settings-booster-preset" data-action="select-booster-preset" aria-label="Booster preset" class="max-w-[11rem] rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-xs text-slate-100"></select>
+                      <select id="settings-booster-preset" data-action="select-booster-preset" aria-label="Booster preset" class="min-w-0 flex-1 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-xs text-slate-100 sm:max-w-[11rem]"></select>
                     </label>
-                    <button type="button" data-action="add-booster-preset" class="rounded-lg border border-ocean-700 px-2.5 py-1 text-xs text-cyan-300 hover:bg-ocean-800">New booster</button>
-                    <button type="button" id="settings-remove-booster-preset" data-action="remove-booster-preset" disabled class="rounded-lg border border-rose-500/60 px-2.5 py-1 text-xs text-rose-300 hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-40">Remove</button>
+                    <button type="button" data-action="add-booster-preset" class="min-w-0 flex-1 rounded-lg border border-ocean-700 px-2.5 py-1 text-xs text-cyan-300 hover:bg-ocean-800 sm:flex-none">New booster</button>
+                    <button type="button" id="settings-remove-booster-preset" data-action="remove-booster-preset" disabled class="min-w-0 flex-1 rounded-lg border border-rose-500/60 px-2.5 py-1 text-xs text-rose-300 hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-40 sm:flex-none">Remove</button>
                   </div>
                 </div>
                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -244,9 +246,9 @@
               </div>
               <div>
                 <label for="settings-preset-import-url" class="block text-xs text-slate-400">Online JSON URL</label>
-                <div class="mt-1 flex gap-2">
+                <div class="mt-1 flex flex-col gap-2 sm:flex-row">
                   <input id="settings-preset-import-url" type="url" value="https://raw.githubusercontent.com/speleobrad/simplex-blender/master/presets/gas.json" data-settings-preset-import-url aria-label="Online preset JSON URL" class="min-w-0 flex-1 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-xs text-slate-100">
-                  <button type="button" data-action="load-preset-url" class="shrink-0 rounded-lg border border-ocean-700 px-2.5 py-1 text-xs text-cyan-300 hover:bg-ocean-800">Load online</button>
+                  <button type="button" data-action="load-preset-url" class="w-full shrink-0 rounded-lg border border-ocean-700 px-2.5 py-1 text-xs text-cyan-300 hover:bg-ocean-800 sm:w-auto">Load online</button>
                 </div>
               </div>
               <div id="settings-preset-import-status" role="status" aria-live="polite" class="hidden rounded border border-ocean-800 bg-ocean-950/60 px-2 py-1.5 text-[10px] text-slate-400"></div>

@@ -181,6 +181,32 @@ test('provides equipment preset clone action buttons', () => {
   assert.match(markup, /<button\b[^>]*data-action="add-booster-preset"[^>]*>New booster<\/button>/);
 });
 
+test('renders mobile cylinder cards without removing the desktop table', () => {
+  const { document, elements } = createFakeDocument();
+  globalThis.document = document;
+  const settings = settingsWithEquipmentPresets();
+  settings.cylinderPresets = [{
+    name: 'AL80',
+    material: 'aluminum',
+    volumeL: 11.1,
+    massKg: 14.3,
+    workingPressureBar: 207
+  }];
+
+  renderSettingsDialog(settings);
+
+  const container = elements.get('settings-cylinder-presets');
+  const cards = container.querySelectorAll('article');
+  assert.equal(cards.length, 1);
+  assert.match(cards[0].className, /\bsm:hidden\b/);
+  const remove = findElement(cards[0], element => element.dataset.action === 'remove-cylinder-preset');
+  assert.ok(remove);
+  assert.equal(remove.textContent, 'Remove');
+  assert.match(remove.className, /\bw-full\b/);
+  assert.match(container.querySelector('table').className, /\bhidden\b/);
+  assert.match(container.querySelector('table').className, /\bsm:table\b/);
+});
+
 test('renders preset delete controls disabled when a collection has one entry', () => {
   const { document, elements } = createFakeDocument();
   globalThis.document = document;
@@ -216,7 +242,7 @@ test('renders compact cylinder mass and pressure controls', () => {
 
   renderSettingsDialog(settings);
 
-  const table = elements.get('settings-cylinder-presets').children[0].children[0];
+  const table = elements.get('settings-cylinder-presets').querySelector('table');
   const massInput = findElement(table, element => element.dataset.settingsField === 'massKg');
   const pressureHeader = findElement(table, element => element.tagName === 'th'
     && element.textContent === 'Max pressure (bar)');
@@ -242,6 +268,14 @@ test('provides the preset management category and repository URLs', () => {
     renderSettingsDialog(settingsWithEquipmentPresets(), { category, candidates: [], selectedIds: [] });
     assert.equal(elements.get('settings-preset-import-url').value, `https://raw.githubusercontent.com/speleobrad/simplex-blender/master/presets/${filename}.json`);
   }
+});
+
+test('marks settings controls as responsive layout regions', () => {
+  const markup = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+
+  assert.match(markup, /class="settings-category-scroll relative min-w-0"/);
+  assert.match(markup, /data-settings-preset-actions="compressor"/);
+  assert.match(markup, /data-settings-preset-actions="booster"/);
 });
 
 test('renders new import candidates checked and duplicate candidates disabled', () => {

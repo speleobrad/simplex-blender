@@ -117,12 +117,84 @@ function createMaterialSelect(preset, index) {
   return select;
 }
 
+function createCylinderField(label, content) {
+  const field = document.createElement('div');
+  const labelElement = document.createElement('span');
+  labelElement.className = 'mb-1 block text-[10px] uppercase tracking-wide text-slate-500';
+  labelElement.textContent = label;
+  field.append(labelElement, content);
+  return field;
+}
+
+function createCylinderCard(preset, index, presetCount) {
+  const card = document.createElement('article');
+  card.className = 'rounded-xl border border-ocean-800/80 bg-ocean-950/40 p-3 sm:hidden';
+  const header = document.createElement('div');
+  header.className = 'flex items-center gap-2';
+  const name = createPresetInput({
+    value: preset.name,
+    type: 'text',
+    collection: 'cylinderPresets',
+    index,
+    field: 'name',
+    label: 'Cylinder preset name'
+  });
+  name.className += ' min-w-0 flex-1';
+  header.append(name);
+  const fields = document.createElement('div');
+  fields.className = 'mt-3 grid grid-cols-2 gap-2';
+  fields.append(
+    createCylinderField('Material', createMaterialSelect(preset, index)),
+    createCylinderField('Volume (L)', createCylinderNumberInput({
+      value: preset.volumeL,
+      index,
+      field: 'volumeL',
+      label: `${preset.name || 'Cylinder'} internal volume in litres`,
+      min: 0.1,
+      step: 0.1
+    })),
+    createCylinderField('Mass (kg)', createCylinderNumberInput({
+      value: preset.massKg,
+      index,
+      field: 'massKg',
+      label: `${preset.name || 'Cylinder'} mass in kilograms`,
+      min: 0.1,
+      step: 0.1
+    })),
+    createCylinderField('Max pressure (bar)', createCylinderNumberInput({
+      value: preset.workingPressureBar,
+      index,
+      field: 'workingPressureBar',
+      label: `${preset.name || 'Cylinder'} working pressure in bar`,
+      min: 10,
+      max: 350,
+      step: 1
+    }))
+  );
+  const removeButton = createRemoveButton(
+    'remove-cylinder-preset',
+    index,
+    `Remove ${preset.name || 'cylinder preset'}`,
+    presetCount <= 1
+  );
+  removeButton.textContent = 'Remove';
+  removeButton.className += ' inline-flex w-full justify-center py-1';
+  card.append(header, fields, removeButton);
+  return card;
+}
+
 function renderCylinderRows(presets) {
   const container = document.getElementById('settings-cylinder-presets');
   if (!container) return;
+  const sortedPresets = sortCylinderPresetEntries(presets);
+  const cards = document.createElement('div');
+  cards.className = 'space-y-2 sm:hidden';
+  for (const { preset, index } of sortedPresets) {
+    cards.append(createCylinderCard(preset, index, presets.length));
+  }
 
   const table = document.createElement('table');
-  table.className = 'w-full table-fixed text-left text-xs';
+  table.className = 'hidden w-full table-fixed text-left text-xs sm:table';
   const thead = document.createElement('thead');
   const headerRow = document.createElement('tr');
   headerRow.className = 'text-[10px] uppercase tracking-wide text-slate-400';
@@ -144,7 +216,7 @@ function renderCylinderRows(presets) {
   thead.append(headerRow);
 
   const tbody = document.createElement('tbody');
-  for (const { preset, index } of sortCylinderPresetEntries(presets)) {
+  for (const { preset, index } of sortedPresets) {
     const row = document.createElement('tr');
     row.className = 'border-t border-ocean-800/70 align-middle';
     const name = createPresetInput({
@@ -195,9 +267,9 @@ function renderCylinderRows(presets) {
   table.append(thead, tbody);
 
   const scrollContainer = document.createElement('div');
-  scrollContainer.className = 'overflow-x-auto';
+  scrollContainer.className = 'hidden overflow-x-auto sm:block';
   scrollContainer.append(table);
-  container.replaceChildren(scrollContainer);
+  container.replaceChildren(cards, scrollContainer);
 }
 
 function renderEquipmentPresetSelector(id, presets, matchesActiveFields, removeButtonId) {

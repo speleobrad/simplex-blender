@@ -187,6 +187,8 @@ function setSettingsCategory(category) {
     button.classList.toggle('settings-category-selected', selected);
     pane.classList.toggle('hidden', !selected);
   }
+  document.querySelector(`[data-settings-category="${category}"]`)
+    ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
 
 function openSettings() {
