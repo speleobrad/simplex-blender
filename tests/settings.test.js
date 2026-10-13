@@ -16,7 +16,8 @@ import {
   saveSettings,
   selectEquipmentPreset,
   sortCylinderPresetEntries,
-  sortGasPresetEntries
+  sortGasPresetEntries,
+  validateSettings
 } from '../js/settings.js';
 
 function memoryStorage(initialEntries = []) {
@@ -182,6 +183,14 @@ test('invalid equipment preset collections are rejected before storage changes',
   for (const settings of invalidSettings) {
     assert.throws(() => saveSettings(settings, storage), RangeError);
     assert.equal(storage.getItem('simplex-gas-remixer-settings'), null);
+  }
+});
+
+test('requires at least one preset in every settings collection', () => {
+  for (const collection of ['gasPresets', 'cylinderPresets', 'compressorPresets', 'boosterPresets']) {
+    const settings = copySettings(DEFAULT_SETTINGS);
+    settings[collection] = [];
+    assert.match(validateSettings(settings).join(' '), /At least one .* preset is required\./);
   }
 });
 

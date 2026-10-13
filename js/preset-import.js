@@ -22,14 +22,16 @@ const CATEGORY_DEFINITIONS = Object.freeze({
     collections: Object.freeze([Object.freeze({
       collection: 'gasPresets',
       validator: validateGasPreset,
-      fields: Object.freeze(['name', 'oxygenPercent', 'heliumPercent'])
+      fields: Object.freeze(['name', 'oxygenPercent', 'heliumPercent']),
+      duplicateBy: 'content'
     })])
   }),
   cylinders: Object.freeze({
     collections: Object.freeze([Object.freeze({
       collection: 'cylinderPresets',
       validator: validateCylinderPreset,
-      fields: Object.freeze(['name', 'volumeL', 'material', 'massKg', 'workingPressureBar'])
+      fields: Object.freeze(['name', 'volumeL', 'material', 'massKg', 'workingPressureBar']),
+      duplicateBy: 'name'
     })])
   }),
   equipment: Object.freeze({
@@ -38,7 +40,8 @@ const CATEGORY_DEFINITIONS = Object.freeze({
         sourceKey: 'compressorPresets',
         collection: 'compressorPresets',
         validator: validateCompressorPreset,
-        fields: Object.freeze(['name', 'inletFlowLPerMin', 'maxPressureBar', 'temperatureModifierC'])
+        fields: Object.freeze(['name', 'inletFlowLPerMin', 'maxPressureBar', 'temperatureModifierC']),
+        duplicateBy: 'name'
       }),
       Object.freeze({
         sourceKey: 'boosterPresets',
@@ -55,7 +58,8 @@ const CATEGORY_DEFINITIONS = Object.freeze({
           'maxOutputPressureBar',
           'temperatureModifierC',
           'drainingRateBarPerMin'
-        ])
+        ]),
+        duplicateBy: 'name'
       })
     ])
   })
@@ -75,16 +79,22 @@ function contentKey(preset, fields) {
   return JSON.stringify(fields.slice(1).map(field => preset[field]));
 }
 
-function addExistingIndexes(settings, definition, namesByCollection, contentsByCollection) {
+function duplicateKey(preset, collectionDefinition) {
+  return collectionDefinition.duplicateBy === 'name'
+    ? normalizePresetName(preset.name)
+    : contentKey(preset, collectionDefinition.fields);
+}
+
+function addExistingIndexes(settings, definition, duplicateKeysByCollection, nameKeysByCollection) {
   for (const collectionDefinition of definition.collections) {
-    const names = new Set();
-    const contents = new Set();
+    const duplicateKeys = new Set();
+    const nameKeys = new Set();
     for (const preset of settings?.[collectionDefinition.collection] ?? []) {
-      names.add(normalizePresetName(preset.name));
-      contents.add(contentKey(preset, collectionDefinition.fields));
+      duplicateKeys.add(duplicateKey(preset, collectionDefinition));
+      nameKeys.add(normalizePresetName(preset.name));
     }
-    namesByCollection.set(collectionDefinition.collection, names);
-    contentsByCollection.set(collectionDefinition.collection, contents);
+    duplicateKeysByCollection.set(collectionDefinition.collection, duplicateKeys);
+    nameKeysByCollection.set(collectionDefinition.collection, nameKeys);
   }
 }
 
@@ -108,7 +118,7 @@ function sourceEntries(category, source, definition) {
         entries.push({ collectionDefinition, preset, index });
       });
     }
-    return { entries, errors };
+    return errors.length > 0 ? { entries: [], errors } : { entries, errors };
   }
 
   if (!Array.isArray(source)) {
@@ -125,9 +135,9 @@ function sourceEntries(category, source, definition) {
 export function analyzePresetSource(category, source, settings = DEFAULT_SETTINGS) {
   const definition = definitionFor(category);
   const { entries, errors } = sourceEntries(category, source, definition);
-  const namesByCollection = new Map();
-  const contentsByCollection = new Map();
-  addExistingIndexes(settings, definition, namesByCollection, contentsByCollection);
+  const duplicateKeysByCollection = new Map();
+  const nameKeysByCollection = new Map();
+  addExistingIndexes(settings, definition, duplicateKeysByCollection, nameKeysByCollection);
   const candidates = [];
 
   for (const { collectionDefinition, preset: sourcePreset, index } of entries) {
@@ -143,24 +153,25 @@ export function analyzePresetSource(category, source, settings = DEFAULT_SETTING
       selectable: false
     };
     if (validationErrors.length === 0) {
-      const names = namesByCollection.get(collectionDefinition.collection);
-      const contents = contentsByCollection.get(collectionDefinition.collection);
-      const nameDuplicate = names.has(normalizePresetName(preset.name));
-      const contentDuplicate = contents.has(contentKey(preset, collectionDefinition.fields));
-      if (nameDuplicate || contentDuplicate) {
+      const duplicateKeys = duplicateKeysByCollection.get(collectionDefinition.collection);
+      const nameKeys = nameKeysByCollection.get(collectionDefinition.collection);
+      const key = duplicateKey(preset, collectionDefinition);
+      const nameKey = normalizePresetName(preset.name);
+      if (collectionDefinition.duplicateBy === 'content'
+        && nameKeys.has(nameKey) && !duplicateKeys.has(key)) {
+        candidate.reason = 'An entry with the same name but different content already exists.';
+      } else if (duplicateKeys.has(key)) {
         candidate.status = 'duplicate';
-        candidate.reason = nameDuplicate && contentDuplicate
-          ? 'An entry with the same name and content already exists.'
-          : nameDuplicate
-            ? 'An entry with the same name already exists.'
-            : 'An entry with the same content already exists.';
+        candidate.reason = collectionDefinition.duplicateBy === 'name'
+          ? 'An entry with the same name already exists.'
+          : 'An entry with the same content already exists.';
       } else {
         candidate.status = 'new';
         candidate.reason = 'Ready to import.';
         candidate.selectable = true;
-        names.add(normalizePresetName(preset.name));
-        contents.add(contentKey(preset, collectionDefinition.fields));
+        duplicateKeys.add(key);
       }
+      nameKeys.add(nameKey);
     }
     candidates.push(candidate);
   }

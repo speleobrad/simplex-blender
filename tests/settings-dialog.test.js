@@ -86,10 +86,14 @@ function createFakeDocument() {
     'settings-preset-import-candidates',
     'settings-preset-import-status',
     'settings-preset-import-button',
+    'settings-gas-presets',
     'settings-cylinder-presets',
     'settings-compressor-preset',
+    'settings-remove-gas-preset',
+    'settings-remove-cylinder-preset',
+    'settings-remove-compressor-preset',
+    'settings-remove-booster-preset',
     'settings-booster-preset',
-    'settings-booster-min-source-pressure',
     'settings-booster-cylinder-volume',
     'settings-booster-oxygen-bpm',
     'settings-booster-other-bpm',
@@ -159,11 +163,43 @@ test('renders equipment selectors and active values', () => {
   assert.equal(elements.get('settings-booster-draining-rate').value, '5');
 });
 
+test('renders the selected physics model into the settings control', () => {
+  const { document, elements } = createFakeDocument();
+  globalThis.document = document;
+  const settings = settingsWithEquipmentPresets();
+  settings.physics = { model: 'ideal' };
+
+  renderSettingsDialog(settings);
+
+  assert.equal(elements.get('settings-physics-model').value, 'ideal');
+});
+
 test('provides equipment preset clone action buttons', () => {
   const markup = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
   assert.match(markup, /<button\b[^>]*data-action="add-compressor-preset"[^>]*>New compressor<\/button>/);
   assert.match(markup, /<button\b[^>]*data-action="add-booster-preset"[^>]*>New booster<\/button>/);
+});
+
+test('renders preset delete controls disabled when a collection has one entry', () => {
+  const { document, elements } = createFakeDocument();
+  globalThis.document = document;
+  const settings = settingsWithEquipmentPresets();
+  settings.gasPresets = [{ name: 'Air', oxygenPercent: 21, heliumPercent: 0 }];
+  settings.cylinderPresets = [{ name: 'AL80', material: 'aluminum', volumeL: 11.1, massKg: 14.3, workingPressureBar: 207 }];
+  settings.boosterPresets = [
+    settings.boosterPresets[0],
+    { ...settings.boosterPresets[0], name: 'High pressure booster' }
+  ];
+
+  renderSettingsDialog(settings);
+
+  const gasRemove = findElement(elements.get('settings-gas-presets'), element => element.dataset.action === 'remove-gas-preset');
+  const cylinderRemove = findElement(elements.get('settings-cylinder-presets'), element => element.dataset.action === 'remove-cylinder-preset');
+  assert.equal(gasRemove.disabled, true);
+  assert.equal(cylinderRemove.disabled, true);
+  assert.equal(elements.get('settings-remove-compressor-preset').disabled, false);
+  assert.equal(elements.get('settings-remove-booster-preset').disabled, false);
 });
 
 test('renders compact cylinder mass and pressure controls', () => {

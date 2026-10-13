@@ -4,7 +4,7 @@
 
 **Goal:** Add a Settings → Preset management workflow for local/online gas, cylinder, and combined equipment JSON imports with duplicate preview and immediate localStorage persistence.
 
-**Architecture:** Keep settings schemas and storage in `js/settings.js`. Add a pure `js/preset-import.js` module that normalizes source JSON, validates candidates, classifies duplicates by normalized name or complete content, and merges only selected new candidates. Extend the existing Settings dialog renderer and `main.js` delegated browser flow; add repository JSON files under `presets/`.
+**Architecture:** Keep settings schemas and storage in `js/settings.js`. Add a pure `js/preset-import.js` module that normalizes source JSON, validates candidates, applies category-specific duplicate policies (gas by complete content; cylinders and equipment by normalized name), and merges only selected new candidates. Extend the existing Settings dialog renderer and `main.js` delegated browser flow; add repository JSON files under `presets/`.
 
 **Tech Stack:** Browser-native ES modules, vanilla DOM, Fetch/File APIs, Tailwind CDN utility classes, Node built-in test runner.
 
@@ -14,7 +14,7 @@
 
 - Existing `simplex-gas-remixer-settings` storage key and all existing preset object shapes MUST remain unchanged.
 - Existing manual Settings edits MUST remain draft-based; confirmed imports MUST persist immediately.
-- Duplicate detection MUST use case-insensitive trimmed names or complete persisted content, and MUST classify source-file duplicates.
+- Duplicate detection MUST use complete persisted content for gas presets or case-insensitive trimmed names for cylinder and equipment presets, and MUST classify source-file duplicates.
 - Invalid candidates MUST never be selectable or imported; import/storage failures MUST leave live settings and storage unchanged.
 - Equipment imports MUST use one file containing `compressorPresets` and/or `boosterPresets` arrays.
 - Run focused tests after each implementation task and `npm test` before completion.
@@ -52,7 +52,7 @@ assert.equal(result.candidates[2].status, 'duplicate');
 assert.equal(result.candidates[3].status, 'invalid');
 ```
 
-Cover normalized-name duplicates, content duplicates with different names, duplicate source entries, cylinder validation, combined equipment collections, malformed top-level shapes, and fresh merge results without mutating the input settings.
+Cover gas content duplicates, normalized-name duplicates for cylinders and equipment, duplicate source entries under each policy, cylinder validation, combined equipment collections, malformed top-level shapes, and fresh merge results without mutating the input settings.
 
 - [ ] **Step 2: Run the focused tests and verify failure**
 
@@ -62,7 +62,7 @@ Expected: FAIL because `js/preset-import.js` does not exist.
 
 - [ ] **Step 3: Implement source normalization and classification**
 
-Define category metadata with collection name, validator, and content fields. Normalize gas/cylinder arrays directly. Normalize equipment objects into ordered compressor and booster candidates; reject non-array provided collections and reject an equipment object with neither collection. Validate each candidate with the existing validator. Build duplicate indexes from current settings and previously accepted candidates; compare normalized names first and stable field-value content second. Return candidate status and human-readable reason without throwing for individual invalid entries.
+Define category metadata with collection name, validator, fields, and duplicate policy. Normalize gas/cylinder arrays directly. Normalize equipment objects into ordered compressor and booster candidates; reject non-array provided collections and reject an equipment object with neither collection. Validate each candidate with the existing validator. Build duplicate indexes from current settings and previously accepted candidates; use complete content for gas and normalized names for cylinders/equipment. Return candidate status and human-readable reason without throwing for individual invalid entries.
 
 - [ ] **Step 4: Implement immutable selected merge**
 

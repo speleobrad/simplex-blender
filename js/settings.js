@@ -157,6 +157,9 @@ export function validateSettings(settings) {
   if (!settings || !Array.isArray(settings.gasPresets) || !Array.isArray(settings.cylinderPresets)) {
     return ['Settings must contain gas and cylinder preset lists.'];
   }
+  if (settings.gasPresets.length === 0) {
+    errors.push('At least one gas preset is required.');
+  }
   if (settings.cylinderPresets.length === 0) {
     errors.push('At least one cylinder preset is required.');
   }
@@ -287,6 +290,7 @@ function addDefaultEquipmentPresets(settings) {
 function validatePresetCollection(presets, category, validator) {
   const errors = [];
   if (!Array.isArray(presets)) return [`Settings must contain a ${category} preset list.`];
+  if (presets.length === 0) return [`At least one ${category} preset is required.`];
 
   const names = new Set();
   for (const preset of presets) {

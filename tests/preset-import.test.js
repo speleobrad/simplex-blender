@@ -20,7 +20,7 @@ function newSettings() {
   return copySettings(DEFAULT_SETTINGS);
 }
 
-test('classifies gas candidates by name, content, source duplicate, and validation', () => {
+test('classifies gas candidates by content and validation', () => {
   const settings = newSettings();
   const result = analyzePresetSource('gas', [
     { name: 'AIR', oxygenPercent: 21, heliumPercent: 0 },
@@ -32,56 +32,108 @@ test('classifies gas candidates by name, content, source duplicate, and validati
 
   assert.deepEqual(result.errors, []);
   assert.deepEqual(result.candidates.map(candidate => candidate.status), [
-    'duplicate', 'new', 'duplicate', 'duplicate', 'invalid'
+    'duplicate', 'new', 'duplicate', 'invalid', 'invalid'
   ]);
   assert.equal(result.candidates[0].selectable, false);
   assert.equal(result.candidates[1].selectable, true);
-  assert.match(result.candidates[0].reason, /name and content/i);
+  assert.match(result.candidates[0].reason, /content/i);
   assert.match(result.candidates[2].reason, /content/i);
+  assert.equal(result.candidates[3].selectable, false);
 });
 
-test('classifies cylinder candidates and rejects malformed top-level data', () => {
+test('rejects gas candidates that reuse a name with different content', () => {
   const settings = newSettings();
-  const duplicate = { ...settings.cylinderPresets[0], name: 'Another name' };
+  const result = analyzePresetSource('gas', [
+    { name: 'Air', oxygenPercent: 22, heliumPercent: 0 }
+  ], settings);
+
+  assert.equal(result.candidates[0].status, 'invalid');
+  assert.equal(result.candidates[0].selectable, false);
+  assert.match(result.candidates[0].reason, /same name/i);
+});
+
+test('classifies cylinder candidates by normalized name', () => {
+  const settings = newSettings();
+  const contentDuplicate = { ...settings.cylinderPresets[0], name: 'Another name' };
+  const nameDuplicate = { ...settings.cylinderPresets[0], volumeL: 4 };
   const result = analyzePresetSource('cylinders', [
-    duplicate,
+    contentDuplicate,
+    nameDuplicate,
     { name: 'New cylinder', volumeL: 12, material: 'steel', massKg: 14, workingPressureBar: 232 },
     { name: 'Invalid cylinder', volumeL: 0, material: 'wood', massKg: -1, workingPressureBar: 500 }
   ], settings);
 
   assert.deepEqual(result.errors, []);
-  assert.deepEqual(result.candidates.map(candidate => candidate.status), ['duplicate', 'new', 'invalid']);
+  assert.deepEqual(result.candidates.map(candidate => candidate.status), ['new', 'duplicate', 'new', 'invalid']);
+  assert.equal(result.candidates[0].selectable, true);
   assert.equal(result.candidates[1].collection, 'cylinderPresets');
-
-  const malformed = analyzePresetSource('cylinders', { presets: [] }, settings);
-  assert.equal(malformed.candidates.length, 0);
-  assert.match(malformed.errors[0], /cylinder/i);
+  assert.match(result.candidates[1].reason, /same name/i);
 });
 
-test('normalizes combined equipment files into compressor and booster candidates', () => {
+test('classifies compressor and booster candidates by normalized name', () => {
   const settings = newSettings();
   const result = analyzePresetSource('equipment', {
     compressorPresets: [
       { ...settings.compressorPresets[0], name: 'Different name' },
+      { ...settings.compressorPresets[0], maxPressureBar: 250 },
       { name: 'New compressor', inletFlowLPerMin: 160, maxPressureBar: 250, temperatureModifierC: 4 }
     ],
     boosterPresets: [
-      { ...settings.boosterPresets[0], name: 'New booster' }
+      { ...settings.boosterPresets[0], name: 'Different name' },
+      { ...settings.boosterPresets[0], maxOutputPressureBar: 240 },
+      {
+        name: 'New booster',
+        minimumSourcePressureBar: 20,
+        cylinderVolumeCm3: 8,
+        oxygenBoostBpm: 40,
+        otherBoostBpm: 55,
+        oxygenDecantRateBarPerMin: 6,
+        otherDecantRateBarPerMin: 12,
+        maxOutputPressureBar: 240,
+        temperatureModifierC: 4,
+        drainingRateBarPerMin: 12
+      }
     ]
   }, settings);
 
   assert.deepEqual(result.errors, []);
   assert.deepEqual(result.candidates.map(candidate => [candidate.collection, candidate.status]), [
+    ['compressorPresets', 'new'],
     ['compressorPresets', 'duplicate'],
     ['compressorPresets', 'new'],
-    ['boosterPresets', 'duplicate']
+    ['boosterPresets', 'new'],
+    ['boosterPresets', 'duplicate'],
+    ['boosterPresets', 'new']
   ]);
 });
+
+
 
 test('rejects equipment files without a preset collection', () => {
   const result = analyzePresetSource('equipment', {}, newSettings());
   assert.equal(result.candidates.length, 0);
   assert.match(result.errors[0], /equipment/i);
+});
+
+test('rejects an equipment source when one provided collection is malformed', () => {
+  const result = analyzePresetSource('equipment', {
+    compressorPresets: null,
+    boosterPresets: [{
+      name: 'Imported booster',
+      minimumSourcePressureBar: 20,
+      cylinderVolumeCm3: 10,
+      oxygenBoostBpm: 40,
+      otherBoostBpm: 55,
+      oxygenDecantRateBarPerMin: 6,
+      otherDecantRateBarPerMin: 11,
+      maxOutputPressureBar: 240,
+      temperatureModifierC: 2,
+      drainingRateBarPerMin: 12
+    }]
+  }, newSettings());
+
+  assert.deepEqual(result.candidates, []);
+  assert.match(result.errors[0], /compressorPresets/);
 });
 
 test('merges selected new candidates immutably into matching collections', () => {

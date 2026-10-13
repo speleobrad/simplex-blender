@@ -111,6 +111,7 @@
                       <select id="settings-compressor-preset" data-action="select-compressor-preset" aria-label="Compressor preset" class="max-w-[11rem] rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-xs text-slate-100"></select>
                     </label>
                     <button type="button" data-action="add-compressor-preset" class="rounded-lg border border-ocean-700 px-2.5 py-1 text-xs text-cyan-300 hover:bg-ocean-800">New compressor</button>
+                    <button type="button" id="settings-remove-compressor-preset" data-action="remove-compressor-preset" disabled class="rounded-lg border border-rose-500/60 px-2.5 py-1 text-xs text-rose-300 hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-40">Remove</button>
                   </div>
                 </div>
                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -147,6 +148,7 @@
                       <select id="settings-booster-preset" data-action="select-booster-preset" aria-label="Booster preset" class="max-w-[11rem] rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-xs text-slate-100"></select>
                     </label>
                     <button type="button" data-action="add-booster-preset" class="rounded-lg border border-ocean-700 px-2.5 py-1 text-xs text-cyan-300 hover:bg-ocean-800">New booster</button>
+                    <button type="button" id="settings-remove-booster-preset" data-action="remove-booster-preset" disabled class="rounded-lg border border-rose-500/60 px-2.5 py-1 text-xs text-rose-300 hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-40">Remove</button>
                   </div>
                 </div>
                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -433,6 +435,15 @@
           </div>
         </section>
 
+      </section>
+      <section class="bg-ocean-900/90 border border-ocean-800 rounded-2xl p-5 shadow-xl">
+        <div class="flex items-center gap-2 pb-3 mb-3 border-b border-ocean-800">
+          <span class="w-2.5 h-2.5 rounded-full bg-cyan-400"></span>
+          <h2 class="text-sm font-bold uppercase tracking-wider text-slate-200">Equipment</h2>
+        </div>
+        <div id="equipment-summary" class="space-y-2 text-xs" aria-label="Active equipment summary">
+          <!-- Rendered via JS -->
+        </div>
       </section>
 
     </div>

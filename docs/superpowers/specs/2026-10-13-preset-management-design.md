@@ -113,13 +113,13 @@ For equipment, candidates are labeled by subtype and compared only against the m
 
 Each candidate is classified as exactly one of:
 
-- `new`: valid and not duplicated.
-- `duplicate`: valid but has a duplicate name or identical persisted content.
-- `invalid`: does not satisfy the existing validator.
+- `new`: valid and not duplicated under the category's duplicate policy.
+- `duplicate`: valid but duplicated under the category's duplicate policy.
+- `invalid`: does not satisfy the existing validator or conflicts with the existing unique-name invariant.
 
-Name comparisons use `normalizePresetName`, so casing and surrounding whitespace do not distinguish names. Content comparisons use all persisted fields for the matching preset shape, excluding no user-visible fields; object key ordering does not affect equality. A candidate duplicated earlier in the same file is classified as a duplicate. Duplicate candidates are never imported, even if a user attempts to select them programmatically.
+Gas candidates compare complete persisted composition content only. Cylinder, compressor, and booster candidates compare normalized names only; casing and surrounding whitespace do not distinguish names. A candidate duplicated earlier in the same file is classified as a duplicate under the same category policy. Duplicate candidates are never imported, even if a user attempts to select them programmatically.
 
-The importer must reject malformed top-level JSON shapes with a category-specific error. Equipment files must contain arrays for any provided `compressorPresets` and `boosterPresets`; an empty valid collection is allowed, but a file with neither collection is invalid.
+The importer must reject malformed top-level JSON shapes with a category-specific error. Equipment files must contain arrays for any provided `compressorPresets` and `boosterPresets`; if either provided collection is malformed, the entire source is rejected without selectable candidates. An empty valid collection is allowed, but a file with neither collection is invalid.
 
 ## Persistence and failure handling
 

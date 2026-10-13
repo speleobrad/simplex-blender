@@ -20,13 +20,14 @@ function createPresetInput({ value, type, collection, index, field, label, min, 
   return input;
 }
 
-function createRemoveButton(action, index, label) {
+function createRemoveButton(action, index, label, disabled = false) {
   const button = document.createElement('button');
   button.type = 'button';
-  button.className = 'rounded px-2 text-rose-400 hover:bg-rose-500/10 hover:text-rose-300';
+  button.className = 'rounded px-2 text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 disabled:cursor-not-allowed disabled:opacity-40';
   button.textContent = '×';
   button.dataset.action = action;
   button.dataset.settingsIndex = String(index);
+  button.disabled = disabled;
   button.setAttribute('aria-label', label);
   return button;
 }
@@ -68,7 +69,7 @@ function renderGasRows(presets) {
         max: 100,
         step: 0.1
       }),
-      createRemoveButton('remove-gas-preset', index, `Remove ${preset.name || 'gas preset'}`)
+      createRemoveButton('remove-gas-preset', index, `Remove ${preset.name || 'gas preset'}`, presets.length <= 1)
     );
     return row;
   });
@@ -185,7 +186,7 @@ function renderCylinderRows(presets) {
         step: 1
       }), 'px-1.5 py-1'),
       createTableCell(
-        createRemoveButton('remove-cylinder-preset', index, `Remove ${preset.name || 'cylinder preset'}`),
+        createRemoveButton('remove-cylinder-preset', index, `Remove ${preset.name || 'cylinder preset'}`, presets.length <= 1),
         'px-0 py-1 text-center'
       )
     );
@@ -199,7 +200,9 @@ function renderCylinderRows(presets) {
   container.replaceChildren(scrollContainer);
 }
 
-function renderEquipmentPresetSelector(id, presets, matchesActiveFields) {
+function renderEquipmentPresetSelector(id, presets, matchesActiveFields, removeButtonId) {
+  const removeButton = document.getElementById(removeButtonId);
+  if (removeButton) removeButton.disabled = presets.length <= 1;
   const select = document.getElementById(id);
   if (!select) return;
   const options = presets.map(preset => createOption(preset.name, preset.name));
@@ -309,17 +312,21 @@ export function renderPresetImport(settings, importState = {}) {
 }
 
 export function renderSettingsDialog(settings, importState) {
+  const physicsModel = document.getElementById('settings-physics-model');
+  if (physicsModel && settings.physics?.model) physicsModel.value = settings.physics.model;
   renderGasRows(settings.gasPresets);
   renderCylinderRows(settings.cylinderPresets);
   renderEquipmentPresetSelector(
     'settings-compressor-preset',
     settings.compressorPresets,
-    preset => compressorPresetMatchesActiveFields(settings.booster, preset)
+    preset => compressorPresetMatchesActiveFields(settings.booster, preset),
+    'settings-remove-compressor-preset'
   );
   renderEquipmentPresetSelector(
     'settings-booster-preset',
     settings.boosterPresets,
-    preset => boosterPresetMatchesActiveFields(settings.booster, preset)
+    preset => boosterPresetMatchesActiveFields(settings.booster, preset),
+    'settings-remove-booster-preset'
   );
   const boosterFields = {
     'settings-booster-min-source-pressure': settings.booster.minimumSourcePressureBar,

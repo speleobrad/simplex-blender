@@ -17,6 +17,7 @@ import { loadSupplyBanks, saveSupplyBanks } from './bank-storage.js';
 import { loadTheme, saveTheme } from './theme.js';
 import { renderResults } from './ui/results.js';
 import { renderSettingsDialog, renderPresetOptions } from './ui/settings-dialog.js';
+import { renderEquipmentSummary } from './ui/equipment-summary.js';
 import { renderSupplyBanks } from './ui/supply-banks.js';
 import { renderStorageWarning } from './ui/storage-warning.js';
 import { renderThermalCharts } from './ui/thermal-charts.js';
@@ -217,7 +218,7 @@ function presetImportStatus(message, error = false) {
 
 function previewPresetImport(source) {
   const { category } = state.settingsImport;
-  const analysis = analyzePresetSource(category, source, state.settingsDraft ?? state.settings);
+  const analysis = analyzePresetSource(category, source, state.settings);
   const newCandidates = analysis.candidates.filter(candidate => candidate.status === 'new');
   const duplicateCount = analysis.candidates.filter(candidate => candidate.status === 'duplicate').length;
   const invalidCount = analysis.candidates.filter(candidate => candidate.status === 'invalid').length;
@@ -328,7 +329,7 @@ function togglePresetImport(checkbox) {
 function importSelectedPresets() {
   const selectedIds = state.settingsImport.selectedIds;
   if (selectedIds.length === 0) return;
-  const baseSettings = state.settingsDraft ?? state.settings;
+  const baseSettings = state.settings;
   let merged;
   try {
     merged = mergeSelectedPresets(baseSettings, state.settingsImport.candidates, selectedIds);
@@ -369,6 +370,7 @@ function resetFactorySettings() {
   }
   if (!didReset) return;
 
+  state.settingsSession += 1;
   state.settingsDraft = copySettings(state.settings);
   state.settingsLoadFailure = null;
   state.banksLoadFailure = null;
@@ -457,9 +459,18 @@ function addBoosterPreset() {
 }
 
 function removeSettingsPreset(collection, index) {
-  state.settingsDraft[collection].splice(index, 1);
+  const presets = state.settingsDraft?.[collection];
+  if (!Array.isArray(presets) || presets.length <= 1 || !Number.isInteger(index)
+    || index < 0 || index >= presets.length) return;
+  presets.splice(index, 1);
   renderSettingsDraft();
   setSettingsCategory(state.settingsCategory);
+}
+
+function removeSelectedEquipmentPreset(collection, selectId) {
+  const selectedName = byId(selectId)?.value;
+  const index = state.settingsDraft?.[collection]?.findIndex(preset => preset.name === selectedName);
+  removeSettingsPreset(collection, index);
 }
 
 function saveSettingsDraft() {
@@ -629,6 +640,7 @@ function recalculate() {
   state.lastResult = result;
 
   renderSupplyBanks(state.banks, state.settings.gasPresets);
+  renderEquipmentSummary(state.settings);
   renderResults(result, input);
   renderThermalCharts(result, input);
   if (result.feasible) renderTernary();
@@ -870,8 +882,14 @@ function handleClick(event) {
     case 'add-compressor-preset':
       addCompressorPreset();
       break;
+    case 'remove-compressor-preset':
+      removeSelectedEquipmentPreset('compressorPresets', 'settings-compressor-preset');
+      break;
     case 'add-booster-preset':
       addBoosterPreset();
+      break;
+    case 'remove-booster-preset':
+      removeSelectedEquipmentPreset('boosterPresets', 'settings-booster-preset');
       break;
     case 'remove-cylinder-preset':
       removeSettingsPreset('cylinderPresets', Number(actionElement.dataset.settingsIndex));
