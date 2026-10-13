@@ -15,6 +15,9 @@ import { resetApplicationState } from './factory-reset.js';
 import { analyzePresetSource, mergeSelectedPresets, PRESET_IMPORT_DEFAULT_URLS } from './preset-import.js';
 import { loadSupplyBanks, saveSupplyBanks } from './bank-storage.js';
 import { loadTheme, saveTheme } from './theme.js';
+import { loadOnboardingState } from './onboarding.js';
+import { loadAnalytics } from './analytics.js';
+import { createOnboardingController } from './ui/onboarding.js';
 import { renderResults } from './ui/results.js';
 import { renderSettingsDialog, renderPresetOptions } from './ui/settings-dialog.js';
 import { renderEquipmentSummary } from './ui/equipment-summary.js';
@@ -66,6 +69,8 @@ const state = {
   settingsCategory: 'model',
   settingsImport: createPresetImportState(),
   theme: loadTheme(settingsStorage),
+  onboarding: null,
+  onboardingController: null,
   settingsLoadFailure,
   banksLoadFailure,
   bankSaveFailure: null,
@@ -100,6 +105,17 @@ function refreshPresetOptions(selectedCylinderName = null) {
 
 const byId = id => document.getElementById(id);
 const numberValue = id => parseNumericInput(byId(id).value);
+
+state.onboarding = loadOnboardingState(settingsStorage);
+state.onboardingController = createOnboardingController({
+  document,
+  storage: settingsStorage,
+  initialState: state.onboarding,
+  onNavigate: tab => setTab(tab ?? 'recipe'),
+  onConsentAccepted: () => loadAnalytics(document, window),
+  launchButton: byId('wizard-launch')
+});
+
 
 
 function displaySettingsErrors(messages) {
@@ -854,6 +870,9 @@ function handleClick(event) {
     case 'open-settings':
       openSettings();
       break;
+    case 'open-wizard':
+      state.onboardingController.open();
+      break;
     case 'toggle-theme':
       toggleTheme();
       break;
@@ -927,6 +946,11 @@ function initialize() {
   updateWaitModeFields();
   observeTernaryCanvas(byId('ternary-canvas'), renderTernary);
   recalculate();
+  if (!state.onboarding.consentAccepted) {
+    state.onboardingController.open({ requireConsent: true });
+  } else if (!state.onboarding.wizardSeen) {
+    state.onboardingController.open();
+  }
 }
 
 

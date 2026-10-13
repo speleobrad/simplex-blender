@@ -37,6 +37,9 @@
           <span id="theme-toggle-label">Dark</span>
         </button>
         <span id="theme-save-status" class="sr-only" aria-live="polite"></span>
+        <button type="button" id="wizard-launch" data-action="open-wizard" aria-label="Show the guided tour" title="Show the guided tour" class="inline-flex items-center rounded-lg border border-ocean-600/70 bg-ocean-800 px-2.5 py-1.5 text-xs text-cyan-300 transition hover:bg-ocean-700">
+          <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
+        </button>
         <button type="button" data-action="open-settings" class="px-2.5 py-1.5 bg-ocean-800 hover:bg-ocean-700 text-slate-200 border border-ocean-600/70 rounded-lg text-xs transition font-medium" aria-haspopup="dialog" aria-controls="settings-dialog">
           Settings
         </button>
@@ -269,7 +272,7 @@
     <div class="lg:col-span-5 min-w-0 flex flex-col gap-6">
 
       <!-- Working Tank Card -->
-      <section class="bg-ocean-900/90 border border-ocean-800 rounded-2xl p-5 shadow-xl">
+      <section id="working-tank-section" class="bg-ocean-900/90 border border-ocean-800 rounded-2xl p-5 shadow-xl">
         <div class="flex items-center justify-between pb-3 mb-4 border-b border-ocean-800">
           <div class="flex items-center gap-2">
             <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse"></span>
@@ -385,7 +388,7 @@
       </section>
 
       <!-- Available Supply Banks Card -->
-      <section class="bg-ocean-900/90 border border-ocean-800 rounded-2xl p-5 shadow-xl flex flex-col flex-1">
+      <section id="supply-banks-section" class="bg-ocean-900/90 border border-ocean-800 rounded-2xl p-5 shadow-xl flex flex-col flex-1">
         <div class="flex items-center justify-between pb-3 mb-3 border-b border-ocean-800">
           <div class="flex items-center gap-2">
             <span class="w-2.5 h-2.5 rounded-full bg-indigo-400"></span>
@@ -430,7 +433,7 @@
         </section>
 
       </section>
-      <section class="bg-ocean-900/90 border border-ocean-800 rounded-2xl p-5 shadow-xl">
+      <section id="equipment-section" class="bg-ocean-900/90 border border-ocean-800 rounded-2xl p-5 shadow-xl">
         <div class="flex items-center gap-2 pb-3 mb-3 border-b border-ocean-800">
           <span class="w-2.5 h-2.5 rounded-full bg-cyan-400"></span>
           <h2 class="text-sm font-bold uppercase tracking-wider text-slate-200">Equipment</h2>
@@ -497,7 +500,7 @@
           </div>
 
           <!-- Step by Step Protocol List -->
-          <div>
+          <div id="mixing-steps-section">
             <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300 mb-3">Mixing steps</h3>
             <div id="steps-container" class="space-y-2.5">
               <!-- Rendered via JS -->
