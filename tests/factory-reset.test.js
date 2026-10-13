@@ -4,6 +4,7 @@ import { DEFAULT_SETTINGS } from '../js/settings.js';
 import { DEFAULT_BANKS } from '../js/bank-storage.js';
 import { DEFAULT_THEME } from '../js/theme.js';
 import { resetApplicationData, resetApplicationState } from '../js/factory-reset.js';
+import { DEFAULT_ONBOARDING_STATE } from '../js/onboarding.js';
 
 function memoryStorage(initialEntries = []) {
   const values = new Map(initialEntries);
@@ -38,7 +39,8 @@ test('factory reset honors cancellation and replaces live state after confirmati
   const state = {
     settings: { custom: true },
     banks: [{ custom: true }],
-    theme: 'dark'
+    theme: 'dark',
+    onboarding: { consentAccepted: true, wizardSeen: true }
   };
   const beforeCancel = structuredClone(state);
 
@@ -50,6 +52,8 @@ test('factory reset honors cancellation and replaces live state after confirmati
   assert.deepEqual(state.settings, DEFAULT_SETTINGS);
   assert.deepEqual(state.banks, DEFAULT_BANKS);
   assert.equal(state.theme, DEFAULT_THEME);
+  assert.deepEqual(state.onboarding, DEFAULT_ONBOARDING_STATE);
+  assert.notStrictEqual(state.onboarding, DEFAULT_ONBOARDING_STATE);
   assert.notStrictEqual(state.settings, DEFAULT_SETTINGS);
   assert.notStrictEqual(state.banks, DEFAULT_BANKS);
   assert.deepEqual(storage.entries(), []);

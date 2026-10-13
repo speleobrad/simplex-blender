@@ -155,8 +155,10 @@ export function createOnboardingController({
   function handleKeydown(event) {
     if (mode === 'closed') return;
     if (event.key === 'Escape') {
-      event.preventDefault();
-      close();
+      if (mode === 'wizard') {
+        event.preventDefault();
+        close();
+      }
       return;
     }
     if (event.key !== 'Tab') return;
@@ -266,18 +268,18 @@ export function createOnboardingController({
     }
     state = nextState;
     consentError = '';
-    onConsentAccepted();
+    onConsentAccepted(nextState);
     stepIndex = 0;
     mode = 'wizard';
     renderWizard();
   }
 
-  function open({ requireConsent = false } = {}) {
+  function open() {
     if (destroyed) return;
     previousFocus = document.activeElement;
     ensureRoot();
     stepIndex = 0;
-    if (requireConsent && !state.consentAccepted) {
+    if (!state.consentAccepted) {
       mode = 'consent';
       consentError = '';
       renderConsent();
@@ -302,6 +304,14 @@ export function createOnboardingController({
     restoreTarget();
     root?.remove();
     (launchButton ?? previousFocus)?.focus?.();
+  }
+
+  function reset(nextState) {
+    if (destroyed) return;
+    close({ markSeen: false });
+    state = { ...nextState };
+    stepIndex = 0;
+    consentError = '';
   }
 
   function next() {
@@ -335,5 +345,5 @@ export function createOnboardingController({
     (launchButton ?? previousFocus)?.focus?.();
   }
 
-  return Object.freeze({ open, close, next, back, render, destroy });
+  return Object.freeze({ open, close, next, back, render, reset, destroy });
 }

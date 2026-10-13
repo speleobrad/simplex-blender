@@ -166,13 +166,16 @@ function createFakeDocument() {
 
 function memoryStorage({ failWrites = false } = {}) {
   const values = new Map();
+  let writeCount = 0;
   return {
     getItem(key) { return values.get(key) ?? null; },
     setItem(key, value) {
+      writeCount += 1;
       if (failWrites) throw new Error('Storage unavailable');
       values.set(key, String(value));
     },
-    readState() { return JSON.parse(values.get(ONBOARDING_STORAGE_KEY)); }
+    readState() { return JSON.parse(values.get(ONBOARDING_STORAGE_KEY)); },
+    writeCount() { return writeCount; }
   };
 }
 
@@ -198,13 +201,17 @@ function createController(options = {}) {
   document.body.append(launchButton);
   const navigations = [];
   let consentAccepted = 0;
+  let acceptedState = null;
   const controller = createOnboardingController({
     document,
     storage,
     initialState: options.initialState ?? { consentAccepted: true, wizardSeen: false },
     launchButton,
     onNavigate: tab => navigations.push(tab),
-    onConsentAccepted: () => { consentAccepted += 1; }
+    onConsentAccepted: nextState => {
+      consentAccepted += 1;
+      acceptedState = nextState;
+    }
   });
   return {
     controller,
@@ -213,6 +220,7 @@ function createController(options = {}) {
     storage,
     launchButton,
     navigations,
+    get acceptedState() { return acceptedState; },
     get consentAccepted() { return consentAccepted; }
   };
 }
@@ -222,6 +230,32 @@ function dialog(document) {
   assert.ok(root, 'expected onboarding dialog');
   return root;
 }
+
+test('public opening keeps unaccepted users in consent mode without a target spotlight', () => {
+  const fixture = createController({ initialState: { consentAccepted: false, wizardSeen: false } });
+
+  fixture.controller.open();
+
+  const root = dialog(fixture.document);
+  assert.equal(root.getAttribute('aria-modal'), 'true');
+  for (const detail of ['settings', 'supply banks', 'theme', 'onboarding state', 'this browser']) {
+    assert.equal(root.textContent.includes(detail), true, `expected disclosure to name ${detail}`);
+  }
+  assert.equal(findElement(root, element => element.getAttribute('data-onboarding-highlight') === 'true'), null);
+  assert.equal(findElement(root, element => element.tagName === 'button' && element.textContent === 'Skip'), null);
+});
+
+test('Escape keeps unaccepted consent open without persisting a dismissal or enabling analytics', () => {
+  const fixture = createController({ initialState: { consentAccepted: false, wizardSeen: false } });
+  fixture.controller.open({ requireConsent: true });
+
+  fixture.window.dispatchEvent({ type: 'keydown', key: 'Escape' });
+
+  const root = dialog(fixture.document);
+  assert.equal(root.textContent.includes('Analytics consent'), true);
+  assert.equal(fixture.storage.writeCount(), 0);
+  assert.equal(fixture.consentAccepted, 0);
+});
 
 test('consent mode presents an accessible browser-storage disclosure without a target spotlight', () => {
   const fixture = createController({ initialState: { consentAccepted: false, wizardSeen: false } });
@@ -246,6 +280,7 @@ test('consent action persists acceptance, loads analytics callback, and opens We
   assert.deepEqual(fixture.storage.readState(), { consentAccepted: true, wizardSeen: false });
   assert.equal(fixture.consentAccepted, 1);
   assert.equal(dialog(fixture.document).textContent.includes('Welcome to Simplex Blender'), true);
+  assert.deepEqual(fixture.acceptedState, { consentAccepted: true, wizardSeen: false });
 });
 
 test('failed consent persistence remains visible and does not enable analytics', () => {
@@ -320,6 +355,19 @@ test('keyboard containment cycles wizard controls and Escape dismisses the tour'
   assert.deepEqual(fixture.storage.readState(), { consentAccepted: true, wizardSeen: true });
 });
 
+test('reset closes the tour without persisting it and restores the consent gate', () => {
+  const fixture = createController({ initialState: { consentAccepted: true, wizardSeen: true } });
+  fixture.controller.open();
+
+  fixture.controller.reset({ consentAccepted: false, wizardSeen: false });
+  assert.equal(findElement(fixture.document.body, element => element.getAttribute('role') === 'dialog'), null);
+  assert.equal(fixture.storage.writeCount(), 0);
+
+  fixture.controller.open();
+  const root = dialog(fixture.document);
+  assert.equal(root.textContent.includes('Analytics consent'), true);
+  assert.equal(findElement(root, element => element.tagName === 'button' && element.textContent === 'Skip'), null);
+});
 test('destroy removes the overlay and registered window listeners', () => {
   const fixture = createController();
   fixture.controller.open();

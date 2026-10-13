@@ -115,7 +115,12 @@ state.onboardingController = createOnboardingController({
   storage: settingsStorage,
   initialState: state.onboarding,
   onNavigate: tab => setTab(tab ?? 'recipe'),
-  onConsentAccepted: () => loadAnalytics(document, window),
+  onConsentAccepted: onboarding => {
+    state.onboarding = onboarding;
+    state.onboardingLoadFailure = null;
+    updateStorageWarning();
+    loadAnalytics(document, window);
+  },
   launchButton: byId('wizard-launch')
 });
 
@@ -392,11 +397,13 @@ function resetFactorySettings() {
   if (!didReset) return;
 
   state.settingsSession += 1;
+  state.onboardingController.reset(state.onboarding);
   state.settingsDraft = copySettings(state.settings);
   state.settingsLoadFailure = null;
   state.banksLoadFailure = null;
   state.bankSaveFailure = null;
   state.bankInputFailure = null;
+  state.onboardingLoadFailure = null;
   state.settingsImport = {
     ...createPresetImportState(),
     status: 'Factory settings restored.',
@@ -409,6 +416,7 @@ function resetFactorySettings() {
   renderSettingsDraft();
   setSettingsCategory('preset-management');
   recalculate();
+  state.onboardingController.open();
 }
 
 
