@@ -75,16 +75,24 @@ function isOnboardingState(value) {
     && typeof value.wizardSeen === 'boolean';
 }
 
-export function loadOnboardingState(storage) {
-  const serialized = storage.getItem(ONBOARDING_STORAGE_KEY);
+export function loadOnboardingState(storage, onFallback = () => {}) {
+  let serialized;
+  try {
+    serialized = storage.getItem(ONBOARDING_STORAGE_KEY);
+  } catch (error) {
+    onFallback(error);
+    return { ...DEFAULT_ONBOARDING_STATE };
+  }
   if (serialized === null) return { ...DEFAULT_ONBOARDING_STATE };
 
   try {
     const state = JSON.parse(serialized);
-    return isOnboardingState(state) ? state : { ...DEFAULT_ONBOARDING_STATE };
-  } catch {
-    return { ...DEFAULT_ONBOARDING_STATE };
+    if (isOnboardingState(state)) return { ...state };
+    onFallback(new RangeError('Onboarding state requires boolean consentAccepted and wizardSeen fields.'));
+  } catch (error) {
+    onFallback(error);
   }
+  return { ...DEFAULT_ONBOARDING_STATE };
 }
 
 export function saveOnboardingState(state, storage) {

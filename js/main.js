@@ -71,6 +71,7 @@ const state = {
   theme: loadTheme(settingsStorage),
   onboarding: null,
   onboardingController: null,
+  onboardingLoadFailure: null,
   settingsLoadFailure,
   banksLoadFailure,
   bankSaveFailure: null,
@@ -106,7 +107,9 @@ function refreshPresetOptions(selectedCylinderName = null) {
 const byId = id => document.getElementById(id);
 const numberValue = id => parseNumericInput(byId(id).value);
 
-state.onboarding = loadOnboardingState(settingsStorage);
+state.onboarding = loadOnboardingState(settingsStorage, error => {
+  state.onboardingLoadFailure = error;
+});
 state.onboardingController = createOnboardingController({
   document,
   storage: settingsStorage,
@@ -948,8 +951,9 @@ function initialize() {
   recalculate();
   if (!state.onboarding.consentAccepted) {
     state.onboardingController.open({ requireConsent: true });
-  } else if (!state.onboarding.wizardSeen) {
-    state.onboardingController.open();
+  } else {
+    loadAnalytics(document, window);
+    if (!state.onboarding.wizardSeen) state.onboardingController.open();
   }
 }
 

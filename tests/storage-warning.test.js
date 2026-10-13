@@ -30,3 +30,10 @@ test('reports supply-bank save failures in the visible storage warning', () => {
   assert.equal(messages.length, 1);
   assert.match(messages[0], /supply bank changes could not be saved/i);
 });
+
+test('reports onboarding-load failures in the visible storage warning', () => {
+  const messages = getStorageWarningMessages({ onboardingLoadFailure: new Error('storage unavailable') });
+
+  assert.equal(messages.length, 1);
+  assert.match(messages[0], /guided-tour preference could not be loaded/i);
+});

@@ -20,6 +20,21 @@ test('missing onboarding state starts without consent or a seen tour', () => {
   assert.deepEqual(loadOnboardingState(memoryStorage()), DEFAULT_ONBOARDING_STATE);
 });
 
+test('unreadable onboarding state falls back and reports the storage failure', () => {
+  const failure = new Error('storage unavailable');
+  let reportedFailure = null;
+  const storage = {
+    getItem() {
+      throw failure;
+    }
+  };
+
+  assert.deepEqual(loadOnboardingState(storage, error => {
+    reportedFailure = error;
+  }), DEFAULT_ONBOARDING_STATE);
+  assert.equal(reportedFailure, failure);
+});
+
 test('valid onboarding state survives save and load', () => {
   const storage = memoryStorage();
   const state = { consentAccepted: true, wizardSeen: true };
