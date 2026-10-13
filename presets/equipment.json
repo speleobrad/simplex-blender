@@ -1,0 +1,45 @@
+{
+  "compressorPresets": [
+    { "name": "Bauer Junior 2 200bar", "inletFlowLPerMin": 100, "maxPressureBar": 232, "temperatureModifierC": 5 },
+    { "name": "Bauer Oceanus 300bar", "inletFlowLPerMin": 140, "maxPressureBar": 300, "temperatureModifierC": 7 },
+    { "name": "Compact compressor 250bar", "inletFlowLPerMin": 120, "maxPressureBar": 250, "temperatureModifierC": 6 }
+  ],
+  "boosterPresets": [
+    {
+      "name": "MPS C1 Sport light",
+      "minimumSourcePressureBar": 5,
+      "cylinderVolumeCm3": 9,
+      "oxygenBoostBpm": 35,
+      "otherBoostBpm": 50,
+      "oxygenDecantRateBarPerMin": 5,
+      "otherDecantRateBarPerMin": 10,
+      "maxOutputPressureBar": 230,
+      "temperatureModifierC": 10,
+      "drainingRateBarPerMin": 15
+    },
+    {
+      "name": "Maximator ROB22",
+      "minimumSourcePressureBar": 50,
+      "cylinderVolumeCm3": 4.6,
+      "oxygenBoostBpm": 30,
+      "otherBoostBpm": 50,
+      "oxygenDecantRateBarPerMin": 5,
+      "otherDecantRateBarPerMin": 10,
+      "maxOutputPressureBar": 280,
+      "temperatureModifierC": 0,
+      "drainingRateBarPerMin": 15
+    },
+    {
+      "name": "Compact booster",
+      "minimumSourcePressureBar": 20,
+      "cylinderVolumeCm3": 8,
+      "oxygenBoostBpm": 40,
+      "otherBoostBpm": 55,
+      "oxygenDecantRateBarPerMin": 6,
+      "otherDecantRateBarPerMin": 12,
+      "maxOutputPressureBar": 240,
+      "temperatureModifierC": 4,
+      "drainingRateBarPerMin": 12
+    }
+  ]
+}

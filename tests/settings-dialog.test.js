@@ -80,7 +80,12 @@ function createFakeDocument() {
   };
   for (const id of [
     'settings-physics-model',
-    'settings-gas-presets',
+    'settings-preset-import-category',
+    'settings-preset-import-url',
+    'settings-preset-import-file',
+    'settings-preset-import-candidates',
+    'settings-preset-import-status',
+    'settings-preset-import-button',
     'settings-cylinder-presets',
     'settings-compressor-preset',
     'settings-booster-preset',
@@ -187,5 +192,81 @@ test('renders compact cylinder mass and pressure controls', () => {
   assert.match(massInput.className, /\bw-16\b/);
   assert.match(massHeader.className, /\bw-16\b/);
   assert.match(pressureHeader.className, /\bw-16\b/);
+});
+
+test('provides the preset management category and repository URLs', () => {
+  const markup = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+
+  assert.match(markup, /data-settings-category="preset-management"/);
+  assert.match(markup, /id="settings-pane-preset-management"/);
+  assert.match(markup, /https:\/\/raw\.githubusercontent\.com\/speleobrad\/simplex-blender\/master\/presets\/gas\.json/);
+  const { document, elements } = createFakeDocument();
+  globalThis.document = document;
+  for (const [category, filename] of [['gas', 'gas'], ['cylinders', 'cylinders'], ['equipment', 'equipment']]) {
+    renderSettingsDialog(settingsWithEquipmentPresets(), { category, candidates: [], selectedIds: [] });
+    assert.equal(elements.get('settings-preset-import-url').value, `https://raw.githubusercontent.com/speleobrad/simplex-blender/master/presets/${filename}.json`);
+  }
+});
+
+test('renders new import candidates checked and duplicate candidates disabled', () => {
+  const { document, elements } = createFakeDocument();
+  globalThis.document = document;
+
+  renderSettingsDialog(settingsWithEquipmentPresets(), {
+    category: 'gas',
+    url: 'https://example.test/gas.json',
+    candidates: [
+      {
+        id: 'gasPresets:0',
+        preset: { name: 'Imported mix', oxygenPercent: 19, heliumPercent: 41 },
+        status: 'new',
+        reason: 'Ready to import.',
+        selectable: true,
+        collection: 'gasPresets'
+      },
+      {
+        id: 'gasPresets:1',
+        preset: { name: 'Air', oxygenPercent: 21, heliumPercent: 0 },
+        status: 'duplicate',
+        reason: 'An entry with the same name already exists.',
+        selectable: false,
+        collection: 'gasPresets'
+      },
+      {
+        id: 'gasPresets:2',
+        preset: { name: 'Broken', oxygenPercent: 101, heliumPercent: 0 },
+        status: 'invalid',
+        reason: 'Gas preset is invalid.',
+        selectable: false,
+        collection: 'gasPresets'
+      }
+    ],
+    selectedIds: ['gasPresets:0'],
+    status: '',
+    loading: false
+  });
+
+  const candidates = elements.get('settings-preset-import-candidates');
+  const checkboxes = [];
+  findElement(candidates, element => {
+    if (element.tagName === 'input' && element.type === 'checkbox') checkboxes.push(element);
+    return false;
+  });
+  assert.equal(checkboxes.length, 3);
+  assert.equal(checkboxes[0].checked, true);
+  assert.equal(checkboxes[1].disabled, true);
+  assert.equal(checkboxes[1].checked, false);
+  assert.equal(checkboxes[2].disabled, true);
+  assert.equal(elements.get('settings-preset-import-button').disabled, false);
+
+  renderSettingsDialog(settingsWithEquipmentPresets(), {
+    category: 'gas',
+    url: 'https://example.test/gas.json',
+    candidates: [],
+    selectedIds: [],
+    status: '',
+    loading: false
+  });
+  assert.equal(elements.get('settings-preset-import-button').disabled, true);
 });
 

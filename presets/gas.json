@@ -1,0 +1,13 @@
+[
+  { "name": "Air", "oxygenPercent": 21, "heliumPercent": 0 },
+  { "name": "EAN 32", "oxygenPercent": 32, "heliumPercent": 0 },
+  { "name": "EAN 50", "oxygenPercent": 50, "heliumPercent": 0 },
+  { "name": "Oxygen", "oxygenPercent": 100, "heliumPercent": 0 },
+  { "name": "Helium", "oxygenPercent": 0, "heliumPercent": 100 },
+  { "name": "Tx 21/35", "oxygenPercent": 21, "heliumPercent": 35 },
+  { "name": "Tx 18/45", "oxygenPercent": 18, "heliumPercent": 45 },
+  { "name": "Tx 15/55", "oxygenPercent": 15, "heliumPercent": 55 },
+  { "name": "Tx 12/65", "oxygenPercent": 12, "heliumPercent": 65 },
+  { "name": "Tx 50/20", "oxygenPercent": 50, "heliumPercent": 20 },
+  { "name": "Tx 10/70", "oxygenPercent": 10, "heliumPercent": 70 }
+]

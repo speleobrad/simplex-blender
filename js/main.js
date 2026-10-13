@@ -11,6 +11,7 @@ import {
   selectEquipmentPreset,
   validateSettings
 } from './settings.js';
+import { analyzePresetSource, mergeSelectedPresets, PRESET_IMPORT_DEFAULT_URLS } from './preset-import.js';
 import { loadSupplyBanks, saveSupplyBanks } from './bank-storage.js';
 import { loadTheme, saveTheme } from './theme.js';
 import { renderResults } from './ui/results.js';
@@ -36,12 +37,31 @@ const initialBanks = loadSupplyBanks(settingsStorage, error => {
 });
 
 
+function createPresetImportState(category = 'gas') {
+  return {
+    category,
+    url: PRESET_IMPORT_DEFAULT_URLS[category],
+    urlTouched: false,
+    candidates: [],
+    selectedIds: [],
+    status: '',
+    error: false,
+    loading: false,
+    requestId: 0
+  };
+}
+
+function resetPresetImportState(category = 'gas') {
+  state.settingsImport = createPresetImportState(category);
+}
+
 const state = {
   banks: initialBanks,
   settings: initialSettings,
   settingsDraft: null,
   settingsSession: 0,
   settingsCategory: 'model',
+  settingsImport: createPresetImportState(),
   theme: loadTheme(settingsStorage),
   settingsLoadFailure,
   banksLoadFailure,
@@ -152,7 +172,7 @@ function toggleTheme() {
 
 
 function setSettingsCategory(category) {
-  const categories = ['model', 'gas-presets', 'cylinder-presets', 'equipment'];
+  const categories = ['model', 'gas-presets', 'cylinder-presets', 'equipment', 'preset-management'];
   if (!categories.includes(category)) return;
   state.settingsCategory = category;
   for (const candidate of categories) {
@@ -169,6 +189,7 @@ function setSettingsCategory(category) {
 function openSettings() {
   state.settingsSession += 1;
   state.settingsDraft = copySettings(state.settings);
+  resetPresetImportState();
   renderSettingsDraft();
   setSettingsCategory(state.settingsCategory);
   clearSettingsErrors();
@@ -183,7 +204,153 @@ function isActiveSettingsSession(session) {
 }
 
 function renderSettingsDraft() {
-  renderSettingsDialog(state.settingsDraft);
+  renderSettingsDialog(state.settingsDraft, state.settingsImport);
+}
+
+function presetImportStatus(message, error = false) {
+  state.settingsImport = { ...state.settingsImport, status: message, error, loading: false };
+  renderSettingsDraft();
+  setSettingsCategory('preset-management');
+}
+
+function previewPresetImport(source) {
+  const { category } = state.settingsImport;
+  const analysis = analyzePresetSource(category, source, state.settingsDraft ?? state.settings);
+  const newCandidates = analysis.candidates.filter(candidate => candidate.status === 'new');
+  const duplicateCount = analysis.candidates.filter(candidate => candidate.status === 'duplicate').length;
+  const invalidCount = analysis.candidates.filter(candidate => candidate.status === 'invalid').length;
+  const summary = [
+    `Loaded ${analysis.candidates.length} entries.`,
+    `${newCandidates.length} new`,
+    `${duplicateCount} already present`,
+    `${invalidCount} rejected`
+  ].join(' ');
+  state.settingsImport = {
+    ...state.settingsImport,
+    candidates: analysis.candidates,
+    selectedIds: newCandidates.map(candidate => candidate.id),
+    status: analysis.errors.length > 0 ? `${summary} ${analysis.errors.join(' ')}` : summary,
+    error: analysis.errors.length > 0,
+    loading: false
+  };
+  renderSettingsDraft();
+  setSettingsCategory('preset-management');
+}
+
+async function loadPresetText(readText, sourceLabel) {
+  const session = state.settingsSession;
+  const requestId = state.settingsImport.requestId + 1;
+  const isCurrentRequest = () => isActiveSettingsSession(session)
+    && state.settingsImport.requestId === requestId;
+  state.settingsImport = {
+    ...state.settingsImport,
+    requestId,
+    candidates: [],
+    selectedIds: [],
+    status: `Loading ${sourceLabel}…`,
+    error: false,
+    loading: true
+  };
+  renderSettingsDraft();
+  setSettingsCategory('preset-management');
+  try {
+    const text = await readText();
+    if (!isCurrentRequest()) return;
+    let source;
+    try {
+      source = JSON.parse(text);
+    } catch {
+      throw new SyntaxError('The selected preset file is not valid JSON.');
+    }
+    if (!isCurrentRequest()) return;
+    previewPresetImport(source);
+  } catch (error) {
+    if (!isCurrentRequest()) return;
+    presetImportStatus(`Could not load ${sourceLabel}: ${error.message}`, true);
+  }
+}
+
+function loadPresetFile(input) {
+  const file = input.files?.[0];
+  if (!file) return;
+  loadPresetText(() => file.text(), file.name);
+}
+
+function loadPresetUrl() {
+  const input = byId('settings-preset-import-url');
+  const url = input.value.trim();
+  state.settingsImport = { ...state.settingsImport, url };
+  if (!url) {
+    presetImportStatus('Enter an online JSON URL before loading.');
+    return;
+  }
+  loadPresetText(async () => {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`The server returned HTTP ${response.status}.`);
+    return response.text();
+  }, url);
+}
+
+function selectPresetImportCategory(select) {
+  const category = select.value;
+  if (!Object.hasOwn(PRESET_IMPORT_DEFAULT_URLS, category)) return;
+  const url = state.settingsImport.urlTouched
+    ? state.settingsImport.url
+    : PRESET_IMPORT_DEFAULT_URLS[category];
+  state.settingsImport = {
+    ...state.settingsImport,
+    category,
+    url,
+    candidates: [],
+    selectedIds: [],
+    status: '',
+    error: false,
+    loading: false,
+    requestId: state.settingsImport.requestId + 1
+  };
+  renderSettingsDraft();
+  setSettingsCategory('preset-management');
+}
+
+function togglePresetImport(checkbox) {
+  const candidate = state.settingsImport.candidates.find(item => item.id === checkbox.dataset.presetImportId);
+  if (!candidate?.selectable) return;
+  const selectedIds = new Set(state.settingsImport.selectedIds);
+  if (checkbox.checked) selectedIds.add(candidate.id);
+  else selectedIds.delete(candidate.id);
+  state.settingsImport = { ...state.settingsImport, selectedIds: [...selectedIds] };
+  renderSettingsDraft();
+  setSettingsCategory('preset-management');
+}
+
+function importSelectedPresets() {
+  const selectedIds = state.settingsImport.selectedIds;
+  if (selectedIds.length === 0) return;
+  const baseSettings = state.settingsDraft ?? state.settings;
+  let merged;
+  try {
+    merged = mergeSelectedPresets(baseSettings, state.settingsImport.candidates, selectedIds);
+    saveSettings(merged, settingsStorage);
+  } catch (error) {
+    presetImportStatus(`Presets were not imported: ${error.message}`, true);
+    return;
+  }
+  state.settings = copySettings(merged);
+  state.settingsDraft = copySettings(merged);
+  state.settingsLoadFailure = null;
+  state.settingsImport = {
+    ...state.settingsImport,
+    candidates: [],
+    selectedIds: [],
+    status: `Imported ${selectedIds.length} preset${selectedIds.length === 1 ? '' : 's'}.`,
+    error: false,
+    loading: false
+  };
+  updateStorageWarning();
+  refreshPresetOptions();
+  renderSettingsDraft();
+  setSettingsCategory('preset-management');
+  recalculate();
 }
 
 
@@ -561,6 +728,22 @@ function updateBankFromInput(input) {
 
 function handleInputOrChange(event) {
   const target = event.target;
+  if (event.type === 'input' && target.dataset.settingsPresetImportUrl !== undefined) {
+    state.settingsImport = { ...state.settingsImport, url: target.value, urlTouched: true };
+    return;
+  }
+  if (event.type === 'change' && target.dataset.action === 'select-preset-import-category') {
+    selectPresetImportCategory(target);
+    return;
+  }
+  if (event.type === 'change' && target.dataset.action === 'load-preset-file') {
+    loadPresetFile(target);
+    return;
+  }
+  if (event.type === 'change' && target.dataset.action === 'toggle-preset-import') {
+    togglePresetImport(target);
+    return;
+  }
   if ((event.type === 'input' || event.type === 'change') && target.dataset.settingsCollection) {
     updateSettingsDraft(target);
     return;
@@ -629,6 +812,12 @@ function handleClick(event) {
       break;
     case 'select-settings-category':
       setSettingsCategory(actionElement.dataset.settingsCategory);
+      break;
+    case 'load-preset-url':
+      loadPresetUrl();
+      break;
+    case 'import-selected-presets':
+      importSelectedPresets();
       break;
     case 'add-gas-preset':
       addGasPreset();

@@ -1,0 +1,5 @@
+[
+  { "name": "Faber 3L", "volumeL": 3, "material": "steel", "massKg": 4.4, "workingPressureBar": 232 },
+  { "name": "Catalina S80", "volumeL": 11.1, "material": "aluminum", "massKg": 14.3, "workingPressureBar": 207 },
+  { "name": "Faber 7L", "volumeL": 7, "material": "steel", "massKg": 8.8, "workingPressureBar": 232 }
+]

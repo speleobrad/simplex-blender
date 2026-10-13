@@ -1,3 +1,4 @@
+import { PRESET_IMPORT_DEFAULT_URLS } from '../preset-import.js';
 import { sortCylinderPresetEntries, sortGasPresetEntries } from '../settings.js';
 
 const CUSTOM_PRESET = 'custom';
@@ -226,7 +227,88 @@ function boosterPresetMatchesActiveFields(booster, preset) {
 }
 
 
-export function renderSettingsDialog(settings) {
+const PRESET_IMPORT_CATEGORIES = ['gas', 'cylinders', 'equipment'];
+
+function presetImportLabel(category, preset) {
+  if (category === 'gas') return `${preset.name} — ${preset.oxygenPercent}% O₂ / ${preset.heliumPercent}% He`;
+  if (category === 'cylinders') {
+    return `${preset.name} — ${preset.volumeL} L / ${preset.material} / ${preset.workingPressureBar} bar`;
+  }
+  const kind = preset.inletFlowLPerMin === undefined ? 'Booster' : 'Compressor';
+  return `${kind}: ${preset.name}`;
+}
+
+function candidateStatusLabel(candidate) {
+  if (candidate.status === 'duplicate') return 'Already exists';
+  if (candidate.status === 'invalid') return 'Rejected';
+  return 'New';
+}
+
+function renderPresetImportCandidates(importState) {
+  const container = document.getElementById('settings-preset-import-candidates');
+  if (!container) return;
+  const selectedIds = new Set(importState.selectedIds ?? []);
+  const candidates = importState.candidates ?? [];
+  const rows = candidates.map(candidate => {
+    const row = document.createElement('label');
+    const enabled = candidate.status === 'new' && candidate.selectable !== false;
+    row.className = enabled
+      ? 'flex items-start gap-2 rounded border border-ocean-800 px-2 py-1.5 text-xs'
+      : 'flex items-start gap-2 rounded border border-ocean-900 px-2 py-1.5 text-xs text-slate-500 opacity-60';
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.dataset.action = 'toggle-preset-import';
+    checkbox.dataset.presetImportId = candidate.id;
+    checkbox.checked = enabled && selectedIds.has(candidate.id);
+    checkbox.disabled = !enabled || Boolean(importState.loading);
+    checkbox.className = 'mt-0.5 accent-cyan-500';
+    checkbox.setAttribute('aria-label', `Import ${candidate.preset.name || 'unnamed preset'}`);
+    const details = document.createElement('span');
+    details.className = 'min-w-0 flex-1';
+    const title = document.createElement('span');
+    title.className = 'block break-words text-slate-200';
+    title.textContent = presetImportLabel(importState.category, candidate.preset);
+    const status = document.createElement('span');
+    status.className = 'mr-1 text-[10px] font-semibold uppercase tracking-wide';
+    status.textContent = candidateStatusLabel(candidate);
+    const reason = document.createElement('span');
+    reason.className = 'text-[10px] text-slate-500';
+    reason.textContent = ` — ${candidate.reason}`;
+    details.append(title, status, reason);
+    row.append(checkbox, details);
+    return row;
+  });
+  container.replaceChildren(...rows);
+}
+
+export function renderPresetImport(settings, importState = {}) {
+  const categorySelect = document.getElementById('settings-preset-import-category');
+  const urlInput = document.getElementById('settings-preset-import-url');
+  const status = document.getElementById('settings-preset-import-status');
+  const importButton = document.getElementById('settings-preset-import-button');
+  if (!categorySelect || !urlInput || !status || !importButton) return;
+  const category = PRESET_IMPORT_CATEGORIES.includes(importState.category)
+    ? importState.category
+    : 'gas';
+  const state = { ...importState, category };
+  categorySelect.value = category;
+  urlInput.value = importState.url ?? PRESET_IMPORT_DEFAULT_URLS[category];
+  status.textContent = importState.status ?? '';
+  status.classList.toggle('hidden', !status.textContent);
+  status.classList.toggle('text-rose-300', Boolean(importState.error));
+  status.classList.toggle('text-slate-400', !importState.error);
+  renderPresetImportCandidates(state);
+  const selectedIds = new Set(importState.selectedIds ?? []);
+  importButton.disabled = Boolean(importState.loading)
+    || !(importState.candidates ?? []).some(candidate => (
+      candidate.status === 'new'
+      && candidate.selectable !== false
+      && selectedIds.has(candidate.id)
+    ));
+  importButton.textContent = importState.loading ? 'Loading…' : 'Import selected';
+}
+
+export function renderSettingsDialog(settings, importState) {
   renderGasRows(settings.gasPresets);
   renderCylinderRows(settings.cylinderPresets);
   renderEquipmentPresetSelector(
@@ -257,6 +339,7 @@ export function renderSettingsDialog(settings) {
     const input = document.getElementById(id);
     if (input) input.value = String(value);
   }
+  renderPresetImport(settings, importState);
 }
 
 function createOption(value, label) {
