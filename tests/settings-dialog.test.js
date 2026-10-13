@@ -163,8 +163,8 @@ test('renders equipment selectors and active values', () => {
 test('provides equipment preset clone action buttons', () => {
   const markup = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
-  assert.match(markup, /<button\b[^>]*data-action="add-compressor-preset"[^>]*>/);
-  assert.match(markup, /<button\b[^>]*data-action="add-booster-preset"[^>]*>/);
+  assert.match(markup, /<button\b[^>]*data-action="add-compressor-preset"[^>]*>New compressor<\/button>/);
+  assert.match(markup, /<button\b[^>]*data-action="add-booster-preset"[^>]*>New booster<\/button>/);
 });
 
 test('renders compact cylinder mass and pressure controls', () => {
