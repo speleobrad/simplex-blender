@@ -1,6 +1,7 @@
 [
   { "name": "Air", "oxygenPercent": 21, "heliumPercent": 0 },
   { "name": "EAN 32", "oxygenPercent": 32, "heliumPercent": 0 },
+  { "name": "EAN 36", "oxygenPercent": 36, "heliumPercent": 0 },
   { "name": "EAN 50", "oxygenPercent": 50, "heliumPercent": 0 },
   { "name": "Oxygen", "oxygenPercent": 100, "heliumPercent": 0 },
   { "name": "Helium", "oxygenPercent": 0, "heliumPercent": 100 },

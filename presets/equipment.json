@@ -1,8 +1,13 @@
 {
   "compressorPresets": [
-    { "name": "Bauer Junior 2 200bar", "inletFlowLPerMin": 100, "maxPressureBar": 232, "temperatureModifierC": 5 },
-    { "name": "Bauer Oceanus 300bar", "inletFlowLPerMin": 140, "maxPressureBar": 300, "temperatureModifierC": 7 },
-    { "name": "Compact compressor 250bar", "inletFlowLPerMin": 120, "maxPressureBar": 250, "temperatureModifierC": 6 }
+    { "name": "Bauer Junior II 330 bar", "inletFlowLPerMin": 100, "maxPressureBar": 330, "temperatureModifierC": 5 },
+    { "name": "Bauer Oceanus 330 bar", "inletFlowLPerMin": 140, "maxPressureBar": 330, "temperatureModifierC": 7 },
+    { "name": "Bauer Capitano 350 bar", "inletFlowLPerMin": 140, "maxPressureBar": 350, "temperatureModifierC": 7 },
+    { "name": "Bauer Mariner 320 bar", "inletFlowLPerMin": 320, "maxPressureBar": 330, "temperatureModifierC": 10 },
+    { "name": "Coltri Icon 100 LSE", "inletFlowLPerMin": 100, "maxPressureBar": 330, "temperatureModifierC": 5 },
+    { "name": "Coltri Mini Compact 100", "inletFlowLPerMin": 100, "maxPressureBar": 330, "temperatureModifierC": 5 },
+    { "name": "Coltri Predator 140", "inletFlowLPerMin": 140, "maxPressureBar": 330, "temperatureModifierC": 7 },
+    { "name": "Coltri MCH 16 330 bar", "inletFlowLPerMin": 315, "maxPressureBar": 330, "temperatureModifierC": 10 }
   ],
   "boosterPresets": [
     {
@@ -18,7 +23,43 @@
       "drainingRateBarPerMin": 15
     },
     {
-      "name": "Maximator ROB22",
+      "name": "Haskel AG-15",
+      "minimumSourcePressureBar": 3.5,
+      "cylinderVolumeCm3": 6.2,
+      "oxygenBoostBpm": 30,
+      "otherBoostBpm": 45,
+      "oxygenDecantRateBarPerMin": 5,
+      "otherDecantRateBarPerMin": 10,
+      "maxOutputPressureBar": 155,
+      "temperatureModifierC": 0,
+      "drainingRateBarPerMin": 15
+    },
+    {
+      "name": "Haskel AGT-15/75",
+      "minimumSourcePressureBar": 7,
+      "cylinderVolumeCm3": 101.6,
+      "oxygenBoostBpm": 50,
+      "otherBoostBpm": 70,
+      "oxygenDecantRateBarPerMin": 8,
+      "otherDecantRateBarPerMin": 16,
+      "maxOutputPressureBar": 345,
+      "temperatureModifierC": 0,
+      "drainingRateBarPerMin": 20
+    },
+    {
+      "name": "MPS C4X 310 bar",
+      "minimumSourcePressureBar": 20,
+      "cylinderVolumeCm3": 76,
+      "oxygenBoostBpm": 60,
+      "otherBoostBpm": 80,
+      "oxygenDecantRateBarPerMin": 8,
+      "otherDecantRateBarPerMin": 16,
+      "maxOutputPressureBar": 310,
+      "temperatureModifierC": 5,
+      "drainingRateBarPerMin": 20
+    },
+    {
+      "name": "Maximator ROB 22",
       "minimumSourcePressureBar": 50,
       "cylinderVolumeCm3": 4.6,
       "oxygenBoostBpm": 30,
@@ -30,16 +71,40 @@
       "drainingRateBarPerMin": 15
     },
     {
-      "name": "Compact booster",
-      "minimumSourcePressureBar": 20,
-      "cylinderVolumeCm3": 8,
-      "oxygenBoostBpm": 40,
-      "otherBoostBpm": 55,
+      "name": "Maximator ROB 32D",
+      "minimumSourcePressureBar": 50,
+      "cylinderVolumeCm3": 11.6,
+      "oxygenBoostBpm": 45,
+      "otherBoostBpm": 70,
       "oxygenDecantRateBarPerMin": 6,
       "otherDecantRateBarPerMin": 12,
-      "maxOutputPressureBar": 240,
-      "temperatureModifierC": 4,
-      "drainingRateBarPerMin": 12
+      "maxOutputPressureBar": 300,
+      "temperatureModifierC": 0,
+      "drainingRateBarPerMin": 15
+    },
+    {
+      "name": "Maximator ROB 8-37",
+      "minimumSourcePressureBar": 10,
+      "cylinderVolumeCm3": 21.6,
+      "oxygenBoostBpm": 25,
+      "otherBoostBpm": 40,
+      "oxygenDecantRateBarPerMin": 5,
+      "otherDecantRateBarPerMin": 10,
+      "maxOutputPressureBar": 300,
+      "temperatureModifierC": 0,
+      "drainingRateBarPerMin": 15
+    },
+    {
+      "name": "Maximator SDLE 20",
+      "minimumSourcePressureBar": 10,
+      "cylinderVolumeCm3": 60,
+      "oxygenBoostBpm": 60,
+      "otherBoostBpm": 90,
+      "oxygenDecantRateBarPerMin": 8,
+      "otherDecantRateBarPerMin": 16,
+      "maxOutputPressureBar": 200,
+      "temperatureModifierC": 0,
+      "drainingRateBarPerMin": 20
     }
   ]
 }
