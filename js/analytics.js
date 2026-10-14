@@ -16,8 +16,8 @@ export function loadAnalytics(document, window) {
   }
 
   window.dataLayer = window.dataLayer || [];
-  window.gtag = window.gtag || function gtag(...args) {
-    window.dataLayer.push(args);
+  window.gtag = window.gtag || function gtag() {
+    window.dataLayer.push(arguments);
   };
   window.gtag('js', new Date());
   window.gtag('config', ANALYTICS_MEASUREMENT_ID);

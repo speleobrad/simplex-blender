@@ -20,3 +20,20 @@ test('loads Analytics only when explicitly called and only once', () => {
   assert.equal(loadAnalytics(document, window), false);
   assert.equal(scripts.length, 1);
 });
+
+test('queues the initial tag commands as argument objects', () => {
+  const scripts = [];
+  const document = {
+    head: { append(node) { scripts.push(node); } },
+    createElement() { return { async: false, src: '', setAttribute() {} }; },
+    querySelector(selector) { return selector === 'script[data-simplex-analytics]' ? scripts[0] ?? null : null; }
+  };
+  const window = { dataLayer: [] };
+
+  loadAnalytics(document, window);
+
+  assert.equal(typeof window.gtag, 'function');
+  assert.equal(Array.isArray(window.dataLayer[0]), false);
+  assert.deepEqual([...window.dataLayer[0]], ['js', window.dataLayer[0][1]]);
+  assert.deepEqual([...window.dataLayer[1]], ['config', 'G-KDQH39FXV3']);
+});
