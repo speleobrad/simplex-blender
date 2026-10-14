@@ -98,11 +98,74 @@ function renderThermalDetails(thermal, isFinalStep) {
   return details;
 }
 
-function renderProtocol(protocolSteps, alertMessage = null) {
+function renderInterimMeasurementControl(stepIndex, nextStep, measurement, workingPressureBar) {
+  const details = document.createElement('details');
+  details.className = 'rounded-lg border border-ocean-800/80 bg-ocean-950/50 px-3 py-2';
+
+  const summary = document.createElement('summary');
+  summary.className = 'cursor-pointer text-[11px] font-semibold text-cyan-300';
+  summary.textContent = measurement
+    ? `Measured start for step ${stepIndex}: ${measurement.pressureBar.toFixed(1)} bar · ${measurement.temperatureC.toFixed(1)} °C`
+    : `Record actual readings before “${nextStep.title}”`;
+
+  const form = document.createElement('form');
+  form.className = 'mt-2 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end';
+
+  for (const field of [
+    { name: 'pressureBar', label: 'Pressure', unit: 'bar', min: '0', max: String(workingPressureBar ?? 350) },
+    { name: 'temperatureC', label: 'Temperature', unit: '°C', min: '-20', max: '100' }
+  ]) {
+    const label = document.createElement('label');
+    label.className = 'text-[10px] text-slate-400';
+    label.textContent = field.label;
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.name = field.name;
+    input.required = true;
+    input.min = field.min;
+    input.max = field.max ?? '';
+    input.step = '0.1';
+    input.value = measurement ? String(measurement[field.name]) : '';
+    input.className = 'mt-1 w-full rounded border border-ocean-700 bg-ocean-900 px-2 py-1 font-mono text-xs text-slate-100';
+    input.setAttribute('aria-label', `${field.label} before “${nextStep.title}”`);
+    label.append(input, (() => {
+      const unit = document.createElement('span');
+      unit.className = 'ml-1';
+      unit.textContent = field.unit;
+      return unit;
+    })());
+    form.append(label);
+  }
+
+  const actions = document.createElement('div');
+  actions.className = 'flex gap-1';
+  const apply = document.createElement('button');
+  apply.type = 'button';
+  apply.className = 'rounded border border-cyan-500/50 px-2 py-1 text-[10px] font-semibold text-cyan-300 hover:bg-cyan-500/10';
+  apply.textContent = measurement ? 'Update' : 'Apply';
+  apply.setAttribute('data-action', 'apply-interim-measurement');
+  apply.setAttribute('data-measurement-index', String(stepIndex));
+  actions.append(apply);
+  if (measurement) {
+    const clear = document.createElement('button');
+    clear.type = 'button';
+    clear.className = 'rounded border border-slate-700 px-2 py-1 text-[10px] text-slate-400 hover:bg-ocean-800';
+    clear.textContent = 'Clear';
+    clear.setAttribute('data-action', 'clear-interim-measurement');
+    clear.setAttribute('data-measurement-index', String(stepIndex));
+    actions.append(clear);
+  }
+  form.append(actions);
+  details.append(summary, form);
+  return details;
+}
+
+function renderProtocol(protocolSteps, alertMessage = null, calculation = null) {
   const container = document.getElementById('steps-container');
   if (!container) return;
 
-  const cards = protocolSteps.map((step, index) => {
+  const cards = [];
+  protocolSteps.forEach((step, index) => {
     const card = document.createElement('div');
     card.className = 'p-3 bg-ocean-950/70 border border-ocean-800 rounded-xl flex items-start justify-between gap-3';
 
@@ -154,7 +217,17 @@ function renderProtocol(protocolSteps, alertMessage = null) {
       result.append(sourceEnd);
     }
     card.append(details, result);
-    return card;
+    cards.push(card);
+
+    if (index < protocolSteps.length - 1 && step.type !== 'keep') {
+      const measurement = calculation?.thermal?.interimMeasurements?.[index + 1] ?? null;
+      cards.push(renderInterimMeasurementControl(
+        index + 1,
+        protocolSteps[index + 1],
+        measurement,
+        calculation?.cylinder?.workingPressureBar
+      ));
+    }
   });
   container.replaceChildren(...(alertMessage ? [alertMessage, ...cards] : cards));
 }
@@ -223,7 +296,8 @@ export function renderResults(result, calculation = null) {
           maximum.blend.finalHeliumPercent,
           result.diagnostics,
           thermal
-        )
+        ),
+        calculation
       );
     } else {
       for (const id of [
@@ -251,5 +325,5 @@ export function renderResults(result, calculation = null) {
     workingPressureBar: calculation?.cylinder?.workingPressureBar,
     useVdw: calculation?.physics?.model === 'vdw'
   });
-  renderProtocol(result.protocolSteps);
+  renderProtocol(result.protocolSteps, null, calculation);
 }

@@ -69,6 +69,33 @@ export function validateCalculatorInputs(cylinder, physics, thermal) {
     && thermal.targetTemperatureC <= thermal.ambientTemperatureC) {
     errors.push('Thermal target temperature must be above ambient temperature.');
   }
+  if (thermal.interimMeasurements !== undefined) {
+    if (!Array.isArray(thermal.interimMeasurements)) {
+      errors.push('Measured interim readings must be an array.');
+    } else {
+      for (const measurement of thermal.interimMeasurements) {
+        if (measurement === null || measurement === undefined) continue;
+        if (!measurement || typeof measurement !== 'object') {
+          errors.push('Measured interim readings must contain pressure and temperature values.');
+          continue;
+        }
+        if (!Number.isFinite(measurement.pressureBar)
+          || measurement.pressureBar < 0
+          || measurement.pressureBar > 350) {
+          errors.push('Measured pressure must be between 0 and 350 bar.');
+        } else if (Number.isFinite(cylinder?.workingPressureBar)
+          && measurement.pressureBar > cylinder.workingPressureBar) {
+          errors.push(`Measured pressure cannot exceed the selected cylinder working pressure of ${cylinder.workingPressureBar} bar.`);
+        }
+        if (!Number.isFinite(measurement.temperatureC)
+          || measurement.temperatureC < -20
+          || measurement.temperatureC > 100) {
+          errors.push('Measured temperature must be between -20 and 100°C.');
+        }
+      }
+    }
+  }
+
   return errors;
 }
 export function validateSupplyBankInput(bank) {

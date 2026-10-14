@@ -7,73 +7,175 @@ function finite(value) {
   return Number.isFinite(value);
 }
 
-function point(step, phase, title, label, recipeAction, recipeGas, pressureBar, temperatureC, elapsedMinutes) {
-  return { step, phase, title, label, recipeAction, recipeGas, pressureBar, temperatureC, elapsedMinutes };
+function point(step, phase, title, label, recipeAction, recipeGas, pressureBar, temperatureC, elapsedMinutes, timeLabel = `${elapsedMinutes.toFixed(1)} min`) {
+  return { step, phase, title, label, recipeAction, recipeGas, pressureBar, temperatureC, elapsedMinutes, timeLabel };
 }
 
 function phaseLabel(phase) {
   if (phase === 'transfer-end') return 'transfer end';
   if (phase === 'settled') return 'ambient settled';
+  if (phase === 'measured-start') return 'measured start';
   return 'step start';
+}
+
+export function thermalCurveAttributes(color, style = 'estimated') {
+  const attributes = {
+    fill: 'none',
+    stroke: color,
+    'stroke-width': 2.5,
+    'stroke-linecap': 'round',
+    'stroke-linejoin': 'round'
+  };
+  if (style === 'estimated') attributes['stroke-dasharray'] = '2 4';
+  return attributes;
+}
+
+export function thermalPointMarkerAttributes(pointValue, color) {
+  const measured = pointValue.phase === 'measured-start';
+  return {
+    r: measured ? 5 : 4,
+    fill: measured ? 'var(--chart-badge)' : color,
+    stroke: measured ? color : 'var(--chart-point-outline)',
+    'stroke-width': measured ? 2 : 1.5
+  };
+}
+
+export function thermalChartAriaLabel(title) {
+  return `${title} during blending steps over time; solid curves show the current/observed path; dotted curves indicate estimated values`;
 }
 
 export function buildThermalSeries(protocolSteps, initial = {}) {
   if (!Array.isArray(protocolSteps) || protocolSteps.length === 0) {
-    return { points: [], bands: [], final: null };
+    return { points: [], samples: [], bands: [], segments: [], final: null };
   }
 
   let previousPressureBar = finite(initial.initialPressureBar) ? initial.initialPressureBar : null;
   let previousTemperatureC = finite(initial.initialTemperatureC) ? initial.initialTemperatureC : null;
   let elapsedMinutes = 0;
+  let previousWaitMinutes = 0;
   const points = [];
+  const samples = [];
   const bands = [];
+  const lineSegments = [];
 
   for (const step of protocolSteps) {
     if (step?.type === 'keep') continue;
     const thermal = step?.thermal;
-    if (!thermal) return { points: [], bands: [], final: null };
+    if (!thermal) return { points: [], samples: [], bands: [], segments: [], final: null };
 
     const durationMinutes = thermal.durationMinutes;
     const waitMinutes = thermal.waitMinutes;
     if (!finite(durationMinutes) || durationMinutes < 0 || !finite(waitMinutes) || waitMinutes < 0) {
-      return { points: [], bands: [], final: null };
+      return { points: [], samples: [], bands: [], segments: [], final: null };
     }
 
-    const startPressureBar = previousPressureBar
+    const measuredPressureBar = finite(thermal.measuredStartPressureBar)
+      ? thermal.measuredStartPressureBar
+      : null;
+    const measuredTemperatureC = finite(thermal.measuredStartTemperatureC)
+      ? thermal.measuredStartTemperatureC
+      : null;
+    const hasMeasuredStart = measuredPressureBar !== null || measuredTemperatureC !== null;
+    const startPressureBar = measuredPressureBar
+      ?? previousPressureBar
       ?? (finite(step.receiverStartPressureBar) ? step.receiverStartPressureBar : step.resultingPressureBar);
-    const startTemperatureC = previousTemperatureC ?? thermal.temperatureStartC;
+    const startTemperatureC = measuredTemperatureC ?? previousTemperatureC ?? thermal.temperatureStartC;
     const transferPressureBar = thermal.pressureAtTransferEndBar;
     const transferTemperatureC = thermal.temperatureAtTransferEndC;
     const settledPressureBar = thermal.pressureAfterWaitBar;
     const settledTemperatureC = thermal.temperatureAfterWaitC;
     if (![startPressureBar, startTemperatureC, transferPressureBar, transferTemperatureC, settledPressureBar, settledTemperatureC].every(finite)) {
-      return { points: [], bands: [], final: null };
+      return { points: [], samples: [], bands: [], segments: [], final: null };
     }
 
     const stepNumber = points.length / 3 + 1;
     const title = step.recipeLabel || step.title || `Step ${stepNumber}`;
-    const transferEndMinutes = elapsedMinutes + durationMinutes;
+    const stepStartMinutes = hasMeasuredStart
+      ? finite(thermal.measuredWaitMinutes)
+        ? elapsedMinutes - previousWaitMinutes + thermal.measuredWaitMinutes
+        : elapsedMinutes
+      : elapsedMinutes;
+    const transferEndMinutes = stepStartMinutes + durationMinutes;
     const settledMinutes = transferEndMinutes + waitMinutes;
+    const startPhase = hasMeasuredStart ? 'measured-start' : 'start';
+    const startTimeLabel = hasMeasuredStart
+      ? finite(thermal.measuredWaitMinutes)
+        ? `~${stepStartMinutes.toFixed(1)} min`
+        : '? min'
+      : undefined;
     points.push(
-      point(stepNumber, 'start', title, `${title} · ${phaseLabel('start')}`, step.recipeAction, step.recipeGas, startPressureBar, startTemperatureC, elapsedMinutes),
+      point(stepNumber, startPhase, title, `${title} · ${phaseLabel(startPhase)}`, step.recipeAction, step.recipeGas, startPressureBar, startTemperatureC, stepStartMinutes, startTimeLabel),
       point(stepNumber, 'transfer-end', title, `${title} · ${phaseLabel('transfer-end')}`, step.recipeAction, step.recipeGas, transferPressureBar, transferTemperatureC, transferEndMinutes),
       point(stepNumber, 'settled', title, `${title} · ${phaseLabel('settled')}`, step.recipeAction, step.recipeGas, settledPressureBar, settledTemperatureC, settledMinutes)
     );
+
+    const stepSamples = Array.isArray(thermal.samples) && thermal.samples.length > 0
+      ? thermal.samples
+      : [
+        { elapsedMinutes: 0, pressureBar: startPressureBar, temperatureC: startTemperatureC },
+        { elapsedMinutes: durationMinutes, pressureBar: transferPressureBar, temperatureC: transferTemperatureC },
+        { elapsedMinutes: durationMinutes + waitMinutes, pressureBar: settledPressureBar, temperatureC: settledTemperatureC }
+      ];
+    if (!stepSamples.every(sample => finite(sample?.elapsedMinutes)
+      && finite(sample?.pressureBar)
+      && finite(sample?.temperatureC))) {
+      return { points: [], samples: [], bands: [], segments: [], final: null };
+    }
+    const mappedSamples = stepSamples.map(sample => ({
+      step: stepNumber,
+      title,
+      elapsedMinutes: stepStartMinutes + sample.elapsedMinutes,
+      pressureBar: sample.pressureBar,
+      temperatureC: sample.temperatureC
+    }));
+    samples.push(...mappedSamples);
+
+    const stepSegment = {
+      style: 'observed',
+      transferEndMinute: transferEndMinutes,
+      samples: mappedSamples
+    };
+    if (hasMeasuredStart) {
+      const previousSegment = lineSegments.at(-1);
+      const transferEndIndex = previousSegment
+        ? previousSegment.samples.findIndex(sample =>
+          Math.abs(sample.elapsedMinutes - previousSegment.transferEndMinute) < 1e-9)
+        : -1;
+      if (transferEndIndex >= 0) {
+        const transferSamples = previousSegment.samples.slice(0, transferEndIndex + 1);
+        const estimatedSamples = previousSegment.samples.slice(transferEndIndex);
+        lineSegments.splice(
+          lineSegments.length - 1,
+          1,
+          { style: 'observed', samples: transferSamples },
+          { style: 'estimated', samples: estimatedSamples },
+          { style: 'observed', samples: [estimatedSamples[0], mappedSamples[0]] }
+        );
+      }
+    }
+    lineSegments.push(stepSegment);
+
     bands.push({
       step: stepNumber,
       title,
-      startMinute: elapsedMinutes,
+      startMinute: stepStartMinutes,
       endMinute: settledMinutes,
       labelRow: bands.length % 2
     });
     elapsedMinutes = settledMinutes;
+    previousWaitMinutes = waitMinutes;
     previousPressureBar = settledPressureBar;
     previousTemperatureC = settledTemperatureC;
   }
 
   return {
     points,
+    samples,
     bands,
+    segments: lineSegments.map(({ style, samples: segmentSamples }) => ({
+      style,
+      samples: segmentSamples
+    })),
     final: points.length > 0 ? points.at(-1) : null
   };
 }
@@ -95,6 +197,32 @@ function textNode(x, y, text, attributes = {}) {
 function formatValue(value) {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
+export function buildChartPath(samples, key, xForTime, yFor) {
+  return samples
+    .map((sample, index) => `${index === 0 ? 'M' : 'L'} ${xForTime(sample.elapsedMinutes)} ${yFor(sample[key])}`)
+    .join(' ');
+}
+export function interpolateThermalSample(samples, elapsedMinutes) {
+  if (!samples.length) return null;
+  if (elapsedMinutes <= samples[0].elapsedMinutes) return samples[0];
+  const last = samples.at(-1);
+  if (elapsedMinutes >= last.elapsedMinutes) return last;
+
+  for (let index = 1; index < samples.length; index++) {
+    const upper = samples[index];
+    if (elapsedMinutes > upper.elapsedMinutes) continue;
+    const lower = samples[index - 1];
+    const duration = upper.elapsedMinutes - lower.elapsedMinutes;
+    if (duration <= 0) return upper;
+    const fraction = (elapsedMinutes - lower.elapsedMinutes) / duration;
+    return {
+      elapsedMinutes,
+      temperatureC: lower.temperatureC + (upper.temperatureC - lower.temperatureC) * fraction,
+      pressureBar: lower.pressureBar + (upper.pressureBar - lower.pressureBar) * fraction
+    };
+  }
+  return last;
+}
 export function calculateChartDomain(values, unit) {
   const rawMin = Math.min(...values);
   const rawMax = Math.max(...values);
@@ -106,6 +234,11 @@ export function calculateChartDomain(values, unit) {
   };
 }
 
+export function calculateReferenceLineY(value, minimum, maximum, plotHeight) {
+  return CHART_MARGIN.top + (1 - (value - minimum) / (maximum - minimum)) * plotHeight;
+}
+
+
 
 const THERMAL_CONTAINER_IDS = [
   'thermal-temperature-chart',
@@ -114,6 +247,10 @@ const THERMAL_CONTAINER_IDS = [
 ];
 
 let thermalInteractionsBound = false;
+let thermalHoverSamples = [];
+let thermalHoverReadout = null;
+const THERMAL_HOVER_DEFAULT = 'Hover either graph to inspect time, temperature, and pressure.';
+
 
 function pointDescription(pointValue) {
   return `${pointValue.label || pointValue.title}, ${phaseLabel(pointValue.phase)}, ${pointValue.elapsedMinutes.toFixed(1)} minutes, ${pointValue.temperatureC.toFixed(1)} degrees Celsius, ${pointValue.pressureBar.toFixed(1)} bar`;
@@ -129,6 +266,48 @@ function clearActiveThermalPoint() {
   for (const element of document.querySelectorAll('.thermal-point-active')) {
     element.classList.remove('thermal-point-active');
   }
+}
+
+function clearThermalHover() {
+  if (thermalHoverReadout) thermalHoverReadout.textContent = THERMAL_HOVER_DEFAULT;
+  for (const svg of document.querySelectorAll('.thermal-chart-svg')) {
+    svg.querySelector('[data-thermal-hover-line]')?.setAttribute('display', 'none');
+    svg.querySelector('[data-thermal-hover-marker]')?.setAttribute('display', 'none');
+  }
+}
+
+function updateThermalHover(sample) {
+  if (!sample) return;
+  if (thermalHoverReadout) {
+    thermalHoverReadout.textContent = `Time: ${sample.elapsedMinutes.toFixed(1)} min · Temperature: ${sample.temperatureC.toFixed(1)} °C · Pressure: ${sample.pressureBar.toFixed(1)} bar`;
+  }
+  for (const svg of document.querySelectorAll('.thermal-chart-svg')) {
+    const maximumTime = Number(svg.dataset.thermalMaximumTime);
+    const minimum = Number(svg.dataset.thermalMinimum);
+    const maximum = Number(svg.dataset.thermalMaximum);
+    const key = svg.dataset.thermalKey;
+    const x = CHART_MARGIN.left + (sample.elapsedMinutes / maximumTime)
+      * (CHART_WIDTH - CHART_MARGIN.left - CHART_MARGIN.right);
+    const value = sample[key];
+    const y = CHART_MARGIN.top + (1 - (value - minimum) / (maximum - minimum))
+      * (CHART_HEIGHT - CHART_MARGIN.top - CHART_MARGIN.bottom);
+    const line = svg.querySelector('[data-thermal-hover-line]');
+    const marker = svg.querySelector('[data-thermal-hover-marker]');
+    line?.setAttribute('x1', x);
+    line?.setAttribute('x2', x);
+    line?.setAttribute('display', 'inline');
+    marker?.setAttribute('cx', x);
+    marker?.setAttribute('cy', y);
+    marker?.setAttribute('display', 'inline');
+  }
+}
+
+function thermalHoverMinutes(event, svg) {
+  const bounds = svg.getBoundingClientRect();
+  const x = (event.clientX - bounds.left) / bounds.width * CHART_WIDTH;
+  const plotWidth = CHART_WIDTH - CHART_MARGIN.left - CHART_MARGIN.right;
+  const fraction = Math.min(1, Math.max(0, (x - CHART_MARGIN.left) / plotWidth));
+  return fraction * Number(svg.dataset.thermalMaximumTime);
 }
 
 function eventThermalPoint(event) {
@@ -164,11 +343,36 @@ function bindThermalInteractions() {
     clearActiveThermalPoint();
   };
 
+  const handleChartMove = event => {
+    const target = event.target;
+    const svg = target && typeof target.closest === 'function'
+      ? target.closest('.thermal-chart-svg')
+      : null;
+    if (!svg || !thermalHoverSamples.length) {
+      clearThermalHover();
+      return;
+    }
+    const bounds = svg.getBoundingClientRect();
+    const viewY = (event.clientY - bounds.top) / bounds.height * CHART_HEIGHT;
+    const plotBottom = CHART_HEIGHT - CHART_MARGIN.bottom;
+    if (viewY < CHART_MARGIN.top || viewY > plotBottom) {
+      clearThermalHover();
+      return;
+    }
+    const minutes = thermalHoverMinutes(event, svg);
+    updateThermalHover(interpolateThermalSample(thermalHoverSamples, minutes));
+  };
+  const handleChartLeave = () => clearThermalHover();
+
   for (const container of containers) {
     container.addEventListener('mouseover', handleEnter);
     container.addEventListener('mouseout', handleLeave);
     container.addEventListener('focusin', handleEnter);
     container.addEventListener('focusout', handleLeave);
+    if (container.id !== 'thermal-chart-data') {
+      container.addEventListener('pointermove', handleChartMove);
+      container.addEventListener('pointerleave', handleChartLeave);
+    }
   }
   thermalInteractionsBound = true;
 }
@@ -182,7 +386,7 @@ function thermalPointAttributes(pointValue, index) {
   };
 }
 
-function renderChart(container, { title, unit, key, color, points, bands }) {
+function renderChart(container, { title, unit, key, color, points, samples, bands, segments = [], referenceLine = null }) {
   container.replaceChildren();
   if (!points.length) {
     const empty = document.createElement('p');
@@ -192,24 +396,34 @@ function renderChart(container, { title, unit, key, color, points, bands }) {
     return;
   }
 
-  const values = points.map(pointValue => pointValue[key]);
+  const values = (samples.length ? samples : points).map(pointValue => pointValue[key]);
   const { min, max } = calculateChartDomain(values, unit);
   const plotWidth = CHART_WIDTH - CHART_MARGIN.left - CHART_MARGIN.right;
   const plotHeight = CHART_HEIGHT - CHART_MARGIN.top - CHART_MARGIN.bottom;
   const maximumTime = Math.max(1, points.at(-1).elapsedMinutes);
   const xForTime = minutes => CHART_MARGIN.left + (minutes / maximumTime) * plotWidth;
-  const yFor = value => CHART_MARGIN.top + (1 - (value - min) / (max - min)) * plotHeight;
+  const yFor = value => calculateReferenceLineY(value, min, max, plotHeight);
 
   const svg = svgElement('svg', {
     viewBox: `0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`,
     role: 'img',
-    'aria-label': `${title} during blending steps over time`
+    'aria-label': thermalChartAriaLabel(title)
   });
   svg.classList.add('thermal-chart-svg', 'w-full', 'h-auto');
+  svg.dataset.thermalKey = key;
+  svg.dataset.thermalMinimum = String(min);
+  svg.dataset.thermalMaximum = String(max);
+  svg.dataset.thermalMaximumTime = String(maximumTime);
   svg.append(textNode(CHART_MARGIN.left, 18, `${title} (${unit})`, {
     fill: 'currentColor',
     'font-size': 13,
     'font-weight': 700
+  }));
+  svg.append(textNode(CHART_WIDTH - CHART_MARGIN.right, 18, 'solid = observed · dotted = estimated', {
+    fill: 'currentColor',
+    'font-size': 10,
+    'text-anchor': 'end',
+    opacity: 0.75
   }));
 
   for (const [index, band] of bands.entries()) {
@@ -284,6 +498,33 @@ function renderChart(container, { title, unit, key, color, points, bands }) {
     );
   }
 
+  if (referenceLine && finite(referenceLine.value)) {
+    const referenceY = yFor(referenceLine.value);
+    if (referenceY >= CHART_MARGIN.top && referenceY <= CHART_MARGIN.top + plotHeight) {
+      svg.append(
+        svgElement('line', {
+          x1: CHART_MARGIN.left,
+          y1: referenceY,
+          x2: CHART_WIDTH - CHART_MARGIN.right,
+          y2: referenceY,
+          stroke: 'var(--chart-label)',
+          'stroke-width': 1.5,
+          'stroke-dasharray': '6 4',
+          opacity: 0.85
+        }),
+        textNode(CHART_WIDTH - CHART_MARGIN.right - 4, referenceY - 4, referenceLine.label, {
+          fill: 'currentColor',
+          'font-size': 10,
+          'text-anchor': 'end'
+        })
+      );
+    }
+  }
+
+
+  const curveSegments = segments.length
+    ? segments
+    : [{ style: 'observed', samples: samples.length ? samples : points }];
   svg.append(
     svgElement('line', {
       x1: CHART_MARGIN.left,
@@ -293,13 +534,42 @@ function renderChart(container, { title, unit, key, color, points, bands }) {
       stroke: 'currentColor',
       'stroke-width': 1
     }),
-    svgElement('polyline', {
-      points: points.map(pointValue => `${xForTime(pointValue.elapsedMinutes)},${yFor(pointValue[key])}`).join(' '),
-      fill: 'none',
-      stroke: color,
-      'stroke-width': 2.5,
-      'stroke-linecap': 'round',
-      'stroke-linejoin': 'round'
+    ...curveSegments.map(segment => svgElement('path', {
+      d: buildChartPath(segment.samples, key, xForTime, yFor),
+      ...thermalCurveAttributes(color, segment.style)
+    })),
+    svgElement('rect', {
+      x: CHART_MARGIN.left,
+      y: CHART_MARGIN.top,
+      width: plotWidth,
+      height: plotHeight,
+      fill: 'transparent',
+      'pointer-events': 'all',
+      'data-thermal-hover-surface': 'true'
+    }),
+    svgElement('line', {
+      x1: CHART_MARGIN.left,
+      y1: CHART_MARGIN.top,
+      x2: CHART_MARGIN.left,
+      y2: CHART_MARGIN.top + plotHeight,
+      stroke: 'var(--chart-label)',
+      'stroke-width': 1,
+      'stroke-dasharray': '3 3',
+      opacity: 0.8,
+      'pointer-events': 'none',
+      display: 'none',
+      'data-thermal-hover-line': 'true'
+    }),
+    svgElement('circle', {
+      cx: CHART_MARGIN.left,
+      cy: CHART_MARGIN.top,
+      r: 5,
+      fill: color,
+      stroke: 'var(--chart-marker-outline)',
+      'stroke-width': 1.5,
+      'pointer-events': 'none',
+      display: 'none',
+      'data-thermal-hover-marker': 'true'
     })
   );
 
@@ -308,12 +578,9 @@ function renderChart(container, { title, unit, key, color, points, bands }) {
     const y = yFor(pointValue[key]);
     svg.append(svgElement('circle', {
       ...thermalPointAttributes(pointValue, index),
+      ...thermalPointMarkerAttributes(pointValue, color),
       cx: x,
-      cy: y,
-      r: 4,
-      fill: color,
-      stroke: 'var(--chart-point-outline)',
-      'stroke-width': 1.5
+      cy: y
     }));
   });
   svg.append(textNode(CHART_WIDTH - CHART_MARGIN.right, CHART_HEIGHT - 8, 'time (min)', {
@@ -327,7 +594,7 @@ function renderChart(container, { title, unit, key, color, points, bands }) {
 function appendThermalTableCells(row, pointValue, stepCell = null) {
   const timeCell = document.createElement('td');
   timeCell.className = 'thermal-time-cell px-2 py-1 text-right text-slate-300';
-  timeCell.textContent = `${pointValue.elapsedMinutes.toFixed(1)} min`;
+  timeCell.textContent = pointValue.timeLabel;
   row.append(timeCell);
   if (stepCell) row.append(stepCell);
 
@@ -422,13 +689,22 @@ export function renderThermalCharts(result, input = {}) {
     initialPressureBar: input.cylinder?.initialPressureBar ?? result?.gas?.initialPressureBar,
     initialTemperatureC: input.physics?.temperatureC
   });
+  thermalHoverSamples = series.samples;
+  thermalHoverReadout = document.getElementById('thermal-chart-hover-readout');
+  clearThermalHover();
+  const ambientTemperatureC = input.thermal?.ambientTemperatureC ?? input.physics?.temperatureC;
   renderChart(temperatureChart, {
     title: 'Temperature',
     unit: '°C',
     key: 'temperatureC',
     color: 'var(--chart-feasible)',
     points: series.points,
-    bands: series.bands
+    samples: series.samples,
+    bands: series.bands,
+    segments: series.segments,
+    referenceLine: finite(ambientTemperatureC)
+      ? { value: ambientTemperatureC, label: `Ambient ${ambientTemperatureC.toFixed(1)} °C` }
+      : null
   });
   renderChart(pressureChart, {
     title: 'Pressure',
@@ -436,7 +712,9 @@ export function renderThermalCharts(result, input = {}) {
     key: 'pressureBar',
     color: 'var(--chart-helium)',
     points: series.points,
-    bands: series.bands
+    samples: series.samples,
+    bands: series.bands,
+    segments: series.segments
   });
   renderDataTable(dataTable, series.points);
   if (status) {

@@ -394,6 +394,63 @@ test('sequential simulation carries post-wait pressure and temperature into the 
     simulation.protocolSteps[0].thermal.temperatureAfterWaitC
   );
 });
+test('measured interim readings replace the next step start state', () => {
+  const input = {
+    protocolSteps: [
+      {
+        type: 'boost',
+        operation: 'Boost',
+        resultingPressureBar: 150,
+        resultingMix: { oxygenPercent: 21, heliumPercent: 0 },
+        sourceStartPressureBar: 200,
+        sourceEndPressureBar: 150,
+        receiverStartPressureBar: 100,
+        receiverEndPressureBar: 150
+      },
+      {
+        type: 'decant',
+        operation: 'Decant',
+        resultingPressureBar: 180,
+        resultingMix: { oxygenPercent: 21, heliumPercent: 0 },
+        sourceStartPressureBar: 220,
+        sourceEndPressureBar: 190,
+        receiverStartPressureBar: 150,
+        receiverEndPressureBar: 180
+      }
+    ],
+    cylinder: { volumeL: 12 },
+    physics: { model: 'ideal', temperatureC: 20 },
+    thermal: {
+      tankMaterial: 'steel',
+      coolingMedium: 'air',
+      ambientTemperatureC: 20,
+      waitMode: 'minutes',
+      waitMinutes: 10,
+      targetTemperatureC: 25,
+      interimMeasurements: [null, { pressureBar: 149, temperatureC: 23 }]
+    },
+    settings: {
+      booster: {
+        cylinderVolumeCm3: 9,
+        oxygenBoostBpm: 50,
+        otherBoostBpm: 50,
+        oxygenDecantRateBarPerMin: 5,
+        otherDecantRateBarPerMin: 5,
+        compressorInletFlowLPerMin: 100
+      }
+    }
+  };
+
+  const simulation = simulateThermalProtocol(input);
+  const nextStep = simulation.protocolSteps[1].thermal;
+
+  assert.equal(nextStep.measuredStartPressureBar, 149);
+  assert.equal(nextStep.pressureStartBar, 149);
+  assert.equal(nextStep.temperatureStartC, 23);
+  assert.ok(nextStep.measuredWaitMinutes > 0);
+  assert.notEqual(nextStep.pressureAfterWaitBar, simulation.protocolSteps[0].thermal.pressureAfterWaitBar);
+});
+
 
 test('top-up uses compressor flow before stage type', () => {
   const simulation = simulateThermalProtocol({
@@ -658,6 +715,56 @@ test('zero-change stages have no transfer rate', () => {
   assert.equal(simulation.protocolSteps[0].thermal.rateBarPerMin, null);
   assert.equal(simulation.protocolSteps[0].thermal.durationMinutes, 0);
 });
+test('thermal simulation retains minute samples and exact fractional endpoints', () => {
+  const simulation = simulateThermalProtocol({
+    protocolSteps: [{
+      type: 'decant',
+      operation: 'Decant',
+      resultingPressureBar: 12,
+      resultingMix: { oxygenPercent: 21, heliumPercent: 0 },
+      receiverStartPressureBar: 0,
+      receiverEndPressureBar: 12,
+      sourceOxygenPercent: 21,
+      sourceHeliumPercent: 0
+    }, {
+      type: 'keep',
+      operation: 'Preserve',
+      resultingPressureBar: 12,
+      resultingMix: { oxygenPercent: 21, heliumPercent: 0 },
+      receiverStartPressureBar: 12,
+      receiverEndPressureBar: 12
+    }],
+    cylinder: { initialPressureBar: 0, volumeL: 12 },
+    physics: { model: 'ideal', temperatureC: 20 },
+    thermal: {
+      tankMaterial: 'steel',
+      coolingMedium: 'air',
+      ambientTemperatureC: 20,
+      waitMode: 'minutes',
+      waitMinutes: 1.6,
+      targetTemperatureC: 25
+    },
+    settings: {
+      booster: {
+        otherDecantRateBarPerMin: 5
+      }
+    }
+  });
+
+  const thermal = simulation.protocolSteps[0].thermal;
+  assert.deepEqual(
+    thermal.samples.map(sample => Number(sample.elapsedMinutes.toFixed(3))),
+    [0, 1, 2, 2.4, 3.4, 4]
+  );
+  assert.equal(thermal.samples[1].pressureBar, 5);
+  assert.equal(thermal.samples[2].pressureBar, 10);
+  assert.equal(thermal.samples[3].pressureBar, thermal.pressureAtTransferEndBar);
+  assert.equal(thermal.samples.at(-1).temperatureC, thermal.temperatureAfterWaitC);
+  assert.equal(thermal.samples.at(-1).pressureBar, thermal.pressureAfterWaitBar);
+  assert.ok(thermal.samples[4].temperatureC < thermal.samples[3].temperatureC);
+  assert.ok(thermal.samples[4].pressureBar < thermal.samples[3].pressureBar);
+});
+
 
 test('an empty protocol cools the initial tank state to ambient', () => {
   const simulation = simulateThermalProtocol({

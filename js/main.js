@@ -1,3 +1,4 @@
+import { calculatorInputSignature, signatureAfterClearingMeasurement } from './interim-measurements.js';
 import { optimizeBlend } from './optimizer.js';
 import { parseNumericInput, splitGasInput } from './gas-input.js';
 import { validateCalculatorInputs, validateSupplyBankInput } from './input-validation.js';
@@ -77,6 +78,8 @@ const state = {
   bankSaveFailure: null,
   bankInputFailure: null,
   activeTab: 'recipe',
+  interimMeasurements: [],
+  interimMeasurementSignature: null,
   lastInput: null,
   lastResult: null
 };
@@ -628,7 +631,8 @@ function readInput() {
       inletTemperatureC: numberValue('inlet-gas-temperature'),
       waitMode: byId('wait-mode').value,
       waitMinutes: numberValue('wait-minutes'),
-      targetTemperatureC: numberValue('wait-target-temperature')
+      targetTemperatureC: numberValue('wait-target-temperature'),
+      interimMeasurements: state.interimMeasurements
     },
     banks: state.banks
   };
@@ -676,7 +680,14 @@ function invalidInputResult(errors) {
 }
 
 function recalculate() {
-  const input = { ...readInput(), settings: state.settings };
+  let input = { ...readInput(), settings: state.settings };
+  const recipeSignature = calculatorInputSignature(input);
+  if (state.interimMeasurements.some(Boolean)
+    && state.interimMeasurementSignature !== recipeSignature) {
+    state.interimMeasurements = [];
+    state.interimMeasurementSignature = null;
+    input = { ...readInput(), settings: state.settings };
+  }
   const inputErrors = validateCalculatorInputs(input.cylinder, input.physics, input.thermal);
   const result = inputErrors.length > 0 ? invalidInputResult(inputErrors) : optimizeBlend(input);
   state.lastInput = input;
@@ -881,6 +892,40 @@ function handleInputOrChange(event) {
   if (target.matches('[data-bank-field]')) updateBankFromInput(target);
 }
 
+function applyInterimMeasurement(actionElement) {
+  const index = Number(actionElement.dataset.measurementIndex);
+  const form = actionElement.closest('form');
+  if (!Number.isInteger(index) || !form) return;
+  if (typeof form.reportValidity === 'function' && !form.reportValidity()) return;
+
+  const pressureInput = form.querySelector('[name="pressureBar"]');
+  const temperatureInput = form.querySelector('[name="temperatureC"]');
+  const interimMeasurements = state.interimMeasurements.slice();
+  interimMeasurements[index] = {
+    pressureBar: Number(pressureInput.value),
+    temperatureC: Number(temperatureInput.value)
+  };
+  state.interimMeasurementSignature = calculatorInputSignature({
+    ...readInput(),
+    settings: state.settings
+  });
+  state.interimMeasurements = interimMeasurements;
+  recalculate();
+}
+
+function clearInterimMeasurement(actionElement) {
+  const index = Number(actionElement.dataset.measurementIndex);
+  if (!Number.isInteger(index)) return;
+  const interimMeasurements = state.interimMeasurements.slice();
+  interimMeasurements[index] = null;
+  state.interimMeasurements = interimMeasurements;
+  state.interimMeasurementSignature = signatureAfterClearingMeasurement({
+    ...readInput(),
+    settings: state.settings
+  }, index);
+  recalculate();
+}
+
 function handleClick(event) {
   const actionElement = event.target.closest('[data-action]');
   if (!actionElement || actionElement.disabled) return;
@@ -942,6 +987,12 @@ function handleClick(event) {
       break;
     case 'save-settings':
       saveSettingsDraft();
+      break;
+    case 'apply-interim-measurement':
+      applyInterimMeasurement(actionElement);
+      break;
+    case 'clear-interim-measurement':
+      clearInterimMeasurement(actionElement);
       break;
     case 'select-tab':
       setTab(actionElement.dataset.tab);

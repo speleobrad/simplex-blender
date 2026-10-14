@@ -63,6 +63,31 @@ test('enforces the selected cylinder working pressure', () => {
     /working pressure/i
   );
 });
+test('validates measured interim readings against supported tank limits', () => {
+  const thermal = {
+    tankMaterial: 'steel',
+    coolingMedium: 'air',
+    ambientTemperatureC: 20,
+    waitMode: 'minutes',
+    waitMinutes: 10,
+    targetTemperatureC: 25,
+    interimMeasurements: [null, { pressureBar: 232.1, temperatureC: 25 }]
+  };
+  const ratedCylinder = { ...defaultCylinder, workingPressureBar: 232 };
+
+  assert.match(
+    validateCalculatorInputs(ratedCylinder, defaultPhysics, thermal).join(' '),
+    /measured.*working pressure/i
+  );
+  assert.match(
+    validateCalculatorInputs(ratedCylinder, defaultPhysics, {
+      ...thermal,
+      interimMeasurements: [null, { pressureBar: 60.2, temperatureC: -20.1 }]
+    }).join(' '),
+    /measured.*temperature/i
+  );
+});
+
 
 test('rejects a temperature wait target at or below ambient', () => {
   const errors = validateCalculatorInputs(

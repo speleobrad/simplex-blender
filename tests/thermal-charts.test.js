@@ -1,6 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildThermalSeries, calculateChartDomain } from '../js/ui/thermal-charts.js';
+import {
+  buildThermalSeries,
+  buildChartPath,
+  calculateChartDomain,
+  calculateReferenceLineY,
+  interpolateThermalSample,
+  thermalCurveAttributes,
+  thermalPointMarkerAttributes,
+  thermalChartAriaLabel
+} from '../js/ui/thermal-charts.js';
 
 const protocolSteps = [
   {
@@ -125,8 +134,14 @@ test('thermal series ends at the final ambient-settled state', () => {
 });
 
 test('empty or incomplete protocol produces no chart points', () => {
-  assert.deepEqual(buildThermalSeries([]), { points: [], bands: [], final: null });
-  assert.deepEqual(buildThermalSeries([{ title: 'Missing thermal state' }]), { points: [], bands: [], final: null });
+  assert.deepEqual(buildThermalSeries([]), { points: [], samples: [], bands: [], segments: [], final: null });
+  assert.deepEqual(buildThermalSeries([{ title: 'Missing thermal state' }]), {
+    points: [],
+    samples: [],
+    bands: [],
+    segments: [],
+    final: null
+  });
 });
 
 test('pressure chart domain never extends below zero bar', () => {
@@ -134,4 +149,188 @@ test('pressure chart domain never extends below zero bar', () => {
 
   assert.equal(domain.min, 0);
   assert.ok(domain.max > 210);
+});
+test('ambient reference line uses the temperature chart scale', () => {
+  assert.equal(calculateReferenceLineY(25, 15, 35, 200), 128);
+  assert.equal(calculateReferenceLineY(15, 15, 35, 200), 228);
+});
+test('estimated thermal curve uses dotted presentation', () => {
+  assert.deepEqual(thermalCurveAttributes('var(--chart-feasible)'), {
+    fill: 'none',
+    stroke: 'var(--chart-feasible)',
+    'stroke-width': 2.5,
+    'stroke-dasharray': '2 4',
+    'stroke-linecap': 'round',
+    'stroke-linejoin': 'round'
+  });
+});
+test('observed thermal curve uses solid presentation', () => {
+  assert.equal(thermalCurveAttributes('var(--chart-feasible)', 'observed')['stroke-dasharray'], undefined);
+});
+test('measured thermal points use a distinct marker presentation', () => {
+  const color = 'var(--chart-feasible)';
+
+  assert.deepEqual(thermalPointMarkerAttributes({ phase: 'measured-start' }, color), {
+    r: 5,
+    fill: 'var(--chart-badge)',
+    stroke: color,
+    'stroke-width': 2
+  });
+  assert.deepEqual(thermalPointMarkerAttributes({ phase: 'transfer-end' }, color), {
+    r: 4,
+    fill: color,
+    stroke: 'var(--chart-point-outline)',
+    'stroke-width': 1.5
+  });
+});
+
+test('thermal chart accessibility names estimated curves', () => {
+  assert.equal(
+    thermalChartAriaLabel('Temperature'),
+    'Temperature during blending steps over time; solid curves show the current/observed path; dotted curves indicate estimated values'
+  );
+});
+test('thermal series includes measured start readings with estimated elapsed time', () => {
+  const series = buildThermalSeries([
+    {
+      title: 'First transfer',
+      thermal: {
+        durationMinutes: 2,
+        waitMinutes: 10,
+        temperatureStartC: 20,
+        temperatureAtTransferEndC: 40,
+        pressureAtTransferEndBar: 100,
+        temperatureAfterWaitC: 30,
+        pressureAfterWaitBar: 98
+      }
+    },
+    {
+      title: 'Measured next transfer',
+      thermal: {
+        measuredStartPressureBar: 95,
+        measuredStartTemperatureC: 25,
+        measuredWaitMinutes: 15,
+        durationMinutes: 3,
+        waitMinutes: 10,
+        temperatureStartC: 25,
+        temperatureAtTransferEndC: 35,
+        pressureAtTransferEndBar: 120,
+        temperatureAfterWaitC: 28,
+        pressureAfterWaitBar: 118
+      }
+    }
+  ], { initialPressureBar: 80, initialTemperatureC: 20 });
+
+  const measuredStart = series.points[3];
+  assert.equal(measuredStart.phase, 'measured-start');
+  assert.equal(measuredStart.pressureBar, 95);
+  assert.equal(measuredStart.temperatureC, 25);
+  assert.equal(measuredStart.elapsedMinutes, 17);
+  assert.equal(measuredStart.timeLabel, '~17.0 min');
+  assert.deepEqual(series.segments.map(segment => segment.style), [
+    'observed', 'estimated', 'observed', 'observed'
+  ]);
+  assert.deepEqual(series.segments[1].samples.map(sample => sample.elapsedMinutes), [2, 12]);
+  assert.deepEqual(series.segments[2].samples.map(sample => sample.elapsedMinutes), [2, 17]);
+});
+
+test('thermal series marks measured start time as unknown when it cannot be estimated', () => {
+  const series = buildThermalSeries([
+    {
+      title: 'First transfer',
+      thermal: {
+        durationMinutes: 2,
+        waitMinutes: 10,
+        temperatureStartC: 20,
+        temperatureAtTransferEndC: 40,
+        pressureAtTransferEndBar: 100,
+        temperatureAfterWaitC: 30,
+        pressureAfterWaitBar: 98
+      }
+    },
+    {
+      title: 'Measured next transfer',
+      thermal: {
+        measuredStartPressureBar: 95,
+        measuredStartTemperatureC: 25,
+        measuredWaitMinutes: null,
+        durationMinutes: 3,
+        waitMinutes: 10,
+        temperatureStartC: 25,
+        temperatureAtTransferEndC: 35,
+        pressureAtTransferEndBar: 120,
+        temperatureAfterWaitC: 28,
+        pressureAfterWaitBar: 118
+      }
+    }
+  ], { initialPressureBar: 80, initialTemperatureC: 20 });
+
+  assert.equal(series.points[3].timeLabel, '? min');
+});
+
+
+test('thermal series maps minute samples while preserving highlighted key points', () => {
+  const sampledStep = {
+    ...protocolSteps[1],
+    thermal: {
+      ...protocolSteps[1].thermal,
+      samples: [
+        { elapsedMinutes: 0, temperatureC: 20, pressureBar: 60 },
+        { elapsedMinutes: 1, temperatureC: 28, pressureBar: 73.3 },
+        { elapsedMinutes: 2, temperatureC: 34, pressureBar: 86.7 },
+        { elapsedMinutes: 3, temperatureC: 35, pressureBar: 100 },
+        { elapsedMinutes: 8, temperatureC: 29, pressureBar: 94 },
+        { elapsedMinutes: 13, temperatureC: 25, pressureBar: 90 }
+      ]
+    }
+  };
+
+  const series = buildThermalSeries([protocolSteps[0], sampledStep], {
+    initialPressureBar: 80,
+    initialTemperatureC: 20
+  });
+
+  assert.equal(series.points.length, 6);
+  assert.deepEqual(series.points.slice(3).map(point => point.phase), [
+    'start', 'transfer-end', 'settled'
+  ]);
+  assert.deepEqual(
+    series.samples.slice(-6).map(sample => sample.elapsedMinutes),
+    [10, 11, 12, 13, 18, 23]
+  );
+  assert.deepEqual(
+    series.samples.slice(-6).map(sample => [sample.temperatureC, sample.pressureBar]),
+    [[20, 60], [28, 73.3], [34, 86.7], [35, 100], [29, 94], [25, 90]]
+  );
+});
+
+test('chart path follows sampled values while key points stay separate', () => {
+  const path = buildChartPath(
+    [
+      { elapsedMinutes: 0, temperatureC: 20 },
+      { elapsedMinutes: 1, temperatureC: 28 },
+      { elapsedMinutes: 2, temperatureC: 25 }
+    ],
+    'temperatureC',
+    minutes => minutes * 10,
+    value => value
+  );
+
+  assert.equal(path, 'M 0 20 L 10 28 L 20 25');
+});
+
+test('thermal hover interpolation returns both values at the hovered time', () => {
+  const samples = [
+    { elapsedMinutes: 0, temperatureC: 20, pressureBar: 40 },
+    { elapsedMinutes: 1, temperatureC: 30, pressureBar: 80 },
+    { elapsedMinutes: 2, temperatureC: 24, pressureBar: 70 }
+  ];
+
+  assert.deepEqual(interpolateThermalSample(samples, 1.5), {
+    elapsedMinutes: 1.5,
+    temperatureC: 27,
+    pressureBar: 75
+  });
+  assert.deepEqual(interpolateThermalSample(samples, -1), samples[0]);
+  assert.deepEqual(interpolateThermalSample(samples, 4), samples.at(-1));
 });
