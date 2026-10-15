@@ -950,6 +950,26 @@ test('compare target wait reaches the requested pressure and temperature', () =>
   assert.ok(Math.abs(wait.thermal.pressureAfterWaitBar - 98.4) < 0.2);
 });
 
+test('compare target wait permits an already reached target state', () => {
+  const result = simulateCompareProtocol({
+    protocolSteps: [{
+      type: 'wait', waitMode: 'target',
+      targetPressureBar: 100, targetTemperatureC: 30,
+      receiverStartPressureBar: 100, resultingPressureBar: 100,
+      resultingMix: { oxygenPercent: 21, heliumPercent: 0 }
+    }],
+    cylinder: { initialPressureBar: 100, volumeL: 12 },
+    physics: { model: 'ideal', temperatureC: 30 },
+    thermal: { tankMaterial: 'steel', coolingMedium: 'air', ambientTemperatureC: 20 },
+    settings: {}
+  });
+
+  const wait = result.protocolSteps[0].thermal;
+  assert.equal(wait.waitMinutes, 0);
+  assert.equal(wait.temperatureAfterWaitC, 30);
+  assert.ok(Math.abs(wait.pressureAfterWaitBar - 100) < 1e-9);
+});
+
 test('compare rejects an unreachable target-state wait', () => {
   assert.throws(() => simulateCompareProtocol({
     protocolSteps: [{

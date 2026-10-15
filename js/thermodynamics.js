@@ -835,7 +835,7 @@ export function simulateCompareProtocol({
       const targetPressureBar = step.targetPressureBar;
       if (!Number.isFinite(targetTemperatureC) || !Number.isFinite(targetPressureBar)
         || targetTemperatureC <= thermal.ambientTemperatureC
-        || temperatureAtTransferEndC <= targetTemperatureC) {
+        || temperatureAtTransferEndC < targetTemperatureC) {
         throw compareTargetWaitError('Compare target wait cannot reach the requested target temperature.', {
           targetPressureBar,
           targetTemperatureC,
