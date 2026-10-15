@@ -1,10 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {
+import * as compareRecipe from '../js/compare-recipe.js';
+
+const {
   buildCompareProtocol,
   createCompareRow,
   validateCompareRecipe
-} from '../js/compare-recipe.js';
+} = compareRecipe;
 
 const cylinder = {
   volumeL: 12,
@@ -14,92 +16,216 @@ const cylinder = {
   initialHeliumPercent: 0
 };
 const physics = { model: 'ideal', temperatureC: 20 };
-const gasPresets = [
-  { name: 'EAN32', oxygenPercent: 32, heliumPercent: 0 },
-  { name: 'Trimix 18/45', oxygenPercent: 18, heliumPercent: 45 }
+const settings = {
+  booster: {
+    minimumSourcePressureBar: 5,
+    maxBoosterOutputPressureBar: 300,
+    oxygenDecantRateBarPerMin: 5,
+    otherDecantRateBarPerMin: 10,
+    oxygenBoostBpm: 35,
+    otherBoostBpm: 50
+  }
+};
+const banks = [
+  {
+    id: 'he-bank',
+    name: 'Helium supply',
+    volumeL: 40,
+    pressureBar: 200,
+    oxygenPercent: 0,
+    heliumPercent: 100,
+    enabled: true
+  },
+  {
+    id: 'disabled-o2',
+    name: 'Disabled oxygen',
+    volumeL: 40,
+    pressureBar: 200,
+    oxygenPercent: 100,
+    heliumPercent: 0,
+    enabled: false
+  }
 ];
 
-test('creates a keep row with independent state', async () => {
-  const { createCompareRow: create } = await import('../js/compare-recipe.js');
-  const first = create('keep', 'row-1');
-  const second = create('keep', 'row-2');
+test('creates independent keep rows', () => {
+  const first = createCompareRow('keep', 'row-1');
+  const second = createCompareRow('keep', 'row-2');
   assert.deepEqual(first, { id: 'row-1', type: 'keep' });
   assert.notEqual(first, second);
 });
 
-test('validates ordered drain, add, and wait rows and normalizes preset gas', () => {
-  const rows = [
-    { id: 'keep', type: 'keep' },
-    { id: 'drain', type: 'drain', targetPressureBar: 30 },
-    {
-      id: 'add', type: 'add',
-      gas: { presetName: 'EAN32', name: '', oxygenPercent: 0, heliumPercent: 0 },
-      targetPressureBar: 100, method: 'decant', sourcePressureBar: null
-    },
-    { id: 'wait', type: 'wait', waitMinutes: 7 }
-  ];
-  const result = validateCompareRecipe(rows, { cylinder, gasPresets });
-  assert.equal(result.valid, true);
-  assert.deepEqual(result.errors, []);
-  assert.equal(result.normalizedRows[2].gas.name, 'EAN32');
-  assert.equal(result.normalizedRows[2].gas.oxygenPercent, 32);
-  assert.deepEqual(rows[2].gas, { presetName: 'EAN32', name: '', oxygenPercent: 0, heliumPercent: 0 });
+test('creates a bank-backed add row and target-state wait row', () => {
+  assert.deepEqual(createCompareRow('add', 'row-1'), {
+    id: 'row-1',
+    type: 'add',
+    bankId: null,
+    pressureAddedBar: 0,
+    targetPressureBar: 0,
+    pressureInputMode: 'added'
+  });
+  assert.deepEqual(createCompareRow('wait', 'row-2'), {
+    id: 'row-2',
+    type: 'wait',
+    waitMode: 'minutes',
+    waitMinutes: 0,
+    targetPressureBar: null,
+    targetTemperatureC: null
+  });
 });
 
-test('calculates cumulative composition from an add-gas target pressure', () => {
+test('rejects an add row that does not select an enabled supply bank', () => {
+  const result = validateCompareRecipe([{
+    id: 'add',
+    type: 'add',
+    bankId: 'missing',
+    pressureAddedBar: 50,
+    targetPressureBar: 100,
+    pressureInputMode: 'added'
+  }], { cylinder, banks, physics, settings });
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some(error => error.field === 'bankId'));
+});
+
+test('rejects disabled and duplicate supply bank IDs', () => {
+  const disabled = validateCompareRecipe([{
+    id: 'add',
+    type: 'add',
+    bankId: 'disabled-o2',
+    pressureAddedBar: 50,
+    targetPressureBar: 100,
+    pressureInputMode: 'added'
+  }], { cylinder, banks, physics, settings });
+  assert.ok(disabled.errors.some(error => error.field === 'bankId'));
+
+  const duplicateBanks = [...banks, { ...banks[0] }];
+  const duplicate = validateCompareRecipe([{
+    id: 'add',
+    type: 'add',
+    bankId: 'he-bank',
+    pressureAddedBar: 50,
+    targetPressureBar: 100,
+    pressureInputMode: 'added'
+  }], { cylinder, banks: duplicateBanks, physics, settings });
+  assert.ok(duplicate.errors.some(error => error.field === 'bankId'));
+});
+
+test('synchronizes pressure-added and receiver-target values from the row start', () => {
+  assert.equal(typeof compareRecipe.normalizeComparePressureFields, 'function');
+  const result = compareRecipe.normalizeComparePressureFields({
+    pressureAddedBar: 100,
+    targetPressureBar: 150,
+    pressureInputMode: 'target'
+  }, 50);
+  assert.deepEqual(result, {
+    pressureAddedBar: 100,
+    targetPressureBar: 150,
+    pressureInputMode: 'target'
+  });
+});
+
+test('normalizes an added-pressure row against the prior receiver state', () => {
+  const result = validateCompareRecipe([{
+    id: 'add',
+    type: 'add',
+    bankId: 'he-bank',
+    pressureAddedBar: 50,
+    targetPressureBar: 0,
+    pressureInputMode: 'added'
+  }], { cylinder, banks, physics, settings });
+  assert.equal(result.valid, true);
+  assert.equal(result.normalizedRows[0].targetPressureBar, 100);
+  assert.equal(result.normalizedRows[0].pressureAddedBar, 50);
+});
+
+test('plans decant equalize and boost stages without mutating bank inventory', () => {
+  const result = buildCompareProtocol([{
+    id: 'add',
+    type: 'add',
+    bankId: 'he-bank',
+    pressureAddedBar: 150,
+    targetPressureBar: 200,
+    pressureInputMode: 'target'
+  }], { cylinder, physics, banks, settings });
+  assert.deepEqual(result.protocolSteps.map(step => step.type), ['equalize', 'boost']);
+  assert.ok(result.protocolSteps.every(step => step.compareRowId === 'add'));
+  assert.ok(result.protocolSteps.every(step => step.sourceBankId === 'he-bank'));
+  assert.ok(result.protocolSteps.every(step => Number.isFinite(step.sourceStartPressureBar)));
+  assert.ok(result.protocolSteps.every(step => Number.isFinite(step.sourceEndPressureBar)));
+  assert.ok(result.protocolSteps.at(-1).sourceEndPressureBar < result.protocolSteps[0].sourceStartPressureBar);
+  assert.equal(banks[0].pressureBar, 200);
+});
+
+test('keeps wait and keep rows between planned transfer stages', () => {
   const result = buildCompareProtocol([
     { id: 'keep', type: 'keep' },
+    { id: 'wait', type: 'wait', waitMode: 'minutes', waitMinutes: 5, targetPressureBar: null, targetTemperatureC: null },
     {
-      id: 'add', type: 'add',
-      gas: { presetName: null, name: 'EAN32', oxygenPercent: 32, heliumPercent: 0 },
-      targetPressureBar: 100, method: 'decant', sourcePressureBar: null
+      id: 'add',
+      type: 'add',
+      bankId: 'he-bank',
+      pressureAddedBar: 50,
+      targetPressureBar: 100,
+      pressureInputMode: 'added'
     }
-  ], { cylinder, physics, gasPresets });
-  const add = result.protocolSteps[1];
-  assert.equal(add.receiverStartPressureBar, 50);
-  assert.equal(add.receiverEndPressureBar, 100);
-  assert.ok(add.resultingMix.oxygenPercent > 21);
-  assert.equal(result.trajectory.length, 2);
+  ], { cylinder, physics, banks, settings });
+  assert.deepEqual(result.protocolSteps.map(step => step.type), ['keep', 'wait', 'decant']);
+  assert.equal(result.protocolSteps[1].waitMinutes, 5);
 });
 
-test('rejects invalid rows with field-specific errors', () => {
-  const cases = [
-    {
-      name: 'empty recipe', rows: [], rowId: null, field: 'recipe'
-    },
-    {
-      name: 'invalid gas composition',
-      rows: [{ id: 'gas', type: 'add', gas: { presetName: null, name: 'Bad', oxygenPercent: 60, heliumPercent: 50 }, targetPressureBar: 100, method: 'decant', sourcePressureBar: null }],
-      rowId: 'gas', field: 'gas'
-    },
-    {
-      name: 'add target below current pressure',
-      rows: [{ id: 'add', type: 'add', gas: { presetName: null, name: 'Air', oxygenPercent: 21, heliumPercent: 0 }, targetPressureBar: 49, method: 'decant', sourcePressureBar: null }],
-      rowId: 'add', field: 'targetPressureBar'
-    },
-    {
-      name: 'drain target above current pressure',
-      rows: [{ id: 'drain', type: 'drain', targetPressureBar: 51 }],
-      rowId: 'drain', field: 'targetPressureBar'
-    },
-    {
-      name: 'negative wait', rows: [{ id: 'wait', type: 'wait', waitMinutes: -1 }], rowId: 'wait', field: 'waitMinutes'
-    },
-    {
-      name: 'boost without source pressure',
-      rows: [{ id: 'boost', type: 'add', gas: { presetName: null, name: 'Air', oxygenPercent: 21, heliumPercent: 0 }, targetPressureBar: 100, method: 'boost', sourcePressureBar: null }],
-      rowId: 'boost', field: 'sourcePressureBar'
-    },
-    {
-      name: 'non-Air compressor',
-      rows: [{ id: 'compressor', type: 'add', gas: { presetName: null, name: 'EAN32', oxygenPercent: 32, heliumPercent: 0 }, targetPressureBar: 100, method: 'compressor', sourcePressureBar: null }],
-      rowId: 'compressor', field: 'gas'
-    }
-  ];
+test('rejects a finite bank that cannot supply the requested addition', () => {
+  const smallBank = {
+    id: 'small-he',
+    name: 'Small helium',
+    volumeL: 2,
+    pressureBar: 20,
+    oxygenPercent: 0,
+    heliumPercent: 100,
+    enabled: true
+  };
+  assert.throws(() => buildCompareProtocol([{
+    id: 'add',
+    type: 'add',
+    bankId: 'small-he',
+    pressureAddedBar: 200,
+    targetPressureBar: 250,
+    pressureInputMode: 'target'
+  }], {
+    cylinder,
+    physics,
+    banks: [smallBank],
+    settings
+  }), /supply bank/i);
+});
 
-  for (const { name, rows, rowId, field } of cases) {
-    const result = validateCompareRecipe(rows, { cylinder, gasPresets });
-    assert.equal(result.valid, false, name);
-    assert.ok(result.errors.some((error) => error.rowId === rowId && error.field === field), name);
-  }
+test('requires both pressure and temperature for a target-state wait', () => {
+  const result = validateCompareRecipe([{
+    id: 'wait',
+    type: 'wait',
+    waitMode: 'target',
+    targetPressureBar: null,
+    targetTemperatureC: 20
+  }], { cylinder, banks, physics, settings });
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some(error => error.field === 'targetPressureBar'));
+});
+
+test('rejects pressure modes that would reduce receiver pressure or exceed the limit', () => {
+  const result = validateCompareRecipe([{
+    id: 'low',
+    type: 'add',
+    bankId: 'he-bank',
+    pressureAddedBar: -1,
+    targetPressureBar: 49,
+    pressureInputMode: 'added'
+  }, {
+    id: 'high',
+    type: 'add',
+    bankId: 'he-bank',
+    pressureAddedBar: 301,
+    targetPressureBar: 351,
+    pressureInputMode: 'added'
+  }], { cylinder, banks, physics, settings });
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some(error => error.rowId === 'low' && error.field === 'pressureAddedBar'));
+  assert.ok(result.errors.some(error => error.rowId === 'high' && error.field === 'targetPressureBar'));
 });

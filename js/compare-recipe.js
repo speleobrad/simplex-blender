@@ -3,11 +3,11 @@ import { calcMolarDensity, calcPressure } from './physics.js';
 
 export const COMPARE_ROW_TYPES = [
   { value: 'keep', label: 'Keep' },
-  { value: 'drain', label: 'Drain' },
   { value: 'add', label: 'Add gas' },
   { value: 'wait', label: 'Wait' }
 ];
 
+// Retained until the Compare editor switches to automatic stage selection.
 export const COMPARE_METHODS = [
   { value: 'decant', label: 'Decant' },
   { value: 'boost', label: 'Boost' },
@@ -16,26 +16,50 @@ export const COMPARE_METHODS = [
 
 const MAX_PRESSURE_BAR = 350;
 const MAX_WAIT_MINUTES = 1440;
+const MIN_WAIT_TEMPERATURE_C = -100;
+const MAX_WAIT_TEMPERATURE_C = 100;
+const PRESSURE_TOLERANCE_BAR = 1e-7;
 const STEP_COLORS = ['#06b6d4', '#f59e0b', '#10b981', '#a855f7', '#ec4899'];
 
 export function createCompareRow(type = 'keep', id = `compare-${Date.now()}-${Math.random()}`) {
-  if (type === 'drain') return { id, type, targetPressureBar: 0 };
   if (type === 'add') {
     return {
       id,
       type,
-      gas: { presetName: null, name: 'Custom gas', oxygenPercent: 21, heliumPercent: 0 },
+      bankId: null,
+      pressureAddedBar: 0,
       targetPressureBar: 0,
-      method: 'decant',
-      sourcePressureBar: null
+      pressureInputMode: 'added'
     };
   }
-  if (type === 'wait') return { id, type, waitMinutes: 0 };
+  if (type === 'wait') {
+    return {
+      id,
+      type,
+      waitMode: 'minutes',
+      waitMinutes: 0,
+      targetPressureBar: null,
+      targetTemperatureC: null
+    };
+  }
   return { id, type: 'keep' };
 }
 
+export function normalizeComparePressureFields(row, receiverStartPressureBar) {
+  if (row.pressureInputMode === 'target') {
+    return {
+      ...row,
+      pressureAddedBar: row.targetPressureBar - receiverStartPressureBar
+    };
+  }
+  return {
+    ...row,
+    targetPressureBar: receiverStartPressureBar + row.pressureAddedBar
+  };
+}
+
 function cloneRow(row) {
-  return { ...row, gas: row?.gas ? { ...row.gas } : row?.gas };
+  return { ...row };
 }
 
 function error(errors, rowId, field, message) {
@@ -46,25 +70,82 @@ function validPressure(value) {
   return Number.isFinite(value) && value >= 0 && value <= MAX_PRESSURE_BAR;
 }
 
-function normalizeGas(gas, gasPresets, rowId, errors) {
-  const normalized = { ...gas };
-  if (normalized.presetName !== null && normalized.presetName !== undefined) {
-    const preset = gasPresets.find(({ name }) => name === normalized.presetName);
-    if (!preset) {
-      error(errors, rowId, 'gas', 'Select a valid gas preset.');
-    } else {
-      normalized.name = preset.name;
-      normalized.oxygenPercent = preset.oxygenPercent;
-      normalized.heliumPercent = preset.heliumPercent;
-    }
-  }
-  if (!isValidGasComposition(normalized.oxygenPercent, normalized.heliumPercent)) {
-    error(errors, rowId, 'gas', 'Gas oxygen and helium percentages must total no more than 100%.');
-  }
-  return normalized;
+function validTemperature(value) {
+  return Number.isFinite(value)
+    && value >= MIN_WAIT_TEMPERATURE_C
+    && value <= MAX_WAIT_TEMPERATURE_C;
 }
 
-export function validateCompareRecipe(rows, { cylinder, gasPresets = [] } = {}) {
+function copiedBank(bank) {
+  return {
+    id: bank.id,
+    name: bank.name,
+    volumeL: bank.volumeL,
+    pressureBar: bank.pressureBar,
+    oxygenPercent: bank.oxygenPercent,
+    heliumPercent: bank.heliumPercent,
+    enabled: bank.enabled
+  };
+}
+
+function indexedBanks(banks) {
+  const byId = new Map();
+  const duplicateIds = new Set();
+  for (const bank of Array.isArray(banks) ? banks : []) {
+    if (!bank || typeof bank.id !== 'string' || bank.id.length === 0) continue;
+    if (byId.has(bank.id)) duplicateIds.add(bank.id);
+    else byId.set(bank.id, bank);
+  }
+  return { byId, duplicateIds };
+}
+
+function isUsableBank(bank) {
+  return bank?.enabled === true
+    && Number.isFinite(bank.volumeL) && bank.volumeL > 0
+    && validPressure(bank.pressureBar)
+    && isValidGasComposition(bank.oxygenPercent, bank.heliumPercent);
+}
+
+function validateAddRow(row, rowId, currentPressure, bankIndex, errors) {
+  if (!['added', 'target'].includes(row.pressureInputMode)) {
+    error(errors, rowId, 'pressureInputMode', 'Choose whether pressure added or receiver target is being edited.');
+    return currentPressure;
+  }
+
+  const bank = bankIndex.byId.get(row.bankId);
+  if (!bank || bankIndex.duplicateIds.has(row.bankId) || !isUsableBank(bank)) {
+    error(errors, rowId, 'bankId', 'Select an enabled supply bank with valid finite inventory.');
+  } else {
+    row.sourceBank = copiedBank(bank);
+  }
+
+  const activePressure = row.pressureInputMode === 'target'
+    ? row.targetPressureBar
+    : row.pressureAddedBar;
+  const activeField = row.pressureInputMode === 'target'
+    ? 'targetPressureBar'
+    : 'pressureAddedBar';
+  if (!validPressure(activePressure)) {
+    error(errors, rowId, activeField, `${activeField === 'targetPressureBar' ? 'Receiver target pressure' : 'Pressure added'} must be between 0 and 350 bar.`);
+    return currentPressure;
+  }
+  if (!Number.isFinite(currentPressure)) return currentPressure;
+
+  const normalized = normalizeComparePressureFields(row, currentPressure);
+  if (!validPressure(normalized.targetPressureBar)) {
+    error(errors, rowId, 'targetPressureBar', 'Add target pressure must be between 0 and 350 bar.');
+    return currentPressure;
+  }
+  if (normalized.pressureAddedBar < 0 || normalized.targetPressureBar < currentPressure) {
+    error(errors, rowId, activeField, 'Add target pressure cannot be below the current pressure.');
+    return currentPressure;
+  }
+
+  Object.assign(row, normalized);
+  return row.targetPressureBar;
+}
+
+export function validateCompareRecipe(rows, { cylinder, banks = [] } = {}) {
   const errors = [];
   if (!Array.isArray(rows) || rows.length === 0) {
     error(errors, null, 'recipe', 'Add at least one recipe row.');
@@ -72,46 +153,35 @@ export function validateCompareRecipe(rows, { cylinder, gasPresets = [] } = {}) 
   }
 
   const normalizedRows = rows.map(cloneRow);
+  const bankIndex = indexedBanks(banks);
   let currentPressure = cylinder?.initialPressureBar;
   if (!validPressure(currentPressure)) currentPressure = null;
 
   for (const row of normalizedRows) {
     const { id: rowId, type } = row;
-    if (!['keep', 'drain', 'add', 'wait'].includes(type)) {
+    if (!['keep', 'add', 'wait'].includes(type)) {
       error(errors, rowId, 'type', 'Select a valid recipe row type.');
       continue;
     }
-    if (type === 'drain') {
-      if (!validPressure(row.targetPressureBar)) {
-        error(errors, rowId, 'targetPressureBar', 'Drain target pressure must be between 0 and 350 bar.');
-      } else if (currentPressure !== null && row.targetPressureBar > currentPressure) {
-        error(errors, rowId, 'targetPressureBar', 'Drain target pressure cannot exceed the current pressure.');
-      } else {
-        currentPressure = row.targetPressureBar;
-      }
-    }
     if (type === 'add') {
-      row.gas = normalizeGas(row.gas || {}, gasPresets, rowId, errors);
-      if (!validPressure(row.targetPressureBar)) {
-        error(errors, rowId, 'targetPressureBar', 'Add target pressure must be between 0 and 350 bar.');
-      } else if (currentPressure !== null && row.targetPressureBar < currentPressure) {
-        error(errors, rowId, 'targetPressureBar', 'Add target pressure cannot be below the current pressure.');
-      } else {
-        currentPressure = row.targetPressureBar;
-      }
-      if (!COMPARE_METHODS.some(({ value }) => value === row.method)) {
-        error(errors, rowId, 'method', 'Select a valid transfer method.');
-      } else if (row.method === 'boost'
-        && (!validPressure(row.sourcePressureBar) || row.sourcePressureBar <= 0)) {
-        error(errors, rowId, 'sourcePressureBar', 'Boost source pressure must be greater than 0 and at most 350 bar.');
-      } else if (row.method === 'compressor'
-        && (row.gas.oxygenPercent !== 21 || row.gas.heliumPercent !== 0)) {
-        error(errors, rowId, 'gas', 'Compressor rows require Air (21% oxygen and 0% helium).');
-      }
+      currentPressure = validateAddRow(row, rowId, currentPressure, bankIndex, errors);
+      continue;
     }
-    if (type === 'wait'
-      && (!Number.isFinite(row.waitMinutes) || row.waitMinutes < 0 || row.waitMinutes > MAX_WAIT_MINUTES)) {
-      error(errors, rowId, 'waitMinutes', 'Wait duration must be between 0 and 1440 minutes.');
+    if (type === 'wait') {
+      if (!['minutes', 'target'].includes(row.waitMode)) {
+        error(errors, rowId, 'waitMode', 'Choose a valid wait mode.');
+      } else if (row.waitMode === 'minutes') {
+        if (!Number.isFinite(row.waitMinutes) || row.waitMinutes < 0 || row.waitMinutes > MAX_WAIT_MINUTES) {
+          error(errors, rowId, 'waitMinutes', 'Wait duration must be between 0 and 1440 minutes.');
+        }
+      } else {
+        if (!validPressure(row.targetPressureBar)) {
+          error(errors, rowId, 'targetPressureBar', 'Target wait pressure must be between 0 and 350 bar.');
+        }
+        if (!validTemperature(row.targetTemperatureC)) {
+          error(errors, rowId, 'targetTemperatureC', 'Target wait temperature must be between -100 and 100 °C.');
+        }
+      }
     }
   }
 
@@ -139,89 +209,345 @@ function trajectoryPoint(step, label, mix, pressureBar, pressureDeltaBar, color)
   };
 }
 
-export function buildCompareProtocol(rows, { cylinder, physics, gasPresets = [] } = {}) {
-  const validation = validateCompareRecipe(rows, { cylinder, gasPresets });
+function receiverAfterAddedMoles(receiver, addedMoles, sourceBank, volumeL, temperatureC, useVdw) {
+  const totalMoles = receiver.totalMoles + addedMoles;
+  const oxygenMoles = receiver.oxygenMoles + addedMoles * (sourceBank.oxygenPercent / 100);
+  const heliumMoles = receiver.heliumMoles + addedMoles * (sourceBank.heliumPercent / 100);
+  const mix = mixFromMoles(totalMoles, oxygenMoles, heliumMoles);
+  return {
+    totalMoles,
+    oxygenMoles,
+    heliumMoles,
+    mix,
+    pressureBar: calcPressure(
+      totalMoles / volumeL,
+      mix.oxygenPercent,
+      mix.heliumPercent,
+      temperatureC,
+      useVdw
+    )
+  };
+}
+
+function pressureForSourceMoles(moles, bank, temperatureC, useVdw) {
+  return calcPressure(
+    Math.max(0, moles) / bank.volumeL,
+    bank.oxygenPercent,
+    bank.heliumPercent,
+    temperatureC,
+    useVdw
+  );
+}
+
+function solveAddedMoles(receiver, targetPressureBar, sourceBank, volumeL, temperatureC, useVdw) {
+  if (targetPressureBar <= receiver.pressureBar + PRESSURE_TOLERANCE_BAR) return 0;
+
+  let high = Math.max(
+    1,
+    calcMolarDensity(targetPressureBar, sourceBank.oxygenPercent, sourceBank.heliumPercent, temperatureC, useVdw) * volumeL
+  );
+  let highState = receiverAfterAddedMoles(receiver, high, sourceBank, volumeL, temperatureC, useVdw);
+  while (highState.pressureBar < targetPressureBar && high < 1e9) {
+    high *= 2;
+    highState = receiverAfterAddedMoles(receiver, high, sourceBank, volumeL, temperatureC, useVdw);
+  }
+  if (highState.pressureBar < targetPressureBar) {
+    throw new RangeError('Supply bank transfer cannot reach the requested receiver pressure.');
+  }
+
+  let low = 0;
+  for (let iteration = 0; iteration < 80; iteration++) {
+    const middle = (low + high) / 2;
+    const pressureBar = receiverAfterAddedMoles(
+      receiver,
+      middle,
+      sourceBank,
+      volumeL,
+      temperatureC,
+      useVdw
+    ).pressureBar;
+    if (pressureBar < targetPressureBar) low = middle;
+    else high = middle;
+  }
+  return (low + high) / 2;
+}
+
+function solveEqualizationMoles(receiver, sourceMoles, requiredMoles, sourceBank, volumeL, temperatureC, useVdw) {
+  let low = 0;
+  let high = requiredMoles;
+  for (let iteration = 0; iteration < 80; iteration++) {
+    const middle = (low + high) / 2;
+    const receiverPressureBar = receiverAfterAddedMoles(
+      receiver,
+      middle,
+      sourceBank,
+      volumeL,
+      temperatureC,
+      useVdw
+    ).pressureBar;
+    const sourcePressureBar = pressureForSourceMoles(
+      sourceMoles - middle,
+      sourceBank,
+      temperatureC,
+      useVdw
+    );
+    if (sourcePressureBar > receiverPressureBar) low = middle;
+    else high = middle;
+  }
+  return (low + high) / 2;
+}
+
+function sourceState(bank, moles, temperatureC, useVdw) {
+  return {
+    bankId: bank.id,
+    name: bank.name,
+    volumeL: bank.volumeL,
+    pressureBar: pressureForSourceMoles(moles, bank, temperatureC, useVdw),
+    moles,
+    oxygenPercent: bank.oxygenPercent,
+    heliumPercent: bank.heliumPercent
+  };
+}
+
+function plannedTransferStep(type, row, sourceStart, sourceEnd, receiverStart, receiverEnd) {
+  const operation = type[0].toUpperCase() + type.slice(1);
+  return {
+    type,
+    compareRowId: row.id,
+    sourceBankId: row.sourceBank.id,
+    sourceBankName: row.sourceBank.name,
+    sourceComposition: {
+      oxygenPercent: row.sourceBank.oxygenPercent,
+      heliumPercent: row.sourceBank.heliumPercent
+    },
+    sourceOxygenPercent: row.sourceBank.oxygenPercent,
+    sourceHeliumPercent: row.sourceBank.heliumPercent,
+    sourceStartPressureBar: sourceStart.pressureBar,
+    sourceEndPressureBar: sourceEnd.pressureBar,
+    sourceState: sourceEnd,
+    sourceMolesAfter: sourceEnd.moles,
+    receiverStartPressureBar: receiverStart.pressureBar,
+    receiverEndPressureBar: receiverEnd.pressureBar,
+    resultingPressureBar: receiverEnd.pressureBar,
+    resultingMix: { ...receiverEnd.mix },
+    operation,
+    recipeAction: operation,
+    recipeGas: row.sourceBank.name,
+    title: operation,
+    recipeLabel: operation
+  };
+}
+
+function passiveStep(row, receiver) {
+  const operation = row.type === 'wait' ? 'Wait' : 'Keep';
+  return {
+    ...row,
+    type: row.type,
+    compareRowId: row.id,
+    sourceBankId: null,
+    sourceStartPressureBar: null,
+    sourceEndPressureBar: null,
+    sourceState: null,
+    receiverStartPressureBar: receiver.pressureBar,
+    receiverEndPressureBar: receiver.pressureBar,
+    resultingPressureBar: receiver.pressureBar,
+    resultingMix: { ...receiver.mix },
+    operation,
+    recipeAction: operation,
+    recipeGas: null,
+    title: operation,
+    recipeLabel: operation
+  };
+}
+
+function equipmentLimits(settings) {
+  const booster = settings?.booster ?? {};
+  return {
+    minimumSourcePressureBar: Number.isFinite(booster.minimumSourcePressureBar)
+      ? booster.minimumSourcePressureBar
+      : 0,
+    maxBoosterOutputPressureBar: Number.isFinite(booster.maxBoosterOutputPressureBar)
+      ? booster.maxBoosterOutputPressureBar
+      : MAX_PRESSURE_BAR
+  };
+}
+
+function addTrajectoryPoint(trajectory, step, currentStep) {
+  if (step.type === 'keep') return currentStep;
+  const trajectoryStep = currentStep + 1;
+  trajectory.push(trajectoryPoint(
+    trajectoryStep,
+    `Step ${trajectoryStep}`,
+    step.resultingMix,
+    step.resultingPressureBar,
+    step.resultingPressureBar - step.receiverStartPressureBar,
+    STEP_COLORS[(trajectoryStep - 1) % STEP_COLORS.length]
+  ));
+  return trajectoryStep;
+}
+
+export function buildCompareProtocol(rows, { cylinder, physics, banks = [], settings } = {}) {
+  const validation = validateCompareRecipe(rows, { cylinder, banks, physics, settings });
   if (!validation.valid) {
     throw new Error(`Invalid compare recipe: ${validation.errors.map(({ message }) => message).join(' ')}`);
+  }
+  if (!Number.isFinite(cylinder?.volumeL) || cylinder.volumeL <= 0 || !validPressure(cylinder.initialPressureBar)) {
+    throw new RangeError('Compare protocol requires a finite cylinder volume and initial pressure.');
+  }
+  if (!Number.isFinite(physics?.temperatureC)) {
+    throw new RangeError('Compare protocol requires a finite gas temperature.');
   }
 
   const { volumeL, initialPressureBar, initialOxygenPercent, initialHeliumPercent } = cylinder;
   const { temperatureC, model } = physics;
   const useVdw = model !== 'ideal';
-  let currentPressure = initialPressureBar;
-  let currentMix = { oxygenPercent: initialOxygenPercent, heliumPercent: initialHeliumPercent };
-  let totalMoles = calcMolarDensity(currentPressure, currentMix.oxygenPercent, currentMix.heliumPercent, temperatureC, useVdw) * volumeL;
-  let oxygenMoles = totalMoles * (currentMix.oxygenPercent / 100);
-  let heliumMoles = totalMoles * (currentMix.heliumPercent / 100);
-  const initialMix = { ...currentMix };
+  const limits = equipmentLimits(settings);
+  const bankIndex = indexedBanks(banks);
+  const bankStates = new Map();
+  for (const bank of bankIndex.byId.values()) {
+    bankStates.set(bank.id, {
+      bank: copiedBank(bank),
+      moles: calcMolarDensity(
+        bank.pressureBar,
+        bank.oxygenPercent,
+        bank.heliumPercent,
+        temperatureC,
+        useVdw
+      ) * bank.volumeL
+    });
+  }
+
+  const initialMix = {
+    oxygenPercent: initialOxygenPercent,
+    heliumPercent: initialHeliumPercent
+  };
+  const initialMoles = calcMolarDensity(
+    initialPressureBar,
+    initialMix.oxygenPercent,
+    initialMix.heliumPercent,
+    temperatureC,
+    useVdw
+  ) * volumeL;
+  let receiver = {
+    totalMoles: initialMoles,
+    oxygenMoles: initialMoles * (initialMix.oxygenPercent / 100),
+    heliumMoles: initialMoles * (initialMix.heliumPercent / 100),
+    mix: initialMix,
+    pressureBar: initialPressureBar
+  };
   const protocolSteps = [];
-  const trajectory = [trajectoryPoint(0, 'Start Mix', currentMix, currentPressure, 0, '#f43f5e')];
+  const trajectory = [trajectoryPoint(0, 'Start Mix', receiver.mix, receiver.pressureBar, 0, '#f43f5e')];
   let trajectoryStep = 0;
 
   for (const row of validation.normalizedRows) {
-    const receiverStartPressureBar = currentPressure;
-    let sourceOxygenPercent = null;
-    let sourceHeliumPercent = null;
-    let recipeGas = null;
-
-    if (row.type === 'drain') {
-      const targetMoles = calcMolarDensity(row.targetPressureBar, currentMix.oxygenPercent, currentMix.heliumPercent, temperatureC, useVdw) * volumeL;
-      const ratio = totalMoles > 0 ? targetMoles / totalMoles : 0;
-      totalMoles = targetMoles;
-      oxygenMoles *= ratio;
-      heliumMoles *= ratio;
-      currentPressure = row.targetPressureBar;
-      currentMix = mixFromMoles(totalMoles, oxygenMoles, heliumMoles);
-    } else if (row.type === 'add') {
-      const targetMoles = calcMolarDensity(row.targetPressureBar, row.gas.oxygenPercent, row.gas.heliumPercent, temperatureC, useVdw) * volumeL;
-      const addedMoles = targetMoles - totalMoles;
-      totalMoles += addedMoles;
-      oxygenMoles += addedMoles * (row.gas.oxygenPercent / 100);
-      heliumMoles += addedMoles * (row.gas.heliumPercent / 100);
-      currentMix = mixFromMoles(totalMoles, oxygenMoles, heliumMoles);
-      currentPressure = calcPressure(totalMoles / volumeL, currentMix.oxygenPercent, currentMix.heliumPercent, temperatureC, useVdw);
-      sourceOxygenPercent = row.gas.oxygenPercent;
-      sourceHeliumPercent = row.gas.heliumPercent;
-      recipeGas = row.gas.name;
+    if (row.type !== 'add') {
+      const step = passiveStep(row, receiver);
+      protocolSteps.push(step);
+      trajectoryStep = addTrajectoryPoint(trajectory, step, trajectoryStep);
+      continue;
     }
 
-    const receiverEndPressureBar = row.type === 'wait' || row.type === 'keep'
-      ? currentPressure
-      : row.targetPressureBar;
-    const operation = row.type === 'add'
-      ? COMPARE_METHODS.find(({ value }) => value === row.method).label
-      : COMPARE_ROW_TYPES.find(({ value }) => value === row.type).label;
-    const step = {
-      ...row,
-      operation,
-      receiverStartPressureBar,
-      receiverEndPressureBar,
-      resultingPressureBar: currentPressure,
-      resultingMix: { ...currentMix },
-      sourceOxygenPercent,
-      sourceHeliumPercent,
-      sourcePressureBar: row.type === 'add' && row.method === 'boost' ? row.sourcePressureBar : null,
-      sourceBankId: null,
-      sourceStartPressureBar: null,
-      sourceEndPressureBar: null,
-      recipeAction: operation,
-      recipeGas,
-      title: operation,
-      recipeLabel: operation
-    };
-    protocolSteps.push(step);
-
-    if (row.type !== 'keep') {
-      trajectoryStep++;
-      trajectory.push(trajectoryPoint(
-        trajectoryStep,
-        `Step ${trajectoryStep}`,
-        currentMix,
-        currentPressure,
-        currentPressure - receiverStartPressureBar,
-        STEP_COLORS[(trajectoryStep - 1) % STEP_COLORS.length]
-      ));
+    const targetRow = normalizeComparePressureFields(row, receiver.pressureBar);
+    const targetPressureBar = targetRow.targetPressureBar;
+    const source = bankStates.get(row.sourceBank.id);
+    const sourceBank = source.bank;
+    const requiredMoles = solveAddedMoles(
+      receiver,
+      targetPressureBar,
+      sourceBank,
+      volumeL,
+      temperatureC,
+      useVdw
+    );
+    const sourceMinimumMoles = calcMolarDensity(
+      limits.minimumSourcePressureBar,
+      sourceBank.oxygenPercent,
+      sourceBank.heliumPercent,
+      temperatureC,
+      useVdw
+    ) * sourceBank.volumeL;
+    if (source.moles - requiredMoles < sourceMinimumMoles - 1e-9) {
+      throw new RangeError(`Supply bank ${sourceBank.name} cannot retain its ${limits.minimumSourcePressureBar} bar minimum pressure for this transfer.`);
     }
+
+    const receiverStart = receiver;
+    const sourceStart = sourceState(sourceBank, source.moles, temperatureC, useVdw);
+    const receiverFinal = receiverAfterAddedMoles(
+      receiver,
+      requiredMoles,
+      sourceBank,
+      volumeL,
+      temperatureC,
+      useVdw
+    );
+    receiverFinal.pressureBar = targetPressureBar;
+    const sourceFinal = sourceState(sourceBank, source.moles - requiredMoles, temperatureC, useVdw);
+
+    if (sourceFinal.pressureBar >= targetPressureBar - PRESSURE_TOLERANCE_BAR) {
+      const step = plannedTransferStep('decant', row, sourceStart, sourceFinal, receiverStart, receiverFinal);
+      protocolSteps.push(step);
+      trajectoryStep = addTrajectoryPoint(trajectory, step, trajectoryStep);
+    } else {
+      if (targetPressureBar > limits.maxBoosterOutputPressureBar + PRESSURE_TOLERANCE_BAR) {
+        throw new RangeError(`Supply bank transfer requires boosting above the ${limits.maxBoosterOutputPressureBar} bar booster output limit.`);
+      }
+      const sourceStartsAboveReceiver = sourceStart.pressureBar > receiverStart.pressureBar + PRESSURE_TOLERANCE_BAR;
+      const equalizationMoles = sourceStartsAboveReceiver
+        ? solveEqualizationMoles(
+          receiver,
+          source.moles,
+          requiredMoles,
+          sourceBank,
+          volumeL,
+          temperatureC,
+          useVdw
+        )
+        : 0;
+      if (equalizationMoles > PRESSURE_TOLERANCE_BAR) {
+        const receiverEqualized = receiverAfterAddedMoles(
+          receiver,
+          equalizationMoles,
+          sourceBank,
+          volumeL,
+          temperatureC,
+          useVdw
+        );
+        const sourceEqualized = sourceState(
+          sourceBank,
+          source.moles - equalizationMoles,
+          temperatureC,
+          useVdw
+        );
+        receiverEqualized.pressureBar = sourceEqualized.pressureBar;
+        const equalizeStep = plannedTransferStep(
+          'equalize',
+          row,
+          sourceStart,
+          sourceEqualized,
+          receiverStart,
+          receiverEqualized
+        );
+        protocolSteps.push(equalizeStep);
+        trajectoryStep = addTrajectoryPoint(trajectory, equalizeStep, trajectoryStep);
+        const boostStep = plannedTransferStep(
+          'boost',
+          row,
+          sourceEqualized,
+          sourceFinal,
+          receiverEqualized,
+          receiverFinal
+        );
+        protocolSteps.push(boostStep);
+        trajectoryStep = addTrajectoryPoint(trajectory, boostStep, trajectoryStep);
+      } else {
+        const boostStep = plannedTransferStep('boost', row, sourceStart, sourceFinal, receiverStart, receiverFinal);
+        protocolSteps.push(boostStep);
+        trajectoryStep = addTrajectoryPoint(trajectory, boostStep, trajectoryStep);
+      }
+    }
+
+    source.moles -= requiredMoles;
+    receiver = receiverFinal;
   }
 
   return { protocolSteps, trajectory, initialMix };
