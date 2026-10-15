@@ -12,8 +12,7 @@ Then visit <http://127.0.0.1:8000/>.
 
 ## Compare recipe
 
-Use **Compare** to model an ordered manual recipe without replacing the default **Optimize** flow. Add **Keep**, **Drain**, **Add gas**, and **Wait** rows; Add gas supports presets or a custom O₂/He composition and Decant, Boost, or Compressor transfer methods. Boost rows require a source pressure. Results distinguish the recipe-end pressure, mix, and temperature from the ambient-settled projection.
-
+Use **Compare** to model an ordered manual recipe without replacing the default **Optimize** flow. Add **Keep**, **Add gas**, and **Wait** rows. Add gas selects an enabled named Supply bank and displays its inferred O₂/He composition, volume, and pressure; **Pressure added** and **Receiver target pressure** stay synchronized. The model consumes a local copy of that bank while choosing Decant, Equalize, and/or Boost stages automatically, so saved bank settings are unchanged. Wait rows can model fixed minutes or a target pressure and temperature. Results distinguish recipe-end pressure, mix, and temperature from the ambient-settled projection.
 
 ## Development
 

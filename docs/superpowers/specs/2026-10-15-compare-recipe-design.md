@@ -2,218 +2,137 @@
 
 ## Goal
 
-Add a Compare recipe mode that lets a user transcribe an ordered recipe from another application and run that recipe through Simplex blender's existing gas and thermodynamic model. The mode must show the modeled state at the end of the entered recipe and a separate projection after the final gas reaches ambient temperature.
+Compare mode lets a diver model an ordered sequence of finite Supply-bank operations with the existing gas and thermodynamic model. It reports the entered recipe endpoint and a separate projection after the final gas reaches ambient temperature.
 
 ## Scope
 
 Compare mode adds:
 
-1. A mode switch between the existing optimizer workflow and Compare recipe.
-2. An in-memory ordered recipe editor with Keep, Drain, Add gas, and Wait rows.
-3. Existing gas-preset selection plus per-row custom gas composition.
-4. A transfer-method selector for every Add gas row: Decant, Boost, or Compressor.
-5. A required source-pressure input for Boost rows.
-6. Explicit wait rows whose durations are taken literally.
-7. Thermodynamic simulation of the manually entered protocol using the existing physics, thermal, and equipment settings.
-8. Recipe-end and ambient-settled result summaries, protocol cards, thermal charts, and composition trajectory output.
+1. A switch between the existing Optimize workflow and Compare recipe.
+2. An in-memory ordered editor with Keep, Add gas, and Wait rows.
+3. Add-gas rows that select an enabled, named Supply bank and infer its composition and inventory data.
+4. Linked pressure-added and receiver-target controls for each Add row.
+5. Finite, local source-bank accounting and automatic Decant, Equalize, and Boost stage selection.
+6. Wait rows that model either a fixed duration or a target pressure and temperature.
+7. Manual-protocol result cards, thermal charts, a composition trajectory, and tank summary.
 
-Compare mode does not add recipe persistence, JSON import/export, finite source-bank accounting, optimizer reordering, or a side-by-side optimizer comparison.
+Compare mode does not persist recipes or its local bank consumption, import or export recipes, automatically reorder rows, or alter the Optimize workflow or persisted Supply-bank settings.
 
 ## Existing boundaries
 
-- `js/optimizer.js` remains the source of automatically optimized recipes and its behavior is unchanged.
-- `js/thermodynamics.js` remains the single implementation of transfer heating, cooling, pressure-at-temperature projection, and protocol simulation. It gains explicit compare-protocol support without a second thermal engine.
-- `js/main.js` remains responsible for browser state, delegated events, mode switching, and calculation orchestration.
-- `js/ui/results.js` remains responsible for protocol-card and summary markup.
-- `js/ui/thermal-charts.js` remains responsible for synchronized thermal charts and accessible data tables.
-- `js/ui/ternary.js` remains responsible for the composition diagram and trajectory rendering.
-- `js/settings.js`, gas presets, cylinder presets, and equipment settings retain their existing storage format and persistence behavior.
+- `js/optimizer.js` remains the source of optimized recipes and its behavior is unchanged.
+- `js/compare-recipe.js` owns the Compare draft schema, validation, finite bank planning, and conversion to thermodynamic protocol steps.
+- `js/thermodynamics.js` remains the single implementation of transfer heating, cooling, pressure-at-temperature projection, and protocol simulation.
+- `js/main.js` owns browser state, delegated events, mode switching, and calculation orchestration.
+- `js/ui/compare-recipe.js` renders the Compare editor and its inline validation feedback.
+- `js/ui/results.js`, `js/ui/thermal-charts.js`, and `js/ui/ternary.js` render the selected mode's result surfaces.
+- `js/settings.js`, bank storage, presets, and equipment settings retain their existing persistence format and behavior.
 
 ## User flow
 
 The main calculator exposes two modes:
 
-- **Optimize blend**: the current workflow, including target pressure, target mix, supply banks, and optimizer-generated protocol.
-- **Compare recipe**: the current working-cylinder state, selected physics model, thermal inputs, and equipment settings remain active, while the user edits an ordered manual protocol.
+- **Optimize blend**: the existing target-mix workflow, Supply banks, and optimizer-generated protocol.
+- **Compare recipe**: the current working-cylinder state, physics model, thermal inputs, and equipment settings remain active while the user edits an ordered manual protocol.
 
-Compare mode provides a recipe editor with:
+Compare starts with one Keep row. Rows can be added, removed, and moved. Editing a draft does not replace the last valid comparison result.
 
-- Add row
-- Remove row
-- Move row up
-- Move row down
-- Run comparison
+Rows show fields appropriate to their type:
 
-The editor starts with one Keep row. The first row may be changed to Drain or removed and replaced with another valid row. Compare mode never inserts an optimizer-generated drain or transfer.
+- **Keep**: retains the current modeled receiver state.
+- **Add gas**: selects an enabled Supply bank with a nonblank name. The editor displays the selected bank's inferred O₂/He composition, volume, and current pressure. Entering either **Pressure added** or **Receiver target pressure** updates the other from the receiver pressure at that row.
+- **Wait**: uses either a fixed duration in minutes or a target pressure and target temperature.
 
-Rows are rendered in order and show only fields relevant to their type:
+An Add row consumes only an in-memory copy of its selected Supply bank. The planner rejects transfers that cannot retain the configured source minimum pressure. It automatically uses:
 
-- **Keep**: retain the current tank pressure and composition.
-- **Drain**: enter the receiver pressure after venting. Gas composition remains unchanged.
-- **Add gas**: select a saved gas preset or choose Custom, enter or edit the gas name and O₂/He percentages, enter the receiver pressure after the addition, and select Decant, Boost, or Compressor.
-- **Wait**: enter a duration in minutes.
+- **Decant** when the source remains at or above the requested receiver target;
+- **Equalize**, then **Boost**, when useful source pressure is available before a required boosted finish; or
+- **Boost** when equalization is not available.
 
-A custom gas must have finite O₂ and He percentages in the existing supported ranges, with O₂ + He <= 100%. Nitrogen is the complement. A saved preset populates the same values but remains directly editable; editing a preset-backed row changes only that row.
-
-An Add gas row using Compressor is valid only for Air (21% O₂, 0% He). Decant and Boost accept any valid gas composition. A Boost row requires a finite source pressure greater than zero and within the existing supported pressure range. Compare mode treats that source pressure as constant during the transfer; it does not model source-cylinder depletion because no finite source volume is part of the compare input.
-
-Rows are draft state. Editing, adding, removing, or reordering rows does not replace the last valid comparison result. Run comparison validates the complete draft; invalid rows receive inline messages and the previous valid comparison output remains visible. A successful run replaces the comparison output and switches the result view to Recipe.
-
-Switching back to Optimize blend restores the existing optimizer inputs and orchestration. Switching modes does not alter saved settings, supply banks, or optimizer form values.
+The selected bank's persisted value is never mutated by Compare. The existing Optimize mode continues to use persisted Supply-bank settings and retains its existing behavior.
 
 ## Data model
 
-`js/compare-recipe.js` owns the pure draft schema and conversion helpers. Draft rows use a discriminated shape:
+`js/compare-recipe.js` owns the pure draft schema:
 
 ```js
-{
-  id: string,
-  type: 'keep'
-}
-
-{
-  id: string,
-  type: 'drain',
-  targetPressureBar: number
-}
+{ id: string, type: 'keep' }
 
 {
   id: string,
   type: 'add',
-  gas: {
-    presetName: string | null,
-    name: string,
-    oxygenPercent: number,
-    heliumPercent: number
-  },
+  bankId: string | null,
+  pressureAddedBar: number,
   targetPressureBar: number,
-  method: 'decant' | 'boost' | 'compressor',
-  sourcePressureBar: number | null
+  pressureInputMode: 'added' | 'target'
 }
 
 {
   id: string,
   type: 'wait',
-  waitMinutes: number
+  waitMode: 'minutes' | 'target',
+  waitMinutes: number,
+  targetPressureBar: number | null,
+  targetTemperatureC: number | null
 }
 ```
 
-The module validates rows independently and as an ordered recipe. It returns stable field errors rather than throwing for user-editable invalid values. It also normalizes preset-backed rows into explicit gas values before simulation.
+Validation returns stable field errors instead of throwing for editable input. It accepts only enabled, named Supply banks with valid finite inventory and normalizes the linked Add pressure fields against the row's modeled receiver-start pressure. A valid Add target cannot exceed the working-cylinder pressure or be below the current modeled receiver pressure.
 
-The converter receives the current cylinder state and turns the draft into protocol data consumed by the thermodynamic simulator. It calculates receiver composition after each Add gas row using the selected physics model and cylinder volume:
-
-1. Convert the current receiver pressure/composition to moles.
-2. Convert the requested receiver pressure/composition to moles.
-3. Add the required gas moles for an Add row.
-4. Update cumulative O₂, He, and total moles.
-5. Convert cumulative composition to the protocol's resulting mix.
-
-Drain removes moles proportionally, leaving the composition unchanged. Keep and Wait leave moles and composition unchanged. Pressure values are gauge pressures everywhere in the UI and protocol, matching the existing calculator contract.
-
-The normalized protocol preserves row identity and carries:
-
-- `type` and `operation`;
-- receiver start/end pressure;
-- resulting O₂/He mix;
-- source O₂/He mix for transfers;
-- source pressure for Boost;
-- explicit wait duration for Wait rows.
+Planning copies the selected banks, converts their and the receiver's state to moles, and updates the copied source state after every transfer. A Wait's modeled pressure, temperature, total moles, and composition feed later rows so later Add rows use coherent post-Wait receiver state. Source-bank pressure and minimum inventory use the calculation temperature; receiver addition calculations use the carried receiver temperature after a Wait.
 
 ## Thermodynamic behavior
 
-Compare simulation uses the selected gas model, cylinder geometry/material/mass, ambient temperature, inlet-gas temperature, cooling medium, and equipment rate settings already used by the optimizer.
+Compare simulation uses the selected gas model, cylinder geometry/material/mass, ambient and inlet-gas temperatures, cooling medium, and equipment rates already used by Optimize.
 
-Unlike optimizer protocols, Compare mode does not insert configured waits between transfer rows. A Wait row is the only finite inter-step wait. This makes the entered order and timing authoritative.
+Each automatic transfer stage carries its source start/end pressure, receiver start/end pressure, resulting mix, rate source, rate, and estimated duration. Compare does not insert an implicit configured wait between stages. A fixed-minute Wait runs cooling for that duration. A target-state Wait solves cooling to the requested pressure and temperature; an unreachable or inconsistent target pair is rejected and leaves the preceding successful result visible.
 
-Transfer rows use the selected method:
-
-- Decant uses the configured manual decant rate selected by source oxygen concentration.
-- Boost uses the existing booster-rate model and the required constant source pressure.
-- Compressor uses the existing compressor rate model and is restricted to Air.
-
-A Wait row performs cooling at fixed receiver pressure for its requested duration and records the pressure decrease caused by cooling. Drain rows use the configured draining rate and signed thermal transfer behavior. Keep rows perform no transfer and no wait.
-
-The simulator returns:
+The simulator returns protocol steps and:
 
 ```js
 {
-  protocolSteps: [...],
   final: {
-    recipeEnd: {
-      pressureBar,
-      temperatureC,
-      oxygenPercent,
-      heliumPercent
-    },
-    ambientSettled: {
-      pressureBar,
-      temperatureC,
-      oxygenPercent,
-      heliumPercent
-    }
+    recipeEnd: { pressureBar, temperatureC, oxygenPercent, heliumPercent },
+    ambientSettled: { pressureBar, temperatureC, oxygenPercent, heliumPercent }
   }
 }
 ```
 
-`recipeEnd` is the state immediately after the last entered row. If the last row is a Wait, it is the state after that explicit wait. If the last row is a transfer, it is the hot transfer-end state. `ambientSettled` applies the existing full cool-off projection to the recipe-end state without inventing another user-entered protocol row.
-
-The existing optimizer simulation contract remains compatible: its configured final cool-off and thermal summary continue to behave as they do today.
+`recipeEnd` is the state immediately after the final entered row. `ambientSettled` applies the full cool-off projection without adding a visible user-entered row. Optimize's existing simulation contract remains unchanged.
 
 ## Result presentation
 
-Compare protocol cards use the existing step-card surface and show:
+Compare cards show the planned Decant, Equalize, and/or Boost stages, selected bank name, modeled receiver pressure and mix, transfer rate and duration, and thermal values. Wait cards show the modeled wait state.
 
-- Entered operation and gas name.
-- Modeled receiver pressure and resulting O₂/He mix.
-- Transfer rate source, rate, and duration for transfer rows.
-- Transfer-end pressure and temperature.
-- Explicit wait duration and after-wait pressure and temperature for Wait rows or rows with modeled cooling data.
+Compare results show:
 
-The Compare summary replaces optimizer accounting with:
+- starting state;
+- recipe endpoint; and
+- ambient-settled projection.
 
-- Starting state.
-- Recipe endpoint state.
-- Ambient-settled projection.
+Optimizer-only accounting is hidden in Compare mode. Thermal graphs, Diagram, and Tank summary render the manual trajectory; Compare intentionally provides no source-bank metadata to the Diagram/Tank summary because the local inventory copy is not persisted.
 
-Optimizer-only values—retained pressure, vented gas litres, helium salvaged, source-bank leftovers, and feasibility diagnostics—are hidden in Compare mode rather than filled with synthetic values.
-
-Thermal graphs include drain, transfer, and Wait rows. The recipe endpoint and ambient-settled projection are represented as semantic key points and remain available in the accessible data table. The composition diagram and Tank summary use the manually simulated trajectory and omit bank-source metadata when no finite bank exists.
-
-Invalid compare drafts clear no existing valid output. An invalid first run shows the editor errors and an empty compare result area; a later invalid edit retains the most recent successful result.
+An invalid draft displays inline errors. A first invalid run has no result; a later invalid run keeps the most recent successful result.
 
 ## Error handling and edge cases
 
-- O₂/He values must be finite and non-negative; their sum must not exceed 100%.
-- Pressures must be finite and within the existing calculator supported range. Drain targets must not exceed the current modeled receiver pressure; Add targets must not be below it; Keep has no target pressure.
-- Wait duration must be finite and between 0 and 1440 minutes.
-- Boost source pressure is required, finite, positive, and within the supported pressure range.
-- Compressor rows reject non-Air compositions with an inline error.
-- A recipe with no rows after editing is invalid and cannot run.
-- Zero-pressure changes produce zero transfer duration and no transfer-rate claim.
-- Cooling pressure projection is clamped to non-negative gauge pressure, matching existing behavior.
-- Existing optimizer validation, safety limits, source-bank rules, and localStorage formats remain unchanged.
+- Add and Wait pressures must be finite and in the supported range; an Add target must not exceed cylinder working pressure.
+- Wait minutes must be finite and between 0 and 1440. Target wait temperature must be between -100 °C and 100 °C, above ambient, and form a reachable pressure/temperature pair.
+- Add rows require a valid enabled, named bank with positive finite volume and valid composition.
+- A source must retain the configured minimum pressure after each planned transfer.
+- The configured booster maximum limits stages that require Boost.
+- Compare recipe state and local source consumption are not persisted; bank settings and Optimize validation remain unchanged.
 
 ## Acceptance criteria
 
-1. Users can switch between Optimize blend and Compare recipe without losing either workflow's current form values.
-2. A Compare draft can contain Keep, Drain, Add gas, and Wait rows, and rows can be edited, reordered, added, and removed.
-3. Add gas rows support saved gas presets and custom named O₂/He compositions.
-4. Decant, Boost, and Compressor methods select the existing configured rate models; Boost requires source pressure and Compressor accepts only Air.
-5. The simulator preserves the entered order and explicit waits, calculates cumulative receiver composition, and exposes per-step thermal results.
-6. Results show the state at the entered recipe endpoint and the separate fully ambient-settled projection.
-7. Thermal graphs and the composition trajectory include manual rows and both endpoint states.
-8. Invalid drafts show actionable inline errors without replacing the last successful comparison result.
-9. Existing optimizer tests and behavior remain passing and unchanged.
-10. No in-progress compare recipe is persisted; existing settings and preset persistence remain unchanged.
+1. Users can switch modes without losing the current workflow inputs.
+2. Compare drafts support Keep, bank-backed Add gas, and fixed-minute or target-state Wait rows, including editing, reordering, adding, and removing rows.
+3. Add gas lists enabled named Supply banks, shows inferred source data, and synchronizes pressure-added and receiver-target values.
+4. Finite local source accounting automatically plans Decant, Equalize, and Boost stages while preserving the configured source minimum.
+5. Wait results feed subsequent planning, and invalid target-state waits retain the prior successful result.
+6. Results distinguish recipe-end and ambient-settled states; Thermal graphs, Diagram, and Tank summary render the Compare trajectory.
+7. Compare does not persist a recipe or mutate persisted Supply banks; Optimize remains unchanged.
 
 ## Verification
 
-Use test-first coverage in the existing Node test runner:
-
-- `tests/compare-recipe.test.js` covers row validation, preset/custom normalization, ordering, pressure/composition conversion, and method constraints.
-- `tests/thermodynamics.test.js` covers explicit Wait rows, recipe-end versus ambient-settled output, and compare transfer methods while retaining optimizer regressions.
-- `tests/results.test.js` covers compare summary and cards without optimizer-only accounting.
-- `tests/thermal-charts.test.js` covers compare endpoint/settled key points and manual wait rows.
-- Existing optimizer, physics, ternary, settings, and input-validation tests remain passing.
-
-Run `npm test`, then serve the app with `python3 -m http.server 8000` and smoke-test mode switching, a Keep → Drain → Add gas → Wait → Add gas recipe, invalid Boost/Compressor rows, Recipe results, Thermal graphs, Diagram, Tank summary, and switching back to the optimizer workflow. Update `docs/architecture.md`, `docs/development.md`, and `README.md` only with behavior that is implemented and verified.
+Run `npm test` and `git diff --check`. Serve the application, then verify Compare is usable without an onboarding overlay, enabled Supply-bank selection and inferred details, linked Add pressures, automatic stage cards and unchanged persisted bank data, both Wait modes including retained results after an invalid target pair, all result tabs, and switching back to Optimize.
