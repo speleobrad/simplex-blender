@@ -35,7 +35,19 @@ class FakeElement {
 
 function createFakeDocument() {
   const elements = new Map([
-    ['steps-container', new FakeElement()]
+    ['steps-container', new FakeElement()],
+    ['summary-banner', new FakeElement()],
+    ['compare-summary', new FakeElement()],
+    ['compare-start-state', new FakeElement()],
+    ['compare-recipe-end-state', new FakeElement()],
+    ['compare-ambient-settled-state', new FakeElement()],
+    ['res-retained-p', new FakeElement()],
+    ['res-retained-pct', new FakeElement()],
+    ['res-vented-p', new FakeElement()],
+    ['res-vented-litres', new FakeElement()],
+    ['res-he-salvaged', new FakeElement()],
+    ['res-final-p', new FakeElement()],
+    ['res-final-mix', new FakeElement()]
   ]);
   return {
     createElement(tagName) {
@@ -165,7 +177,7 @@ test('does not offer an interim reading before the first mixing transfer', () =>
   }
 });
 
-test('renders a successful compare protocol without an infeasible alert', () => {
+test('renders compare endpoints and modeled protocol rows without optimizer accounting', () => {
   const previousDocument = globalThis.document;
   const document = createFakeDocument();
   globalThis.document = document;
@@ -174,23 +186,82 @@ test('renders a successful compare protocol without an infeasible alert', () => 
     renderResults({
       mode: 'compare',
       compare: {
-        protocolSteps: [{
-          title: 'Decant',
-          resultingPressureBar: 100,
-          resultingMix: { oxygenPercent: 32, heliumPercent: 0 }
+        protocolSteps: [
+          {
+            type: 'keep',
+            operation: 'Keep',
+            title: 'Keep',
+            resultingPressureBar: 100,
+            resultingMix: { oxygenPercent: 21, heliumPercent: 0 }
+          },
+          {
+            type: 'add',
+            operation: 'Decant',
+            title: 'Decant',
+            resultingPressureBar: 145.2,
+            resultingMix: { oxygenPercent: 25.4, heliumPercent: 12 },
+            thermal: {
+              rateSource: 'decant-rate',
+              rateBarPerMin: 4,
+              durationMinutes: 11.3,
+              pressureAtTransferEndBar: 145.2,
+              temperatureAtTransferEndC: 38.1,
+              waitMinutes: 0,
+              pressureAfterWaitBar: 145.2,
+              temperatureAfterWaitC: 38.1
+            }
+          },
+          {
+            type: 'wait',
+            operation: 'Wait',
+            title: 'Wait',
+            resultingPressureBar: 132.8,
+            resultingMix: { oxygenPercent: 25.4, heliumPercent: 12 },
+            thermal: {
+              rateSource: 'none',
+              rateBarPerMin: null,
+              durationMinutes: 0,
+              pressureAtTransferEndBar: 145.2,
+              temperatureAtTransferEndC: 38.1,
+              waitMinutes: 30,
+              pressureAfterWaitBar: 132.8,
+              temperatureAfterWaitC: 25
+            }
+          }
+        ],
+        trajectory: [{
+          pressureBar: 100,
+          oxygenPercent: 21,
+          heliumPercent: 0
         }],
         initialMix: { oxygenPercent: 21, heliumPercent: 0 },
         final: {
-          recipeEnd: { pressureBar: 100, temperatureC: 25, oxygenPercent: 32, heliumPercent: 0 },
-          ambientSettled: { pressureBar: 98, temperatureC: 20, oxygenPercent: 32, heliumPercent: 0 }
+          recipeEnd: { pressureBar: 145.2, temperatureC: 38.1, oxygenPercent: 25.4, heliumPercent: 12 },
+          ambientSettled: { pressureBar: 132.8, temperatureC: 25, oxygenPercent: 25.4, heliumPercent: 12 }
         }
       }
+    }, {
+      physics: { temperatureC: 25 }
     });
 
-    const [card] = document.elements.get('steps-container').children;
-    assert.match(card.textContent, /Decant/);
-    assert.match(card.textContent, /100\.0 bar/);
-    assert.doesNotMatch(card.textContent, /No Feasible Solution Found/);
+    const cards = document.elements.get('steps-container').children;
+    assert.equal(cards.length, 3);
+    for (const [index, [operation, pressure]] of [
+      ['Keep', '100.0 bar'],
+      ['Decant', '145.2 bar'],
+      ['Wait', '132.8 bar']
+    ].entries()) {
+      assert.match(cards[index].textContent, new RegExp(operation));
+      assert.match(cards[index].textContent, new RegExp(pressure.replace('.', '\\.')));
+    }
+
+    const summary = document.elements.get('compare-summary');
+    assert.equal(document.elements.get('summary-banner').hidden, true);
+    assert.equal(summary.hidden, false);
+    assert.match(document.elements.get('compare-start-state').textContent, /100\.0 bar.*Tx 21\.0\/0\.0/);
+    assert.match(document.elements.get('compare-recipe-end-state').textContent, /145\.2 bar at 38\.1 °C.*Tx 25\.4\/12\.0/);
+    assert.match(document.elements.get('compare-ambient-settled-state').textContent, /132\.8 bar at 25\.0 °C.*Tx 25\.4\/12\.0/);
+    assert.doesNotMatch(summary.textContent, /Retained Gas|Helium salvaged/);
   } finally {
     globalThis.document = previousDocument;
   }

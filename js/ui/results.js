@@ -81,15 +81,21 @@ function renderThermalDetails(thermal, isFinalStep) {
 
   const details = document.createElement('div');
   details.className = 'mt-2 text-[11px] text-slate-400 space-y-0.5';
+  const isWaitOnly = thermal.rateSource === 'none' && thermal.waitMinutes > 0;
   const wait = isFinalStep
     ? `Wait: Full ambient cool-off (4.6 × tau = ${formatThermalValue(thermal.waitMinutes)} min)`
     : `Wait: ${formatThermalValue(thermal.waitMinutes)} min`;
-  const lines = [
-    `Rate: ${thermal.rateSource} · ${formatThermalValue(thermal.rateBarPerMin)} bar/min · ${formatThermalValue(thermal.durationMinutes)} min`,
-    `Estimated transfer end: ${formatThermalValue(thermal.pressureAtTransferEndBar)} bar at ${formatThermalValue(thermal.temperatureAtTransferEndC)} °C`,
-    wait,
-    `Estimated after wait: ${formatThermalValue(thermal.pressureAfterWaitBar)} bar at ${formatThermalValue(thermal.temperatureAfterWaitC)} °C`
-  ];
+  const lines = isWaitOnly
+    ? [
+      `Wait: ${formatThermalValue(thermal.waitMinutes)} min`,
+      `Estimated after wait: ${formatThermalValue(thermal.pressureAfterWaitBar)} bar at ${formatThermalValue(thermal.temperatureAfterWaitC)} °C`
+    ]
+    : [
+      `Rate: ${thermal.rateSource} · ${formatThermalValue(thermal.rateBarPerMin)} bar/min · ${formatThermalValue(thermal.durationMinutes)} min`,
+      `Estimated transfer end: ${formatThermalValue(thermal.pressureAtTransferEndBar)} bar at ${formatThermalValue(thermal.temperatureAtTransferEndC)} °C`,
+      wait,
+      `Estimated after wait: ${formatThermalValue(thermal.pressureAfterWaitBar)} bar at ${formatThermalValue(thermal.temperatureAfterWaitC)} °C`
+    ];
   for (const text of lines) {
     const line = document.createElement('div');
     line.textContent = text;
@@ -160,7 +166,11 @@ function renderInterimMeasurementControl(stepIndex, nextStep, measurement, worki
   return details;
 }
 
-function renderProtocol(protocolSteps, alertMessage = null, calculation = null) {
+function renderProtocol(protocolSteps, alertMessage = null, calculation = null, {
+  showResultingMix = false,
+  showInterimMeasurements = true,
+  finalStepIncludesAmbientCoolOff = true
+} = {}) {
   const container = document.getElementById('steps-container');
   if (!container) return;
 
@@ -183,7 +193,10 @@ function renderProtocol(protocolSteps, alertMessage = null, calculation = null) 
     description.className = 'text-[11px] text-slate-400';
     description.textContent = step.description;
     details.append(heading, description);
-    const thermalDetails = renderThermalDetails(step.thermal, index === protocolSteps.length - 1);
+    const thermalDetails = renderThermalDetails(
+      step.thermal,
+      finalStepIncludesAmbientCoolOff && index === protocolSteps.length - 1
+    );
     if (thermalDetails) details.append(thermalDetails);
 
     const result = document.createElement('div');
@@ -193,9 +206,18 @@ function renderProtocol(protocolSteps, alertMessage = null, calculation = null) 
     label.textContent = 'Result';
     const pressure = document.createElement('div');
     pressure.className = 'text-sm font-bold text-cyan-300';
-    pressure.textContent = `${step.resultingPressureBar.toFixed(1)} bar`;
+    const resultingPressureBar = step.type === 'wait'
+      ? step.thermal?.pressureAfterWaitBar ?? step.resultingPressureBar
+      : step.resultingPressureBar;
+    pressure.textContent = `${resultingPressureBar.toFixed(1)} bar`;
 
     result.append(label, pressure);
+    if (showResultingMix && step.resultingMix) {
+      const mix = document.createElement('div');
+      mix.className = 'mt-1 text-[10px] text-slate-400';
+      mix.textContent = `Tx ${step.resultingMix.oxygenPercent.toFixed(1)}/${step.resultingMix.heliumPercent.toFixed(1)}`;
+      result.append(mix);
+    }
     if (Number.isFinite(step.sourceEndPressureBar)) {
       const sourceEnd = document.createElement('div');
       sourceEnd.className = 'mt-1 text-[10px] text-slate-400';
@@ -219,7 +241,7 @@ function renderProtocol(protocolSteps, alertMessage = null, calculation = null) 
     card.append(details, result);
     cards.push(card);
 
-    if (index < protocolSteps.length - 1 && step.type !== 'keep') {
+    if (showInterimMeasurements && index < protocolSteps.length - 1 && step.type !== 'keep') {
       const measurement = calculation?.thermal?.interimMeasurements?.[index + 1] ?? null;
       cards.push(renderInterimMeasurementControl(
         index + 1,
@@ -260,7 +282,18 @@ function renderThermalSummary(thermal) {
   if (summary) summary.hidden = false;
 }
 
-function renderCompareResults(compare) {
+function formatCompareState(state) {
+  const temperature = Number.isFinite(state.temperatureC)
+    ? ` at ${state.temperatureC.toFixed(1)} °C`
+    : '';
+  return `${state.pressureBar.toFixed(1)} bar${temperature} · Tx ${state.oxygenPercent.toFixed(1)}/${state.heliumPercent.toFixed(1)}`;
+}
+
+function renderCompareResults(compare, calculation) {
+  const summaryBanner = document.getElementById('summary-banner');
+  if (summaryBanner) summaryBanner.hidden = true;
+  const compareSummary = document.getElementById('compare-summary');
+  if (compareSummary) compareSummary.hidden = false;
   for (const id of [
     'res-retained-p',
     'res-retained-pct',
@@ -270,19 +303,36 @@ function renderCompareResults(compare) {
     'res-final-p',
     'res-final-mix'
   ]) {
-    setText(id, '—');
+    setText(id, '');
   }
   renderThermalSummary(null);
+
+  const start = {
+    pressureBar: compare.trajectory?.[0]?.pressureBar ?? compare.protocolSteps[0]?.receiverStartPressureBar ?? 0,
+    temperatureC: calculation?.physics?.temperatureC,
+    ...compare.initialMix
+  };
+  setText('compare-start-state', formatCompareState(start));
+  setText('compare-recipe-end-state', formatCompareState(compare.final.recipeEnd));
+  setText('compare-ambient-settled-state', formatCompareState(compare.final.ambientSettled));
   renderProtocol(compare.protocolSteps.map(step => ({
     ...step,
-    description: step.description ?? step.operation ?? step.title
-  })));
+    description: step.description ?? (step.recipeGas ? `${step.operation}: ${step.recipeGas}` : step.operation ?? step.title)
+  })), null, null, {
+    showResultingMix: true,
+    showInterimMeasurements: false,
+    finalStepIncludesAmbientCoolOff: false
+  });
 }
 
 export function renderResults(result, calculation = null) {
   renderWaterPressurePane(null);
+  const summaryBanner = document.getElementById('summary-banner');
+  if (summaryBanner) summaryBanner.hidden = result?.mode === 'compare';
+  const compareSummary = document.getElementById('compare-summary');
+  if (compareSummary) compareSummary.hidden = result?.mode !== 'compare';
   if (result?.mode === 'compare') {
-    renderCompareResults(result.compare);
+    renderCompareResults(result.compare, calculation);
     return;
   }
   if (result.gas) {
