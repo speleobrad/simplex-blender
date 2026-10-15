@@ -696,6 +696,7 @@ function ternaryData() {
     if (!compare || !state.lastCompareInput) return null;
     const finalMix = compare.final.recipeEnd;
     return {
+      mode: 'compare',
       banks: [],
       initialMix: compare.initialMix,
       targetMix: {
@@ -753,7 +754,7 @@ function renderCompareResult() {
     return;
   }
   renderResults(state.lastCompareResult, state.lastCompareInput);
-  renderThermalCharts({ feasible: true, protocolSteps: compare.protocolSteps }, state.lastCompareInput);
+  renderThermalCharts(state.lastCompareResult, state.lastCompareInput);
   renderTernary();
 }
 

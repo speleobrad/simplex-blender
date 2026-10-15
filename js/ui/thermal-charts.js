@@ -14,6 +14,7 @@ function point(step, phase, title, label, recipeAction, recipeGas, pressureBar, 
 function phaseLabel(phase) {
   if (phase === 'transfer-end') return 'transfer end';
   if (phase === 'settled') return 'ambient settled';
+  if (phase === 'ambient-settled') return 'ambient-settled projection';
   if (phase === 'measured-start') return 'measured start';
   return 'step start';
 }
@@ -44,7 +45,7 @@ export function thermalChartAriaLabel(title) {
   return `${title} during blending steps over time; solid curves show the current/observed path; dotted curves indicate estimated values`;
 }
 
-export function buildThermalSeries(protocolSteps, initial = {}) {
+export function buildThermalSeries(protocolSteps, initial = {}, terminalProjection = null) {
   if (!Array.isArray(protocolSteps) || protocolSteps.length === 0) {
     return { points: [], samples: [], bands: [], segments: [], final: null };
   }
@@ -166,6 +167,40 @@ export function buildThermalSeries(protocolSteps, initial = {}) {
     previousWaitMinutes = waitMinutes;
     previousPressureBar = settledPressureBar;
     previousTemperatureC = settledTemperatureC;
+  }
+
+  if (points.length > 0
+    && finite(terminalProjection?.pressureBar)
+    && finite(terminalProjection?.temperatureC)
+    && finite(terminalProjection?.durationMinutes)
+    && terminalProjection.durationMinutes >= 0) {
+    const terminalElapsedMinutes = elapsedMinutes + terminalProjection.durationMinutes;
+    const terminalPoint = point(
+      points.at(-1).step,
+      'ambient-settled',
+      'Ambient-settled projection',
+      'Ambient-settled projection',
+      undefined,
+      undefined,
+      terminalProjection.pressureBar,
+      terminalProjection.temperatureC,
+      terminalElapsedMinutes
+    );
+    const lastSample = samples.at(-1) ?? {
+      elapsedMinutes,
+      pressureBar: previousPressureBar,
+      temperatureC: previousTemperatureC
+    };
+    const terminalSample = {
+      step: terminalPoint.step,
+      title: terminalPoint.title,
+      elapsedMinutes: terminalElapsedMinutes,
+      pressureBar: terminalProjection.pressureBar,
+      temperatureC: terminalProjection.temperatureC
+    };
+    points.push(terminalPoint);
+    samples.push(terminalSample);
+    lineSegments.push({ style: 'estimated', samples: [lastSample, terminalSample] });
   }
 
   return {
@@ -634,6 +669,7 @@ function renderDataTable(container, points) {
   const body = document.createElement('tbody');
   for (let index = 0; index < points.length;) {
     const pointValue = points[index];
+    const isTerminalProjection = pointValue.phase === 'ambient-settled';
     const row = document.createElement('tr');
     const bandIndex = pointValue.step - 1;
     row.className = `thermal-band-${bandIndex % 2 === 0 ? 'even' : 'odd'} border-b border-ocean-800/60 last:border-0`;
@@ -642,8 +678,8 @@ function renderDataTable(container, points) {
     row.setAttribute('aria-label', pointDescription(pointValue));
 
     const stepCell = document.createElement('th');
-    stepCell.scope = 'rowgroup';
-    stepCell.rowSpan = 3;
+    stepCell.scope = isTerminalProjection ? 'row' : 'rowgroup';
+    stepCell.rowSpan = isTerminalProjection ? 1 : 3;
     stepCell.className = 'thermal-step-cell px-2 py-1 text-slate-300';
     const stepLabel = document.createElement('span');
     if (pointValue.recipeAction && pointValue.recipeGas) {
@@ -655,6 +691,10 @@ function renderDataTable(container, points) {
 
     appendThermalTableCells(row, pointValue, stepCell);
     body.append(row);
+    if (isTerminalProjection) {
+      index++;
+      continue;
+    }
 
     for (let rowOffset = 1; rowOffset < 3; rowOffset++) {
       const followingPoint = points[index + rowOffset];
@@ -673,6 +713,7 @@ function renderDataTable(container, points) {
 }
 
 function protocolForResult(result) {
+  if (result?.mode === 'compare') return result.compare?.protocolSteps;
   if (result?.feasible) return result.protocolSteps;
   return result?.maximumPressure?.protocolSteps ?? result?.protocolSteps;
 }
@@ -685,10 +726,17 @@ export function renderThermalCharts(result, input = {}) {
   if (!temperatureChart || !pressureChart || !dataTable) return;
   bindThermalInteractions();
 
+  const terminalProjection = result?.mode === 'compare'
+    ? {
+      pressureBar: result.compare?.final?.ambientSettled?.pressureBar,
+      temperatureC: result.compare?.final?.ambientSettled?.temperatureC,
+      durationMinutes: result.compare?.final?.ambientSettledDurationMinutes
+    }
+    : null;
   const series = buildThermalSeries(protocolForResult(result), {
     initialPressureBar: input.cylinder?.initialPressureBar ?? result?.gas?.initialPressureBar,
     initialTemperatureC: input.physics?.temperatureC
-  });
+  }, terminalProjection);
   thermalHoverSamples = series.samples;
   thermalHoverReadout = document.getElementById('thermal-chart-hover-readout');
   clearThermalHover();
@@ -719,7 +767,9 @@ export function renderThermalCharts(result, input = {}) {
   renderDataTable(dataTable, series.points);
   if (status) {
     status.textContent = series.final
-      ? `${series.final.step} blending step${series.final.step === 1 ? '' : 's'} shown over ${series.final.elapsedMinutes.toFixed(1)} minutes; final point is the ambient-settled tank state at ${series.final.pressureBar.toFixed(1)} bar and ${series.final.temperatureC.toFixed(1)} °C.`
+      ? result?.mode === 'compare'
+        ? `${series.final.step} compare recipe step${series.final.step === 1 ? '' : 's'} shown over ${series.final.elapsedMinutes.toFixed(1)} minutes; final point is the ambient-settled tank state at ${series.final.pressureBar.toFixed(1)} bar and ${series.final.temperatureC.toFixed(1)} °C.`
+        : `${series.final.step} blending step${series.final.step === 1 ? '' : 's'} shown over ${series.final.elapsedMinutes.toFixed(1)} minutes; final point is the ambient-settled tank state at ${series.final.pressureBar.toFixed(1)} bar and ${series.final.temperatureC.toFixed(1)} °C.`
       : 'Chart data appears when a completed blend protocol is available.';
   }
 }
