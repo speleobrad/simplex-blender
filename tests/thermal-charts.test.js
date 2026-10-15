@@ -187,6 +187,34 @@ test('compare series retains explicit waits before adding an ambient-settled pro
   assert.equal(series.final.elapsedMinutes, 63);
 });
 
+test('keep-only compare series projects from the initial state to ambient settled', () => {
+  const series = buildThermalSeries([{ type: 'keep' }], {
+    initialPressureBar: 100,
+    initialTemperatureC: 24
+  }, {
+    pressureBar: 98,
+    temperatureC: 20,
+    durationMinutes: 46
+  });
+
+  assert.deepEqual(series.bands, []);
+  assert.deepEqual(series.points.map(point => [
+    point.phase,
+    point.elapsedMinutes,
+    point.pressureBar,
+    point.temperatureC
+  ]), [['ambient-settled', 46, 98, 20]]);
+  assert.deepEqual(series.samples.map(sample => [
+    sample.elapsedMinutes,
+    sample.pressureBar,
+    sample.temperatureC
+  ]), [[0, 100, 24], [46, 98, 20]]);
+  assert.deepEqual(series.segments, [{
+    style: 'estimated',
+    samples: series.samples
+  }]);
+});
+
 test('empty or incomplete protocol produces no chart points', () => {
   assert.deepEqual(buildThermalSeries([]), { points: [], samples: [], bands: [], segments: [], final: null });
   assert.deepEqual(buildThermalSeries([{ title: 'Missing thermal state' }]), {

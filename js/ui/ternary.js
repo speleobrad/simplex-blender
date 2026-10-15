@@ -429,11 +429,12 @@ export function buildAccessibleTernaryData({
     mix: point,
     pressureBar: point.pressureBar
   }));
+  const recipeStageCount = trajectory.filter(point => point.step !== 0).length;
   return {
     mixRows,
     trajectoryRows,
     status: isCompare
-      ? `Data covers ${trajectory.length} recipe stage${trajectory.length === 1 ? '' : 's'}.`
+      ? `Data covers ${recipeStageCount} recipe stage${recipeStageCount === 1 ? '' : 's'}.`
       : `Data covers ${enabledBankCount} enabled supply bank${enabledBankCount === 1 ? '' : 's'} and ${trajectory.length} trajectory points.`
   };
 }

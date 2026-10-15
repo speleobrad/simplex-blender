@@ -169,14 +169,23 @@ export function buildThermalSeries(protocolSteps, initial = {}, terminalProjecti
     previousTemperatureC = settledTemperatureC;
   }
 
-  if (points.length > 0
+  const terminalStart = points.length > 0
+    ? samples.at(-1)
+    : finite(previousPressureBar) && finite(previousTemperatureC)
+      ? {
+        elapsedMinutes: 0,
+        pressureBar: previousPressureBar,
+        temperatureC: previousTemperatureC
+      }
+      : null;
+  if (terminalStart
     && finite(terminalProjection?.pressureBar)
     && finite(terminalProjection?.temperatureC)
     && finite(terminalProjection?.durationMinutes)
     && terminalProjection.durationMinutes >= 0) {
     const terminalElapsedMinutes = elapsedMinutes + terminalProjection.durationMinutes;
     const terminalPoint = point(
-      points.at(-1).step,
+      points.at(-1)?.step ?? 0,
       'ambient-settled',
       'Ambient-settled projection',
       'Ambient-settled projection',
@@ -186,11 +195,6 @@ export function buildThermalSeries(protocolSteps, initial = {}, terminalProjecti
       terminalProjection.temperatureC,
       terminalElapsedMinutes
     );
-    const lastSample = samples.at(-1) ?? {
-      elapsedMinutes,
-      pressureBar: previousPressureBar,
-      temperatureC: previousTemperatureC
-    };
     const terminalSample = {
       step: terminalPoint.step,
       title: terminalPoint.title,
@@ -198,9 +202,10 @@ export function buildThermalSeries(protocolSteps, initial = {}, terminalProjecti
       pressureBar: terminalProjection.pressureBar,
       temperatureC: terminalProjection.temperatureC
     };
+    if (points.length === 0) samples.push(terminalStart);
     points.push(terminalPoint);
     samples.push(terminalSample);
-    lineSegments.push({ style: 'estimated', samples: [lastSample, terminalSample] });
+    lineSegments.push({ style: 'estimated', samples: [terminalStart, terminalSample] });
   }
 
   return {

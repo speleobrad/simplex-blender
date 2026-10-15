@@ -78,13 +78,15 @@ test('compare accessible data keeps manual stages without supply banks', () => {
     initialMix: { oxygenPercent: 21, heliumPercent: 0, nitrogenPercent: 79 },
     targetMix: { oxygenPercent: 18, heliumPercent: 35, nitrogenPercent: 47 },
     trajectory: [
-      { label: 'Step 1', oxygenPercent: 20, heliumPercent: 15, nitrogenPercent: 65, pressureBar: 120 },
-      { label: 'Step 2', oxygenPercent: 18, heliumPercent: 35, nitrogenPercent: 47, pressureBar: 200 }
+      { step: 0, label: 'Start mix', oxygenPercent: 21, heliumPercent: 0, nitrogenPercent: 79, pressureBar: 100 },
+      { step: 1, label: 'Step 1', oxygenPercent: 20, heliumPercent: 15, nitrogenPercent: 65, pressureBar: 120 },
+      { step: 2, label: 'Step 2', oxygenPercent: 18, heliumPercent: 35, nitrogenPercent: 47, pressureBar: 200 }
     ]
   });
 
   assert.deepEqual(data.mixRows.map(row => row.label), ['Air reference', 'Initial mix', 'Final mix']);
   assert.deepEqual(data.trajectoryRows.map(row => [row.label, row.pressureBar]), [
+    ['Start mix', 100],
     ['Step 1', 120],
     ['Step 2', 200]
   ]);
