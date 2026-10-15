@@ -1,6 +1,6 @@
 import { calculatorInputSignature, signatureAfterClearingMeasurement } from './interim-measurements.js';
 import { optimizeBlend } from './optimizer.js';
-import { parseNumericInput, splitGasInput } from './gas-input.js';
+import { isValidGasComposition, parseNumericInput, splitGasInput } from './gas-input.js';
 import { validateCalculatorInputs, validateSupplyBankInput } from './input-validation.js';
 import { buildCompareProtocol, createCompareRow, validateCompareRecipe } from './compare-recipe.js';
 import { simulateCompareProtocol } from './thermodynamics.js';
@@ -656,7 +656,14 @@ function compareInput() {
 
 function compareSharedInputErrors(input) {
   const targetPressureBar = Math.max(10, input.cylinder.initialPressureBar);
-  return validateCalculatorInputs({ ...input.cylinder, targetPressureBar }, input.physics, input.thermal);
+  const errors = validateCalculatorInputs({ ...input.cylinder, targetPressureBar }, input.physics, input.thermal);
+  if (!isValidGasComposition(input.cylinder.initialOxygenPercent, input.cylinder.initialHeliumPercent)) {
+    errors.push('Initial oxygen and helium percentages must total no more than 100%.');
+  }
+  if (!['ideal', 'vdw'].includes(input.physics.model)) {
+    errors.push('Physics model must be ideal or vdw.');
+  }
+  return errors;
 }
 
 function renderCompareEditor() {
@@ -745,6 +752,7 @@ function renderCompareResult() {
     clearTernaryDiagram(byId('ternary-canvas'));
     return;
   }
+  renderResults(state.lastCompareResult, state.lastCompareInput);
   renderThermalCharts({ feasible: true, protocolSteps: compare.protocolSteps }, state.lastCompareInput);
   renderTernary();
 }
@@ -839,6 +847,7 @@ function setMode(mode) {
     renderResults(state.lastResult, state.lastInput);
     renderThermalCharts(state.lastResult, state.lastInput);
     if (state.lastResult.feasible) renderTernary();
+    else clearTernaryDiagram(byId('ternary-canvas'));
   }
 }
 
@@ -970,7 +979,7 @@ function updateBankFromInput(input) {
   recalculate();
 }
 
-function updateCompareRow(input) {
+function updateCompareRow(input, rerender) {
   const index = state.compareRows.findIndex(row => row.id === input.dataset.rowId);
   if (index < 0) return;
   const row = state.compareRows[index];
@@ -998,6 +1007,7 @@ function updateCompareRow(input) {
     updatedRow = { ...row, [field]: value };
   }
   state.compareRows.splice(index, 1, updatedRow);
+  if (!rerender) return;
   state.compareErrors = [];
   renderCompareErrors();
   renderCompareEditor();
@@ -1006,7 +1016,7 @@ function updateCompareRow(input) {
 function handleInputOrChange(event) {
   const target = event.target;
   if (target.dataset.compareField && target.dataset.rowId) {
-    updateCompareRow(target);
+    updateCompareRow(target, event.type === 'change');
     return;
   }
   if (event.type === 'input' && target.dataset.settingsPresetImportUrl !== undefined) {
