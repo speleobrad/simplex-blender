@@ -260,8 +260,31 @@ function renderThermalSummary(thermal) {
   if (summary) summary.hidden = false;
 }
 
+function renderCompareResults(compare) {
+  for (const id of [
+    'res-retained-p',
+    'res-retained-pct',
+    'res-vented-p',
+    'res-vented-litres',
+    'res-he-salvaged',
+    'res-final-p',
+    'res-final-mix'
+  ]) {
+    setText(id, '—');
+  }
+  renderThermalSummary(null);
+  renderProtocol(compare.protocolSteps.map(step => ({
+    ...step,
+    description: step.description ?? step.operation ?? step.title
+  })));
+}
+
 export function renderResults(result, calculation = null) {
   renderWaterPressurePane(null);
+  if (result?.mode === 'compare') {
+    renderCompareResults(result.compare);
+    return;
+  }
   if (result.gas) {
     setText('lbl-init-p', result.gas.initialPressureBar);
     setText(

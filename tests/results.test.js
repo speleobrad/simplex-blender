@@ -165,6 +165,37 @@ test('does not offer an interim reading before the first mixing transfer', () =>
   }
 });
 
+test('renders a successful compare protocol without an infeasible alert', () => {
+  const previousDocument = globalThis.document;
+  const document = createFakeDocument();
+  globalThis.document = document;
+
+  try {
+    renderResults({
+      mode: 'compare',
+      compare: {
+        protocolSteps: [{
+          title: 'Decant',
+          resultingPressureBar: 100,
+          resultingMix: { oxygenPercent: 32, heliumPercent: 0 }
+        }],
+        initialMix: { oxygenPercent: 21, heliumPercent: 0 },
+        final: {
+          recipeEnd: { pressureBar: 100, temperatureC: 25, oxygenPercent: 32, heliumPercent: 0 },
+          ambientSettled: { pressureBar: 98, temperatureC: 20, oxygenPercent: 32, heliumPercent: 0 }
+        }
+      }
+    });
+
+    const [card] = document.elements.get('steps-container').children;
+    assert.match(card.textContent, /Decant/);
+    assert.match(card.textContent, /100\.0 bar/);
+    assert.doesNotMatch(card.textContent, /No Feasible Solution Found/);
+  } finally {
+    globalThis.document = previousDocument;
+  }
+});
+
 test('pressure warnings trigger only above the cylinder working pressure', () => {
   assert.equal(isPressureAboveWorkingPressure(232, 232), false);
   assert.equal(isPressureAboveWorkingPressure(232.1, 232), true);
