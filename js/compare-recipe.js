@@ -1,5 +1,6 @@
 import { isValidGasComposition } from './gas-input.js';
 import { calcMolarDensity, calcPressure } from './physics.js';
+import { calculateBoosterFillRate } from './thermodynamics.js';
 
 export const COMPARE_ROW_TYPES = [
   { value: 'keep', label: 'Keep' },
@@ -70,6 +71,12 @@ function validPressure(value) {
   return Number.isFinite(value) && value >= 0 && value <= MAX_PRESSURE_BAR;
 }
 
+function receiverPressureCeiling(cylinder) {
+  return Number.isFinite(cylinder?.workingPressureBar) && cylinder.workingPressureBar >= 0
+    ? Math.min(MAX_PRESSURE_BAR, cylinder.workingPressureBar)
+    : MAX_PRESSURE_BAR;
+}
+
 function validTemperature(value) {
   return Number.isFinite(value)
     && value >= MIN_WAIT_TEMPERATURE_C
@@ -101,12 +108,13 @@ function indexedBanks(banks) {
 
 function isUsableBank(bank) {
   return bank?.enabled === true
+    && typeof bank.name === 'string' && bank.name.trim().length > 0
     && Number.isFinite(bank.volumeL) && bank.volumeL > 0
     && validPressure(bank.pressureBar)
     && isValidGasComposition(bank.oxygenPercent, bank.heliumPercent);
 }
 
-function validateAddRow(row, rowId, currentPressure, bankIndex, errors) {
+function validateAddRow(row, rowId, currentPressure, pressureCeilingBar, bankIndex, errors) {
   if (!['added', 'target'].includes(row.pressureInputMode)) {
     error(errors, rowId, 'pressureInputMode', 'Choose whether pressure added or receiver target is being edited.');
     return currentPressure;
@@ -136,6 +144,10 @@ function validateAddRow(row, rowId, currentPressure, bankIndex, errors) {
     error(errors, rowId, 'targetPressureBar', 'Add target pressure must be between 0 and 350 bar.');
     return currentPressure;
   }
+  if (normalized.targetPressureBar > pressureCeilingBar) {
+    error(errors, rowId, 'targetPressureBar', `Add target pressure cannot exceed the cylinder working pressure of ${pressureCeilingBar} bar.`);
+    return currentPressure;
+  }
   if (normalized.pressureAddedBar < 0 || normalized.targetPressureBar < currentPressure) {
     error(errors, rowId, activeField, 'Add target pressure cannot be below the current pressure.');
     return currentPressure;
@@ -154,6 +166,7 @@ export function validateCompareRecipe(rows, { cylinder, banks = [] } = {}) {
 
   const normalizedRows = rows.map(cloneRow);
   const bankIndex = indexedBanks(banks);
+  const pressureCeilingBar = receiverPressureCeiling(cylinder);
   let currentPressure = cylinder?.initialPressureBar;
   if (!validPressure(currentPressure)) currentPressure = null;
 
@@ -164,7 +177,7 @@ export function validateCompareRecipe(rows, { cylinder, banks = [] } = {}) {
       continue;
     }
     if (type === 'add') {
-      currentPressure = validateAddRow(row, rowId, currentPressure, bankIndex, errors);
+      currentPressure = validateAddRow(row, rowId, currentPressure, pressureCeilingBar, bankIndex, errors);
       continue;
     }
     if (type === 'wait') {
@@ -309,7 +322,45 @@ function sourceState(bank, moles, temperatureC, useVdw) {
   };
 }
 
-function plannedTransferStep(type, row, sourceStart, sourceEnd, receiverStart, receiverEnd) {
+function transferRate(type, sourceStart, sourceEnd, receiverStart, receiverEnd, limits, receiverVolumeL, temperatureC, useVdw) {
+  const pressureIncreaseBar = Math.max(0, receiverEnd.pressureBar - receiverStart.pressureBar);
+  if (type === 'decant' || type === 'equalize') {
+    const rateBarPerMin = sourceStart.oxygenPercent >= 40
+      ? limits.oxygenDecantRateBarPerMin
+      : limits.otherDecantRateBarPerMin;
+    return {
+      source: 'decant',
+      rateBarPerMin,
+      estimatedDurationMinutes: pressureIncreaseBar / rateBarPerMin
+    };
+  }
+
+  const boosterBpm = sourceStart.oxygenPercent >= 40
+    ? limits.oxygenBoostBpm
+    : limits.otherBoostBpm;
+  const rateBarPerMin = calculateBoosterFillRate({
+    cylinderVolumeCm3: limits.cylinderVolumeCm3,
+    bpm: boosterBpm,
+    sourcePressureBar: (sourceStart.pressureBar + sourceEnd.pressureBar) / 2,
+    receiverPressureBar: (receiverStart.pressureBar + receiverEnd.pressureBar) / 2,
+    sourceOxygenPercent: sourceStart.oxygenPercent,
+    sourceHeliumPercent: sourceStart.heliumPercent,
+    receiverOxygenPercent: receiverEnd.mix.oxygenPercent,
+    receiverHeliumPercent: receiverEnd.mix.heliumPercent,
+    receiverVolumeL,
+    temperatureC,
+    useVdw
+  }).fillRateBarPerMin;
+  return {
+    source: 'booster',
+    boosterBpm,
+    boosterCylinderVolumeCm3: limits.cylinderVolumeCm3,
+    rateBarPerMin,
+    estimatedDurationMinutes: pressureIncreaseBar / rateBarPerMin
+  };
+}
+
+function plannedTransferStep(type, row, sourceStart, sourceEnd, receiverStart, receiverEnd, limits, receiverVolumeL, temperatureC, useVdw) {
   const operation = type[0].toUpperCase() + type.slice(1);
   return {
     type,
@@ -330,6 +381,17 @@ function plannedTransferStep(type, row, sourceStart, sourceEnd, receiverStart, r
     receiverEndPressureBar: receiverEnd.pressureBar,
     resultingPressureBar: receiverEnd.pressureBar,
     resultingMix: { ...receiverEnd.mix },
+    transferRate: transferRate(
+      type,
+      sourceStart,
+      sourceEnd,
+      receiverStart,
+      receiverEnd,
+      limits,
+      receiverVolumeL,
+      temperatureC,
+      useVdw
+    ),
     operation,
     recipeAction: operation,
     recipeGas: row.sourceBank.name,
@@ -368,7 +430,22 @@ function equipmentLimits(settings) {
       : 0,
     maxBoosterOutputPressureBar: Number.isFinite(booster.maxBoosterOutputPressureBar)
       ? booster.maxBoosterOutputPressureBar
-      : MAX_PRESSURE_BAR
+      : MAX_PRESSURE_BAR,
+    oxygenDecantRateBarPerMin: Number.isFinite(booster.oxygenDecantRateBarPerMin)
+      ? booster.oxygenDecantRateBarPerMin
+      : 5,
+    otherDecantRateBarPerMin: Number.isFinite(booster.otherDecantRateBarPerMin)
+      ? booster.otherDecantRateBarPerMin
+      : 10,
+    cylinderVolumeCm3: Number.isFinite(booster.cylinderVolumeCm3)
+      ? booster.cylinderVolumeCm3
+      : 9,
+    oxygenBoostBpm: Number.isFinite(booster.oxygenBoostBpm)
+      ? booster.oxygenBoostBpm
+      : 35,
+    otherBoostBpm: Number.isFinite(booster.otherBoostBpm)
+      ? booster.otherBoostBpm
+      : 50
   };
 }
 
@@ -401,6 +478,10 @@ export function buildCompareProtocol(rows, { cylinder, physics, banks = [], sett
   const { volumeL, initialPressureBar, initialOxygenPercent, initialHeliumPercent } = cylinder;
   const { temperatureC, model } = physics;
   const useVdw = model !== 'ideal';
+  const receiverPressureCeilingBar = receiverPressureCeiling(cylinder);
+  if (initialPressureBar > receiverPressureCeilingBar + PRESSURE_TOLERANCE_BAR) {
+    throw new RangeError(`Compare protocol initial pressure cannot exceed the cylinder working pressure of ${receiverPressureCeilingBar} bar.`);
+  }
   const limits = equipmentLimits(settings);
   const bankIndex = indexedBanks(banks);
   const bankStates = new Map();
@@ -449,6 +530,9 @@ export function buildCompareProtocol(rows, { cylinder, physics, banks = [], sett
 
     const targetRow = normalizeComparePressureFields(row, receiver.pressureBar);
     const targetPressureBar = targetRow.targetPressureBar;
+    if (targetPressureBar > receiverPressureCeilingBar + PRESSURE_TOLERANCE_BAR) {
+      throw new RangeError(`Compare protocol target pressure cannot exceed the cylinder working pressure of ${receiverPressureCeilingBar} bar.`);
+    }
     const source = bankStates.get(row.sourceBank.id);
     const sourceBank = source.bank;
     const requiredMoles = solveAddedMoles(
@@ -484,7 +568,18 @@ export function buildCompareProtocol(rows, { cylinder, physics, banks = [], sett
     const sourceFinal = sourceState(sourceBank, source.moles - requiredMoles, temperatureC, useVdw);
 
     if (sourceFinal.pressureBar >= targetPressureBar - PRESSURE_TOLERANCE_BAR) {
-      const step = plannedTransferStep('decant', row, sourceStart, sourceFinal, receiverStart, receiverFinal);
+      const step = plannedTransferStep(
+        'decant',
+        row,
+        sourceStart,
+        sourceFinal,
+        receiverStart,
+        receiverFinal,
+        limits,
+        volumeL,
+        temperatureC,
+        useVdw
+      );
       protocolSteps.push(step);
       trajectoryStep = addTrajectoryPoint(trajectory, step, trajectoryStep);
     } else {
@@ -525,7 +620,11 @@ export function buildCompareProtocol(rows, { cylinder, physics, banks = [], sett
           sourceStart,
           sourceEqualized,
           receiverStart,
-          receiverEqualized
+          receiverEqualized,
+          limits,
+          volumeL,
+          temperatureC,
+          useVdw
         );
         protocolSteps.push(equalizeStep);
         trajectoryStep = addTrajectoryPoint(trajectory, equalizeStep, trajectoryStep);
@@ -535,12 +634,27 @@ export function buildCompareProtocol(rows, { cylinder, physics, banks = [], sett
           sourceEqualized,
           sourceFinal,
           receiverEqualized,
-          receiverFinal
+          receiverFinal,
+          limits,
+          volumeL,
+          temperatureC,
+          useVdw
         );
         protocolSteps.push(boostStep);
         trajectoryStep = addTrajectoryPoint(trajectory, boostStep, trajectoryStep);
       } else {
-        const boostStep = plannedTransferStep('boost', row, sourceStart, sourceFinal, receiverStart, receiverFinal);
+        const boostStep = plannedTransferStep(
+          'boost',
+          row,
+          sourceStart,
+          sourceFinal,
+          receiverStart,
+          receiverFinal,
+          limits,
+          volumeL,
+          temperatureC,
+          useVdw
+        );
         protocolSteps.push(boostStep);
         trajectoryStep = addTrajectoryPoint(trajectory, boostStep, trajectoryStep);
       }

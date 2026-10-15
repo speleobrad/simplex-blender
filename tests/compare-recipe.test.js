@@ -186,8 +186,8 @@ test('rejects a finite bank that cannot supply the requested addition', () => {
     id: 'add',
     type: 'add',
     bankId: 'small-he',
-    pressureAddedBar: 200,
-    targetPressureBar: 250,
+    pressureAddedBar: 170,
+    targetPressureBar: 220,
     pressureInputMode: 'target'
   }], {
     cylinder,
@@ -228,4 +228,57 @@ test('rejects pressure modes that would reduce receiver pressure or exceed the l
   assert.equal(result.valid, false);
   assert.ok(result.errors.some(error => error.rowId === 'low' && error.field === 'pressureAddedBar'));
   assert.ok(result.errors.some(error => error.rowId === 'high' && error.field === 'targetPressureBar'));
+});
+
+test('rejects an add target above the configured cylinder working pressure', () => {
+  const result = validateCompareRecipe([{
+    id: 'over-working-pressure',
+    type: 'add',
+    bankId: 'he-bank',
+    pressureAddedBar: 183,
+    targetPressureBar: 233,
+    pressureInputMode: 'target'
+  }], { cylinder, banks, physics, settings });
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some(error => (
+    error.rowId === 'over-working-pressure'
+      && error.field === 'targetPressureBar'
+      && /working pressure/i.test(error.message)
+  )));
+});
+
+test('carries configured decant and booster rates on planned stages', () => {
+  const result = buildCompareProtocol([{
+    id: 'add',
+    type: 'add',
+    bankId: 'he-bank',
+    pressureAddedBar: 150,
+    targetPressureBar: 200,
+    pressureInputMode: 'target'
+  }], { cylinder, physics, banks, settings });
+  const [equalize, boost] = result.protocolSteps;
+  assert.deepEqual(equalize.transferRate, {
+    source: 'decant',
+    rateBarPerMin: 10,
+    estimatedDurationMinutes: (equalize.receiverEndPressureBar - equalize.receiverStartPressureBar) / 10
+  });
+  assert.equal(boost.transferRate.source, 'booster');
+  assert.equal(boost.transferRate.boosterBpm, 50);
+  assert.equal(boost.transferRate.boosterCylinderVolumeCm3, 9);
+  assert.ok(Number.isFinite(boost.transferRate.rateBarPerMin));
+  assert.ok(Number.isFinite(boost.transferRate.estimatedDurationMinutes));
+});
+
+test('rejects a selected supply bank without a name', () => {
+  const namelessBank = { ...banks[0], id: 'nameless', name: '' };
+  const result = validateCompareRecipe([{
+    id: 'add',
+    type: 'add',
+    bankId: 'nameless',
+    pressureAddedBar: 50,
+    targetPressureBar: 100,
+    pressureInputMode: 'added'
+  }], { cylinder, banks: [namelessBank], physics, settings });
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some(error => error.field === 'bankId'));
 });
