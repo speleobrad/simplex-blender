@@ -8,6 +8,7 @@ import {
   calculateTemperatureAfterWait,
   estimateTransferTemperature,
   projectPressureAtTemperatures,
+  simulateCompareProtocol,
   simulateThermalProtocol
 } from '../js/thermodynamics.js';
 
@@ -811,4 +812,97 @@ test('projects final gauge pressure across the requested water temperatures', ()
   assert.ok(Math.abs(projections[4].pressureBar - 200) < 1e-9);
   assert.ok(projections[0].pressureBar < projections[4].pressureBar);
   assert.ok(projections[6].pressureBar > projections[4].pressureBar);
+});
+
+test('compare simulation honors an explicit wait instead of configured inter-step wait', () => {
+  const result = simulateCompareProtocol({
+    protocolSteps: [
+      { type: 'keep', operation: 'Keep', resultingPressureBar: 50, resultingMix: { oxygenPercent: 21, heliumPercent: 0 } },
+      { type: 'add', method: 'decant', operation: 'Decant', receiverStartPressureBar: 50, receiverEndPressureBar: 100, resultingPressureBar: 100, resultingMix: { oxygenPercent: 32, heliumPercent: 0 }, sourceOxygenPercent: 32, sourceHeliumPercent: 0 },
+      { type: 'wait', operation: 'Wait', receiverStartPressureBar: 100, receiverEndPressureBar: 100, resultingPressureBar: 100, resultingMix: { oxygenPercent: 32, heliumPercent: 0 }, waitMinutes: 7 }
+    ],
+    cylinder: { initialPressureBar: 50, volumeL: 12 },
+    physics: { model: 'ideal', temperatureC: 20 },
+    thermal: { tankMaterial: 'steel', coolingMedium: 'air', ambientTemperatureC: 20, inletTemperatureC: 20, waitMinutes: 99 },
+    settings: { booster: { otherDecantRateBarPerMin: 5, drainingRateBarPerMin: 5 } }
+  });
+
+  assert.equal(result.protocolSteps[2].thermal.waitMinutes, 7);
+  assert.equal(result.final.recipeEnd.pressureBar, result.protocolSteps.at(-1).thermal.pressureAfterWaitBar);
+  assert.equal(result.final.ambientSettled.temperatureC, 20);
+});
+
+test('compare simulation maps drain, decant, boost, and compressor transfer rates', () => {
+  const result = simulateCompareProtocol({
+    protocolSteps: [
+      { type: 'drain', operation: 'Drain', receiverEndPressureBar: 80, resultingPressureBar: 80, resultingMix: { oxygenPercent: 21, heliumPercent: 0 } },
+      { type: 'add', method: 'decant', operation: 'Decant', receiverEndPressureBar: 100, resultingPressureBar: 100, resultingMix: { oxygenPercent: 21, heliumPercent: 0 }, sourceOxygenPercent: 21, sourceHeliumPercent: 0 },
+      { type: 'add', method: 'boost', operation: 'Boost', receiverEndPressureBar: 110, resultingPressureBar: 110, resultingMix: { oxygenPercent: 21, heliumPercent: 0 }, sourceOxygenPercent: 21, sourceHeliumPercent: 0, sourcePressureBar: 250 },
+      { type: 'add', method: 'compressor', operation: 'Compressor', receiverEndPressureBar: 120, resultingPressureBar: 120, resultingMix: { oxygenPercent: 21, heliumPercent: 0 }, sourceOxygenPercent: 21, sourceHeliumPercent: 0 }
+    ],
+    cylinder: { initialPressureBar: 100, volumeL: 12 },
+    physics: { model: 'ideal', temperatureC: 40 },
+    thermal: { tankMaterial: 'steel', coolingMedium: 'air', ambientTemperatureC: 20, inletTemperatureC: 20 },
+    settings: { booster: { cylinderVolumeCm3: 9, otherBoostBpm: 50, otherDecantRateBarPerMin: 5, drainingRateBarPerMin: 10, compressorInletFlowLPerMin: 100 } }
+  });
+
+  const [drain, decant, boost, compressor] = result.protocolSteps.map(step => step.thermal);
+  assert.equal(drain.rateSource, 'draining-rate');
+  assert.equal(drain.rateBarPerMin, 10);
+  assert.ok(drain.temperatureAtTransferEndC < drain.temperatureStartC);
+  assert.equal(decant.rateSource, 'decant-rate');
+  assert.equal(decant.rateBarPerMin, 5);
+  assert.equal(boost.rateSource, 'booster');
+  assert.equal(boost.rateBarPerMin, calculateBoosterFillRate({
+    cylinderVolumeCm3: 9,
+    bpm: 50,
+    sourcePressureBar: 250,
+    receiverPressureBar: (boost.pressureStartBar + boost.pressureAtTransferEndBar) / 2,
+    sourceOxygenPercent: 21,
+    sourceHeliumPercent: 0,
+    receiverOxygenPercent: 21,
+    receiverHeliumPercent: 0,
+    receiverVolumeL: 12,
+    temperatureC: boost.temperatureStartC,
+    useVdw: false
+  }).fillRateBarPerMin);
+  assert.equal(compressor.rateSource, 'compressor');
+  assert.ok(compressor.rateBarPerMin > 0);
+});
+
+test('compare simulation keeps a wait at fixed transfer pressure and projects a hot final transfer', () => {
+  const waitResult = simulateCompareProtocol({
+    protocolSteps: [{ type: 'wait', operation: 'Wait', resultingPressureBar: 100, resultingMix: { oxygenPercent: 21, heliumPercent: 0 }, waitMinutes: 7 }],
+    cylinder: { initialPressureBar: 100, volumeL: 12 },
+    physics: { model: 'ideal', temperatureC: 40 },
+    thermal: { tankMaterial: 'steel', coolingMedium: 'air', ambientTemperatureC: 20 },
+    settings: {}
+  });
+  const wait = waitResult.protocolSteps[0].thermal;
+  assert.equal(wait.durationMinutes, 0);
+  assert.equal(wait.pressureAtTransferEndBar, 100);
+  assert.ok(wait.pressureAfterWaitBar < wait.pressureAtTransferEndBar);
+
+  const transferResult = simulateCompareProtocol({
+    protocolSteps: [{ type: 'add', method: 'decant', operation: 'Decant', receiverEndPressureBar: 100, resultingPressureBar: 100, resultingMix: { oxygenPercent: 32, heliumPercent: 0 }, sourceOxygenPercent: 32, sourceHeliumPercent: 0 }],
+    cylinder: { initialPressureBar: 50, volumeL: 12 },
+    physics: { model: 'ideal', temperatureC: 20 },
+    thermal: { tankMaterial: 'steel', coolingMedium: 'air', ambientTemperatureC: 20, inletTemperatureC: 20 },
+    settings: { booster: { otherDecantRateBarPerMin: 5 } }
+  });
+  assert.ok(transferResult.final.recipeEnd.temperatureC > 20);
+  assert.ok(transferResult.final.ambientSettled.pressureBar < transferResult.final.recipeEnd.pressureBar);
+  assert.equal(transferResult.final.ambientSettledDurationMinutes, 82.8);
+});
+
+test('optimizer thermal simulation retains its final ambient cool-off', () => {
+  const simulation = simulateThermalProtocol({
+    protocolSteps: [{ type: 'decant', operation: 'Decant', receiverEndPressureBar: 100, resultingPressureBar: 100, resultingMix: { oxygenPercent: 21, heliumPercent: 0 }, sourceOxygenPercent: 21, sourceHeliumPercent: 0 }],
+    cylinder: { initialPressureBar: 50, volumeL: 12 },
+    physics: { model: 'ideal', temperatureC: 20 },
+    thermal: { tankMaterial: 'steel', coolingMedium: 'air', ambientTemperatureC: 20, waitMinutes: 0 },
+    settings: { booster: { otherDecantRateBarPerMin: 5 } }
+  });
+
+  assert.equal(simulation.protocolSteps[0].thermal.waitMinutes, 82.8);
 });
