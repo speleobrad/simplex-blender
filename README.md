@@ -10,6 +10,11 @@ python3 -m http.server 8000
 
 Then visit <http://127.0.0.1:8000/>.
 
+## Compare recipe
+
+Use **Compare** to model an ordered manual recipe without replacing the default **Optimize** flow. Add **Keep**, **Drain**, **Add gas**, and **Wait** rows; Add gas supports presets or a custom O₂/He composition and Decant, Boost, or Compressor transfer methods. Boost rows require a source pressure. Results distinguish the recipe-end pressure, mix, and temperature from the ambient-settled projection.
+
+
 ## Development
 
 Run the test suite with:

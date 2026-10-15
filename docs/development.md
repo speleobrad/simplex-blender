@@ -64,4 +64,10 @@ Solid thermal curves show the current/observed path; dotted curves show the supe
 20. Settings → Preset management exposes Reset to factory settings. Confirm the action and verify all local storage data is removed, the light theme and built-in presets/banks return immediately, and the success status remains visible without reloading.
 21. At a narrow viewport, verify Settings category navigation scrolls the active category into view, Equipment preset actions stack without clipping, Cylinder presets use readable cards with full-width remove actions, and Preset management URL controls stack without horizontal overflow. At desktop width, verify the cylinder table and sidebar layout remain intact.
 
+### Compare recipe scenario
+
+With valid working-tank, thermal, and equipment values, switch from the default Optimize mode to Compare and confirm those values remain while the row editor appears. Run `Keep → Drain → Add EAN32 by Decant → Wait 7 min → Add custom gas by Boost` with a valid Boost source pressure. Confirm the compare cards preserve row order and show modeled transfers and waits, while the summary separates recipe-end and ambient-settled pressure, mix, and temperature. Thermal graphs include drain, transfer, Wait, and terminal settled-projection rows; Diagram and Tank summary show the manual trajectory without bank rows.
+
+Enter invalid O₂/He, select Compressor for a non-Air gas, omit a Boost source pressure, and reverse pressure targets. Each error is inline and the last successful comparison remains visible. Switch back to Optimize and confirm its existing result, supply banks, target fields, and tabs still work. Confirm the browser console has no app module or runtime errors; the existing Tailwind CDN warning remains expected.
+
 See [Architecture](architecture.md) for runtime module responsibilities.
