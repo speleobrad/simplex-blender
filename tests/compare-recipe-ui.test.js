@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+
 import { renderCompareRecipe } from '../js/ui/compare-recipe.js';
 
 class FakeElement {
@@ -102,7 +104,7 @@ test('shows boost source pressure, compressor errors, row boundaries, and field 
   globalThis.document = createFakeDocument();
   const container = new FakeElement();
   const errors = [
-    { rowId: 'add-1', field: 'method', message: 'Compressor is available only for Air.' },
+    { rowId: 'add-1', field: 'gas', message: 'Compressor rows require Air (21% oxygen and 0% helium).' },
     { rowId: 'add-1', field: 'targetPressureBar', message: 'Target pressure must not decrease.' }
   ];
 
@@ -115,7 +117,7 @@ test('shows boost source pressure, compressor errors, row boundaries, and field 
 
     const sourcePressure = findAll(container, element => hasAttribute(element, 'data-row-id', 'add-1') && hasAttribute(element, 'data-compare-field', 'sourcePressureBar'))[0];
     assert.equal(sourcePressure.hidden, true);
-    assert.match(container.textContent, /Compressor is available only for Air\./);
+    assert.match(container.textContent, /Compressor rows require Air \(21% oxygen and 0% helium\)\./);
     assert.match(container.textContent, /Target pressure must not decrease\./);
 
     const controls = findAll(container, element => hasAttribute(element, 'data-row-id', 'keep-1'));
@@ -126,7 +128,16 @@ test('shows boost source pressure, compressor errors, row boundaries, and field 
     const invalidTarget = findAll(container, element => hasAttribute(element, 'data-row-id', 'add-1') && hasAttribute(element, 'data-compare-field', 'targetPressureBar'))[0];
     assert.equal(invalidTarget.attributes.get('aria-invalid'), 'true');
     assert.ok(invalidTarget.attributes.get('aria-describedby'));
+    const invalidGas = findAll(container, element => hasAttribute(element, 'data-row-id', 'add-1') && hasAttribute(element, 'data-compare-field', 'oxygenPercent'))[0];
+    assert.equal(invalidGas.attributes.get('aria-invalid'), 'true');
+    assert.ok(invalidGas.attributes.get('aria-describedby'));
   } finally {
     globalThis.document = previousDocument;
   }
+});
+
+test('provides a polite compare run status host', async () => {
+  const markup = await readFile(new URL('../index.html', import.meta.url), 'utf8');
+
+  assert.match(markup, /id="compare-run-status"[^>]*role="status"[^>]*aria-live="polite"/);
 });

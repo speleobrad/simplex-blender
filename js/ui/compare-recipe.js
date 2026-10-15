@@ -35,6 +35,23 @@ function addFieldError(wrapper, control, errors, rowId, field) {
   wrapper.append(message);
 }
 
+function addGasError(wrapper, controls, errors, rowId) {
+  const messages = errorsFor(errors, rowId, 'gas');
+  if (messages.length === 0) return;
+
+  const errorId = `${fieldId(rowId, 'gas')}-error`;
+  for (const control of controls) {
+    control.setAttribute('aria-invalid', 'true');
+    control.setAttribute('aria-describedby', errorId);
+  }
+  const message = element('p', {
+    className: 'col-span-2 mt-1 text-[10px] text-rose-300',
+    attributes: { id: errorId }
+  });
+  message.textContent = messages.map(error => error.message).join(' ');
+  wrapper.append(message);
+}
+
 function appendLabelledControl(wrapper, row, rowNumber, field, labelText, control, errors) {
   const id = fieldId(row.id, field);
   const label = element('label', {
@@ -74,18 +91,21 @@ function addGasFields(card, row, rowNumber, gasPresets, errors) {
   const gas = row.gas ?? {};
   const fields = element('div', { className: 'grid grid-cols-2 gap-2' });
   const presetField = element('div', { className: 'col-span-2' });
-  const presetOptions = [
+  const preset = select([
     { value: '', label: 'Custom' },
-    ...gasPresets.map(preset => ({ value: preset.name, label: preset.name }))
-  ];
-  appendLabelledControl(presetField, row, rowNumber, 'presetName', 'Gas preset', select(presetOptions, gas.presetName ?? ''), errors);
+    ...gasPresets.map(gasPreset => ({ value: gasPreset.name, label: gasPreset.name }))
+  ], gas.presetName ?? '');
+  appendLabelledControl(presetField, row, rowNumber, 'presetName', 'Gas preset', preset, errors);
 
   const nameField = element('div', { className: 'col-span-2' });
-  appendLabelledControl(nameField, row, rowNumber, 'name', 'Gas name', input(row, 'name', gas.name), errors);
+  const name = input(row, 'name', gas.name);
+  appendLabelledControl(nameField, row, rowNumber, 'name', 'Gas name', name, errors);
   const oxygenField = element('div');
-  appendLabelledControl(oxygenField, row, rowNumber, 'oxygenPercent', '% O₂', input(row, 'oxygenPercent', gas.oxygenPercent, 'number'), errors);
+  const oxygen = input(row, 'oxygenPercent', gas.oxygenPercent, 'number');
+  appendLabelledControl(oxygenField, row, rowNumber, 'oxygenPercent', '% O₂', oxygen, errors);
   const heliumField = element('div');
-  appendLabelledControl(heliumField, row, rowNumber, 'heliumPercent', '% He', input(row, 'heliumPercent', gas.heliumPercent, 'number'), errors);
+  const helium = input(row, 'heliumPercent', gas.heliumPercent, 'number');
+  appendLabelledControl(heliumField, row, rowNumber, 'heliumPercent', '% He', helium, errors);
   const targetField = element('div');
   appendLabelledControl(targetField, row, rowNumber, 'targetPressureBar', 'Target pressure (bar)', input(row, 'targetPressureBar', row.targetPressureBar, 'number'), errors);
   const methodField = element('div');
@@ -97,6 +117,7 @@ function addGasFields(card, row, rowNumber, gasPresets, errors) {
   appendLabelledControl(sourceField, row, rowNumber, 'sourcePressureBar', 'Source pressure (bar)', sourcePressure, errors);
 
   fields.append(presetField, nameField, oxygenField, heliumField, targetField, methodField, sourceField);
+  addGasError(fields, [preset, name, oxygen, helium], errors, row.id);
   card.append(fields);
 }
 
