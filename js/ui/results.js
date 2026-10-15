@@ -76,12 +76,12 @@ function renderWaterPressurePane(data) {
 }
 
 
-function renderThermalDetails(thermal, isFinalStep) {
+function renderThermalDetails(thermal, isFinalStep, isWaitRow = false) {
   if (!thermal) return null;
 
   const details = document.createElement('div');
   details.className = 'mt-2 text-[11px] text-slate-400 space-y-0.5';
-  const isWaitOnly = thermal.rateSource === 'none' && thermal.waitMinutes > 0;
+  const isWaitOnly = isWaitRow && thermal.rateSource === 'none' && thermal.waitMinutes > 0;
   const wait = isFinalStep
     ? `Wait: Full ambient cool-off (4.6 × tau = ${formatThermalValue(thermal.waitMinutes)} min)`
     : `Wait: ${formatThermalValue(thermal.waitMinutes)} min`;
@@ -195,7 +195,8 @@ function renderProtocol(protocolSteps, alertMessage = null, calculation = null, 
     details.append(heading, description);
     const thermalDetails = renderThermalDetails(
       step.thermal,
-      finalStepIncludesAmbientCoolOff && index === protocolSteps.length - 1
+      finalStepIncludesAmbientCoolOff && index === protocolSteps.length - 1,
+      step.type === 'wait'
     );
     if (thermalDetails) details.append(thermalDetails);
 

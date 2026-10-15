@@ -177,6 +177,51 @@ test('does not offer an interim reading before the first mixing transfer', () =>
   }
 });
 
+test('retains optimizer thermal details for a final Keep row', () => {
+  const previousDocument = globalThis.document;
+  const document = createFakeDocument();
+  globalThis.document = document;
+
+  try {
+    renderResults({
+      feasible: true,
+      blend: {
+        retainedPressureBar: 100,
+        retainedPercent: 100,
+        ventedPressureBar: 0,
+        ventedGasLitres: 0,
+        heliumSalvagedLitres: 0,
+        finalPressureBar: 100,
+        finalOxygenPercent: 21,
+        finalHeliumPercent: 0
+      },
+      thermal: null,
+      protocolSteps: [{
+        type: 'keep',
+        title: 'Keep',
+        description: 'Keep the existing mix.',
+        resultingPressureBar: 100,
+        thermal: {
+          rateSource: 'none',
+          rateBarPerMin: null,
+          durationMinutes: 0,
+          pressureAtTransferEndBar: 100,
+          temperatureAtTransferEndC: 25,
+          waitMinutes: 30,
+          pressureAfterWaitBar: 98,
+          temperatureAfterWaitC: 20
+        }
+      }]
+    });
+
+    const [card] = document.elements.get('steps-container').children;
+    assert.match(card.textContent, /Rate: none/);
+    assert.match(card.textContent, /Estimated transfer end: 100\.0 bar at 25\.0 °C/);
+  } finally {
+    globalThis.document = previousDocument;
+  }
+});
+
 test('renders compare endpoints and modeled protocol rows without optimizer accounting', () => {
   const previousDocument = globalThis.document;
   const document = createFakeDocument();
