@@ -2,6 +2,8 @@ import { calculatorInputSignature, signatureAfterClearingMeasurement } from './i
 import { optimizeBlend } from './optimizer.js';
 import { parseNumericInput, splitGasInput } from './gas-input.js';
 import { validateCalculatorInputs, validateSupplyBankInput } from './input-validation.js';
+import { buildCompareProtocol, createCompareRow, validateCompareRecipe } from './compare-recipe.js';
+import { simulateCompareProtocol } from './thermodynamics.js';
 import {
   addEquipmentPresetToDraft,
   applyGasPresetToBank,
@@ -19,6 +21,7 @@ import { loadTheme, saveTheme } from './theme.js';
 import { loadOnboardingState } from './onboarding.js';
 import { loadAnalytics } from './analytics.js';
 import { createOnboardingController } from './ui/onboarding.js';
+import { renderCompareRecipe } from './ui/compare-recipe.js';
 import { renderResults } from './ui/results.js';
 import { renderSettingsDialog, renderPresetOptions } from './ui/settings-dialog.js';
 import { renderEquipmentSummary } from './ui/equipment-summary.js';
@@ -81,8 +84,15 @@ const state = {
   interimMeasurements: [],
   interimMeasurementSignature: null,
   lastInput: null,
-  lastResult: null
+  lastResult: null,
+  mode: 'optimize',
+  compareRows: [createCompareRow('keep', 'compare-row-1')],
+  compareErrors: [],
+  lastCompareInput: null,
+  lastCompareResult: null,
+  compareHasRun: false
 };
+let nextCompareRowNumber = 2;
 let onboardingSettingsOpen = false;
 
 
@@ -638,7 +648,57 @@ function readInput() {
   };
 }
 
+function compareInput() {
+  const input = readInput();
+  const { targetPressureBar, targetOxygenPercent, targetHeliumPercent, ...cylinder } = input.cylinder;
+  return { ...input, cylinder, settings: state.settings };
+}
+
+function compareSharedInputErrors(input) {
+  const targetPressureBar = Math.max(10, input.cylinder.initialPressureBar);
+  return validateCalculatorInputs({ ...input.cylinder, targetPressureBar }, input.physics, input.thermal);
+}
+
+function renderCompareEditor() {
+  renderCompareRecipe(byId('compare-recipe-editor'), {
+    rows: state.compareRows,
+    gasPresets: state.settings.gasPresets,
+    errors: state.compareErrors
+  });
+}
+
+function renderCompareErrors() {
+  const container = byId('compare-recipe-errors');
+  container.replaceChildren(...state.compareErrors
+    .filter(({ rowId }) => rowId === null)
+    .map(({ message }) => {
+      const line = document.createElement('p');
+      line.className = 'text-xs text-rose-300';
+      line.textContent = message;
+      return line;
+    }));
+}
+
+function updateCompareStatus(message = '') {
+  byId('compare-run-status').textContent = message;
+}
+
 function ternaryData() {
+  if (state.mode === 'compare') {
+    const compare = state.lastCompareResult?.compare;
+    if (!compare || !state.lastCompareInput) return null;
+    const finalMix = compare.final.recipeEnd;
+    return {
+      banks: [],
+      initialMix: compare.initialMix,
+      targetMix: {
+        oxygenPercent: finalMix.oxygenPercent,
+        heliumPercent: finalMix.heliumPercent,
+        nitrogenPercent: Math.max(0, 100 - finalMix.oxygenPercent - finalMix.heliumPercent)
+      },
+      trajectory: compare.trajectory
+    };
+  }
   if (!state.lastInput || !state.lastResult?.feasible) return null;
   const cylinder = state.lastInput.cylinder;
   return {
@@ -679,7 +739,67 @@ function invalidInputResult(errors) {
   };
 }
 
+function renderCompareResult() {
+  const compare = state.lastCompareResult?.compare;
+  if (!compare) {
+    clearTernaryDiagram(byId('ternary-canvas'));
+    return;
+  }
+  renderThermalCharts({ feasible: true, protocolSteps: compare.protocolSteps }, state.lastCompareInput);
+  renderTernary();
+}
+
+function runCompare() {
+  const input = compareInput();
+  const sharedErrors = compareSharedInputErrors(input);
+  const validation = validateCompareRecipe(state.compareRows, {
+    cylinder: input.cylinder,
+    gasPresets: state.settings.gasPresets
+  });
+  state.compareErrors = [
+    ...sharedErrors.map(message => ({ rowId: null, field: 'recipe', message })),
+    ...validation.errors
+  ];
+  renderCompareErrors();
+  renderCompareEditor();
+  if (state.compareErrors.length > 0) {
+    updateCompareStatus('Correct the highlighted recipe inputs before running a comparison.');
+    return;
+  }
+  const protocol = buildCompareProtocol(state.compareRows, {
+    cylinder: input.cylinder,
+    physics: input.physics,
+    gasPresets: state.settings.gasPresets
+  });
+  const simulation = simulateCompareProtocol({
+    protocolSteps: protocol.protocolSteps,
+    cylinder: input.cylinder,
+    physics: input.physics,
+    thermal: input.thermal,
+    settings: input.settings
+  });
+  state.lastCompareInput = input;
+  state.lastCompareResult = {
+    mode: 'compare',
+    compare: { ...protocol, ...simulation }
+  };
+  state.compareHasRun = true;
+  state.compareErrors = [];
+  renderCompareErrors();
+  renderCompareEditor();
+  updateCompareStatus('Comparison run.');
+  renderCompareResult();
+  setTab('recipe');
+}
+
 function recalculate() {
+  renderSupplyBanks(state.banks, state.settings.gasPresets);
+  renderEquipmentSummary(state.settings);
+  if (state.mode === 'compare') {
+    renderCompareResult();
+    return;
+  }
+
   let input = { ...readInput(), settings: state.settings };
   const recipeSignature = calculatorInputSignature(input);
   if (state.interimMeasurements.some(Boolean)
@@ -693,13 +813,35 @@ function recalculate() {
   state.lastInput = input;
   state.lastResult = result;
 
-  renderSupplyBanks(state.banks, state.settings.gasPresets);
-  renderEquipmentSummary(state.settings);
   renderResults(result, input);
   renderThermalCharts(result, input);
   if (result.feasible) renderTernary();
   else clearTernaryDiagram(byId('ternary-canvas'));
 }
+function setMode(mode) {
+  if (!['optimize', 'compare'].includes(mode)) return;
+  state.mode = mode;
+  for (const control of document.querySelectorAll('[data-action="select-mode"]')) {
+    const selected = control.dataset.mode === mode;
+    control.setAttribute('aria-pressed', String(selected));
+    control.className = selected
+      ? 'rounded-lg border border-cyan-500/40 bg-cyan-500/20 px-3 py-1.5 text-xs font-semibold text-cyan-300'
+      : 'rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-400';
+  }
+  byId('target-state-section').hidden = mode === 'compare';
+  byId('supply-banks-section').hidden = mode === 'compare';
+  byId('compare-recipe-section').hidden = mode !== 'compare';
+  if (mode === 'compare') {
+    renderCompareErrors();
+    renderCompareEditor();
+    renderCompareResult();
+  } else if (state.lastResult) {
+    renderResults(state.lastResult, state.lastInput);
+    renderThermalCharts(state.lastResult, state.lastInput);
+    if (state.lastResult.feasible) renderTernary();
+  }
+}
+
 
 function setTab(tabId) {
   if (!['recipe', 'ternary', 'thermal', 'summary', 'water-pressure'].includes(tabId)) return;
@@ -828,8 +970,45 @@ function updateBankFromInput(input) {
   recalculate();
 }
 
+function updateCompareRow(input) {
+  const index = state.compareRows.findIndex(row => row.id === input.dataset.rowId);
+  if (index < 0) return;
+  const row = state.compareRows[index];
+  const field = input.dataset.compareField;
+  let value = field === 'presetName' ? input.value || null : input.value;
+  if (['targetPressureBar', 'sourcePressureBar', 'waitMinutes', 'oxygenPercent', 'heliumPercent'].includes(field)) {
+    value = Number.parseFloat(value);
+  }
+  let updatedRow;
+  if (field === 'type') {
+    updatedRow = createCompareRow(value, row.id);
+  } else if (['presetName', 'name', 'oxygenPercent', 'heliumPercent'].includes(field)) {
+    const gas = { ...row.gas, [field]: value };
+    if (field === 'presetName') {
+      const preset = state.settings.gasPresets.find(candidate => candidate.name === value);
+      if (preset) Object.assign(gas, {
+        presetName: preset.name,
+        name: preset.name,
+        oxygenPercent: preset.oxygenPercent,
+        heliumPercent: preset.heliumPercent
+      });
+    }
+    updatedRow = { ...row, gas };
+  } else {
+    updatedRow = { ...row, [field]: value };
+  }
+  state.compareRows.splice(index, 1, updatedRow);
+  state.compareErrors = [];
+  renderCompareErrors();
+  renderCompareEditor();
+}
+
 function handleInputOrChange(event) {
   const target = event.target;
+  if (target.dataset.compareField && target.dataset.rowId) {
+    updateCompareRow(target);
+    return;
+  }
   if (event.type === 'input' && target.dataset.settingsPresetImportUrl !== undefined) {
     state.settingsImport = { ...state.settingsImport, url: target.value, urlTouched: true };
     return;
@@ -926,11 +1105,46 @@ function clearInterimMeasurement(actionElement) {
   recalculate();
 }
 
+function moveCompareRow(rowId, offset) {
+  const index = state.compareRows.findIndex(row => row.id === rowId);
+  const destination = index + offset;
+  if (index < 0 || destination < 0 || destination >= state.compareRows.length) return;
+  [state.compareRows[index], state.compareRows[destination]] = [
+    state.compareRows[destination],
+    state.compareRows[index]
+  ];
+  renderCompareEditor();
+}
+
 function handleClick(event) {
   const actionElement = event.target.closest('[data-action]');
   if (!actionElement || actionElement.disabled) return;
 
   switch (actionElement.dataset.action) {
+    case 'select-mode':
+      setMode(actionElement.dataset.mode);
+      break;
+    case 'add-compare-row':
+      state.compareRows.push(createCompareRow('keep', `compare-row-${nextCompareRowNumber++}`));
+      state.compareErrors = [];
+      renderCompareErrors();
+      renderCompareEditor();
+      break;
+    case 'remove-compare-row':
+      state.compareRows = state.compareRows.filter(row => row.id !== actionElement.dataset.rowId);
+      state.compareErrors = [];
+      renderCompareErrors();
+      renderCompareEditor();
+      break;
+    case 'move-compare-row-up':
+      moveCompareRow(actionElement.dataset.rowId, -1);
+      break;
+    case 'move-compare-row-down':
+      moveCompareRow(actionElement.dataset.rowId, 1);
+      break;
+    case 'run-compare':
+      runCompare();
+      break;
     case 'add-bank':
       addBank();
       break;
