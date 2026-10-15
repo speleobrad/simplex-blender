@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as compareRecipe from '../js/compare-recipe.js';
+import { calcMolarDensity } from '../js/physics.js';
 
 const {
   buildCompareProtocol,
@@ -219,6 +220,34 @@ test('plans an add after a wait from the modeled post-wait pressure', () => {
 
   const add = result.protocolSteps.find(step => step.compareRowId === 'add');
   assert.equal(add.receiverStartPressureBar, 45);
+});
+
+test('uses the full modeled wait state when planning a following add', () => {
+  const totalMoles = calcMolarDensity(45, 21, 0, 15, false) * cylinder.volumeL;
+  const waitState = {
+    pressureBar: 45,
+    temperatureC: 15,
+    oxygenPercent: 21,
+    heliumPercent: 0,
+    totalMoles,
+    oxygenMoles: totalMoles * 0.21,
+    heliumMoles: 0,
+    mix: { oxygenPercent: 21, heliumPercent: 0 }
+  };
+  const rows = [
+    { id: 'wait', type: 'wait', waitMode: 'minutes', waitMinutes: 10 },
+    { id: 'add', type: 'add', bankId: 'he-bank', pressureAddedBar: 0, targetPressureBar: 100, pressureInputMode: 'target' }
+  ];
+  const partial = buildCompareProtocol(rows, {
+    cylinder, physics, banks, settings, waitStates: { wait: { pressureBar: 45 } }
+  });
+  const full = buildCompareProtocol(rows, {
+    cylinder, physics, banks, settings, waitStates: { wait: waitState }
+  });
+
+  const partialAdd = partial.protocolSteps.find(step => step.compareRowId === 'add');
+  const fullAdd = full.protocolSteps.find(step => step.compareRowId === 'add');
+  assert.ok(fullAdd.resultingMix.heliumPercent > partialAdd.resultingMix.heliumPercent);
 });
 
 test('requires both pressure and temperature for a target-state wait', () => {

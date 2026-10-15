@@ -525,11 +525,22 @@ export function buildCompareProtocol(rows, { cylinder, physics, banks = [], sett
   for (const row of validation.normalizedRows) {
     if (row.type !== 'add') {
       const step = passiveStep(row, receiver);
-      const waitPressureBar = row.type === 'wait' ? waitStates[row.id]?.pressureBar : null;
-      if (Number.isFinite(waitPressureBar)) {
-        receiver = { ...receiver, pressureBar: waitPressureBar };
-        step.receiverEndPressureBar = waitPressureBar;
-        step.resultingPressureBar = waitPressureBar;
+      const waitState = row.type === 'wait' ? waitStates[row.id] : null;
+      if (Number.isFinite(waitState?.pressureBar)) {
+        const hasMoles = [waitState.totalMoles, waitState.oxygenMoles, waitState.heliumMoles].every(Number.isFinite);
+        receiver = hasMoles
+          ? {
+            totalMoles: waitState.totalMoles,
+            oxygenMoles: waitState.oxygenMoles,
+            heliumMoles: waitState.heliumMoles,
+            mix: waitState.mix ?? receiver.mix,
+            pressureBar: waitState.pressureBar,
+            temperatureC: waitState.temperatureC
+          }
+          : { ...receiver, pressureBar: waitState.pressureBar };
+        step.receiverEndPressureBar = waitState.pressureBar;
+        step.resultingPressureBar = waitState.pressureBar;
+        step.resultingMix = { ...receiver.mix };
       }
       protocolSteps.push(step);
       trajectoryStep = addTrajectoryPoint(trajectory, step, trajectoryStep);

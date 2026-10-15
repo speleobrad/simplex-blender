@@ -4,6 +4,7 @@ import { isValidGasComposition, parseNumericInput, splitGasInput } from './gas-i
 import { validateCalculatorInputs, validateSupplyBankInput } from './input-validation.js';
 import { buildCompareProtocol, createCompareRow, normalizeComparePressureFields, validateCompareRecipe } from './compare-recipe.js';
 import { simulateCompareProtocol } from './thermodynamics.js';
+import { calcMolarDensity } from './physics.js';
 import {
   addEquipmentPresetToDraft,
   applyGasPresetToBank,
@@ -686,7 +687,27 @@ function compareWaitStates(input = compareInput()) {
         thermal: input.thermal,
         settings: input.settings
       });
-      waitStates[row.id] = { pressureBar: simulation.final.recipeEnd.pressureBar };
+      const recipeEnd = simulation.final.recipeEnd;
+      const totalMoles = calcMolarDensity(
+        recipeEnd.pressureBar,
+        recipeEnd.oxygenPercent,
+        recipeEnd.heliumPercent,
+        recipeEnd.temperatureC,
+        input.physics.model === 'vdw'
+      ) * input.cylinder.volumeL;
+      waitStates[row.id] = {
+        pressureBar: recipeEnd.pressureBar,
+        temperatureC: recipeEnd.temperatureC,
+        oxygenPercent: recipeEnd.oxygenPercent,
+        heliumPercent: recipeEnd.heliumPercent,
+        totalMoles,
+        oxygenMoles: totalMoles * (recipeEnd.oxygenPercent / 100),
+        heliumMoles: totalMoles * (recipeEnd.heliumPercent / 100),
+        mix: {
+          oxygenPercent: recipeEnd.oxygenPercent,
+          heliumPercent: recipeEnd.heliumPercent
+        }
+      };
     } catch {
       // Validation presents the underlying draft error; omit an unavailable modeled state.
     }
