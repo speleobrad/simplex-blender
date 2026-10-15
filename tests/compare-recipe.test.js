@@ -250,6 +250,38 @@ test('uses the full modeled wait state when planning a following add', () => {
   assert.ok(fullAdd.resultingMix.heliumPercent > partialAdd.resultingMix.heliumPercent);
 });
 
+test('consumes finite source moles at the modeled wait temperature for a following add', () => {
+  const waitTemperatureC = 15;
+  const totalMoles = calcMolarDensity(45, 21, 0, waitTemperatureC, false) * cylinder.volumeL;
+  const result = buildCompareProtocol([
+    { id: 'wait', type: 'wait', waitMode: 'minutes', waitMinutes: 10 },
+    { id: 'add', type: 'add', bankId: 'he-bank', pressureAddedBar: 0, targetPressureBar: 100, pressureInputMode: 'target' }
+  ], {
+    cylinder,
+    physics,
+    banks,
+    settings,
+    waitStates: {
+      wait: {
+        pressureBar: 45,
+        temperatureC: waitTemperatureC,
+        totalMoles,
+        oxygenMoles: totalMoles * 0.21,
+        heliumMoles: 0,
+        mix: { oxygenPercent: 21, heliumPercent: 0 }
+      }
+    }
+  });
+
+  const add = result.protocolSteps.find(step => step.compareRowId === 'add');
+  const initialSourceMoles = calcMolarDensity(200, 0, 100, physics.temperatureC, false) * 40;
+  const expectedAddedMoles = (
+    calcMolarDensity(100, 0, 100, waitTemperatureC, false)
+    - calcMolarDensity(45, 21, 0, waitTemperatureC, false)
+  ) * cylinder.volumeL;
+  assert.ok(Math.abs(add.sourceMolesAfter - (initialSourceMoles - expectedAddedMoles)) < 1e-9);
+});
+
 test('requires both pressure and temperature for a target-state wait', () => {
   const result = validateCompareRecipe([{
     id: 'wait',

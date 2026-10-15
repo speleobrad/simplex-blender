@@ -225,6 +225,9 @@ function trajectoryPoint(step, label, mix, pressureBar, pressureDeltaBar, color)
 }
 
 function receiverAfterAddedMoles(receiver, addedMoles, sourceBank, volumeL, temperatureC, useVdw) {
+  const receiverTemperatureC = Number.isFinite(receiver.temperatureC)
+    ? receiver.temperatureC
+    : temperatureC;
   const totalMoles = receiver.totalMoles + addedMoles;
   const oxygenMoles = receiver.oxygenMoles + addedMoles * (sourceBank.oxygenPercent / 100);
   const heliumMoles = receiver.heliumMoles + addedMoles * (sourceBank.heliumPercent / 100);
@@ -234,11 +237,12 @@ function receiverAfterAddedMoles(receiver, addedMoles, sourceBank, volumeL, temp
     oxygenMoles,
     heliumMoles,
     mix,
+    temperatureC: receiverTemperatureC,
     pressureBar: calcPressure(
       totalMoles / volumeL,
       mix.oxygenPercent,
       mix.heliumPercent,
-      temperatureC,
+      receiverTemperatureC,
       useVdw
     )
   };
@@ -256,10 +260,19 @@ function pressureForSourceMoles(moles, bank, temperatureC, useVdw) {
 
 function solveAddedMoles(receiver, targetPressureBar, sourceBank, volumeL, temperatureC, useVdw) {
   if (targetPressureBar <= receiver.pressureBar + PRESSURE_TOLERANCE_BAR) return 0;
+  const receiverTemperatureC = Number.isFinite(receiver.temperatureC)
+    ? receiver.temperatureC
+    : temperatureC;
 
   let high = Math.max(
     1,
-    calcMolarDensity(targetPressureBar, sourceBank.oxygenPercent, sourceBank.heliumPercent, temperatureC, useVdw) * volumeL
+    calcMolarDensity(
+      targetPressureBar,
+      sourceBank.oxygenPercent,
+      sourceBank.heliumPercent,
+      receiverTemperatureC,
+      useVdw
+    ) * volumeL
   );
   let highState = receiverAfterAddedMoles(receiver, high, sourceBank, volumeL, temperatureC, useVdw);
   while (highState.pressureBar < targetPressureBar && high < 1e9) {
@@ -535,7 +548,9 @@ export function buildCompareProtocol(rows, { cylinder, physics, banks = [], sett
             heliumMoles: waitState.heliumMoles,
             mix: waitState.mix ?? receiver.mix,
             pressureBar: waitState.pressureBar,
-            temperatureC: waitState.temperatureC
+            temperatureC: Number.isFinite(waitState.temperatureC)
+              ? waitState.temperatureC
+              : (receiver.temperatureC ?? temperatureC)
           }
           : { ...receiver, pressureBar: waitState.pressureBar };
         step.receiverEndPressureBar = waitState.pressureBar;
