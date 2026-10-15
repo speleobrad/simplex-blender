@@ -666,14 +666,37 @@ function compareSharedInputErrors(input) {
   return errors;
 }
 
-function comparePressureStarts(initialPressureBar = compareInput().cylinder.initialPressureBar) {
+function comparePressureStarts(input = compareInput()) {
   const starts = {};
-  let currentPressure = initialPressureBar;
-  for (const row of state.compareRows) {
-    if (row.type !== 'add') continue;
-    starts[row.id] = currentPressure;
-    const normalized = normalizeComparePressureFields(row, currentPressure);
-    if (Number.isFinite(normalized.targetPressureBar)) currentPressure = normalized.targetPressureBar;
+  let currentPressure = input.cylinder.initialPressureBar;
+  for (let index = 0; index < state.compareRows.length; index += 1) {
+    const row = state.compareRows[index];
+    if (row.type === 'add') {
+      starts[row.id] = currentPressure;
+      const normalized = normalizeComparePressureFields(row, currentPressure);
+      if (Number.isFinite(normalized.targetPressureBar)) currentPressure = normalized.targetPressureBar;
+      continue;
+    }
+    if (row.type !== 'wait') continue;
+
+    try {
+      const protocol = buildCompareProtocol(state.compareRows.slice(0, index + 1), {
+        cylinder: input.cylinder,
+        physics: input.physics,
+        banks: input.banks,
+        settings: input.settings
+      });
+      const simulation = simulateCompareProtocol({
+        protocolSteps: protocol.protocolSteps,
+        cylinder: input.cylinder,
+        physics: input.physics,
+        thermal: input.thermal,
+        settings: input.settings
+      });
+      currentPressure = simulation.final.recipeEnd.pressureBar;
+    } catch {
+      // Validation presents the underlying draft error; preserve the last usable estimate.
+    }
   }
   return starts;
 }
@@ -829,6 +852,8 @@ function recalculate() {
   renderSupplyBanks(state.banks, state.settings.gasPresets);
   renderEquipmentSummary(state.settings);
   if (state.mode === 'compare') {
+    renderCompareEditor();
+    renderCompareErrors();
     renderCompareResult();
     return;
   }

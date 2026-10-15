@@ -76,6 +76,7 @@ const rows = [
 
 const banks = [
   { id: 'helium-bank', name: 'Helium bank', enabled: true, volumeL: 50, pressureBar: 200, oxygenPercent: 0, heliumPercent: 100 },
+  { id: 'unnamed-bank', name: '  ', enabled: true, volumeL: 12, pressureBar: 200, oxygenPercent: 21, heliumPercent: 0 },
   { id: 'disabled-bank', name: 'Disabled bank', enabled: false, volumeL: 12, pressureBar: 200, oxygenPercent: 21, heliumPercent: 0 }
 ];
 
@@ -104,7 +105,8 @@ test('renders enabled supply-bank controls and synchronized pressure fields for 
     assert.equal(added.attributes.get('data-pressure-input-mode'), 'added');
     assert.equal(target.attributes.get('data-pressure-input-mode'), 'target');
     assert.equal(target.value, 100);
-    assert.doesNotMatch(container.textContent, /Disabled bank/);
+    assert.doesNotMatch(container.textContent, /Disabled bank|unnamed-bank/);
+    assert.equal(findAll(container, element => element.tagName === 'option' && hasAttribute(element, 'value', 'unnamed-bank')).length, 0);
   } finally {
     globalThis.document = previousDocument;
   }

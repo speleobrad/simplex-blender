@@ -89,7 +89,7 @@ function select(options, value) {
 
 function addGasFields(card, row, rowNumber, banks, errors, pressureStart) {
   const fields = element('div', { className: 'grid grid-cols-2 gap-2' });
-  const enabledBanks = banks.filter(bank => bank.enabled);
+  const enabledBanks = banks.filter(bank => bank.enabled && typeof bank.name === 'string' && bank.name.trim().length > 0);
   const bankField = element('div', { className: 'col-span-2' });
   const bank = select([
     { value: '', label: 'Select supply bank' },
