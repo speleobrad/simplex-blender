@@ -157,7 +157,7 @@ function validateAddRow(row, rowId, currentPressure, pressureCeilingBar, bankInd
   return row.targetPressureBar;
 }
 
-export function validateCompareRecipe(rows, { cylinder, banks = [] } = {}) {
+export function validateCompareRecipe(rows, { cylinder, banks = [], physics, settings, waitStates = {} } = {}) {
   const errors = [];
   if (!Array.isArray(rows) || rows.length === 0) {
     error(errors, null, 'recipe', 'Add at least one recipe row.');
@@ -195,6 +195,8 @@ export function validateCompareRecipe(rows, { cylinder, banks = [] } = {}) {
           error(errors, rowId, 'targetTemperatureC', 'Target wait temperature must be between -100 and 100 °C.');
         }
       }
+      const waitPressureBar = waitStates[rowId]?.pressureBar;
+      if (Number.isFinite(waitPressureBar)) currentPressure = waitPressureBar;
     }
   }
 
@@ -463,8 +465,8 @@ function addTrajectoryPoint(trajectory, step, currentStep) {
   return trajectoryStep;
 }
 
-export function buildCompareProtocol(rows, { cylinder, physics, banks = [], settings } = {}) {
-  const validation = validateCompareRecipe(rows, { cylinder, banks, physics, settings });
+export function buildCompareProtocol(rows, { cylinder, physics, banks = [], settings, waitStates = {} } = {}) {
+  const validation = validateCompareRecipe(rows, { cylinder, banks, physics, settings, waitStates });
   if (!validation.valid) {
     throw new Error(`Invalid compare recipe: ${validation.errors.map(({ message }) => message).join(' ')}`);
   }
@@ -523,6 +525,12 @@ export function buildCompareProtocol(rows, { cylinder, physics, banks = [], sett
   for (const row of validation.normalizedRows) {
     if (row.type !== 'add') {
       const step = passiveStep(row, receiver);
+      const waitPressureBar = row.type === 'wait' ? waitStates[row.id]?.pressureBar : null;
+      if (Number.isFinite(waitPressureBar)) {
+        receiver = { ...receiver, pressureBar: waitPressureBar };
+        step.receiverEndPressureBar = waitPressureBar;
+        step.resultingPressureBar = waitPressureBar;
+      }
       protocolSteps.push(step);
       trajectoryStep = addTrajectoryPoint(trajectory, step, trajectoryStep);
       continue;

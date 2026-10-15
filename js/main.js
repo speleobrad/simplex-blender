@@ -666,25 +666,18 @@ function compareSharedInputErrors(input) {
   return errors;
 }
 
-function comparePressureStarts(input = compareInput()) {
-  const starts = {};
-  let currentPressure = input.cylinder.initialPressureBar;
+function compareWaitStates(input = compareInput()) {
+  const waitStates = {};
   for (let index = 0; index < state.compareRows.length; index += 1) {
     const row = state.compareRows[index];
-    if (row.type === 'add') {
-      starts[row.id] = currentPressure;
-      const normalized = normalizeComparePressureFields(row, currentPressure);
-      if (Number.isFinite(normalized.targetPressureBar)) currentPressure = normalized.targetPressureBar;
-      continue;
-    }
     if (row.type !== 'wait') continue;
-
     try {
       const protocol = buildCompareProtocol(state.compareRows.slice(0, index + 1), {
         cylinder: input.cylinder,
         physics: input.physics,
         banks: input.banks,
-        settings: input.settings
+        settings: input.settings,
+        waitStates
       });
       const simulation = simulateCompareProtocol({
         protocolSteps: protocol.protocolSteps,
@@ -693,9 +686,25 @@ function comparePressureStarts(input = compareInput()) {
         thermal: input.thermal,
         settings: input.settings
       });
-      currentPressure = simulation.final.recipeEnd.pressureBar;
+      waitStates[row.id] = { pressureBar: simulation.final.recipeEnd.pressureBar };
     } catch {
-      // Validation presents the underlying draft error; preserve the last usable estimate.
+      // Validation presents the underlying draft error; omit an unavailable modeled state.
+    }
+  }
+  return waitStates;
+}
+
+function comparePressureStarts(input = compareInput()) {
+  const starts = {};
+  const waitStates = compareWaitStates(input);
+  let currentPressure = input.cylinder.initialPressureBar;
+  for (const row of state.compareRows) {
+    if (row.type === 'add') {
+      starts[row.id] = currentPressure;
+      const normalized = normalizeComparePressureFields(row, currentPressure);
+      if (Number.isFinite(normalized.targetPressureBar)) currentPressure = normalized.targetPressureBar;
+    } else if (row.type === 'wait' && Number.isFinite(waitStates[row.id]?.pressureBar)) {
+      currentPressure = waitStates[row.id].pressureBar;
     }
   }
   return starts;
@@ -797,11 +806,13 @@ function renderCompareResult() {
 function runCompare() {
   const input = compareInput();
   const sharedErrors = compareSharedInputErrors(input);
+  const waitStates = compareWaitStates(input);
   const validation = validateCompareRecipe(state.compareRows, {
     cylinder: input.cylinder,
     banks: input.banks,
     physics: input.physics,
-    settings: input.settings
+    settings: input.settings,
+    waitStates
   });
   state.compareErrors = [
     ...sharedErrors.map(message => ({ rowId: null, field: 'recipe', message })),
@@ -819,7 +830,8 @@ function runCompare() {
       cylinder: input.cylinder,
       physics: input.physics,
       banks: input.banks,
-      settings: input.settings
+      settings: input.settings,
+      waitStates
     });
     const simulation = simulateCompareProtocol({
       protocolSteps: protocol.protocolSteps,

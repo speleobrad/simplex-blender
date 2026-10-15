@@ -176,6 +176,7 @@ test('rejects a finite bank that cannot supply the requested addition', () => {
   const smallBank = {
     id: 'small-he',
     name: 'Small helium',
+
     volumeL: 2,
     pressureBar: 20,
     oxygenPercent: 0,
@@ -195,6 +196,29 @@ test('rejects a finite bank that cannot supply the requested addition', () => {
     banks: [smallBank],
     settings
   }), /supply bank/i);
+});
+
+test('plans an add after a wait from the modeled post-wait pressure', () => {
+  const result = buildCompareProtocol([
+    { id: 'wait', type: 'wait', waitMode: 'minutes', waitMinutes: 10 },
+    {
+      id: 'add',
+      type: 'add',
+      bankId: 'he-bank',
+      pressureAddedBar: 0,
+      targetPressureBar: 100,
+      pressureInputMode: 'target'
+    }
+  ], {
+    cylinder,
+    physics,
+    banks,
+    settings,
+    waitStates: { wait: { pressureBar: 45 } }
+  });
+
+  const add = result.protocolSteps.find(step => step.compareRowId === 'add');
+  assert.equal(add.receiverStartPressureBar, 45);
 });
 
 test('requires both pressure and temperature for a target-state wait', () => {
