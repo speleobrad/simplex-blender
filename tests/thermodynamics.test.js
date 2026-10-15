@@ -895,6 +895,76 @@ test('compare simulation keeps a wait at fixed transfer pressure and projects a 
   assert.equal(transferResult.final.ambientSettledDurationMinutes, 82.8);
 });
 
+test('compare simulation maps explicit decant, equalize, and boost stages', () => {
+  const result = simulateCompareProtocol({
+    protocolSteps: [
+      {
+        type: 'decant', operation: 'Decant',
+        receiverStartPressureBar: 50, receiverEndPressureBar: 80,
+        sourceOxygenPercent: 0, sourceHeliumPercent: 100,
+        resultingMix: { oxygenPercent: 12, heliumPercent: 40 }
+      },
+      {
+        type: 'equalize', operation: 'Equalize',
+        receiverStartPressureBar: 80, receiverEndPressureBar: 120,
+        sourceStartPressureBar: 200, sourceEndPressureBar: 120,
+        sourceOxygenPercent: 0, sourceHeliumPercent: 100,
+        resultingMix: { oxygenPercent: 10, heliumPercent: 50 }
+      },
+      {
+        type: 'boost', operation: 'Boost',
+        receiverStartPressureBar: 120, receiverEndPressureBar: 200,
+        sourceStartPressureBar: 120, sourceEndPressureBar: 80,
+        sourceOxygenPercent: 0, sourceHeliumPercent: 100,
+        resultingMix: { oxygenPercent: 8, heliumPercent: 60 }
+      }
+    ],
+    cylinder: { initialPressureBar: 50, volumeL: 12 },
+    physics: { model: 'ideal', temperatureC: 20 },
+    thermal: { tankMaterial: 'steel', coolingMedium: 'air', ambientTemperatureC: 20 },
+    settings: { booster: { otherDecantRateBarPerMin: 5, otherBoostBpm: 50 } }
+  });
+
+  assert.deepEqual(result.protocolSteps.map(step => step.type), ['decant', 'equalize', 'boost']);
+  assert.equal(result.protocolSteps[0].thermal.rateSource, 'decant-rate');
+  assert.equal(result.protocolSteps[1].thermal.rateSource, 'decant-rate');
+  assert.equal(result.protocolSteps[2].thermal.rateSource, 'booster');
+  assert.ok(result.protocolSteps.every(step => step.thermal.durationMinutes >= 0));
+});
+
+test('compare target wait reaches the requested pressure and temperature', () => {
+  const result = simulateCompareProtocol({
+    protocolSteps: [{
+      type: 'wait', waitMode: 'target',
+      targetPressureBar: 98.4, targetTemperatureC: 25,
+      receiverStartPressureBar: 100, resultingPressureBar: 100,
+      resultingMix: { oxygenPercent: 21, heliumPercent: 0 }
+    }],
+    cylinder: { initialPressureBar: 100, volumeL: 12 },
+    physics: { model: 'ideal', temperatureC: 30 },
+    thermal: { tankMaterial: 'steel', coolingMedium: 'air', ambientTemperatureC: 20 },
+    settings: {}
+  });
+  const wait = result.protocolSteps[0];
+  assert.ok(Math.abs(wait.thermal.temperatureAfterWaitC - 25) < 0.05);
+  assert.ok(Math.abs(wait.thermal.pressureAfterWaitBar - 98.4) < 0.2);
+});
+
+test('compare rejects an unreachable target-state wait', () => {
+  assert.throws(() => simulateCompareProtocol({
+    protocolSteps: [{
+      type: 'wait', waitMode: 'target',
+      targetPressureBar: 120, targetTemperatureC: 25,
+      receiverStartPressureBar: 100, resultingPressureBar: 100,
+      resultingMix: { oxygenPercent: 21, heliumPercent: 0 }
+    }],
+    cylinder: { initialPressureBar: 100, volumeL: 12 },
+    physics: { model: 'ideal', temperatureC: 30 },
+    thermal: { tankMaterial: 'steel', coolingMedium: 'air', ambientTemperatureC: 20 },
+    settings: {}
+  }), /target pressure/i);
+});
+
 test('optimizer thermal simulation retains its final ambient cool-off', () => {
   const simulation = simulateThermalProtocol({
     protocolSteps: [{ type: 'decant', operation: 'Decant', receiverEndPressureBar: 100, resultingPressureBar: 100, resultingMix: { oxygenPercent: 21, heliumPercent: 0 }, sourceOxygenPercent: 21, sourceHeliumPercent: 0 }],
