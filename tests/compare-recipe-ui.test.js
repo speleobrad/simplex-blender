@@ -56,81 +56,82 @@ function hasAttribute(element, name, value) {
 
 const rows = [
   { id: 'keep-1', type: 'keep' },
-  { id: 'drain-1', type: 'drain', targetPressureBar: 40 },
   {
     id: 'add-1',
     type: 'add',
-    gas: { presetName: 'Nitrox 32', name: 'Nitrox 32', oxygenPercent: 32, heliumPercent: 0 },
-    targetPressureBar: 180,
-    method: 'boost',
-    sourcePressureBar: 150
+    bankId: 'helium-bank',
+    pressureAddedBar: 50,
+    targetPressureBar: 100,
+    pressureInputMode: 'added'
   },
-  { id: 'wait-1', type: 'wait', waitMinutes: 15 }
+  {
+    id: 'wait-1',
+    type: 'wait',
+    waitMode: 'target',
+    waitMinutes: 15,
+    targetPressureBar: 95,
+    targetTemperatureC: 20
+  }
 ];
 
-const gasPresets = [
-  { name: 'Air', oxygenPercent: 21, heliumPercent: 0 },
-  { name: 'Nitrox 32', oxygenPercent: 32, heliumPercent: 0 }
+const banks = [
+  { id: 'helium-bank', name: 'Helium bank', enabled: true, volumeL: 50, pressureBar: 200, oxygenPercent: 0, heliumPercent: 100 },
+  { id: 'disabled-bank', name: 'Disabled bank', enabled: false, volumeL: 12, pressureBar: 200, oxygenPercent: 21, heliumPercent: 0 }
 ];
 
-test('renders each recipe row with complete add-gas controls and delegated actions', () => {
+test('renders enabled supply-bank controls and synchronized pressure fields for add rows', () => {
   const previousDocument = globalThis.document;
   globalThis.document = createFakeDocument();
   const container = new FakeElement();
 
   try {
-    renderCompareRecipe(container, { rows, gasPresets, errors: [] });
+    renderCompareRecipe(container, { rows, banks, errors: [], pressureStarts: { 'add-1': 50 } });
     const cards = findAll(container, element => element.tagName === 'fieldset');
-    assert.equal(cards.length, 4);
-    assert.match(container.textContent, /Keep/);
-    assert.match(container.textContent, /Drain/);
-    assert.match(container.textContent, /Add gas/);
-    assert.match(container.textContent, /Wait/);
+    assert.equal(cards.length, 3);
 
-    for (const field of ['presetName', 'name', 'oxygenPercent', 'heliumPercent', 'targetPressureBar', 'method', 'sourcePressureBar']) {
+    for (const field of ['bankId', 'pressureAddedBar', 'targetPressureBar']) {
       assert.equal(findAll(container, element => hasAttribute(element, 'data-row-id', 'add-1') && hasAttribute(element, 'data-compare-field', field)).length, 1, `add row has ${field}`);
     }
-    assert.match(container.textContent, /Custom/);
-    assert.match(container.textContent, /Nitrox 32/);
-    assert.equal(findAll(container, element => hasAttribute(element, 'data-action', 'add-compare-row')).length, 1);
-    assert.equal(findAll(container, element => hasAttribute(element, 'data-action', 'run-compare')).length, 1);
+    assert.equal(findAll(container, element => hasAttribute(element, 'data-row-id', 'add-1') && hasAttribute(element, 'data-compare-field', 'method')).length, 0);
+    assert.equal(findAll(container, element => hasAttribute(element, 'data-row-id', 'add-1') && hasAttribute(element, 'data-compare-field', 'sourcePressureBar')).length, 0);
+    assert.equal(findAll(container, element => hasAttribute(element, 'data-row-id', 'add-1') && hasAttribute(element, 'data-compare-field', 'oxygenPercent')).length, 0);
+    assert.match(container.textContent, /Helium bank/);
+    assert.match(container.textContent, /O₂ 0%.*He 100%/);
+    assert.match(container.textContent, /50 L.*200 bar/);
+
+    const added = findAll(container, element => hasAttribute(element, 'data-row-id', 'add-1') && hasAttribute(element, 'data-compare-field', 'pressureAddedBar'))[0];
+    const target = findAll(container, element => hasAttribute(element, 'data-row-id', 'add-1') && hasAttribute(element, 'data-compare-field', 'targetPressureBar'))[0];
+    assert.equal(added.attributes.get('data-pressure-input-mode'), 'added');
+    assert.equal(target.attributes.get('data-pressure-input-mode'), 'target');
+    assert.equal(target.value, 100);
+    assert.doesNotMatch(container.textContent, /Disabled bank/);
   } finally {
     globalThis.document = previousDocument;
   }
 });
 
-test('shows boost source pressure, compressor errors, row boundaries, and field error association', () => {
+test('renders target-state wait controls and associates field errors', () => {
   const previousDocument = globalThis.document;
   globalThis.document = createFakeDocument();
   const container = new FakeElement();
-  const errors = [
-    { rowId: 'add-1', field: 'gas', message: 'Compressor rows require Air (21% oxygen and 0% helium).' },
-    { rowId: 'add-1', field: 'targetPressureBar', message: 'Target pressure must not decrease.' }
-  ];
+  const errors = [{ rowId: 'wait-1', field: 'targetPressureBar', message: 'Target pair is unreachable.' }];
 
   try {
-    renderCompareRecipe(container, {
-      rows: [{ ...rows[0] }, { ...rows[2], method: 'compressor' }, { ...rows[3] }],
-      gasPresets,
-      errors
-    });
+    renderCompareRecipe(container, { rows, banks, errors });
 
-    const sourcePressure = findAll(container, element => hasAttribute(element, 'data-row-id', 'add-1') && hasAttribute(element, 'data-compare-field', 'sourcePressureBar'))[0];
-    assert.equal(sourcePressure.hidden, true);
-    assert.match(container.textContent, /Compressor rows require Air \(21% oxygen and 0% helium\)\./);
-    assert.match(container.textContent, /Target pressure must not decrease\./);
+    for (const field of ['waitMode', 'targetPressureBar', 'targetTemperatureC']) {
+      assert.equal(findAll(container, element => hasAttribute(element, 'data-row-id', 'wait-1') && hasAttribute(element, 'data-compare-field', field)).length, 1, `wait row has ${field}`);
+    }
+    assert.equal(findAll(container, element => hasAttribute(element, 'data-row-id', 'wait-1') && hasAttribute(element, 'data-compare-field', 'waitMinutes')).length, 0);
+    const invalidTarget = findAll(container, element => hasAttribute(element, 'data-row-id', 'wait-1') && hasAttribute(element, 'data-compare-field', 'targetPressureBar'))[0];
+    assert.equal(invalidTarget.attributes.get('aria-invalid'), 'true');
+    assert.ok(invalidTarget.attributes.get('aria-describedby'));
+    assert.match(container.textContent, /Target pair is unreachable\./);
 
     const controls = findAll(container, element => hasAttribute(element, 'data-row-id', 'keep-1'));
     assert.equal(controls.find(element => hasAttribute(element, 'data-action', 'move-compare-row-up')).disabled, true);
     const lastControls = findAll(container, element => hasAttribute(element, 'data-row-id', 'wait-1'));
     assert.equal(lastControls.find(element => hasAttribute(element, 'data-action', 'move-compare-row-down')).disabled, true);
-
-    const invalidTarget = findAll(container, element => hasAttribute(element, 'data-row-id', 'add-1') && hasAttribute(element, 'data-compare-field', 'targetPressureBar'))[0];
-    assert.equal(invalidTarget.attributes.get('aria-invalid'), 'true');
-    assert.ok(invalidTarget.attributes.get('aria-describedby'));
-    const invalidGas = findAll(container, element => hasAttribute(element, 'data-row-id', 'add-1') && hasAttribute(element, 'data-compare-field', 'oxygenPercent'))[0];
-    assert.equal(invalidGas.attributes.get('aria-invalid'), 'true');
-    assert.ok(invalidGas.attributes.get('aria-describedby'));
   } finally {
     globalThis.document = previousDocument;
   }

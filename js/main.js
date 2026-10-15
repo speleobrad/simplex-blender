@@ -2,7 +2,7 @@ import { calculatorInputSignature, signatureAfterClearingMeasurement } from './i
 import { optimizeBlend } from './optimizer.js';
 import { isValidGasComposition, parseNumericInput, splitGasInput } from './gas-input.js';
 import { validateCalculatorInputs, validateSupplyBankInput } from './input-validation.js';
-import { buildCompareProtocol, createCompareRow, validateCompareRecipe } from './compare-recipe.js';
+import { buildCompareProtocol, createCompareRow, normalizeComparePressureFields, validateCompareRecipe } from './compare-recipe.js';
 import { simulateCompareProtocol } from './thermodynamics.js';
 import {
   addEquipmentPresetToDraft,
@@ -666,11 +666,24 @@ function compareSharedInputErrors(input) {
   return errors;
 }
 
+function comparePressureStarts(initialPressureBar = compareInput().cylinder.initialPressureBar) {
+  const starts = {};
+  let currentPressure = initialPressureBar;
+  for (const row of state.compareRows) {
+    if (row.type !== 'add') continue;
+    starts[row.id] = currentPressure;
+    const normalized = normalizeComparePressureFields(row, currentPressure);
+    if (Number.isFinite(normalized.targetPressureBar)) currentPressure = normalized.targetPressureBar;
+  }
+  return starts;
+}
+
 function renderCompareEditor() {
   renderCompareRecipe(byId('compare-recipe-editor'), {
     rows: state.compareRows,
-    gasPresets: state.settings.gasPresets,
-    errors: state.compareErrors
+    banks: state.banks,
+    errors: state.compareErrors,
+    pressureStarts: comparePressureStarts()
   });
 }
 
@@ -763,7 +776,9 @@ function runCompare() {
   const sharedErrors = compareSharedInputErrors(input);
   const validation = validateCompareRecipe(state.compareRows, {
     cylinder: input.cylinder,
-    gasPresets: state.settings.gasPresets
+    banks: input.banks,
+    physics: input.physics,
+    settings: input.settings
   });
   state.compareErrors = [
     ...sharedErrors.map(message => ({ rowId: null, field: 'recipe', message })),
@@ -775,30 +790,39 @@ function runCompare() {
     updateCompareStatus('Correct the highlighted recipe inputs before running a comparison.');
     return;
   }
-  const protocol = buildCompareProtocol(state.compareRows, {
-    cylinder: input.cylinder,
-    physics: input.physics,
-    gasPresets: state.settings.gasPresets
-  });
-  const simulation = simulateCompareProtocol({
-    protocolSteps: protocol.protocolSteps,
-    cylinder: input.cylinder,
-    physics: input.physics,
-    thermal: input.thermal,
-    settings: input.settings
-  });
-  state.lastCompareInput = input;
-  state.lastCompareResult = {
-    mode: 'compare',
-    compare: { ...protocol, ...simulation }
-  };
-  state.compareHasRun = true;
-  state.compareErrors = [];
-  renderCompareErrors();
-  renderCompareEditor();
-  updateCompareStatus('Comparison run.');
-  renderCompareResult();
-  setTab('recipe');
+
+  try {
+    const protocol = buildCompareProtocol(validation.normalizedRows, {
+      cylinder: input.cylinder,
+      physics: input.physics,
+      banks: input.banks,
+      settings: input.settings
+    });
+    const simulation = simulateCompareProtocol({
+      protocolSteps: protocol.protocolSteps,
+      cylinder: input.cylinder,
+      physics: input.physics,
+      thermal: input.thermal,
+      settings: input.settings
+    });
+    state.lastCompareInput = input;
+    state.lastCompareResult = {
+      mode: 'compare',
+      compare: { ...protocol, ...simulation }
+    };
+    state.compareHasRun = true;
+    state.compareErrors = [];
+    renderCompareErrors();
+    renderCompareEditor();
+    updateCompareStatus('Comparison run.');
+    renderCompareResult();
+    setTab('recipe');
+  } catch (error) {
+    state.compareErrors = [{ rowId: null, field: 'recipe', message: error.message }];
+    renderCompareErrors();
+    renderCompareEditor();
+    updateCompareStatus('Correct the highlighted recipe inputs before running a comparison.');
+  }
 }
 
 function recalculate() {
@@ -985,31 +1009,30 @@ function updateCompareRow(input, rerender) {
   if (index < 0) return;
   const row = state.compareRows[index];
   const field = input.dataset.compareField;
-  let value = field === 'presetName' ? input.value || null : input.value;
-  if (['targetPressureBar', 'sourcePressureBar', 'waitMinutes', 'oxygenPercent', 'heliumPercent'].includes(field)) {
+  let value = input.value;
+  if (['pressureAddedBar', 'targetPressureBar', 'waitMinutes', 'targetTemperatureC'].includes(field)) {
     value = Number.parseFloat(value);
   }
+
   let updatedRow;
   if (field === 'type') {
     updatedRow = createCompareRow(value, row.id);
-  } else if (['presetName', 'name', 'oxygenPercent', 'heliumPercent'].includes(field)) {
-    const gas = { ...row.gas, [field]: value };
-    if (field === 'presetName') {
-      const preset = state.settings.gasPresets.find(candidate => candidate.name === value);
-      if (preset) Object.assign(gas, {
-        presetName: preset.name,
-        name: preset.name,
-        oxygenPercent: preset.oxygenPercent,
-        heliumPercent: preset.heliumPercent
-      });
-    }
-    updatedRow = { ...row, gas };
+  } else if (field === 'bankId') {
+    updatedRow = { ...row, bankId: value || null };
+  } else if (field === 'pressureAddedBar' || (field === 'targetPressureBar' && row.type === 'add')) {
+    const pressureInputMode = input.dataset.pressureInputMode;
+    const pressureStart = comparePressureStarts()[row.id];
+    updatedRow = normalizeComparePressureFields({
+      ...row,
+      [field]: value,
+      pressureInputMode
+    }, pressureStart);
   } else {
     updatedRow = { ...row, [field]: value };
   }
   state.compareRows.splice(index, 1, updatedRow);
-  if (!rerender) return;
   state.compareErrors = [];
+  if (!rerender) return;
   renderCompareErrors();
   renderCompareEditor();
 }

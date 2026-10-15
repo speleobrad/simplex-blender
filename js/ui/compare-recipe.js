@@ -1,4 +1,4 @@
-import { COMPARE_METHODS, COMPARE_ROW_TYPES } from '../compare-recipe.js';
+import { COMPARE_ROW_TYPES } from '../compare-recipe.js';
 
 const inputClass = 'w-full rounded border border-ocean-700 bg-ocean-900 px-2 py-1 font-mono text-xs text-slate-100';
 
@@ -87,56 +87,65 @@ function select(options, value) {
   return control;
 }
 
-function addGasFields(card, row, rowNumber, gasPresets, errors) {
-  const gas = row.gas ?? {};
+function addGasFields(card, row, rowNumber, banks, errors, pressureStart) {
   const fields = element('div', { className: 'grid grid-cols-2 gap-2' });
-  const presetField = element('div', { className: 'col-span-2' });
-  const preset = select([
-    { value: '', label: 'Custom' },
-    ...gasPresets.map(gasPreset => ({ value: gasPreset.name, label: gasPreset.name }))
-  ], gas.presetName ?? '');
-  appendLabelledControl(presetField, row, rowNumber, 'presetName', 'Gas preset', preset, errors);
+  const enabledBanks = banks.filter(bank => bank.enabled);
+  const bankField = element('div', { className: 'col-span-2' });
+  const bank = select([
+    { value: '', label: 'Select supply bank' },
+    ...enabledBanks.map(candidate => ({ value: candidate.id, label: candidate.name }))
+  ], row.bankId ?? '');
+  appendLabelledControl(bankField, row, rowNumber, 'bankId', 'Supply bank', bank, errors);
 
-  const nameField = element('div', { className: 'col-span-2' });
-  const name = input(row, 'name', gas.name);
-  appendLabelledControl(nameField, row, rowNumber, 'name', 'Gas name', name, errors);
-  const oxygenField = element('div');
-  const oxygen = input(row, 'oxygenPercent', gas.oxygenPercent, 'number');
-  appendLabelledControl(oxygenField, row, rowNumber, 'oxygenPercent', '% O₂', oxygen, errors);
-  const heliumField = element('div');
-  const helium = input(row, 'heliumPercent', gas.heliumPercent, 'number');
-  appendLabelledControl(heliumField, row, rowNumber, 'heliumPercent', '% He', helium, errors);
+  const selectedBank = enabledBanks.find(candidate => candidate.id === row.bankId);
+  if (selectedBank) {
+    const details = element('p', {
+      className: 'col-span-2 text-[10px] text-slate-400',
+      text: `${selectedBank.name}: O₂ ${selectedBank.oxygenPercent}% · He ${selectedBank.heliumPercent}% · ${selectedBank.volumeL} L · ${selectedBank.pressureBar} bar`
+    });
+    fields.append(details);
+  }
+
+  const addedField = element('div');
+  const added = input(row, 'pressureAddedBar', row.pressureAddedBar, 'number');
+  added.setAttribute('data-pressure-input-mode', 'added');
+  added.setAttribute('data-receiver-start-pressure', pressureStart);
+  appendLabelledControl(addedField, row, rowNumber, 'pressureAddedBar', 'Pressure added (bar)', added, errors);
   const targetField = element('div');
-  appendLabelledControl(targetField, row, rowNumber, 'targetPressureBar', 'Target pressure (bar)', input(row, 'targetPressureBar', row.targetPressureBar, 'number'), errors);
-  const methodField = element('div');
-  appendLabelledControl(methodField, row, rowNumber, 'method', 'Method', select(COMPARE_METHODS, row.method), errors);
-  const sourceField = element('div');
-  const sourcePressure = input(row, 'sourcePressureBar', row.sourcePressureBar, 'number');
-  sourceField.hidden = row.method !== 'boost';
-  sourcePressure.hidden = sourceField.hidden;
-  appendLabelledControl(sourceField, row, rowNumber, 'sourcePressureBar', 'Source pressure (bar)', sourcePressure, errors);
+  const target = input(row, 'targetPressureBar', row.targetPressureBar, 'number');
+  target.setAttribute('data-pressure-input-mode', 'target');
+  target.setAttribute('data-receiver-start-pressure', pressureStart);
+  appendLabelledControl(targetField, row, rowNumber, 'targetPressureBar', 'Receiver target pressure (bar)', target, errors);
 
-  fields.append(presetField, nameField, oxygenField, heliumField, targetField, methodField, sourceField);
-  addGasError(fields, [preset, name, oxygen, helium], errors, row.id);
+  fields.append(bankField, addedField, targetField);
   card.append(fields);
 }
 
-function rowFields(card, row, rowNumber, gasPresets, errors) {
+function rowFields(card, row, rowNumber, banks, errors, pressureStarts) {
   if (row.type === 'add') {
-    addGasFields(card, row, rowNumber, gasPresets, errors);
+    addGasFields(card, row, rowNumber, banks, errors, pressureStarts[row.id]);
     return;
   }
 
   const fields = element('div', { className: 'grid grid-cols-2 gap-2' });
-  if (row.type === 'drain') {
-    const targetField = element('div');
-    appendLabelledControl(targetField, row, rowNumber, 'targetPressureBar', 'Target pressure (bar)', input(row, 'targetPressureBar', row.targetPressureBar, 'number'), errors);
-    fields.append(targetField);
-  }
   if (row.type === 'wait') {
-    const waitField = element('div');
-    appendLabelledControl(waitField, row, rowNumber, 'waitMinutes', 'Wait time (minutes)', input(row, 'waitMinutes', row.waitMinutes, 'number'), errors);
-    fields.append(waitField);
+    const modeField = element('div');
+    appendLabelledControl(modeField, row, rowNumber, 'waitMode', 'Wait mode', select([
+      { value: 'minutes', label: 'Minutes' },
+      { value: 'target', label: 'Target state' }
+    ], row.waitMode), errors);
+    fields.append(modeField);
+    if (row.waitMode === 'target') {
+      const pressureField = element('div');
+      appendLabelledControl(pressureField, row, rowNumber, 'targetPressureBar', 'Target pressure (bar)', input(row, 'targetPressureBar', row.targetPressureBar, 'number'), errors);
+      const temperatureField = element('div');
+      appendLabelledControl(temperatureField, row, rowNumber, 'targetTemperatureC', 'Target temperature (°C)', input(row, 'targetTemperatureC', row.targetTemperatureC, 'number'), errors);
+      fields.append(pressureField, temperatureField);
+    } else {
+      const waitField = element('div');
+      appendLabelledControl(waitField, row, rowNumber, 'waitMinutes', 'Wait time (minutes)', input(row, 'waitMinutes', row.waitMinutes, 'number'), errors);
+      fields.append(waitField);
+    }
   }
   if (fields.children.length > 0) card.append(fields);
 }
@@ -151,7 +160,7 @@ function actionButton(action, label, rowId, disabled = false) {
   return button;
 }
 
-function renderRow(row, index, rows, gasPresets, errors) {
+function renderRow(row, index, rows, banks, errors, pressureStarts) {
   const rowNumber = index + 1;
   const card = element('fieldset', {
     className: 'rounded-xl border border-ocean-800 bg-ocean-950/60 p-3',
@@ -169,13 +178,13 @@ function renderRow(row, index, rows, gasPresets, errors) {
   );
   header.append(type, actions);
   card.append(legend, header);
-  rowFields(card, row, rowNumber, gasPresets, errors);
+  rowFields(card, row, rowNumber, banks, errors, pressureStarts);
   return card;
 }
 
-export function renderCompareRecipe(container, { rows = [], gasPresets = [], errors = [] } = {}) {
+export function renderCompareRecipe(container, { rows = [], banks = [], errors = [], pressureStarts = {} } = {}) {
   const content = element('div', { className: 'space-y-3' });
-  rows.forEach((row, index) => content.append(renderRow(row, index, rows, gasPresets, errors)));
+  rows.forEach((row, index) => content.append(renderRow(row, index, rows, banks, errors, pressureStarts)));
 
   const addButton = element('button', {
     className: 'rounded-lg border border-ocean-700 bg-ocean-800 px-3 py-1.5 text-xs font-medium text-cyan-300 hover:bg-ocean-700',
