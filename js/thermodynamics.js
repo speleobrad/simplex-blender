@@ -660,7 +660,7 @@ export function simulateThermalProtocol({
     const waitAmbientTemperatureC = coolsBelowAmbient
       ? settledTemperatureC
       : thermal.ambientTemperatureC;
-    const waitMinutes = skipsConfiguredWait
+    const configuredWaitMinutes = skipsConfiguredWait
       ? 0
       : isFinalStep
         ? Math.abs(settledTemperatureC - thermal.ambientTemperatureC) < 1e-9 || coolsBelowAmbient
@@ -683,6 +683,12 @@ export function simulateThermalProtocol({
               tauMinutes
             })
           : thermal.waitMinutes;
+    const waitMinutes = skipsConfiguredWait
+      ? 0
+      : Math.min(
+        1440,
+        Math.max(0, configuredWaitMinutes + (Number(step.automaticWaitMinutes) || 0))
+      );
     const intermediateTargetTemperatureC = thermal.targetMediumTemperatureC
       ?? thermal.targetTemperatureC;
     const temperatureAfterWaitC = skipsConfiguredWait

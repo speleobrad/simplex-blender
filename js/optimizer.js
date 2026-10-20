@@ -4,6 +4,74 @@ import { isValidGasComposition } from './gas-input.js';
 import { validateCalculatorInputs, validateSupplyBankInput } from './input-validation.js';
 import { simulateThermalProtocol, calculatePressureAtTemperature } from './thermodynamics.js';
 
+const MAX_AUTOMATIC_WAIT_MINUTES = 1440;
+
+export function scheduleSafeThermalProtocol({
+  protocolSteps,
+  thermal,
+  cylinder,
+  physics,
+  settings
+}) {
+  const steps = protocolSteps.map(step => ({ ...step }));
+  const automaticWaits = [];
+  for (let pass = 0; pass < steps.length * 3 + 3; pass++) {
+    const simulation = simulateThermalProtocol({
+      protocolSteps: steps, cylinder, physics, thermal, settings
+    });
+    const unsafeIndex = simulation.protocolSteps.findIndex(step => (
+      step.thermal
+      && step.thermal.pressureAtTransferEndBar > cylinder.workingPressureBar + 1e-7
+    ));
+    if (unsafeIndex < 0) {
+      return {
+        protocolSteps: simulation.protocolSteps,
+        automaticWaits,
+        simulation
+      };
+    }
+    const waitIndex = unsafeIndex - 1;
+    if (waitIndex < 0 || steps[waitIndex].type === 'keep') {
+      return {
+        protocolSteps: simulation.protocolSteps,
+        automaticWaits,
+        simulation,
+        unsafe: true
+      };
+    }
+    const current = simulation.protocolSteps[unsafeIndex].thermal;
+    const waitStep = simulation.protocolSteps[waitIndex].thermal;
+    const configuredWaitMinutes = Number.isFinite(waitStep?.waitMinutes)
+      ? waitStep.waitMinutes
+      : Number(thermal.waitMinutes) || 0;
+    const existingAdded = Number(steps[waitIndex].automaticWaitMinutes) || 0;
+    const available = MAX_AUTOMATIC_WAIT_MINUTES - existingAdded;
+    if (available <= 0) {
+      return { protocolSteps: simulation.protocolSteps, automaticWaits, simulation, unsafe: true };
+    }
+    const requiredRatio = Math.max(
+      1e-12,
+      (current.temperatureAtTransferEndC - thermal.ambientTemperatureC)
+        / Math.max(1e-12, current.temperatureAtTransferEndC - thermal.ambientTemperatureC
+          + (cylinder.workingPressureBar - current.pressureAtTransferEndBar))
+    );
+    const suggested = Math.max(1, waitStep.waitMinutes || configuredWaitMinutes || 1,
+      -Math.log(Math.min(1, requiredRatio)) * 3);
+    const addedWaitMinutes = Math.min(available, suggested);
+    steps[waitIndex].automaticWaitMinutes = existingAdded + addedWaitMinutes;
+    steps[waitIndex].automaticWaitMetadata = {
+      stepIndex: waitIndex,
+      stepIdentifier: steps[waitIndex].id ?? steps[waitIndex].title ?? waitIndex,
+      configuredWaitMinutes,
+      actualWaitMinutes: configuredWaitMinutes + steps[waitIndex].automaticWaitMinutes,
+      addedWaitMinutes: steps[waitIndex].automaticWaitMinutes,
+      warning: '!'
+    };
+    automaticWaits.push(steps[waitIndex].automaticWaitMetadata);
+  }
+  return { protocolSteps: steps, automaticWaits, unsafe: true };
+}
+
 const INTERNAL_THERMAL_TARGET = Symbol('internal thermal target');
 const NORMAL_RETAINED_GAS_COST = -5;
 const SAFETY_SOURCE_COST_RANGE = 10_101;
@@ -1598,8 +1666,15 @@ function evaluateThermalCandidate(input, optimizeStatic, targetPressureBar) {
   const result = optimizeStatic(candidateInput);
   if (!result.feasible) return { candidateInput, result, simulation: null };
 
-  const simulation = simulateThermalProtocol({
+  const scheduled = scheduleSafeThermalProtocol({
     protocolSteps: result.protocolSteps,
+    cylinder: candidateInput.cylinder,
+    physics: candidateInput.physics,
+    thermal: candidateInput.thermal,
+    settings: candidateInput.settings
+  });
+  const simulation = scheduled.simulation ?? simulateThermalProtocol({
+    protocolSteps: scheduled.protocolSteps ?? result.protocolSteps,
     cylinder: candidateInput.cylinder,
     physics: candidateInput.physics,
     thermal: candidateInput.thermal,
