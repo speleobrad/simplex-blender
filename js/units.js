@@ -16,6 +16,11 @@ export function convertFromDisplay(value, quantity, units = 'metric') {
   if (!Number.isFinite(value) || !QUANTITIES.has(quantity) || normalizeUnits(units) === 'metric') return value;
   return quantity === 'temperature' ? (value - 32) * 5 / 9 : value / FACTORS[quantity];
 }
+
+export function displayStep(value, quantity, units = 'metric') {
+  if (!Number.isFinite(value) || !QUANTITIES.has(quantity) || normalizeUnits(units) === 'metric') return value;
+  return quantity === 'temperature' ? value * 9 / 5 : value * FACTORS[quantity];
+}
 export function formatQuantity(value, quantity, units = 'metric') {
   const display = convertToDisplay(value, quantity, units);
   return `${Number.isFinite(display) ? display.toFixed(2) : '—'} ${getUnitLabel(quantity, units)}`;

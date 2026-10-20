@@ -7,7 +7,8 @@ import {
   formatPressure,
   formatQuantity,
   getUnitLabel,
-  normalizeUnits
+  normalizeUnits,
+  displayStep
 } from '../js/units.js';
 
 test('metric display is identity for every supported quantity', () => {
@@ -33,6 +34,11 @@ test('imperial volume uses cubic feet rather than gallons', () => {
   assert.equal(getUnitLabel('volume', 'imperial'), 'ft³');
   assert.equal(formatQuantity(10, 'volume', 'imperial'), '0.35 ft³');
   assert.ok(!formatQuantity(10, 'volume', 'imperial').includes('gal'));
+});
+
+test('temperature display steps scale without Fahrenheit offset', () => {
+  assert.equal(displayStep(0.1, 'temperature', 'imperial'), 0.18);
+  assert.equal(displayStep(1, 'pressure', 'imperial'), 14.5037738);
 });
 
 test('imperial labels never expose gallons', () => {

@@ -1,6 +1,6 @@
 import { PRESET_IMPORT_DEFAULT_URLS } from '../preset-import.js';
 import { sortCylinderPresetEntries, sortGasPresetEntries } from '../settings.js';
-import { convertFromDisplay, convertToDisplay, getUnitLabel, normalizeUnits } from '../units.js';
+import { convertFromDisplay, convertToDisplay, displayStep, getUnitLabel, normalizeUnits } from '../units.js';
 
 const CUSTOM_PRESET = 'custom';
 let activeUnits = 'metric';
@@ -23,6 +23,12 @@ function displayValue(value, quantity, field, units) {
   return convertToDisplay(field === 'cylinderVolumeCm3' ? value / 1000 : value, quantity, units);
 }
 
+function displayConstraint(value, quantity, field, units) {
+  if (!quantity) return value;
+  const canonical = field === 'cylinderVolumeCm3' ? value / 1000 : value;
+  return displayStep(canonical, quantity, units);
+}
+
 function createPresetInput({ value, type, collection, index, field, label, min, max, step, units = activeUnits }) {
   const quantity = fieldQuantity(collection, field);
   const normalizedUnits = normalizeUnits(units);
@@ -37,9 +43,9 @@ function createPresetInput({ value, type, collection, index, field, label, min, 
   input.dataset.settingsIndex = String(index);
   input.dataset.settingsField = field;
   if (quantity) input.dataset.settingsQuantity = quantity;
-  if (min !== undefined) input.min = String(displayValue(min, quantity, field, normalizedUnits));
-  if (max !== undefined) input.max = String(displayValue(max, quantity, field, normalizedUnits));
-  if (step !== undefined) input.step = String(displayValue(step, quantity, field, normalizedUnits));
+  if (min !== undefined) input.min = String(displayConstraint(min, quantity, field, normalizedUnits));
+  if (max !== undefined) input.max = String(displayConstraint(max, quantity, field, normalizedUnits));
+  if (step !== undefined) input.step = String(displayConstraint(step, quantity, field, normalizedUnits));
   return input;
 }
 

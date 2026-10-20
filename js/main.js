@@ -26,7 +26,7 @@ import { renderSupplyBanks } from './ui/supply-banks.js';
 import { renderStorageWarning } from './ui/storage-warning.js';
 import { renderThermalCharts } from './ui/thermal-charts.js';
 import { changeTernaryZoom, clearTernaryDiagram, observeTernaryCanvas, renderTernaryDiagram } from './ui/ternary.js';
-import { convertFromDisplay } from './units.js';
+import { convertFromDisplay, convertToDisplay, getUnitLabel, displayStep } from './units.js';
 
 const settingsStorage = {
   getItem: key => window.localStorage.getItem(key),
@@ -548,6 +548,7 @@ function saveSettingsDraft() {
   updateStorageWarning();
   state.settingsDraft = null;
   byId('settings-dialog').close();
+  syncPrimaryUnitInputs();
   refreshPresetOptions(selectedCylinderName);
   recalculate();
 }
@@ -612,6 +613,37 @@ function updateWaitModeFields() {
   byId('wait-target-temperature-field').hidden = isMinutesMode;
 }
 
+function syncPrimaryUnitInputs() {
+  const units = state.settings.units;
+  for (const [id, quantity, min, max, step] of [
+    ['init-p', 'pressure', 0, 350, 5], ['target-p', 'pressure', 10, 350, 5],
+    ['ambient-temperature', 'temperature', 0, 50, 0.1],
+    ['wait-target-temperature', 'temperature', 0, 100, 0.1],
+    ['inlet-gas-temperature', 'temperature', -20, 100, 0.1]
+  ]) {
+    const input = byId(id);
+    if (!input) continue;
+    const canonical = input.dataset.canonicalValue === undefined ? Number(input.value) : Number(input.dataset.canonicalValue);
+    if (Number.isFinite(canonical)) {
+      input.dataset.canonicalValue = String(canonical);
+      input.value = String(convertToDisplay(canonical, quantity, units));
+    }
+    input.min = String(convertToDisplay(min, quantity, units));
+    input.max = String(convertToDisplay(max, quantity, units));
+    input.step = String(displayStep(step, quantity, units));
+    const suffix = input.parentElement?.querySelector('span');
+    if (suffix) suffix.textContent = getUnitLabel(quantity, units);
+    input.setAttribute('aria-label', `${input.labels?.[0]?.textContent?.trim() || id} in ${getUnitLabel(quantity, units)}`);
+  }
+}
+
+
+function canonicalPrimaryValue(id, quantity) {
+  const input = byId(id);
+  const value = convertFromDisplay(numberValue(id), quantity, state.settings.units);
+  if (input && Number.isFinite(value)) input.dataset.canonicalValue = String(value);
+  return value;
+}
 
 function readInput() {
   const cylinderPreset = selectedCylinderPreset();
@@ -620,26 +652,26 @@ function readInput() {
       presetName: cylinderPreset.name,
       volumeL: cylinderPreset.volumeL,
       workingPressureBar: cylinderPreset.workingPressureBar,
-      initialPressureBar: numberValue('init-p'),
+      initialPressureBar: canonicalPrimaryValue('init-p', 'pressure'),
       initialOxygenPercent: numberValue('init-o2'),
       initialHeliumPercent: numberValue('init-he'),
-      targetPressureBar: numberValue('target-p'),
+      targetPressureBar: canonicalPrimaryValue('target-p', 'pressure'),
       targetOxygenPercent: numberValue('target-o2'),
       targetHeliumPercent: numberValue('target-he')
     },
     physics: {
       model: state.settings.physics.model,
-      temperatureC: numberValue('ambient-temperature')
+      temperatureC: canonicalPrimaryValue('ambient-temperature', 'temperature'),
     },
     thermal: {
       tankMaterial: cylinderPreset.material,
       tankMassKg: cylinderPreset.massKg,
       coolingMedium: byId('cooling-medium').value,
-      ambientTemperatureC: numberValue('ambient-temperature'),
-      inletTemperatureC: numberValue('inlet-gas-temperature'),
+      ambientTemperatureC: canonicalPrimaryValue('ambient-temperature', 'temperature'),
+      inletTemperatureC: canonicalPrimaryValue('inlet-gas-temperature', 'temperature'),
       waitMode: byId('wait-mode').value,
       waitMinutes: numberValue('wait-minutes'),
-      targetTemperatureC: numberValue('wait-target-temperature'),
+      targetTemperatureC: canonicalPrimaryValue('wait-target-temperature', 'temperature'),
       interimMeasurements: state.interimMeasurements
     },
     banks: state.banks
@@ -704,6 +736,7 @@ function recalculate() {
   renderSupplyBanks(state.banks, state.settings.gasPresets, state.settings.units);
   renderEquipmentSummary(state.settings, state.settings.units);
   renderResults(result, input, state.settings.units);
+  syncPrimaryUnitInputs();
   renderThermalCharts(result, input, state.settings.units);
   if (result.feasible) renderTernary();
   else clearTernaryDiagram(byId('ternary-canvas'));
