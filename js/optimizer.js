@@ -6,6 +6,38 @@ import { simulateThermalProtocol, calculatePressureAtTemperature } from './therm
 
 const MAX_AUTOMATIC_WAIT_MINUTES = 1440;
 
+export function isSafeSimulation(simulation, workingPressureBar, {
+  thermal,
+  physics,
+  cylinder
+} = {}) {
+  const limit = workingPressureBar + 1e-7;
+  const pressures = [];
+  if (Number.isFinite(cylinder?.initialPressureBar)) pressures.push(cylinder.initialPressureBar);
+  for (const step of simulation?.protocolSteps ?? []) {
+    const state = step.thermal;
+    if (!state) continue;
+    pressures.push(
+      state.pressureStartBar,
+      state.pressureAtTransferEndBar,
+      state.pressureAfterWaitBar,
+      ...(state.samples ?? []).map(sample => sample.pressureBar)
+    );
+    if (thermal && physics && cylinder) {
+      pressures.push(calculatePressureAtTemperature({
+        pressureBar: state.pressureAtTransferEndBar,
+        oxygenPercent: step.resultingMix?.oxygenPercent ?? 21,
+        heliumPercent: step.resultingMix?.heliumPercent ?? 0,
+        fromTemperatureC: thermal.ambientTemperatureC,
+        toTemperatureC: state.temperatureAtTransferEndC,
+        volumeL: cylinder.volumeL,
+        useVdw: physics.model === 'vdw'
+      }));
+    }
+  }
+  return pressures.filter(Number.isFinite).every(pressure => pressure <= limit);
+}
+
 export function scheduleSafeThermalProtocol({
   protocolSteps,
   thermal,
@@ -19,25 +51,16 @@ export function scheduleSafeThermalProtocol({
     const simulation = simulateThermalProtocol({
       protocolSteps: steps, cylinder, physics, thermal, settings
     });
-    const unsafeIndex = simulation.protocolSteps.findIndex(step => {
-      const thermalStep = step.thermal;
-      if (!thermalStep) return false;
-      const hotPressureBar = calculatePressureAtTemperature({
-        pressureBar: thermalStep.pressureAtTransferEndBar,
-        oxygenPercent: step.resultingMix?.oxygenPercent ?? 21,
-        heliumPercent: step.resultingMix?.heliumPercent ?? 0,
-        fromTemperatureC: thermal.ambientTemperatureC,
-        toTemperatureC: thermalStep.temperatureAtTransferEndC,
-        volumeL: cylinder.volumeL,
-        useVdw: physics.model === 'vdw'
-      });
-      const samplePressureBar = Math.max(
-        hotPressureBar,
-        thermalStep.pressureAtTransferEndBar,
-        thermalStep.pressureAfterWaitBar,
-        ...(thermalStep.samples ?? []).map(sample => sample.pressureBar ?? 0)
-      );
-      return samplePressureBar > cylinder.workingPressureBar + 1e-7;
+    const simulationSafe = isSafeSimulation(simulation, cylinder.workingPressureBar, {
+      thermal, physics, cylinder
+    });
+    const unsafeIndex = simulationSafe ? -1 : simulation.protocolSteps.findIndex(step => {
+      const state = step.thermal;
+      return state && Math.max(
+        state.pressureAtTransferEndBar,
+        state.pressureAfterWaitBar,
+        ...(state.samples ?? []).map(sample => sample.pressureBar ?? 0)
+      ) > cylinder.workingPressureBar + 1e-7;
     });
     if (unsafeIndex < 0) {
       return {
@@ -170,8 +193,9 @@ export function scheduleSafeThermalProtocol({
     const safeAt = added => {
       steps[waitIndex].automaticWaitMinutes = added;
       const candidate = simulateThermalProtocol({ protocolSteps: steps, cylinder, physics, thermal, settings });
-      const endpoint = candidate.protocolSteps[unsafeIndex]?.thermal;
-      return endpoint && endpoint.pressureAtTransferEndBar <= cylinder.workingPressureBar + 1e-7;
+      return isSafeSimulation(candidate, cylinder.workingPressureBar, {
+        thermal, physics, cylinder
+      });
     };
     if (!available || !safeAt(existingAdded + available)) {
       steps[waitIndex].automaticWaitMinutes = existingAdded;

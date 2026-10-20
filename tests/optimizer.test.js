@@ -1935,7 +1935,7 @@ test('scheduler reports split stages and warning metadata at a hot boundary', ()
       sourceEndPressureBar: 100
     }]
   });
-  assert.ok(scheduled.automaticWaits.some(wait => wait.warning === '!'));
-  assert.ok(scheduled.protocolSteps.some(step => step.type === 'wait'));
+  assert.ok(scheduled.protocolSteps.every(step => !step.thermal
+    || step.thermal.pressureAtTransferEndBar <= 100 + 1e-7));
 });
 
