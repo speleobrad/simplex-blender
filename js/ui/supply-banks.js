@@ -11,10 +11,10 @@ const COLUMN_CLASSES = {
 function bankFieldDefinition(key, units) {
   const definitions = {
     name: { key: 'name', label: 'bank name', type: 'text', className: 'w-full min-w-0 bg-transparent border-b border-transparent hover:border-ocean-700 focus:border-cyan-400 focus:bg-ocean-900 rounded px-1 text-slate-200' },
-    volumeL: { key: 'volumeL', label: `volume in ${unitLabel('volumeL', units)}`, type: 'number', min: 1, max: 200, step: 1, className: 'w-28 min-w-0 text-[6px] overflow-visible bg-ocean-950/60 border border-ocean-800 rounded px-1 py-0.5 text-center text-slate-300' },
-    pressureBar: { key: 'pressureBar', label: `pressure in ${unitLabel('pressureBar', units)}`, type: 'number', min: 1, max: 350, step: 5, className: 'w-28 min-w-0 text-[6px] overflow-visible bg-ocean-950/60 border border-ocean-800 rounded px-1 py-0.5 text-center text-slate-300' },
-    oxygenPercent: { key: 'oxygenPercent', label: 'oxygen percentage', type: 'number', min: 0, max: 100, step: 1, className: 'w-20 bg-emerald-950/40 border border-emerald-900/60 rounded px-1 py-0.5 text-center text-emerald-400 font-bold' },
-    heliumPercent: { key: 'heliumPercent', label: 'helium percentage', type: 'number', min: 0, max: 100, step: 1, className: 'w-20 bg-amber-950/40 border border-amber-900/60 rounded px-1 py-0.5 text-center text-amber-400 font-bold' }
+    volumeL: { key: 'volumeL', label: `volume in ${unitLabel('volumeL', units)}`, type: 'number', min: 1, max: 200, step: 1, className: 'w-28 min-w-0 bg-ocean-950/60 border border-ocean-800 rounded px-2 py-1 font-mono text-xs text-slate-100' },
+    pressureBar: { key: 'pressureBar', label: `pressure in ${unitLabel('pressureBar', units)}`, type: 'number', min: 1, max: 350, step: 5, className: 'w-28 min-w-0 bg-ocean-950/60 border border-ocean-800 rounded px-2 py-1 font-mono text-xs text-slate-100' },
+    oxygenPercent: { key: 'oxygenPercent', label: 'oxygen percentage', type: 'number', min: 0, max: 100, step: 1, className: 'w-20 bg-emerald-950/40 border border-emerald-900/60 rounded px-1 py-1 text-center text-emerald-400 font-bold' },
+    heliumPercent: { key: 'heliumPercent', label: 'helium percentage', type: 'number', min: 0, max: 100, step: 1, className: 'w-20 bg-amber-950/40 border border-amber-900/60 rounded px-1 py-1 text-center text-amber-400 font-bold' }
   };
   return definitions[key];
 }
@@ -76,6 +76,10 @@ function makeBankNameControl(bank, gasPresets, units) {
 export function renderSupplyBanks(banks, gasPresets, units = 'metric') {
   const tbody = document.getElementById('tanks-tbody');
   if (!tbody) return;
+  const volumeHeading = document.getElementById('inventory-volume-heading');
+  const pressureHeading = document.getElementById('inventory-pressure-heading');
+  if (volumeHeading) volumeHeading.textContent = `Volume (${unitLabel('volumeL', units)})`;
+  if (pressureHeading) pressureHeading.textContent = `Pressure (${unitLabel('pressureBar', units)})`;
 
   const rows = banks.map(bank => {
     const row = document.createElement('tr');

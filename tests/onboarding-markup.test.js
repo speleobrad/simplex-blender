@@ -55,16 +55,30 @@ test('keeps the working tank and optimized results in Blending, with What-if ste
   assert.ok(markup.indexOf('id="inventory-section"', inventoryStart) > inventoryStart);
   assert.ok(markup.indexOf('id="tanks-tbody"', inventoryStart) > inventoryStart);
   assert.match(markup, /data-action="save-settings"[\s\S]*?<\/div>\s*<\/div>\s*<\/div>\s*<\/div>\s*<!-- Main Application Body -->/);
-  for (const id of ['init-p', 'target-p']) {
+  for (const id of ['init-p', 'target-p', 'init-o2', 'init-he', 'target-o2', 'target-he', 'init-gas-preset', 'target-gas-preset']) {
     assert.match(markup, new RegExp(`id="${id}"[^>]*class="[^"]*w-28`));
   }
+  assert.match(markup, /id="init-p"[^>]*>[\s\S]*?<\/input>|id="init-p"/);
+  assert.match(markup, /<span class="font-mono text-slate-200">bar<\/span>/);
+  assert.match(markup, /id="inventory-volume-heading"[^>]*>Volume<\/th>/);
+  assert.match(markup, /id="inventory-pressure-heading"[^>]*>Pressure<\/th>/);
+  assert.match(markup, /Temperature of inventory gases/);
+  assert.match(markup, /temperature at which inventory gases are assumed to be stored/i);
 });
 
-test('exposes semantic result tabs and panels', () => {
-  assert.match(markup, /<div\b[^>]*id="results-tablist"[^>]*role="tablist"[^>]*>/);
+test('exposes semantic result tabs and panels in the requested order', () => {
+  assert.match(markup, /id="results-tablist"[\s\S]*?Recipe[\s\S]*?Thermal Graph[\s\S]*?In-water pressure[\s\S]*?Tank summary[\s\S]*?Simplex diagram/);
+  assert.doesNotMatch(markup, /id="tab-btn-ternary"[^>]*>\s*Diagram\s*</);
   for (const tab of ['recipe', 'ternary', 'thermal', 'summary', 'water-pressure']) {
     assert.match(markup, new RegExp(`id="tab-btn-${tab}"[^>]*role="tab"[^>]*aria-selected=`));
     assert.match(markup, new RegExp(`id="tab-btn-${tab}"[^>]*aria-controls="tab-pane-${tab}"`));
     assert.match(markup, new RegExp(`id="tab-pane-${tab}"[^>]*role="tabpanel"[^>]*aria-labelledby="tab-btn-${tab}"`));
   }
+});
+
+test('merges Model and Units into the General settings pane', () => {
+  assert.match(markup, /data-settings-category="general"[^>]*aria-controls="settings-pane-general"[^>]*>General</);
+  assert.doesNotMatch(markup, /data-settings-category="model"/);
+  assert.doesNotMatch(markup, /data-settings-category="units"/);
+  assert.match(markup, /id="settings-pane-general"[\s\S]*?id="settings-physics-model"[\s\S]*?id="settings-units"/);
 });

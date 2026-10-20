@@ -8,10 +8,10 @@ const PRIMARY_PANELS = {
 
 const RESULT_PANELS = {
   Recipe: 'recipe',
-  Diagram: 'ternary',
-  'Thermal graphs': 'thermal',
+  'Simplex diagram': 'ternary',
+  'Thermal Graph': 'thermal',
   'Tank summary': 'summary',
-  'In water pressure': 'water-pressure'
+  'In-water pressure': 'water-pressure'
 };
 
 async function closeSettings(page) {

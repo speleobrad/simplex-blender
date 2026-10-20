@@ -3,7 +3,7 @@ import { assertInsideViewport, assertNoUnexpectedOverflow } from './assertions/l
 import { assertNoClippedText } from './assertions/runtime.js';
 import { selectPrimaryScreen, selectResultTab, toggleTheme } from './helpers/navigation.js';
 
-const resultTabs = ['Recipe', 'Diagram', 'Thermal graphs', 'Tank summary', 'In water pressure'];
+const resultTabs = ['Recipe', 'Thermal Graph', 'In-water pressure', 'Tank summary', 'Simplex diagram'];
 
 test.describe('global shell', () => {
   test('header geometry remains usable at every configured viewport', async ({ appPage }) => {

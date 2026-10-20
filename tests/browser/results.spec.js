@@ -6,7 +6,7 @@ async function populated(appPage) { return appPage.goto('tourSeen'); }
 test.describe('result tabs', () => {
   test('exposes every result panel exclusively in a populated recipe', async ({ appPage }) => {
     const page = await populated(appPage);
-    for (const tab of ['Recipe', 'Diagram', 'Thermal graphs', 'Tank summary', 'In water pressure']) {
+    for (const tab of ['Recipe', 'Thermal Graph', 'In-water pressure', 'Tank summary', 'Simplex diagram']) {
       await assertResultPanelExclusive(page, tab);
     }
     await openRecipeScenario(page);
@@ -24,17 +24,17 @@ test.describe('result tabs', () => {
 
     await page.locator('#tab-btn-recipe').focus();
     await page.keyboard.press('ArrowRight');
-    await expect(page.locator('#tab-btn-ternary')).toBeFocused();
-    await expect(page.locator('#tab-btn-ternary')).toHaveAttribute('aria-selected', 'true');
-    await expect(page.locator('#tab-btn-ternary')).toHaveAttribute('tabindex', '0');
+    await expect(page.locator('#tab-btn-thermal')).toBeFocused();
+    await expect(page.locator('#tab-btn-thermal')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('#tab-btn-thermal')).toHaveAttribute('tabindex', '0');
     await expect(page.locator('#tab-btn-recipe')).toHaveAttribute('aria-selected', 'false');
-    await expect(page.locator('#tab-pane-ternary')).toHaveAttribute('aria-hidden', 'false');
+    await expect(page.locator('#tab-pane-thermal')).toHaveAttribute('aria-hidden', 'false');
     await expect(page.locator('#tab-pane-recipe')).toHaveAttribute('aria-hidden', 'true');
 
     await page.keyboard.press('End');
-    await expect(page.locator('#tab-btn-water-pressure')).toBeFocused();
-    await expect(page.locator('#tab-btn-water-pressure')).toHaveAttribute('aria-selected', 'true');
-    await expect(page.locator('#tab-btn-water-pressure')).toHaveAttribute('tabindex', '0');
+    await expect(page.locator('#tab-btn-ternary')).toBeFocused();
+    await expect(page.locator('#tab-btn-ternary')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('#tab-btn-ternary')).toHaveAttribute('tabindex', '0');
     await page.keyboard.press('ArrowLeft');
     await expect(page.locator('#tab-btn-summary')).toBeFocused();
     await expect(page.locator('#tab-btn-summary')).toHaveAttribute('aria-selected', 'true');
@@ -55,7 +55,7 @@ test.describe('result tabs', () => {
 
   test('diagram zoom, pointer readout, and reset remain observable', async ({ appPage }) => {
     const page = await populated(appPage);
-    await assertResultPanelExclusive(page, 'Diagram');
+    await assertResultPanelExclusive(page, 'Simplex diagram');
     const canvas = page.locator('#ternary-canvas');
     await expect(canvas).toHaveAttribute('aria-describedby', 'ternary-chart-description');
     const box = await canvas.boundingBox();
@@ -75,7 +75,7 @@ test.describe('result tabs', () => {
 
   test('thermal charts synchronize focusable points with the accessible table', async ({ appPage }) => {
     const page = await populated(appPage);
-    await assertResultPanelExclusive(page, 'Thermal graphs');
+    await assertResultPanelExclusive(page, 'Thermal Graph');
     const chartPoint = page.locator('#thermal-temperature-chart [data-thermal-point-index]').first();
     await expect(chartPoint).toBeVisible();
     const index = await chartPoint.getAttribute('data-thermal-point-index');
@@ -94,13 +94,13 @@ test.describe('result tabs', () => {
     await page.locator('#target-o2').blur();
     await assertResultPanelExclusive(page, 'Recipe');
     await expect(page.locator('#steps-container')).toContainText(/no feasible|invalid|error|unable/i);
-    await assertResultPanelExclusive(page, 'Diagram');
+    await assertResultPanelExclusive(page, 'Simplex diagram');
     await expect(page.locator('#ternary-steps-summary')).toContainText(/no|unavailable|invalid|ready/i);
-    await assertResultPanelExclusive(page, 'Thermal graphs');
+    await assertResultPanelExclusive(page, 'Thermal Graph');
     await expect(page.locator('#thermal-chart-status')).toContainText(/available|appears|invalid|error/i);
     await assertResultPanelExclusive(page, 'Tank summary');
     await expect(page.locator('#ternary-data-status')).toContainText(/available|appears|invalid|error|no feasible/i);
-    await assertResultPanelExclusive(page, 'In water pressure');
+    await assertResultPanelExclusive(page, 'In-water pressure');
     await expect(page.locator('#water-pressure-container')).toBeEmpty();
   });
 });

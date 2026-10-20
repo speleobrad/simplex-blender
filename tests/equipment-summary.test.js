@@ -118,5 +118,5 @@ test('adds a note directing users to Settings for equipment changes', () => {
 
   renderEquipmentSummary(equipmentSettings());
 
-  assert.match(summary.textContent, /Equipment can be changed in Settings\./);
+  assert.match(summary.textContent, /equipment lists and properties can also be changed in Settings/i);
 });

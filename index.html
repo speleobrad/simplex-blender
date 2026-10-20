@@ -67,8 +67,7 @@
       <div class="py-5">
         <div class="settings-category-scroll relative min-w-0">
         <nav aria-label="Settings categories" class="settings-category-list flex gap-2 overflow-x-auto border-b border-ocean-800 pb-3">
-          <button type="button" data-action="select-settings-category" data-settings-category="model" aria-controls="settings-pane-model" aria-selected="true" class="settings-category-button settings-category-selected shrink-0 rounded-lg border border-cyan-500/40 px-3 py-2 text-left text-xs font-semibold text-cyan-300 transition hover:bg-ocean-800/70">Model</button>
-          <button type="button" data-action="select-settings-category" data-settings-category="units" aria-controls="settings-pane-units" aria-selected="false" class="settings-category-button shrink-0 rounded-lg border border-transparent px-3 py-2 text-left text-xs font-semibold text-slate-400 transition hover:border-ocean-700 hover:bg-ocean-800/70 hover:text-slate-200">Units</button>
+          <button type="button" data-action="select-settings-category" data-settings-category="general" aria-controls="settings-pane-general" aria-selected="true" class="settings-category-button settings-category-selected shrink-0 rounded-lg border border-cyan-500/40 px-3 py-2 text-left text-xs font-semibold text-cyan-300 transition hover:bg-ocean-800/70">General</button>
           <button type="button" data-action="select-settings-category" data-settings-category="gas-presets" aria-controls="settings-pane-gas-presets" aria-selected="false" class="settings-category-button shrink-0 rounded-lg border border-transparent px-3 py-2 text-left text-xs font-semibold text-slate-400 transition hover:border-ocean-700 hover:bg-ocean-800/70 hover:text-slate-200">Gas presets</button>
           <button type="button" data-action="select-settings-category" data-settings-category="cylinder-presets" aria-controls="settings-pane-cylinder-presets" aria-selected="false" class="settings-category-button shrink-0 rounded-lg border border-transparent px-3 py-2 text-left text-xs font-semibold text-slate-400 transition hover:border-ocean-700 hover:bg-ocean-800/70 hover:text-slate-200">Cylinder presets</button>
           <button type="button" id="settings-category-equipment" data-action="select-settings-category" data-settings-category="equipment" aria-controls="settings-pane-equipment" aria-selected="false" class="settings-category-button shrink-0 rounded-lg border border-transparent px-3 py-2 text-left text-xs font-semibold text-slate-400 transition hover:border-ocean-700 hover:bg-ocean-800/70 hover:text-slate-200">Equipment</button>
@@ -76,24 +75,26 @@
         </nav>
         </div>
         <div class="min-w-0">
-          <section id="settings-pane-model" aria-labelledby="settings-pane-model-title">
-            <h3 id="settings-pane-model-title" class="mb-3 text-sm font-semibold text-slate-200">Model</h3>
-            <label for="settings-physics-model" class="block text-xs text-slate-400">Gas model</label>
-            <select id="settings-physics-model" data-settings-collection="physics" data-settings-field="model" aria-label="Gas model" class="mt-1 w-full rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-xs text-slate-100">
-              <option value="vdw">Van der Waals (real gas)</option>
-              <option value="ideal">Ideal gas</option>
-            </select>
-            <p class="mt-1 text-[10px] text-slate-500">Choose the pressure model used by the calculator.</p>
-          </section>
-
-          <section id="settings-pane-units" aria-labelledby="settings-pane-units-title" class="hidden">
-            <h3 id="settings-pane-units-title" class="mb-3 text-sm font-semibold text-slate-200">Units</h3>
-            <label for="settings-units" class="block text-xs text-slate-400">Units</label>
-            <select id="settings-units" data-settings-collection="units" data-settings-field="units" aria-label="Units" class="mt-1 w-full rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-xs text-slate-100">
-              <option value="metric">Metric</option>
-              <option value="imperial">Imperial</option>
-            </select>
-            <p class="mt-1 text-[10px] text-slate-500">Choose the units shown throughout the calculator. Calculations and saved values remain canonical.</p>
+          <section id="settings-pane-general" aria-labelledby="settings-pane-general-title">
+            <h3 id="settings-pane-general-title" class="mb-3 text-sm font-semibold text-slate-200">General</h3>
+            <div class="space-y-4">
+              <div>
+                <label for="settings-physics-model" class="block text-xs text-slate-400">Gas model</label>
+                <select id="settings-physics-model" data-settings-collection="physics" data-settings-field="model" aria-label="Gas model" class="mt-1 w-full rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-xs text-slate-100">
+                  <option value="vdw">Van der Waals (real gas)</option>
+                  <option value="ideal">Ideal gas</option>
+                </select>
+                <p class="mt-1 text-[10px] text-slate-500">Choose the pressure model used by the calculator.</p>
+              </div>
+              <div>
+                <label for="settings-units" class="block text-xs text-slate-400">Units</label>
+                <select id="settings-units" data-settings-collection="units" data-settings-field="units" aria-label="Units" class="mt-1 w-full rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-xs text-slate-100">
+                  <option value="metric">Metric</option>
+                  <option value="imperial">Imperial</option>
+                </select>
+                <p class="mt-1 text-[10px] text-slate-500">Choose the units shown throughout the calculator. Calculations and saved values remain canonical.</p>
+              </div>
+            </div>
           </section>
 
           <section id="settings-pane-gas-presets" aria-labelledby="settings-pane-gas-presets-title" class="hidden">
@@ -309,23 +310,23 @@
               <div class="min-w-0">
                 <div class="flex justify-between text-[11px] text-slate-400 mb-0.5">
                   <label for="init-p">Start pressure:</label>
-                  <span class="font-mono text-slate-200"><span id="lbl-init-p">50</span> bar</span>
+                  <span class="font-mono text-slate-200">bar</span>
                 </div>
                 <input type="number" id="init-p" value="50" min="0" max="350" step="5" data-recalculate="input" class="w-28 max-w-full bg-ocean-900 border border-ocean-700 rounded px-2 py-1 font-mono text-slate-100 text-xs">
               </div>
               <div class="min-w-0">
                 <label for="init-gas-preset" class="block text-[10px] text-slate-400 font-mono mb-0.5">Gas preset</label>
-                <select id="init-gas-preset" data-action="select-cylinder-gas" data-mix="initial" aria-label="Current gas preset" class="mt-4 w-full min-w-0 bg-ocean-900 border border-ocean-700 rounded px-2 py-1 text-xs text-slate-200">
+                <select id="init-gas-preset" data-action="select-cylinder-gas" data-mix="initial" aria-label="Current gas preset" class="mt-4 w-28 max-w-full min-w-0 bg-ocean-900 border border-ocean-700 rounded px-2 py-1 text-xs text-slate-200">
                   <option value="custom">Custom</option>
                 </select>
               </div>
               <div class="min-w-0">
                 <label for="init-o2" class="block text-[10px] text-emerald-400 font-mono mb-0.5">% O₂</label>
-                <input type="text" inputmode="decimal" id="init-o2" value="21" data-gas-input="oxygen" data-gas-pair="init-he" data-mix="initial" data-recalculate="input" aria-label="Current oxygen percentage" class="w-20 max-w-full bg-ocean-900 border border-ocean-700 rounded px-2 py-1 font-mono text-slate-100 text-xs">
+                <input type="text" inputmode="decimal" id="init-o2" value="21" data-gas-input="oxygen" data-gas-pair="init-he" data-mix="initial" data-recalculate="input" aria-label="Current oxygen percentage" class="w-28 max-w-full bg-ocean-900 border border-ocean-700 rounded px-2 py-1 font-mono text-slate-100 text-xs">
               </div>
               <div class="min-w-0">
                 <label for="init-he" class="block text-[10px] text-amber-400 font-mono mb-0.5">% He</label>
-                <input type="text" inputmode="decimal" id="init-he" value="0" data-gas-input="helium" data-gas-pair="init-he" data-mix="initial" data-recalculate="input" aria-label="Current helium percentage" class="w-20 max-w-full bg-ocean-900 border border-ocean-700 rounded px-2 py-1 font-mono text-slate-100 text-xs">
+                <input type="text" inputmode="decimal" id="init-he" value="0" data-gas-input="helium" data-gas-pair="init-he" data-mix="initial" data-recalculate="input" aria-label="Current helium percentage" class="w-28 max-w-full bg-ocean-900 border border-ocean-700 rounded px-2 py-1 font-mono text-slate-100 text-xs">
               </div>
             </div>
           </div>
@@ -338,23 +339,23 @@
               <div class="min-w-0">
                 <div class="flex justify-between text-[11px] text-slate-400 mb-0.5">
                   <label for="target-p">Target pressure:</label>
-                  <span class="font-mono text-slate-200"><span id="lbl-target-p">200</span> bar</span>
+                  <span class="font-mono text-slate-200">bar</span>
                 </div>
                 <input type="number" id="target-p" value="200" min="10" max="350" step="5" data-recalculate="input" class="w-28 max-w-full bg-ocean-900 border border-ocean-700 rounded px-2 py-1 font-mono text-slate-100 text-xs">
               </div>
               <div class="min-w-0">
                 <label for="target-gas-preset" class="block text-[10px] text-slate-400 font-mono mb-0.5">Gas preset</label>
-                <select id="target-gas-preset" data-action="select-cylinder-gas" data-mix="target" aria-label="Target gas preset" class="mt-4 w-full min-w-0 bg-ocean-900 border border-ocean-700 rounded px-2 py-1 text-xs text-slate-200">
+                <select id="target-gas-preset" data-action="select-cylinder-gas" data-mix="target" aria-label="Target gas preset" class="mt-4 w-28 max-w-full min-w-0 bg-ocean-900 border border-ocean-700 rounded px-2 py-1 text-xs text-slate-200">
                   <option value="custom">Custom</option>
                 </select>
               </div>
               <div class="min-w-0">
                 <label for="target-o2" class="block text-[10px] text-emerald-400 font-mono mb-0.5">% O₂</label>
-                <input type="text" inputmode="decimal" id="target-o2" value="18" data-gas-input="oxygen" data-gas-pair="target-he" data-mix="target" data-recalculate="input" aria-label="Target oxygen percentage" class="w-20 max-w-full bg-ocean-900 border border-ocean-700 rounded px-2 py-1 font-mono text-slate-100 text-xs">
+                <input type="text" inputmode="decimal" id="target-o2" value="18" data-gas-input="oxygen" data-gas-pair="target-he" data-mix="target" data-recalculate="input" aria-label="Target oxygen percentage" class="w-28 max-w-full bg-ocean-900 border border-ocean-700 rounded px-2 py-1 font-mono text-slate-100 text-xs">
               </div>
               <div class="min-w-0">
                 <label for="target-he" class="block text-[10px] text-amber-400 font-mono mb-0.5">% He</label>
-                <input type="text" inputmode="decimal" id="target-he" value="45" data-gas-input="helium" data-mix="target" data-recalculate="input" aria-label="Target helium percentage" class="w-20 max-w-full bg-ocean-900 border border-ocean-700 rounded px-2 py-1 font-mono text-slate-100 text-xs">
+                <input type="text" inputmode="decimal" id="target-he" value="45" data-gas-input="helium" data-mix="target" data-recalculate="input" aria-label="Target helium percentage" class="w-28 max-w-full bg-ocean-900 border border-ocean-700 rounded px-2 py-1 font-mono text-slate-100 text-xs">
               </div>
             </div>
           </div>
@@ -420,17 +421,17 @@
             <button id="tab-btn-recipe" role="tab" aria-selected="true" aria-controls="tab-pane-recipe" tabindex="0" data-action="select-tab" data-tab="recipe" class="shrink-0 px-3.5 py-2 rounded-lg text-xs font-semibold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm transition">
               Recipe
             </button>
-            <button id="tab-btn-ternary" role="tab" aria-selected="false" aria-controls="tab-pane-ternary" tabindex="-1" data-action="select-tab" data-tab="ternary" class="shrink-0 px-3.5 py-2 rounded-lg text-xs font-semibold text-slate-400 hover:text-slate-200 transition">
-              Diagram
-            </button>
             <button id="tab-btn-thermal" role="tab" aria-selected="false" aria-controls="tab-pane-thermal" tabindex="-1" data-action="select-tab" data-tab="thermal" class="shrink-0 px-3.5 py-2 rounded-lg text-xs font-semibold text-slate-400 hover:text-slate-200 transition">
-              Thermal graphs
+              Thermal Graph
+            </button>
+            <button id="tab-btn-water-pressure" role="tab" aria-selected="false" aria-controls="tab-pane-water-pressure" tabindex="-1" data-action="select-tab" data-tab="water-pressure" class="shrink-0 px-3.5 py-2 rounded-lg text-xs font-semibold text-slate-400 hover:text-slate-200 transition">
+              In-water pressure
             </button>
             <button id="tab-btn-summary" role="tab" aria-selected="false" aria-controls="tab-pane-summary" tabindex="-1" data-action="select-tab" data-tab="summary" class="shrink-0 px-3.5 py-2 rounded-lg text-xs font-semibold text-slate-400 hover:text-slate-200 transition">
               Tank summary
             </button>
-            <button id="tab-btn-water-pressure" role="tab" aria-selected="false" aria-controls="tab-pane-water-pressure" tabindex="-1" data-action="select-tab" data-tab="water-pressure" class="shrink-0 px-3.5 py-2 rounded-lg text-xs font-semibold text-slate-400 hover:text-slate-200 transition">
-              In water pressure
+            <button id="tab-btn-ternary" role="tab" aria-selected="false" aria-controls="tab-pane-ternary" tabindex="-1" data-action="select-tab" data-tab="ternary" class="shrink-0 px-3.5 py-2 rounded-lg text-xs font-semibold text-slate-400 hover:text-slate-200 transition">
+              Simplex diagram
             </button>
           </div>
         </div>
@@ -438,7 +439,7 @@
         <div id="tab-pane-recipe" role="tabpanel" aria-labelledby="tab-btn-recipe" aria-live="polite" class="pt-4 flex flex-col gap-4">
           <div id="blend-status" role="status" aria-live="polite" class="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300"></div>
           <!-- Summary Banner -->
-          <div id="summary-banner" class="p-4 rounded-xl bg-gradient-to-r from-ocean-850 to-ocean-900 border border-ocean-700/80 grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+          <div id="summary-banner" class="p-4 rounded-xl bg-gradient-to-r from-ocean-850 to-ocean-900 border border-ocean-700/80 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 text-center">
             <div>
               <div class="text-[10px] uppercase text-slate-400 font-mono">Retained Gas</div>
               <div id="res-retained-p" class="text-base font-bold font-mono text-cyan-300 mt-0.5">80.0 bar</div>
@@ -457,13 +458,17 @@
               <div class="text-[10px] uppercase text-slate-400 font-mono">Final Pressure</div>
               <div id="res-final-p" class="text-base font-bold font-mono text-emerald-400 mt-0.5">200.0 bar</div>
               <div id="res-final-mix" class="text-[10px] text-slate-300 font-mono">Tx 18/45</div>
-              <div id="res-final-thermal" class="mt-1 text-[10px] text-slate-400 font-mono space-y-0.5" hidden>
-                <div>Estimated transfer end: <span id="res-final-transfer-end"></span></div>
-                <div>Estimated ambient settled: <span id="res-final-ambient"></span></div>
-              </div>
             </div>
-          </div>
+            <div>
+              <div class="text-[10px] uppercase text-slate-400 font-mono">Fill duration</div>
+              <div id="res-fill-duration" class="text-base font-bold font-mono text-cyan-300 mt-0.5">—</div>
+            </div>
+            <div>
+              <div class="text-[10px] uppercase text-slate-400 font-mono">Max temperature</div>
+              <div id="res-max-temperature" class="text-base font-bold font-mono text-amber-300 mt-0.5">—</div>
+            </div>
 
+</div>
           <div id="compare-summary" hidden class="rounded-xl border border-ocean-700/80 bg-gradient-to-r from-ocean-850 to-ocean-900 p-4 text-center">
             <div class="grid grid-cols-1 gap-3 text-xs sm:grid-cols-3">
               <div>
@@ -627,8 +632,8 @@
               <tr class="text-[10px] text-slate-400 border-b border-ocean-800 bg-ocean-950/40">
                 <th class="py-2 px-2">Use</th>
                 <th class="py-2 px-2">Bank / gas</th>
-                <th class="py-2 px-1">Vol(L)</th>
-                <th class="py-2 px-1">P(bar)</th>
+                <th id="inventory-volume-heading" class="py-2 px-1">Volume</th>
+                <th id="inventory-pressure-heading" class="py-2 px-1">Pressure</th>
                 <th class="py-2 px-1 text-emerald-400">O₂%</th>
                 <th class="py-2 px-1 text-amber-400">He%</th>
                 <th class="py-2 px-1 text-center">Del</th>
@@ -642,12 +647,12 @@
         <section class="mb-3 rounded-xl border border-ocean-800/80 bg-ocean-950/60 p-3 font-sans">
           <h3 class="text-xs font-semibold text-slate-200">Transfer conditions</h3>
           <div class="mt-2 max-w-xs text-xs">
-            <label for="inlet-gas-temperature" class="mb-1 block text-slate-400 font-medium">Incoming gas temperature</label>
+            <label for="inlet-gas-temperature" class="mb-1 block text-slate-400 font-medium">Temperature of inventory gases</label>
             <div class="flex items-center gap-2">
-              <input type="number" id="inlet-gas-temperature" value="25" min="-20" max="100" step="0.1" data-recalculate="input" class="min-w-0 flex-1 rounded-lg border border-ocean-700 bg-ocean-900 px-2.5 py-1.5 font-mono text-slate-100 focus:border-cyan-400 focus:outline-none">
+              <input type="number" id="inlet-gas-temperature" value="25" min="-20" max="100" step="0.1" data-recalculate="input" class="w-28 rounded-lg border border-ocean-700 bg-ocean-900 px-2 py-1.5 font-mono text-xs text-slate-100 focus:border-cyan-400 focus:outline-none">
               <span class="font-mono text-slate-400">°C</span>
             </div>
-            <p class="mt-1 text-[10px] text-slate-500">Shared by compressor and inventory transfers; source-specific temperature modifiers still apply.</p>
+            <p class="mt-1 text-[10px] text-slate-500">The temperature at which inventory gases are assumed to be stored; compressor and source-specific temperature modifiers still apply.</p>
           </div>
         </section>
       </section>

@@ -1,13 +1,10 @@
 import { expect } from '@playwright/test';
-
 const CATEGORIES = {
-  model: 'Model',
-  general: 'Model',
+  general: 'General',
   'gas-presets': 'Gas presets',
   'cylinder-presets': 'Cylinder presets',
   equipment: 'Equipment',
-  'preset-management': 'Preset management',
-  units: 'Units',
+  'preset-management': 'Preset management'
 };
 
 function settingsDialog(page) {
@@ -16,9 +13,9 @@ function settingsDialog(page) {
 
 /** Open Settings when needed, select a category, and verify its active pane. */
 export async function openSettingsCategory(page, category) {
-  const categoryKey = category === 'general' ? 'model' : category;
+  const categoryKey = category;
   const label = CATEGORIES[category];
-  if (!label || !['model', 'units', 'gas-presets', 'cylinder-presets', 'equipment', 'preset-management'].includes(categoryKey)) {
+  if (!label || !['general', 'gas-presets', 'cylinder-presets', 'equipment', 'preset-management'].includes(categoryKey)) {
     throw new RangeError(`Unknown settings category: ${category}`);
   }
   const dialog = settingsDialog(page);
@@ -32,7 +29,7 @@ export async function openSettingsCategory(page, category) {
   const pane = dialog.locator(`#settings-pane-${categoryKey}`);
   await expect(button).toHaveAttribute('aria-selected', 'true');
   await expect(pane).toBeVisible();
-  for (const key of ['model', 'units', 'gas-presets', 'cylinder-presets', 'equipment', 'preset-management']) {
+  for (const key of ['general', 'gas-presets', 'cylinder-presets', 'equipment', 'preset-management']) {
     const candidate = dialog.locator(`#settings-pane-${key}`);
     if (key === categoryKey) continue;
     await expect(candidate).toBeHidden();

@@ -62,10 +62,10 @@ test.describe('inventory supply banks', () => {
     await expect(oxygen).toHaveValue('34');
   });
 
-  test('exposes transfer temperature and keeps dynamic rows separated at narrow width', async ({ appPage }, testInfo) => {
+  test('exposes inventory temperature and keeps dynamic rows separated at narrow width', async ({ appPage }, testInfo) => {
     const page = await appPage.goto('tourSeen');
     await page.getByRole('tab', { name: 'Inventory', exact: true }).click();
-    const inlet = page.getByRole('spinbutton', { name: 'Incoming gas temperature' });
+    const inlet = page.getByRole('spinbutton', { name: 'Temperature of inventory gases' });
     await inlet.fill('-10');
     await inlet.blur();
     await expect(inlet).toHaveValue('-10');
@@ -122,5 +122,17 @@ test.describe('inventory supply banks', () => {
     await expect(persisted.getByRole('spinbutton', { name: /volume in (?:litres|L)$/i })).toHaveValue('44');
     await expect(persisted.getByRole('spinbutton', { name: /pressure in bar$/i })).toHaveValue('145');
     await assertNoFiniteAir(page);
+  });
+  test('allows selecting configured compressor and booster presets from Inventory', async ({ appPage }) => {
+    const page = await appPage.goto('tourSeen');
+    await page.getByRole('tab', { name: 'Inventory', exact: true }).click();
+    const compressor = page.locator('#inventory-compressor-preset');
+    const booster = page.locator('#inventory-booster-preset');
+    await expect(compressor.locator('option')).toHaveCount(2);
+    await expect(booster.locator('option')).toHaveCount(2);
+    await compressor.selectOption({ label: 'Bauer Oceanus 300bar' });
+    await booster.selectOption({ label: 'Maximator ROB22' });
+    await expect(page.locator('#equipment-summary')).toContainText('Bauer Oceanus 300bar');
+    await expect(page.locator('#equipment-summary')).toContainText('Maximator ROB22');
   });
 });

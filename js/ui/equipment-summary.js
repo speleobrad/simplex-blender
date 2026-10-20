@@ -38,9 +38,29 @@ function makeRow(label, value) {
   const valueElement = document.createElement('span');
   valueElement.className = 'font-mono text-slate-200';
   valueElement.textContent = value;
-
   row.append(labelElement, valueElement);
   return row;
+}
+
+function makePresetSelect(id, action, label, presets, selectedName) {
+  const wrapper = document.createElement('label');
+  wrapper.className = 'flex items-center gap-2 text-xs';
+  wrapper.textContent = label;
+  const select = document.createElement('select');
+  select.id = id;
+  select.dataset ??= {};
+  select.dataset.action = action;
+  select.className = 'min-w-0 flex-1 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-xs text-slate-100';
+  select.setAttribute?.('aria-label', label);
+  for (const preset of presets) {
+    const option = document.createElement('option');
+    option.value = preset.name;
+    option.textContent = preset.name;
+    select.append(option);
+  }
+  if (selectedName) select.value = selectedName;
+  wrapper.append(select);
+  return wrapper;
 }
 
 export function renderEquipmentSummary(settings, units = 'metric') {
@@ -55,14 +75,16 @@ export function renderEquipmentSummary(settings, units = 'metric') {
 
   const note = document.createElement('p');
   note.className = 'text-[10px] text-slate-500';
-  note.textContent = 'Equipment can be changed in Settings.';
+  note.textContent = 'Choose available equipment here; equipment lists and properties can also be changed in Settings.';
   container.replaceChildren(
+    makePresetSelect('inventory-compressor-preset', 'select-inventory-compressor-preset', 'Compressor', settings.compressorPresets, compressorName),
+    makePresetSelect('inventory-booster-preset', 'select-inventory-booster-preset', 'Booster', settings.boosterPresets, boosterName),
     makeRow(
-      'Compressor',
+      'Compressor details',
       `${compressorName} · ${equipmentValue(activeEquipment.compressorInletFlowLPerMin, 'flowLPerMin', units)} · ${equipmentValue(activeEquipment.maxCompressorPressureBar, 'pressureBar', units)}`
     ),
     makeRow(
-      'Booster',
+      'Booster details',
       `${boosterName} · boost ${activeEquipment.oxygenBoostBpm}/${activeEquipment.otherBoostBpm} BPM · decant ${rateValue(activeEquipment.oxygenDecantRateBarPerMin, units)}/${rateValue(activeEquipment.otherDecantRateBarPerMin, units)} ${unitLabel('pressureBar', units)}/min · ${equipmentValue(activeEquipment.maxBoosterOutputPressureBar, 'pressureBar', units)}`
     ),
     note

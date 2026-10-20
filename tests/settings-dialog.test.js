@@ -290,10 +290,10 @@ test('marks settings controls as responsive layout regions', () => {
   assert.match(markup, /data-settings-preset-actions="compressor"/);
   assert.match(markup, /data-settings-preset-actions="booster"/);
 });
-test('provides a visible Units category and selector', () => {
+test('provides a visible General category with a units selector', () => {
   const markup = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-  assert.match(markup, /data-settings-category="units"/);
-  assert.match(markup, /id="settings-pane-units"/);
+  assert.match(markup, /data-settings-category="general"/);
+  assert.match(markup, /id="settings-pane-general"/);
   assert.match(markup, /id="settings-units"[^>]*aria-label="Units"/);
   assert.match(markup, /value="imperial"/);
 });

@@ -36,7 +36,7 @@ export async function openRecipeScenario(page, scenario = {}) {
 }
 
 export async function assertResultPanelExclusive(page, tabName) {
-  const ids = { Recipe: 'recipe', Diagram: 'ternary', 'Thermal graphs': 'thermal', 'Tank summary': 'summary', 'In water pressure': 'water-pressure' };
+  const ids = { Recipe: 'recipe', 'Simplex diagram': 'ternary', 'Thermal Graph': 'thermal', 'Tank summary': 'summary', 'In-water pressure': 'water-pressure' };
   const id = ids[tabName] ?? tabName;
   await selectResultTab(page, tabName);
   const panel = page.locator(`#tab-pane-${id}`);

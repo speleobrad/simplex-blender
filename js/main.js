@@ -74,7 +74,7 @@ const state = {
   settings: initialSettings,
   settingsDraft: null,
   settingsSession: 0,
-  settingsCategory: 'model',
+  settingsCategory: 'general',
   settingsImport: createPresetImportState(),
   settingsReturnScreen: 'blending',
   theme: loadTheme(settingsStorage),
@@ -260,7 +260,7 @@ function toggleTheme() {
 
 
 function setSettingsCategory(category) {
-  const categories = ['model', 'units', 'gas-presets', 'cylinder-presets', 'equipment', 'preset-management'];
+  const categories = ['general', 'gas-presets', 'cylinder-presets', 'equipment', 'preset-management'];
   if (!categories.includes(category)) return;
   state.settingsCategory = category;
   for (const candidate of categories) {
@@ -496,6 +496,20 @@ function selectBoosterPreset(select) {
   if (!settings) return;
   state.settingsDraft = settings;
   renderSettingsDraft();
+}
+function selectInventoryEquipmentPreset(select, collection) {
+  const settings = selectEquipmentPreset(state.settings, collection, select.value);
+  if (!settings) return;
+  try {
+    saveSettings(settings, settingsStorage);
+  } catch (error) {
+    console.warn('Inventory equipment selection was not saved.', error);
+    return;
+  }
+  state.settings = settings;
+  state.settingsLoadFailure = null;
+  refreshPresetOptions();
+  recalculate();
 }
 
 function updateSettingsDraft(input) {
@@ -1216,6 +1230,14 @@ function handleInputOrChange(event) {
   }
   if (event.type === 'change' && target.dataset.action === 'select-booster-preset') {
     selectBoosterPreset(target);
+    return;
+  }
+  if (event.type === 'change' && target.dataset.action === 'select-inventory-compressor-preset') {
+    selectInventoryEquipmentPreset(target, 'compressorPresets');
+    return;
+  }
+  if (event.type === 'change' && target.dataset.action === 'select-inventory-booster-preset') {
+    selectInventoryEquipmentPreset(target, 'boosterPresets');
     return;
   }
   if (event.type === 'change' && target.dataset.action === 'select-cylinder-gas') {

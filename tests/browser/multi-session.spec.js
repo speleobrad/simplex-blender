@@ -86,14 +86,14 @@ test.describe('continued browser sessions', () => {
       pressureBar: 150,
       enabled: true
     });
-    const unitsA = await openSettingsCategory(pageA, 'units');
+    const unitsA = await openSettingsCategory(pageA, 'general');
     await unitsA.getByRole('combobox', { name: 'Units' }).selectOption('imperial');
     await saveSettings(pageA);
     await expect(pageA.locator('#init-p')).toHaveValue('580.2');
     await expect(pageA.locator('#init-p')).toHaveAttribute('aria-label', /in psi$/i);
     const sessionB = await createContinuedSession(pageA);
     await sessionB.page.getByRole('tab', { name: 'Inventory', exact: true }).click();
-    const unitsB = await openSettingsCategory(sessionB.page, 'units');
+    const unitsB = await openSettingsCategory(sessionB.page, 'general');
     await expect(unitsB.getByRole('combobox', { name: 'Units' })).toHaveValue('imperial');
     const cylindersB = await openSettingsCategory(sessionB.page, 'cylinder-presets');
     await expect(cylindersB.locator('[data-settings-index="0"][data-settings-field="volumeL"]:visible')).toHaveValue('0.10594400016446577');
@@ -102,12 +102,12 @@ test.describe('continued browser sessions', () => {
     const rowB = bankRows(sessionB.page).nth(index);
     await expect(rowB.getByRole('spinbutton', { name: /volume in (?:ft³|cu ft)$/i })).toHaveValue('0.4237760006578631');
     await expect(rowB.getByRole('spinbutton', { name: /pressure in psi$/i })).toHaveValue('2175.56607');
-    const unitsMetric = await openSettingsCategory(sessionB.page, 'units');
+    const unitsMetric = await openSettingsCategory(sessionB.page, 'general');
     await unitsMetric.getByRole('combobox', { name: 'Units' }).selectOption('metric');
     await saveSettings(sessionB.page);
     const sessionC = await createContinuedSession(sessionB.page);
     await sessionC.page.getByRole('tab', { name: 'Inventory', exact: true }).click();
-    const unitsC = await openSettingsCategory(sessionC.page, 'units');
+    const unitsC = await openSettingsCategory(sessionC.page, 'general');
     await expect(unitsC.getByRole('combobox', { name: 'Units' })).toHaveValue('metric');
     const cylindersC = await openSettingsCategory(sessionC.page, 'cylinder-presets');
     await expect(cylindersC.locator('[data-settings-index="0"][data-settings-field="volumeL"]:visible')).toHaveValue('3');

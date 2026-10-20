@@ -79,7 +79,7 @@ test.describe('responsive artifact surfaces', () => {
       clip: '#results-navigation [role="tab"]:nth-child(-n+3)'
     });
 
-    await assertResultPanelExclusive(page, 'Diagram');
+    await assertResultPanelExclusive(page, 'Simplex diagram');
     await checkSurface(page, '#tab-pane-ternary', {
       children: '#tab-pane-ternary > div, #ternary-canvas',
       focus: '#results-navigation [role="tab"][aria-selected="true"]',
@@ -87,7 +87,7 @@ test.describe('responsive artifact surfaces', () => {
       clip: '[aria-label="Zoom in diagram"], [aria-label="Zoom out diagram"], [aria-label="Reset diagram zoom"]'
     });
 
-    await assertResultPanelExclusive(page, 'Thermal graphs');
+    await assertResultPanelExclusive(page, 'Thermal Graph');
     await checkSurface(page, '#tab-pane-thermal', {
       children: '#thermal-temperature-chart, #thermal-pressure-chart, #thermal-chart-data',
       focus: '#results-navigation [role="tab"][aria-selected="true"]',

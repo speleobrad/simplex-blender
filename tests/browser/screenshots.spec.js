@@ -22,9 +22,9 @@ test.describe('approved UI screenshots', () => {
     const page = await load(appPage, 'lightTheme');
     await assertResultPanelExclusive(page, 'Recipe');
     await expect(page).toHaveScreenshot('results-recipe-light.png', { animations: 'disabled', fullPage: false });
-    await assertResultPanelExclusive(page, 'Diagram');
+    await assertResultPanelExclusive(page, 'Simplex diagram');
     await expect(page).toHaveScreenshot('results-diagram-light.png', { animations: 'disabled', fullPage: false });
-    await assertResultPanelExclusive(page, 'Thermal graphs');
+    await assertResultPanelExclusive(page, 'Thermal Graph');
     await expect(page).toHaveScreenshot('results-thermal-light.png', { animations: 'disabled', fullPage: false });
   });
 

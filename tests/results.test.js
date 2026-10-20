@@ -48,7 +48,9 @@ function createFakeDocument() {
     ['res-vented-litres', new FakeElement()],
     ['res-he-salvaged', new FakeElement()],
     ['res-final-p', new FakeElement()],
-    ['res-final-mix', new FakeElement()]
+    ['res-final-mix', new FakeElement()],
+    ['res-fill-duration', new FakeElement()],
+    ['res-max-temperature', new FakeElement()]
   ]);
   return {
     createElement(tagName) {
@@ -142,7 +144,7 @@ test('renders a collapsed interim measurement control between mixing steps', () 
 });
 
 
-test('does not offer an interim reading before the first mixing transfer', () => {
+test('places readings before the next transfer, not before a preserve step', () => {
   const previousDocument = globalThis.document;
   const document = createFakeDocument();
   globalThis.document = document;
@@ -171,8 +173,9 @@ test('does not offer an interim reading before the first mixing transfer', () =>
     });
 
     const children = document.elements.get('steps-container').children;
-    assert.equal(children.length, 2);
-    assert.notEqual(children[0].tagName, 'details');
+    assert.equal(children.length, 3);
+    assert.doesNotMatch(children[0].textContent, /record actual readings/i);
+    assert.match(children[1].textContent, /record actual readings/i);
   } finally {
     globalThis.document = previousDocument;
   }
@@ -222,6 +225,94 @@ test('announces feasibility and keeps thermal details behind an explicit disclos
     globalThis.document = previousDocument;
   }
 });
+test('renders recipe aggregates and normalized technical details', () => {
+  const previousDocument = globalThis.document;
+  const document = createFakeDocument();
+  globalThis.document = document;
+
+  try {
+    renderResults({
+      feasible: true,
+      blend: {
+        retainedPressureBar: 80,
+        retainedPercent: 80,
+        ventedPressureBar: 20,
+        ventedGasLitres: 40,
+        heliumSalvagedLitres: 12,
+        finalPressureBar: 200,
+        finalOxygenPercent: 18,
+        finalHeliumPercent: 45
+      },
+      thermal: {
+        finalTransferEndPressureBar: 198,
+        finalTransferEndTemperatureC: 34,
+        finalAmbientPressureBar: 200,
+        finalAmbientTemperatureC: 25
+      },
+      protocolSteps: [{
+        title: 'Transfer helium',
+        description: 'Add helium from the reserve bank.',
+        resultingPressureBar: 200,
+        thermal: {
+          rateSource: 'booster',
+          rateBarPerMin: 5,
+          durationMinutes: 10,
+          pressureAtTransferEndBar: 200,
+          temperatureAtTransferEndC: 36,
+          waitMinutes: 4,
+          pressureAfterWaitBar: 198,
+          temperatureAfterWaitC: 30
+        },
+        resultingMix: { oxygenPercent: 18, heliumPercent: 45 },
+        sourceEndPressureBar: 25
+      }]
+    });
+
+    assert.equal(document.elements.get('res-fill-duration').textContent, '10.0 min');
+    assert.equal(document.elements.get('res-max-temperature').textContent, '36.0 °C');
+    const step = document.elements.get('steps-container').children[0];
+    assert.match(step.textContent, /Step 1/);
+    assert.match(step.textContent, /Transfer helium/);
+    assert.match(step.textContent, /Rate/);
+    assert.match(step.textContent, /Interim mix/);
+    assert.match(step.textContent, /Source leftover pressure/);
+    assert.equal(step.children[0].children[2].children[1].tagName, 'table');
+  } finally {
+    globalThis.document = previousDocument;
+  }
+});
+
+test('places readings before the next step and omits them before preserve steps', () => {
+  const previousDocument = globalThis.document;
+  const document = createFakeDocument();
+  globalThis.document = document;
+
+  try {
+    renderResults({
+      feasible: true,
+      blend: {
+        retainedPressureBar: 50, retainedPercent: 100, ventedPressureBar: 0,
+        ventedGasLitres: 0, heliumSalvagedLitres: 0, finalPressureBar: 100,
+        finalOxygenPercent: 21, finalHeliumPercent: 0
+      },
+      protocolSteps: [
+        { type: 'keep', title: 'Preserve gas', description: 'Keep it.', resultingPressureBar: 50 },
+        { type: 'boost', title: 'Add oxygen', description: 'Add it.', resultingPressureBar: 100 }
+      ]
+    }, {
+      cylinder: { workingPressureBar: 232 },
+      thermal: { interimMeasurements: [null, null] }
+    });
+
+    const children = document.elements.get('steps-container').children;
+    assert.equal(children.length, 3);
+    assert.doesNotMatch(children[0].textContent, /record actual readings/i);
+    assert.match(children[1].textContent, /record actual readings/i);
+  } finally {
+    globalThis.document = previousDocument;
+  }
+});
+
 
 test('pressure warnings trigger only above the cylinder working pressure', () => {
   assert.equal(isPressureAboveWorkingPressure(232, 232), false);
