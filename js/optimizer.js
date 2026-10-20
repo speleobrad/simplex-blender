@@ -20,17 +20,24 @@ export function scheduleSafeThermalProtocol({
       protocolSteps: steps, cylinder, physics, thermal, settings
     });
     const unsafeIndex = simulation.protocolSteps.findIndex(step => {
-      if (!step.thermal) return false;
+      const thermalStep = step.thermal;
+      if (!thermalStep) return false;
       const hotPressureBar = calculatePressureAtTemperature({
-        pressureBar: step.thermal.pressureAtTransferEndBar,
+        pressureBar: thermalStep.pressureAtTransferEndBar,
         oxygenPercent: step.resultingMix?.oxygenPercent ?? 21,
         heliumPercent: step.resultingMix?.heliumPercent ?? 0,
         fromTemperatureC: thermal.ambientTemperatureC,
-        toTemperatureC: step.thermal.temperatureAtTransferEndC,
+        toTemperatureC: thermalStep.temperatureAtTransferEndC,
         volumeL: cylinder.volumeL,
         useVdw: physics.model === 'vdw'
       });
-      return hotPressureBar > cylinder.workingPressureBar + 1e-7;
+      const samplePressureBar = Math.max(
+        hotPressureBar,
+        thermalStep.pressureAtTransferEndBar,
+        thermalStep.pressureAfterWaitBar,
+        ...(thermalStep.samples ?? []).map(sample => sample.pressureBar ?? 0)
+      );
+      return samplePressureBar > cylinder.workingPressureBar + 1e-7;
     });
     if (unsafeIndex < 0) {
       return {
@@ -122,30 +129,37 @@ export function scheduleSafeThermalProtocol({
       }
     }
     const waitStep = simulation.protocolSteps[waitIndex].thermal;
-    const configuredWaitMinutes = Number.isFinite(waitStep?.waitMinutes)
-      ? waitStep.waitMinutes
+    const configuredWaitMinutes = Number.isFinite(steps[waitIndex].configuredWaitMinutes)
+      ? steps[waitIndex].configuredWaitMinutes
       : Number(thermal.waitMinutes) || 0;
     const existingAdded = Number(steps[waitIndex].automaticWaitMinutes) || 0;
-    const available = MAX_AUTOMATIC_WAIT_MINUTES - existingAdded;
-    if (available <= 0) {
+    const available = Math.max(0, MAX_AUTOMATIC_WAIT_MINUTES - configuredWaitMinutes - existingAdded);
+    const safeAt = added => {
+      steps[waitIndex].automaticWaitMinutes = added;
+      const candidate = simulateThermalProtocol({ protocolSteps: steps, cylinder, physics, thermal, settings });
+      const endpoint = candidate.protocolSteps[unsafeIndex]?.thermal;
+      return endpoint && endpoint.pressureAtTransferEndBar <= cylinder.workingPressureBar + 1e-7;
+    };
+    if (!available || !safeAt(existingAdded + available)) {
+      steps[waitIndex].automaticWaitMinutes = existingAdded;
       return { protocolSteps: simulation.protocolSteps, automaticWaits, simulation, unsafe: true };
     }
-    const requiredRatio = Math.max(
-      1e-12,
-      (current.temperatureAtTransferEndC - thermal.ambientTemperatureC)
-        / Math.max(1e-12, current.temperatureAtTransferEndC - thermal.ambientTemperatureC
-          + (cylinder.workingPressureBar - current.pressureAtTransferEndBar))
-    );
-    const suggested = Math.max(1, waitStep.waitMinutes || configuredWaitMinutes || 1,
-      -Math.log(Math.min(1, requiredRatio)) * 3);
-    const addedWaitMinutes = Math.min(available, suggested);
-    steps[waitIndex].automaticWaitMinutes = existingAdded + addedWaitMinutes;
+    let low = existingAdded;
+    let high = existingAdded + available;
+    for (let iteration = 0; iteration < 40; iteration++) {
+      const middle = (low + high) / 2;
+      if (safeAt(middle)) high = middle;
+      else low = middle;
+    }
+    const addedWaitMinutes = high - existingAdded;
+    steps[waitIndex].automaticWaitMinutes = high;
+    steps[waitIndex].configuredWaitMinutes = configuredWaitMinutes;
     steps[waitIndex].automaticWaitMetadata = {
       stepIndex: waitIndex,
       stepIdentifier: steps[waitIndex].id ?? steps[waitIndex].title ?? waitIndex,
       configuredWaitMinutes,
-      actualWaitMinutes: configuredWaitMinutes + steps[waitIndex].automaticWaitMinutes,
-      addedWaitMinutes: steps[waitIndex].automaticWaitMinutes,
+      actualWaitMinutes: configuredWaitMinutes + high,
+      addedWaitMinutes: high,
       warning: '!'
     };
     automaticWaits.push(steps[waitIndex].automaticWaitMetadata);

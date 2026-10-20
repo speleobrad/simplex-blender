@@ -723,6 +723,8 @@ export function simulateThermalProtocol({
       measuredStartTemperatureC: measuredStart?.temperatureC,
       temperatureStartC,
       temperatureAtTransferEndC,
+      configuredWaitMinutes,
+      automaticWaitMinutes: Number(step.automaticWaitMinutes) || 0,
       measuredWaitMinutes,
       waitMinutes,
       temperatureAfterWaitC,
