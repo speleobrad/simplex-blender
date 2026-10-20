@@ -195,3 +195,15 @@ test('rejects finite Air supply banks because Air is an implicit compressor sour
 
   assert.match(errors.join(' '), /Air.*compressor|compressor.*Air/i);
 });
+
+test('accepts thermal temperature boundaries and semantic combinations', () => {
+  const valid = { tankMaterial: 'steel', coolingMedium: 'air', ambientTemperatureC: 5, inletTemperatureC: 5, targetMediumTemperatureC: 5, targetInWaterTemperatureC: 1, waitMode: 'minutes', waitMinutes: 0 };
+  for (const field of ['ambientTemperatureC', 'inletTemperatureC', 'targetMediumTemperatureC']) for (const value of [5, 40]) { const thermal = { ...valid, [field]: value }; if (field === 'ambientTemperatureC') thermal.targetMediumTemperatureC = value; assert.deepEqual(validateCalculatorInputs(defaultCylinder, defaultPhysics, thermal), []); }
+  for (const value of [1, 30]) assert.deepEqual(validateCalculatorInputs(defaultCylinder, defaultPhysics, { ...valid, targetInWaterTemperatureC: value }), []);
+});
+test('rejects values outside every thermal temperature range', () => {
+  const valid = { tankMaterial: 'steel', coolingMedium: 'air', ambientTemperatureC: 20, inletTemperatureC: 20, targetMediumTemperatureC: 20, targetInWaterTemperatureC: 15, waitMode: 'minutes', waitMinutes: 0 };
+  for (const [field, value, message] of [['ambientTemperatureC', 4, /ambient.*5 and 40/i], ['ambientTemperatureC', 41, /ambient.*5 and 40/i], ['inletTemperatureC', 4, /inlet.*5 and 40/i], ['inletTemperatureC', 41, /inlet.*5 and 40/i], ['targetMediumTemperatureC', 4, /target-medium.*5 and 40/i], ['targetMediumTemperatureC', 41, /target-medium.*5 and 40/i], ['targetInWaterTemperatureC', 0, /target in-water.*1 and 30/i], ['targetInWaterTemperatureC', 31, /target in-water.*1 and 30/i]]) assert.match(validateCalculatorInputs(defaultCylinder, defaultPhysics, { ...valid, [field]: value }).join(' '), message);
+});
+test('allows target in-water below ambient while target medium remains valid', () => assert.deepEqual(validateCalculatorInputs(defaultCylinder, defaultPhysics, { tankMaterial: 'steel', coolingMedium: 'air', ambientTemperatureC: 25, inletTemperatureC: 25, targetMediumTemperatureC: 25, targetInWaterTemperatureC: 1, waitMode: 'minutes', waitMinutes: 0 }), []));
+test('allows target medium equal to ambient in temperature mode', () => assert.deepEqual(validateCalculatorInputs(defaultCylinder, defaultPhysics, { tankMaterial: 'steel', coolingMedium: 'air', ambientTemperatureC: 25, inletTemperatureC: 25, targetMediumTemperatureC: 25, targetInWaterTemperatureC: 10, waitMode: 'temperature', waitMinutes: 0 }), []));

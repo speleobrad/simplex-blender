@@ -996,3 +996,14 @@ test('optimizer thermal simulation retains its final ambient cool-off', () => {
 
   assert.equal(simulation.protocolSteps[0].thermal.waitMinutes, 82.8);
 });
+
+test('non-final fixed-minute wait equal to ambient keeps duration and cools exponentially', () => {
+  const simulation = simulateThermalProtocol({ protocolSteps: [
+    { type: 'decant', operation: 'Decant', receiverEndPressureBar: 100, resultingPressureBar: 100, resultingMix: { oxygenPercent: 21, heliumPercent: 0 }, sourceOxygenPercent: 21, sourceHeliumPercent: 0 },
+    { type: 'decant', operation: 'Decant', receiverEndPressureBar: 120, resultingPressureBar: 120, resultingMix: { oxygenPercent: 21, heliumPercent: 0 }, sourceOxygenPercent: 21, sourceHeliumPercent: 0 }
+  ], cylinder: { initialPressureBar: 50, volumeL: 12 }, physics: { model: 'ideal', temperatureC: 20 }, thermal: { tankMaterial: 'steel', coolingMedium: 'air', ambientTemperatureC: 20, targetTemperatureC: 20, waitMode: 'minutes', waitMinutes: 5 }, settings: { booster: { otherDecantRateBarPerMin: 5 } } });
+  const wait = simulation.protocolSteps[0].thermal;
+  assert.equal(wait.waitMinutes, 5);
+  assert.ok(wait.temperatureAtTransferEndC > wait.temperatureAfterWaitC && wait.temperatureAfterWaitC > 20);
+  assert.ok(Math.abs(wait.temperatureAfterWaitC - calculateTemperatureAfterWait({ transferEndTemperatureC: wait.temperatureAtTransferEndC, ambientTemperatureC: 20, waitMinutes: 5, tauMinutes: 18 })) < 1e-9);
+});
