@@ -56,7 +56,18 @@ export function scheduleSafeThermalProtocol({
     });
     const unsafeIndex = simulationSafe ? -1 : simulation.protocolSteps.findIndex(step => {
       const state = step.thermal;
-      return state && Math.max(
+      if (!state) return false;
+      const hotPressureBar = calculatePressureAtTemperature({
+        pressureBar: state.pressureAtTransferEndBar,
+        oxygenPercent: step.resultingMix?.oxygenPercent ?? 21,
+        heliumPercent: step.resultingMix?.heliumPercent ?? 0,
+        fromTemperatureC: thermal.ambientTemperatureC,
+        toTemperatureC: state.temperatureAtTransferEndC,
+        volumeL: cylinder.volumeL,
+        useVdw: physics.model === 'vdw'
+      });
+      return Math.max(
+        hotPressureBar,
         state.pressureAtTransferEndBar,
         state.pressureAfterWaitBar,
         ...(state.samples ?? []).map(sample => sample.pressureBar ?? 0)
