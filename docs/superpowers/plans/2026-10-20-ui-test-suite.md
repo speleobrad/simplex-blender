@@ -536,3 +536,58 @@ Expected: both suites pass, no whitespace errors, generated artifacts are ignore
 git add README.md docs/development.md .gitignore .github tests/browser package.json package-lock.json playwright.config.js
 git commit -m "test: integrate comprehensive UI browser suite"
 ```
+
+---
+
+### Task 9: Implement the approved Units display and cross-session contract
+
+**Files:**
+- Create: `js/units.js`
+- Modify: `index.html`
+- Modify: `js/settings.js`
+- Modify: `js/main.js`
+- Modify: `js/ui/settings-dialog.js`
+- Modify: `js/ui/supply-banks.js`
+- Modify: `js/ui/equipment-summary.js`
+- Modify: `js/ui/results.js`
+- Create: `tests/units.test.js`
+- Modify: `tests/settings.test.js`
+- Modify: `tests/settings-dialog.test.js`
+- Modify: `tests/browser/fixtures/storage-fixtures.js`
+- Modify: `tests/browser/multi-session.spec.js`
+
+**Interfaces:**
+- `normalizeUnits(units)` returns `metric` or `imperial`.
+- `unitLabel(quantity, units)` returns the display unit for a supported quantity.
+- `convertToDisplay(value, quantity, units)` and `convertFromDisplay(value, quantity, units)` convert canonical values without mutating stored settings.
+- UI renderers receive the selected units and parse displayed pressure/volume/mass/temperature values back to canonical values before persistence or calculation.
+
+- [ ] **Step 1: Write failing unit-conversion and UI contract tests**
+
+Cover metric identity, Imperial PSI/cubic-foot/pound/Fahrenheit conversions, pressure formatting boundaries, settings default/validation/persistence, visible Units category controls, and the cross-session Imperial → Metric handoff. Run the focused tests and confirm they fail because the selector/conversion path is absent.
+
+- [ ] **Step 2: Implement the smallest conversion and settings contract**
+
+Add the conversion module and persisted `settings.units` field. Add the accessible Units category/selector and thread the selected units through visible input and result renderers. Keep optimizer and stored values canonical metric units.
+
+- [ ] **Step 3: Verify red-to-green behavior**
+
+Run:
+
+```sh
+npm test -- tests/units.test.js tests/settings.test.js tests/settings-dialog.test.js
+npm run test:ui -- tests/browser/multi-session.spec.js tests/browser/settings.spec.js tests/browser/inventory.spec.js
+```
+
+Expected: conversion, display, persistence, and Imperial → Metric cross-session assertions pass.
+
+- [ ] **Step 4: Update visual baselines**
+
+Run the screenshot suite for the Units category and Imperial representative states, review the diffs, and check in only intentional baselines.
+
+- [ ] **Step 5: Commit**
+
+```sh
+git add js index.html tests package.json playwright.config.js
+git commit -m "feat: add persisted metric and imperial display units"
+```
