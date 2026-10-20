@@ -29,6 +29,13 @@ function displayConstraint(value, quantity, field, units) {
   return displayStep(canonical, quantity, units);
 }
 
+function quantityDisplayLabel(quantity, units) {
+  if (normalizeUnits(units) === 'metric') {
+    return { volume: 'litres', mass: 'kilograms', pressure: 'bar', flow: 'L/min', temperature: '°C' }[quantity] ?? getUnitLabel(quantity, units);
+  }
+  return getUnitLabel(quantity, units);
+}
+
 function createPresetInput({ value, type, collection, index, field, label, min, max, step, units = activeUnits }) {
   const quantity = fieldQuantity(collection, field);
   const normalizedUnits = normalizeUnits(units);
@@ -38,7 +45,7 @@ function createPresetInput({ value, type, collection, index, field, label, min, 
   input.className = type === 'text'
     ? 'min-w-0 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-xs text-slate-100'
     : 'min-w-0 rounded border border-ocean-700 bg-ocean-950 px-1 py-1 text-center text-xs text-slate-100';
-  input.setAttribute('aria-label', quantity ? `${label.replace(/ in .+$/, '')} in ${getUnitLabel(quantity, normalizedUnits)}` : label);
+  input.setAttribute('aria-label', quantity ? `${label.replace(/ in .+$/, '')} in ${quantityDisplayLabel(quantity, normalizedUnits)}` : label);
   input.dataset.settingsCollection = collection;
   input.dataset.settingsIndex = String(index);
   input.dataset.settingsField = field;
@@ -174,7 +181,7 @@ function createCylinderCard(preset, index, presetCount) {
   fields.className = 'mt-3 grid grid-cols-2 gap-2';
   fields.append(
     createCylinderField('Material', createMaterialSelect(preset, index)),
-    createCylinderField('Volume (L)', createCylinderNumberInput({
+    createCylinderField(`Volume (${getUnitLabel('volume', activeUnits)})`, createCylinderNumberInput({
       value: preset.volumeL,
       index,
       field: 'volumeL',
@@ -182,7 +189,7 @@ function createCylinderCard(preset, index, presetCount) {
       min: 0.1,
       step: 0.1
     })),
-    createCylinderField('Mass (kg)', createCylinderNumberInput({
+    createCylinderField(`Mass (${getUnitLabel('mass', activeUnits)})`, createCylinderNumberInput({
       value: preset.massKg,
       index,
       field: 'massKg',
@@ -190,7 +197,7 @@ function createCylinderCard(preset, index, presetCount) {
       min: 0.1,
       step: 0.1
     })),
-    createCylinderField('Max pressure (bar)', createCylinderNumberInput({
+    createCylinderField(`Max pressure (${getUnitLabel('pressure', activeUnits)})`, createCylinderNumberInput({
       value: preset.workingPressureBar,
       index,
       field: 'workingPressureBar',
@@ -230,9 +237,9 @@ function renderCylinderRows(presets) {
   for (const [label, className, ariaLabel] of [
     ['Name', 'min-w-[8.5rem]'],
     ['Material', 'w-20'],
-    ['Volume (L)', 'w-14'],
-    ['Mass (kg)', 'w-16'],
-    ['Max pressure (bar)', 'w-16'],
+    [`Volume (${getUnitLabel('volume', activeUnits)})`, 'w-14'],
+    [`Mass (${getUnitLabel('mass', activeUnits)})`, 'w-16'],
+    [`Max pressure (${getUnitLabel('pressure', activeUnits)})`, 'w-16'],
     ['', 'w-6', 'Actions']
   ]) {
     const header = document.createElement('th');
@@ -464,6 +471,27 @@ export function renderSettingsDialog(settings, importState) {
       'settings-compressor-temperature-modifier': 'compressorTemperatureModifierC'
     }[id]);
     const quantity = fieldQuantity('booster', field);
+    const constraints = {
+      compressorInletFlowLPerMin: [0.1, 10000, 0.1],
+      maxCompressorPressureBar: [10, 350, 1],
+      compressorTemperatureModifierC: [-100, 100, 1],
+      cylinderVolumeCm3: [0.1, 1000, 0.1],
+      minimumSourcePressureBar: [0, 100, 1],
+      oxygenBoostBpm: [1, 1000, 1],
+      otherBoostBpm: [1, 1000, 1],
+      maxBoosterOutputPressureBar: [10, 350, 1],
+      boosterTemperatureModifierC: [-100, 100, 1],
+      oxygenDecantRateBarPerMin: [0.1, 100, 0.1],
+      otherDecantRateBarPerMin: [0.1, 100, 0.1],
+      drainingRateBarPerMin: [0.1, 100, 0.1]
+    }[field];
+    if (constraints) {
+      const divisor = field === 'cylinderVolumeCm3' ? 1000 : 1;
+      const values = constraints.map(item => displayConstraint(item / divisor, quantity, field, activeUnits));
+      ['min', 'max', 'step'].forEach((attribute, index) => { input[attribute] = String(values[index]); });
+    }
+    const suffix = input.parentElement?.querySelector('span');
+    if (suffix && quantity) suffix.textContent = getUnitLabel(quantity, activeUnits);
     input.value = String(displayValue(value, quantity, field, activeUnits));
     if (quantity) {
       input.dataset.settingsQuantity = quantity;

@@ -31,14 +31,14 @@ function makeBankInput(bank, field, units) {
   input.className = field.className;
   input.dataset.bankId = bank.id;
   input.dataset.bankField = field.key;
-  if (field.quantity) input.dataset.bankQuantity = field.quantity;
-  if (field.min !== undefined) input.min = field.min;
-  if (field.max !== undefined) input.max = field.max;
-  if (field.step !== undefined) input.step = field.step;
+  if (field.min !== undefined) input.min = String(field.quantity ? convertToDisplay(field.min, field.quantity, units) : field.min);
+  if (field.max !== undefined) input.max = String(field.quantity ? convertToDisplay(field.max, field.quantity, units) : field.max);
+  if (field.step !== undefined) input.step = String(field.quantity ? convertToDisplay(field.step, field.quantity, units) : field.step);
   const metricLabels = { volume: 'volume in litres', pressure: 'pressure in bar' };
   const label = field.quantity
     ? (normalizeUnits(units) === 'metric' ? metricLabels[field.quantity] : `${field.label} in ${getUnitLabel(field.quantity, units)}`)
     : field.label;
+  input.setAttribute('aria-label', label);
   return input;
 }
 

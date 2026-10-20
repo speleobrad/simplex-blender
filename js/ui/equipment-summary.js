@@ -17,12 +17,11 @@ function boosterPresetMatchesActiveFields(booster, preset) {
     && preset.drainingRateBarPerMin === booster.drainingRateBarPerMin;
 }
 function equipmentQuantity(value, quantity, units) {
-  if (normalizeUnits(units) === 'metric') return `${value} ${quantity === 'flow' ? 'L/min' : 'bar'}`;
-  return formatQuantity(convertToDisplay(value, quantity, units), quantity, units);
+  return formatQuantity(value, quantity, units);
 }
+
 function equipmentRate(value, units) {
-  if (normalizeUnits(units) === 'metric') return String(value);
-  return formatQuantity(convertToDisplay(value, 'pressure', units), 'pressure', units).split(' ')[0];
+  return formatQuantity(value, 'pressure', units).split(' ')[0];
 }
 
 function makeRow(label, value) {

@@ -464,12 +464,16 @@ function updateSettingsDraft(input) {
     ? input.value
     : Number.parseFloat(input.value);
   if (typeof value === 'number' && Number.isFinite(value) && input.dataset.settingsQuantity) {
-    value = convertFromDisplay(value, input.dataset.settingsQuantity, state.settings.units);
+    value = convertFromDisplay(value, input.dataset.settingsQuantity, state.settingsDraft.units);
     if (collection === 'booster' && field === 'cylinderVolumeCm3') value *= 1000;
   }
   if (collection === 'physics') state.settingsDraft.physics[field] = value;
-  else if (collection === 'settings' && field === 'units') state.settingsDraft.units = value;
-  else if (collection === 'cylinderPresets') state.settingsDraft.cylinderPresets[index][field] = value;
+  else if (collection === 'settings' && field === 'units') {
+    state.settingsDraft.units = value;
+    renderSettingsDraft();
+    setSettingsCategory(state.settingsCategory);
+    return;
+  } else if (collection === 'cylinderPresets') state.settingsDraft.cylinderPresets[index][field] = value;
   else if (collection === 'booster') state.settingsDraft.booster[field] = value;
   else state.settingsDraft.gasPresets[index][field] = value;
 }
@@ -534,6 +538,9 @@ function saveSettingsDraft() {
     return;
   }
 
+  for (const [id, quantity] of [['init-p', 'pressure'], ['target-p', 'pressure'], ['ambient-temperature', 'temperature'], ['wait-target-temperature', 'temperature'], ['inlet-gas-temperature', 'temperature']]) {
+    canonicalPrimaryValue(id, quantity);
+  }
   const selectedCylinderName = byId('cylinder-preset')?.value || DEFAULT_CYLINDER_PRESET_NAME;
   try {
     saveSettings(state.settingsDraft, settingsStorage);
@@ -612,6 +619,13 @@ function updateWaitModeFields() {
   byId('wait-minutes-field').hidden = !isMinutesMode;
   byId('wait-target-temperature-field').hidden = isMinutesMode;
 }
+function establishCanonicalPrimaryDefaults() {
+  for (const id of ['init-p', 'target-p', 'ambient-temperature', 'wait-target-temperature', 'inlet-gas-temperature']) {
+    const input = byId(id);
+    if (input && input.dataset.canonicalValue === undefined) input.dataset.canonicalValue = input.value;
+  }
+}
+
 
 function syncPrimaryUnitInputs() {
   const units = state.settings.units;
@@ -640,7 +654,12 @@ function syncPrimaryUnitInputs() {
 
 function canonicalPrimaryValue(id, quantity) {
   const input = byId(id);
-  const value = convertFromDisplay(numberValue(id), quantity, state.settings.units);
+  const displayed = numberValue(id);
+  const cached = Number(input?.dataset.canonicalValue);
+  const cachedDisplay = convertToDisplay(cached, quantity, state.settings.units);
+  const value = Number.isFinite(cached) && displayed === cachedDisplay
+    ? cached
+    : convertFromDisplay(displayed, quantity, state.settings.units);
   if (input && Number.isFinite(value)) input.dataset.canonicalValue = String(value);
   return value;
 }
@@ -863,7 +882,9 @@ function updateBankFromInput(input) {
   } else {
     const value = Number.parseFloat(input.value);
     if (!Number.isFinite(value)) {
-      input.value = String(bank[bankField]);
+      input.value = String(input.dataset.bankQuantity
+        ? convertToDisplay(bank[bankField], input.dataset.bankQuantity, state.settings.units)
+        : bank[bankField]);
       clearBankInputFailure(bank.id);
       return;
     }
@@ -874,7 +895,9 @@ function updateBankFromInput(input) {
   }
 
   if (updatedBank.oxygenPercent === 21 && updatedBank.heliumPercent === 0) {
-    input.value = String(bank[bankField]);
+    input.value = String(input.dataset.bankQuantity
+      ? convertToDisplay(bank[bankField], input.dataset.bankQuantity, state.settings.units)
+      : bank[bankField]);
     state.bankInputFailure = {
       bankId: bank.id,
       message: `${bank.name}: Air is supplied by the compressor and cannot be a finite supply bank.`
@@ -885,7 +908,9 @@ function updateBankFromInput(input) {
 
   const errors = validateSupplyBankInput(updatedBank);
   if (errors.length > 0) {
-    input.value = String(bank[bankField]);
+    input.value = String(input.dataset.bankQuantity
+      ? convertToDisplay(bank[bankField], input.dataset.bankQuantity, state.settings.units)
+      : bank[bankField]);
     state.bankInputFailure = { bankId: bank.id, message: `${bank.name}: ${errors[0]}` };
     updateStorageWarning();
     return;
@@ -1085,6 +1110,7 @@ function initialize() {
   document.addEventListener('keydown', handleResultTabKeydown);
   document.addEventListener('paste', handleGasPaste);
   byId('settings-dialog').addEventListener('close', handleSettingsClosed);
+  establishCanonicalPrimaryDefaults();
   applyTheme(state.theme);
   setTab(state.activeTab);
   updateStorageWarning();

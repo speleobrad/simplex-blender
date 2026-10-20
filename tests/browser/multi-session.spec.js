@@ -70,15 +70,32 @@ test.describe('continued browser sessions', () => {
 
   test('persists units across sessions while preserving canonical saved values', async ({ appPage }) => {
     const pageA = await appPage.goto('tourSeen');
+    const initialPressure = pageA.locator('#init-p');
+    await initialPressure.fill('40');
+    await initialPressure.blur();
+    const index = await bankRows(pageA).count();
+    const rowA = await addBank(pageA);
+    await editBank(pageA, index, {
+      gasPreset: 'Tx 18/45',
+      name: 'Imperial session bank',
+      volumeL: 12,
+      pressureBar: 150,
+      enabled: true
+    });
     const unitsA = await openSettingsCategory(pageA, 'units');
     await unitsA.getByRole('combobox', { name: 'Units' }).selectOption('imperial');
     await saveSettings(pageA);
+    await expect(pageA.locator('#init-p')).toHaveValue('580.150952');
+    await expect(pageA.locator('#init-p')).toHaveAccessibleName(/in psi$/i);
     const sessionB = await createContinuedSession(pageA);
     const unitsB = await openSettingsCategory(sessionB.page, 'units');
     await expect(unitsB.getByRole('combobox', { name: 'Units' })).toHaveValue('imperial');
     const cylindersB = await openSettingsCategory(sessionB.page, 'cylinder-presets');
-    await expect(cylindersB.locator('[data-settings-index="0"][data-settings-field="volumeL"]:visible')).toHaveValue('3');
-    await expect(cylindersB.locator('[data-settings-index="0"][data-settings-field="workingPressureBar"]:visible')).toHaveValue('232');
+    await expect(cylindersB.locator('[data-settings-index="0"][data-settings-field="volumeL"]:visible')).toHaveValue('0.10594400009999999');
+    await expect(cylindersB.locator('[data-settings-index="0"][data-settings-field="workingPressureBar"]:visible')).toHaveValue('3364.8755216');
+    const rowB = bankRows(sessionB.page).nth(index);
+    await expect(rowB.getByRole('spinbutton', { name: /volume in ft³$/i })).toHaveValue('0.42377600039999996');
+    await expect(rowB.getByRole('spinbutton', { name: /pressure in psi$/i })).toHaveValue('2175.56607');
     const unitsMetric = await openSettingsCategory(sessionB.page, 'units');
     await unitsMetric.getByRole('combobox', { name: 'Units' }).selectOption('metric');
     await saveSettings(sessionB.page);
@@ -88,7 +105,13 @@ test.describe('continued browser sessions', () => {
     const cylindersC = await openSettingsCategory(sessionC.page, 'cylinder-presets');
     await expect(cylindersC.locator('[data-settings-index="0"][data-settings-field="volumeL"]:visible')).toHaveValue('3');
     await expect(cylindersC.locator('[data-settings-index="0"][data-settings-field="workingPressureBar"]:visible')).toHaveValue('232');
+    const rowC = bankRows(sessionC.page).nth(index);
+    await expect(rowC.getByRole('spinbutton', { name: /volume in litres$/i })).toHaveValue('12');
+    await expect(rowC.getByRole('spinbutton', { name: /pressure in bar$/i })).toHaveValue('150');
+    await expect(sessionC.page.evaluate(() => JSON.parse(localStorage.getItem('simplex-gas-remixer-banks')).find(bank => bank.name === 'Imperial session bank'))).resolves.toMatchObject({ volumeL: 12, pressureBar: 150 });
     await closeSession(sessionC);
+    await closeSession(sessionB);
+    await closeSession({ context: pageA.context() });
   });
 
   test('persists theme but discards an unsaved settings draft in the next session', async ({ appPage }) => {

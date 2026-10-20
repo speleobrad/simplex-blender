@@ -6,6 +6,7 @@ const CATEGORIES = {
   'gas-presets': 'Gas presets',
   'cylinder-presets': 'Cylinder presets',
   equipment: 'Equipment',
+  'preset-management': 'Preset management',
   units: 'Units',
 };
 
@@ -25,7 +26,7 @@ export async function openSettingsCategory(page, category) {
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
   }
   await expect(dialog).toBeVisible();
-  const button = dialog.getByRole('button', { name: label, exact: true });
+  const button = dialog.locator('.settings-category-button:visible').filter({ hasText: label }).first();
   await button.click();
   const pane = dialog.locator(`#settings-pane-${categoryKey}`);
   await expect(button).toHaveAttribute('aria-selected', 'true');
