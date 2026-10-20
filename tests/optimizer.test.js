@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { optimizeBlend, isSafeSimulation, scheduleSafeThermalProtocol } from '../js/optimizer.js';
+import { calculatePressureAtTemperature } from '../js/thermodynamics.js';
 import { DEFAULT_BANKS } from '../js/bank-storage.js';
 import { DEFAULT_SETTINGS } from '../js/settings.js';
 
@@ -1949,8 +1950,12 @@ test('solves a nonzero minimum wait before the first transfer after keep', () =>
       initialHeliumPercent: 0,
       workingPressureBar: 100
     },
-    physics: { model: 'ideal', temperatureC: 40 },
-    thermal: { ...schedulerFixture.thermal, inletTemperatureC: 40 },
+    physics: { model: 'ideal', temperatureC: 20 },
+    thermal: {
+      ...schedulerFixture.thermal,
+      inletTemperatureC: 40,
+      interimMeasurements: [{ pressureBar: 0, temperatureC: 40 }]
+    },
     protocolSteps: [
       {
         type: 'keep',
@@ -2086,7 +2091,7 @@ test('omits an unsafe thermal maximum fallback instead of returning it as feasib
       initialPressureBar: 0,
       initialOxygenPercent: 21,
       initialHeliumPercent: 0,
-      targetPressureBar: 98,
+      targetPressureBar: 99.5,
       targetOxygenPercent: 21,
       targetHeliumPercent: 0,
       workingPressureBar: 100
@@ -2110,3 +2115,166 @@ test('omits an unsafe thermal maximum fallback instead of returning it as feasib
   assert.match(result.error, /cannot remain below cylinder working pressure/i);
 });
 
+
+test('scheduler preserves interim measurement identity across inserted waits', () => {
+  const thermal = {
+    ...schedulerFixture,
+    interimMeasurements: [
+      { pressureBar: 0, temperatureC: 40 },
+      { pressureBar: 0, temperatureC: 40 },
+      { pressureBar: 95, temperatureC: 20 }
+    ]
+  };
+  const scheduled = scheduleSafeThermalProtocol({
+    ...schedulerFixture,
+    cylinder: {
+      ...schedulerFixture.cylinder,
+      initialOxygenPercent: 21,
+      initialHeliumPercent: 0,
+      workingPressureBar: 100
+    },
+    physics: { model: 'ideal', temperatureC: 40 },
+    thermal: {
+      ...thermal.thermal,
+      interimMeasurements: thermal.interimMeasurements
+    },
+    protocolSteps: [
+      {
+        id: 'keep',
+        type: 'keep',
+        receiverStartPressureBar: 0,
+        receiverEndPressureBar: 0,
+        resultingPressureBar: 0,
+        resultingMix: { oxygenPercent: 21, heliumPercent: 0 }
+      },
+      {
+        id: 'first-transfer',
+        type: 'boost',
+        operation: 'Boost',
+        receiverStartPressureBar: 0,
+        receiverEndPressureBar: 100,
+        resultingPressureBar: 100,
+        resultingMix: { oxygenPercent: 21, heliumPercent: 0 },
+        sourceOxygenPercent: 21,
+        sourceHeliumPercent: 0,
+        sourceStartPressureBar: 200,
+        sourceEndPressureBar: 100,
+        sourceVolumeL: 12
+      },
+      {
+        id: 'second-transfer',
+        type: 'boost',
+        operation: 'Boost',
+        receiverStartPressureBar: 100,
+        receiverEndPressureBar: 100,
+        resultingPressureBar: 100,
+        resultingMix: { oxygenPercent: 21, heliumPercent: 0 },
+        sourceOxygenPercent: 21,
+        sourceHeliumPercent: 0,
+        sourceStartPressureBar: 200,
+        sourceEndPressureBar: 100,
+        sourceVolumeL: 12
+      }
+    ]
+  });
+  assert.equal(scheduled.unsafe, false);
+  const keep = scheduled.protocolSteps.find(step => step.id === 'keep');
+  const first = scheduled.protocolSteps.find(step => step.id === 'first-transfer');
+  const second = scheduled.protocolSteps.find(step => step.id === 'second-transfer');
+  assert.equal(keep.thermal.measuredStartPressureBar, 0);
+  assert.equal(keep.thermal.measuredStartTemperatureC, 40);
+  assert.equal(first.thermal.measuredStartPressureBar, 0);
+  assert.equal(first.thermal.measuredStartTemperatureC, 40);
+  assert.equal(second.thermal.measuredStartPressureBar, 95);
+  assert.equal(second.thermal.measuredStartTemperatureC, 20);
+  assert.ok(scheduled.protocolSteps.some(step => step._measurementIndex === null));
+});
+
+test('scheduler projects endpoints from the physics pressure reference temperature', () => {
+  const scheduled = scheduleSafeThermalProtocol({
+    ...schedulerFixture,
+    cylinder: {
+      ...schedulerFixture.cylinder,
+      initialOxygenPercent: 21,
+      initialHeliumPercent: 0,
+      workingPressureBar: 100
+    },
+    physics: { model: 'ideal', temperatureC: 30 },
+    thermal: { ...schedulerFixture.thermal, inletTemperatureC: 40 },
+    protocolSteps: [{
+      type: 'boost',
+      operation: 'Boost',
+      receiverStartPressureBar: 0,
+      receiverEndPressureBar: 98,
+      resultingPressureBar: 98,
+      resultingMix: { oxygenPercent: 21, heliumPercent: 0 },
+      sourceOxygenPercent: 21,
+      sourceHeliumPercent: 0,
+      sourceStartPressureBar: 300,
+      sourceEndPressureBar: 200,
+      sourceVolumeL: 12
+    }]
+  });
+  assert.equal(scheduled.unsafe, false);
+  assert.ok(isSafeSimulation(scheduled.simulation, 100, {
+    thermal: { ...schedulerFixture.thermal, inletTemperatureC: 40 },
+    physics: { model: 'ideal', temperatureC: 30 },
+    cylinder: { ...schedulerFixture.cylinder, workingPressureBar: 100 }
+  }));
+  for (const step of scheduled.protocolSteps) {
+    const state = step.thermal;
+    if (!state) continue;
+    assert.equal(state.pressureReferenceTemperatureC, 30);
+    const expectedHotPressure = calculatePressureAtTemperature({
+      pressureBar: state.pressureAtTransferEndBar,
+      oxygenPercent: step.resultingMix?.oxygenPercent ?? 21,
+      heliumPercent: step.resultingMix?.heliumPercent ?? 0,
+      fromTemperatureC: 30,
+      toTemperatureC: state.temperatureAtTransferEndC,
+      volumeL: 12,
+      useVdw: false
+    });
+    assert.ok(expectedHotPressure <= 100 + 1e-7);
+  }
+});
+
+test('compressor-air splits keep the source effectively unlimited', () => {
+  const scheduled = scheduleSafeThermalProtocol({
+    ...schedulerFixture,
+    cylinder: {
+      ...schedulerFixture.cylinder,
+      initialOxygenPercent: 21,
+      initialHeliumPercent: 0,
+      workingPressureBar: 100
+    },
+    physics: { model: 'ideal', temperatureC: 20 },
+    thermal: { ...schedulerFixture.thermal, inletTemperatureC: 30 },
+    protocolSteps: [{
+      type: 'boost',
+      operation: 'Top-up',
+      recipeGas: 'Compressor Air',
+      receiverStartPressureBar: 0,
+      receiverEndPressureBar: 98,
+      resultingPressureBar: 98,
+      sourceOxygenPercent: 21,
+      sourceHeliumPercent: 0,
+      sourceStartPressureBar: 350,
+      sourceEndPressureBar: 350,
+      sourceVolumeL: 1
+    }]
+  });
+  assert.equal(scheduled.unsafe, false);
+  const stages = scheduled.protocolSteps.filter(step => step.type === 'boost');
+  assert.equal(stages.length, 2);
+  for (const stage of stages) {
+    assert.equal(stage.sourceInventory, 'unlimited');
+    assert.equal(stage.sourceStartMoles, null);
+    assert.equal(stage.sourceEndMoles, null);
+    assert.equal(stage.sourceVolumeL, null);
+    assert.equal(stage.sourceOxygenPercent, 21);
+    assert.equal(stage.sourceHeliumPercent, 0);
+    assert.equal(stage.thermal.rateSource, 'compressor');
+    assert.equal(stage.sourceStartPressureBar, 350);
+    assert.equal(stage.sourceEndPressureBar, 350);
+  }
+});

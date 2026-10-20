@@ -22,10 +22,11 @@ function pressureAtSample(sample, state, step, {
     ?? step.resultingMix?.heliumPercent
     ?? state.receiverStartMix?.heliumPercent
     ?? 0;
+  if (!Number.isFinite(sample.ambientPressureBar)) return sample.pressureBar;
   const fromTemperatureC = sample.pressureReferenceTemperatureC
     ?? thermal.ambientTemperatureC;
   return calculatePressureAtTemperature({
-    pressureBar: sample.ambientPressureBar ?? sample.pressureBar,
+    pressureBar: sample.ambientPressureBar,
     oxygenPercent,
     heliumPercent,
     fromTemperatureC,
@@ -40,6 +41,9 @@ function hotTransferEndpointPressure(state, step, {
   physics,
   cylinder
 }) {
+  if (Number.isFinite(state.pressureAtTransferEndHotBar)) {
+    return state.pressureAtTransferEndHotBar;
+  }
   return calculatePressureAtTemperature({
     pressureBar: state.pressureAtTransferEndBar,
     oxygenPercent: step.resultingMix?.oxygenPercent
@@ -48,7 +52,8 @@ function hotTransferEndpointPressure(state, step, {
     heliumPercent: step.resultingMix?.heliumPercent
       ?? state.receiverStartMix?.heliumPercent
       ?? 0,
-    fromTemperatureC: thermal.ambientTemperatureC,
+    fromTemperatureC: state.pressureReferenceTemperatureC
+      ?? thermal.ambientTemperatureC,
     toTemperatureC: state.temperatureAtTransferEndC,
     volumeL: cylinder.volumeL,
     useVdw: physics.model === 'vdw'
@@ -64,8 +69,8 @@ function unsafeThermalStep(state, step, limit, context) {
     hotTransferEndpointPressure(state, step, context),
     ...(state.samples ?? []).map(sample => pressureAtSample(sample, state, step, context))
   ];
-  return pressures.some(pressure => Number.isFinite(pressure)
-    && pressure > limit + THERMAL_SAFETY_TOLERANCE_BAR);
+  return pressures.some(pressure => !Number.isFinite(pressure)
+    || pressure > limit + THERMAL_SAFETY_TOLERANCE_BAR);
 }
 
 function firstUnsafeThermalIndex(simulation, workingPressureBar, context) {
@@ -101,12 +106,14 @@ export function isSafeSimulation(simulation, workingPressureBar, {
     return Number(cylinder?.initialPressureBar ?? 0) <= limit
       && (simulation?.protocolSteps ?? []).every(step => {
         const state = step.thermal;
-        return !state || [
+        if (!state) return true;
+        const pressures = [
           state.pressureStartBar,
           state.pressureAtTransferEndBar,
           state.pressureAfterWaitBar,
           ...(state.samples ?? []).map(sample => sample.projectedPressureBar ?? sample.pressureBar)
-        ].filter(Number.isFinite).every(pressure => pressure <= limit);
+        ];
+        return pressures.every(pressure => Number.isFinite(pressure) && pressure <= limit);
       });
   }
   return firstUnsafeThermalIndex(simulation, workingPressureBar, {
@@ -230,9 +237,12 @@ function splitTransferAtSafeHotEndpoint({
   const totalReceiverMoles = receiverEndMoles - receiverStartMoles;
   if (!(totalReceiverMoles > 1e-10)) return null;
 
+  const sourceUnlimited = transferStep.sourceInventory === 'unlimited'
+    || transferStep.recipeGas === 'Compressor Air'
+    || transferStep.method === 'compressor';
   const sourceOxygenPercent = transferStep.sourceOxygenPercent ?? receiverEndMix.oxygenPercent;
   const sourceHeliumPercent = transferStep.sourceHeliumPercent ?? receiverEndMix.heliumPercent;
-  const sourceVolumeL = Number(transferStep.sourceVolumeL);
+  const sourceVolumeL = sourceUnlimited ? NaN : Number(transferStep.sourceVolumeL);
   const sourceStartPressureBar = Number(transferStep.sourceStartPressureBar);
   const derivedSourceStartMoles = Number.isFinite(sourceVolumeL) && sourceVolumeL > 0
     && Number.isFinite(sourceStartPressureBar)
@@ -244,9 +254,11 @@ function splitTransferAtSafeHotEndpoint({
       useVdw
     ) * sourceVolumeL
     : null;
-  const sourceStartMoles = Number.isFinite(transferStep.sourceStartMoles)
-    ? transferStep.sourceStartMoles
-    : derivedSourceStartMoles;
+  const sourceStartMoles = sourceUnlimited
+    ? null
+    : Number.isFinite(transferStep.sourceStartMoles)
+      ? transferStep.sourceStartMoles
+      : derivedSourceStartMoles;
   const sourceEndMoles = Number.isFinite(sourceStartMoles)
     ? sourceStartMoles - totalReceiverMoles
     : null;
@@ -305,6 +317,8 @@ function splitTransferAtSafeHotEndpoint({
       receiverStartMix,
       receiverStartMoles,
       receiverEndMoles: stage1.moles,
+      sourceInventory: sourceUnlimited ? 'unlimited' : transferStep.sourceInventory,
+      sourceVolumeL: sourceUnlimited ? null : transferStep.sourceVolumeL,
       sourceStartMoles,
       sourceEndMoles: firstSourceMoles,
       sourceConsumedMoles: firstConsumedMoles,
@@ -319,12 +333,15 @@ function splitTransferAtSafeHotEndpoint({
     const second = {
       ...transferStep,
       _thermalSplit: true,
+      _measurementIndex: null,
       receiverStartPressureBar: firstReceiverPressureBar,
       receiverEndPressureBar,
       resultingPressureBar: receiverEndPressureBar,
       receiverStartMix: first.resultingMix,
       receiverStartMoles: stage1.moles,
       receiverEndMoles,
+      sourceInventory: sourceUnlimited ? 'unlimited' : transferStep.sourceInventory,
+      sourceVolumeL: sourceUnlimited ? null : transferStep.sourceVolumeL,
       sourceStartMoles: firstSourceMoles,
       sourceEndMoles,
       sourceConsumedMoles: totalReceiverMoles - firstConsumedMoles,
@@ -338,6 +355,7 @@ function splitTransferAtSafeHotEndpoint({
     };
     const wait = {
       type: 'wait',
+      _measurementIndex: null,
       _safetyWaitOnly: true,
       title: 'Automatic wait between safe transfer stages',
       recipeLabel: 'Automatic safety wait',
@@ -379,7 +397,9 @@ function splitTransferAtSafeHotEndpoint({
     const candidateSimulation = firstStageSimulationAt(fraction);
     return firstUnsafeThermalIndex(candidateSimulation, options.cylinder.workingPressureBar, options) === -1;
   };
-  if (!firstStageSafeAt(0)) return null;
+  if (!firstStageSafeAt(0)) {
+    return null;
+  }
   let low = 0;
   let high = 1;
   if (firstStageSafeAt(1)) low = 1;
@@ -390,7 +410,9 @@ function splitTransferAtSafeHotEndpoint({
       else high = middle;
     }
   }
-  if (!(low > 1e-9)) return null;
+  if (!(low > 1e-9)) {
+    return null;
+  }
   return stagesAt(low);
 }
 
@@ -402,7 +424,10 @@ export function scheduleSafeThermalProtocol({
   settings
 }) {
   const options = { thermal, cylinder, physics, settings };
-  const steps = protocolSteps.map(step => ({ ...step }));
+  const steps = protocolSteps.map((step, index) => ({
+    ...step,
+    _measurementIndex: index
+  }));
   const maxWait = MAX_AUTOMATIC_WAIT_MINUTES;
   const finish = (simulation, unsafe = false) => {
     const automaticWaits = automaticWaitMetadata(simulation);
@@ -411,7 +436,12 @@ export function scheduleSafeThermalProtocol({
     );
     const protocol = simulation.protocolSteps.map((step, index) => {
       const metadata = metadataByIndex.get(index);
-      const { automaticWaitMetadata: _staleMetadata, ...cleanStep } = step;
+      const {
+        automaticWaitMetadata: _staleMetadata,
+        _scheduledMeasuredStartPressureBar: _scheduledPressure,
+        _scheduledMeasuredStartTemperatureC: _scheduledTemperature,
+        ...cleanStep
+      } = step;
       return metadata ? { ...cleanStep, automaticWaitMetadata: metadata } : cleanStep;
     });
     const normalizedSimulation = { ...simulation, protocolSteps: protocol };
@@ -435,6 +465,21 @@ export function scheduleSafeThermalProtocol({
     if (unsafeIndex === -2) return finish(simulation, true);
 
     const targetIndex = unsafeIndex < 0 ? steps.length - 1 : unsafeIndex;
+    const targetState = simulation.protocolSteps[targetIndex]?.thermal;
+    if (targetState && steps[targetIndex]) {
+      const receiverStartPressureBar = steps[targetIndex].receiverStartPressureBar;
+      steps[targetIndex] = {
+        ...steps[targetIndex],
+        _scheduledMeasuredStartPressureBar: steps[targetIndex]._scheduledMeasuredStartPressureBar
+          ?? (Number.isFinite(receiverStartPressureBar)
+            ? receiverStartPressureBar
+            : targetState.pressureStartBar),
+        _scheduledMeasuredStartTemperatureC: steps[targetIndex]._scheduledMeasuredStartTemperatureC
+          ?? (steps[targetIndex - 1]?.type === 'keep'
+            ? targetState.temperatureStartC
+            : options.thermal.ambientTemperatureC ?? targetState.temperatureStartC)
+      };
+    }
     let waitIndex = targetIndex - 1;
     if (waitIndex < 0 || steps[waitIndex]?.type === 'keep') {
       const state = simulation.protocolSteps[targetIndex]?.thermal;
@@ -447,8 +492,8 @@ export function scheduleSafeThermalProtocol({
         ?? { oxygenPercent: cylinder.initialOxygenPercent ?? 21, heliumPercent: cylinder.initialHeliumPercent ?? 0 };
       steps.splice(targetIndex, 0, {
         type: 'wait',
+        _measurementIndex: null,
         _safetyWaitOnly: true,
-        title: `Automatic wait before step ${targetIndex + 1}`,
         recipeLabel: 'Automatic safety wait',
         receiverStartPressureBar: pressureBar,
         receiverEndPressureBar: pressureBar,
@@ -1886,8 +1931,8 @@ function optimizeBlendWithoutThermal(input) {
       title: 'Drain / Vent Cylinder Gas',
       recipeLabel: 'Drain / Vent Cylinder Gas',
       description: `Bleed cylinder from ${initialPressureBar.toFixed(drainPrecision)} bar down to ${retainedPressure.toFixed(drainPrecision)} bar (-${drainPressure.toFixed(drainPrecision)} bar vented). Retains ${((retainedMoles / (initialMoles || 1)) * 100).toFixed(0)}% of the original mix.`,
+      pressureReferenceTemperatureC: temperatureC,
       resultingPressureBar: currentPressure,
-      resultingMix: { oxygenPercent: initialOxygenPercent, heliumPercent: initialHeliumPercent },
       oxygenCompressionRatio: null,
       badgeClass: 'bg-rose-500/20 text-rose-300 border-rose-500/40'
     });
@@ -1896,7 +1941,7 @@ function optimizeBlendWithoutThermal(input) {
       type: 'keep',
       title: 'Preserve 100% of Cylinder Gas',
       recipeLabel: 'Preserve 100% of Cylinder Gas',
-      description: `Retain all ${initialPressureBar.toFixed(0)} bar of original mix. Zero gas vented!`,
+      pressureReferenceTemperatureC: temperatureC,
       resultingPressureBar: currentPressure,
       resultingMix: { oxygenPercent: initialOxygenPercent, heliumPercent: initialHeliumPercent },
       oxygenCompressionRatio: null,
@@ -1986,6 +2031,8 @@ function optimizeBlendWithoutThermal(input) {
         recipeGas: bank.name,
         description: descriptionParts.join(' '),
         pressureDeltaBar: pressureDelta,
+        pressureReferenceTemperatureC: temperatureC,
+        pressureAtTransferEndHotBar: currentPressure,
         resultingPressureBar: currentPressure,
         resultingMix: { oxygenPercent, heliumPercent },
         sourceStartPressureBar: stage.sourceStartPressureBar,
