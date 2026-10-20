@@ -30,7 +30,7 @@ test('provides the primary navigation labels and guided-tour targets', () => {
   }
 });
 
-test('keeps only the working tank and results in Blending and moves Equipment into Inventory', () => {
+test('keeps the working tank, recipe modes, and results in Blending and moves Equipment into Inventory', () => {
   assert.match(markup, /<nav\b[^>]*id="primary-navigation"[^>]*>[\s\S]*?<div\b[^>]*role="tablist"/);
   assert.match(markup, /<button\b[^>]*id="primary-tab-blending"[^>]*role="tab"[^>]*aria-controls="screen-blending"/);
   assert.match(markup, /<button\b[^>]*id="primary-tab-inventory"[^>]*role="tab"[^>]*aria-controls="screen-inventory"/);
@@ -43,8 +43,9 @@ test('keeps only the working tank and results in Blending and moves Equipment in
   assert.ok(inventoryStart > blendingStart);
   assert.ok(markup.indexOf('id="working-tank-section"', blendingStart) < inventoryStart);
   assert.ok(markup.indexOf('id="results-navigation"', blendingStart) < inventoryStart);
-  assert.equal(markup.indexOf('id="recipe-mode-title"', blendingStart), -1);
-  assert.equal(markup.indexOf('id="compare-recipe-section"', blendingStart), -1);
+  assert.ok(markup.indexOf('id="recipe-mode-title"', blendingStart) > blendingStart);
+  assert.ok(markup.indexOf('id="compare-recipe-section"', blendingStart) > blendingStart);
+  assert.ok(markup.indexOf('id="compare-recipe-section"', blendingStart) < inventoryStart);
   assert.ok(markup.indexOf('id="equipment-section"', inventoryStart) > inventoryStart);
   assert.ok(markup.indexOf('id="equipment-summary"', inventoryStart) > inventoryStart);
   assert.ok(markup.indexOf('id="inventory-section"', inventoryStart) > inventoryStart);

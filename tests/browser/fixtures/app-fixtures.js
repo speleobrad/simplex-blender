@@ -64,7 +64,7 @@ export const test = base.extend({
         window.localStorage.clear();
       });
       await page.reload();
-      await page.getByRole('button', { name: 'Settings' }).waitFor();
+      await page.getByRole('tab', { name: 'Settings', exact: true }).waitFor();
     });
   }
 });

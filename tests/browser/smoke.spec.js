@@ -9,7 +9,7 @@ test('factory state shows consent boundary', async ({ appPage }) => {
 test('tourSeen state opens the application without consent', async ({ appPage }) => {
   const page = await appPage.goto('tourSeen');
   await expect(page).toHaveTitle('Simplex blender');
-  await expect(page.getByRole('button', { name: 'Settings' })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Settings', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: /accept/i })).toHaveCount(0);
 });
 
@@ -21,7 +21,7 @@ test('populated inventory is rendered from seeded state', async ({ appPage }) =>
 
 test('settings and theme scenarios are available before navigation', async ({ appPage }) => {
   const page = await appPage.goto('settings');
-  await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByRole('tab', { name: 'Settings', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
   await page.getByRole('button', { name: 'Gas presets' }).click();
   await expect(page.locator('#settings-gas-presets input').first()).toHaveValue('Air');
@@ -41,7 +41,7 @@ test('light theme scenario exposes the light-theme control state', async ({ appP
 
 test('invalid saved data displays the fallback warning', async ({ appPage }) => {
   const page = await appPage.goto('invalidSavedData');
-  await expect(page.getByRole('alert')).toContainText('Saved supply banks could not be loaded');
+  await expect(page.getByRole('alert')).toContainText('Saved Inventory could not be loaded');
 });
 
 test('reset clears a previously seeded scenario', async ({ appPage, resetApp }) => {

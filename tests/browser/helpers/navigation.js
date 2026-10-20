@@ -15,20 +15,18 @@ const RESULT_PANELS = {
 };
 
 async function closeSettings(page) {
-  const dialog = page.locator('#settings-dialog');
-  if (await dialog.evaluate(element => element.open).catch(() => false)) {
-    await page.getByRole('button', { name: 'Close settings', exact: true }).click();
-    await expect(dialog).not.toBeVisible();
+  const screen = page.locator('#screen-settings');
+  if (await screen.getAttribute('hidden') === null) {
+    await page.getByRole('tab', { name: 'Blending', exact: true }).click();
+    await expect(screen).toBeHidden();
   }
 }
 
 /**
  * Select one of the app's primary user-facing surfaces.
  *
- * The current shell has no separate primary-screen route: Recipe is the
- * Blending destination, Supply banks is an always-present inventory surface,
- * and Settings is a modal surface. Prefer semantic tabs when a future shell
- * exposes them, while exercising the current controls for the existing shell.
+ * The current shell exposes semantic primary tabs. Inventory is an always-present
+ * surface, while Settings is a primary tab containing the settings controls.
  */
 export async function selectPrimaryScreen(page, name) {
   if (!Object.hasOwn(PRIMARY_PANELS, name)) {
@@ -52,11 +50,11 @@ export async function selectPrimaryScreen(page, name) {
 
   if (name === 'Settings') {
     await closeSettings(page);
-    await page.getByRole('button', { name: 'Settings', exact: true }).click();
-    const dialog = page.locator(PRIMARY_PANELS[name]);
-    await expect(dialog).toBeVisible();
-    await expect(dialog.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
-    return dialog;
+    await page.getByRole('tab', { name: 'Settings', exact: true }).click();
+    const panel = page.locator(PRIMARY_PANELS[name]);
+    await expect(panel).toBeVisible();
+    await expect(panel.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
+    return panel;
   }
 
   await closeSettings(page);

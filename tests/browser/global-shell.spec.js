@@ -29,8 +29,8 @@ test.describe('global shell', () => {
     const settings = await selectPrimaryScreen(page, 'Settings');
     await expect(settings).toBeVisible();
     await expect(settings.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
-    await page.getByRole('button', { name: 'Close settings', exact: true }).click();
-    await expect(settings).not.toBeVisible();
+    await page.getByRole('tab', { name: 'Blending', exact: true }).click();
+    await expect(settings).toBeHidden();
   });
 
   test('result navigation keeps only the selected panel visible', async ({ appPage }) => {
@@ -59,7 +59,7 @@ test.describe('global shell', () => {
 
   test('invalid saved data exposes the storage warning without hiding the shell', async ({ appPage }) => {
     const page = await appPage.goto('invalidSavedData');
-    await expect(page.getByRole('alert')).toContainText('Saved supply banks could not be loaded');
+    await expect(page.getByRole('alert')).toContainText('Saved Inventory could not be loaded');
     await expect(page.locator('main')).toBeVisible();
     await expect(page.locator('#settings-launch')).toBeVisible();
   });

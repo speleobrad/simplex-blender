@@ -395,15 +395,18 @@ function trajectoryDataRow(label, mix, pressureBar) {
   return row;
 }
 
-function renderAccessibleChartData(banks, initialMix, targetMix, trajectory) {
-  const mixesTable = document.getElementById('ternary-data-mixes');
-  const trajectoryTable = document.getElementById('ternary-data-trajectory');
-  if (!mixesTable || !trajectoryTable) return;
-
+export function buildAccessibleTernaryData({
+  banks = [],
+  initialMix,
+  targetMix,
+  trajectory = [],
+  mode = 'optimizer'
+} = {}) {
+  const isCompare = mode === 'compare';
   const mixRows = [
-    chartDataRow('Air reference', { oxygenPercent: 21, heliumPercent: 0 }),
-    chartDataRow('Initial mix', initialMix),
-    chartDataRow('Target mix', targetMix)
+    { label: 'Air reference', mix: { oxygenPercent: 21, heliumPercent: 0 } },
+    { label: 'Initial mix', mix: initialMix },
+    { label: isCompare ? 'Final mix' : 'Target mix', mix: targetMix }
   ];
   const sourcePressureByBankId = new Map(
     trajectory
@@ -414,35 +417,57 @@ function renderAccessibleChartData(banks, initialMix, targetMix, trajectory) {
   for (const bank of banks) {
     if (!bank.enabled) continue;
     enabledBankCount++;
-    mixRows.push(chartDataRow(
-      bank.name,
-      { oxygenPercent: bank.oxygenPercent, heliumPercent: bank.heliumPercent },
-      bank.pressureBar,
-      sourcePressureByBankId.get(bank.id) ?? bank.pressureBar
-    ));
+    mixRows.push({
+      label: bank.name,
+      mix: { oxygenPercent: bank.oxygenPercent, heliumPercent: bank.heliumPercent },
+      startPressureBar: bank.pressureBar,
+      endPressureBar: sourcePressureByBankId.get(bank.id) ?? bank.pressureBar
+    });
   }
-  mixesTable.replaceChildren(...mixRows);
+  const trajectoryRows = trajectory.map(point => ({
+    label: point.bankName ? `${point.label}: ${point.bankName}` : point.label,
+    mix: point,
+    pressureBar: point.pressureBar
+  }));
+  const recipeStageCount = trajectory.filter(point => point.step !== 0).length;
+  return {
+    mixRows,
+    trajectoryRows,
+    status: isCompare
+      ? `Data covers ${recipeStageCount} recipe stage${recipeStageCount === 1 ? '' : 's'}.`
+      : `Data covers ${enabledBankCount} enabled supply bank${enabledBankCount === 1 ? '' : 's'} and ${trajectory.length} trajectory points.`
+  };
+}
 
-  const trajectoryRows = trajectory.map(point => trajectoryDataRow(
-    point.bankName ? `${point.label}: ${point.bankName}` : point.label,
-    point,
-    point.pressureBar
-  ));
-  trajectoryTable.replaceChildren(...trajectoryRows);
+function renderAccessibleChartData({ banks, initialMix, targetMix, trajectory, mode }) {
+  const mixesTable = document.getElementById('ternary-data-mixes');
+  const trajectoryTable = document.getElementById('ternary-data-trajectory');
+  if (!mixesTable || !trajectoryTable) return;
+
+  const data = buildAccessibleTernaryData({ banks, initialMix, targetMix, trajectory, mode });
+  mixesTable.replaceChildren(...data.mixRows.map(row => chartDataRow(
+    row.label,
+    row.mix,
+    row.startPressureBar,
+    row.endPressureBar
+  )));
+  trajectoryTable.replaceChildren(...data.trajectoryRows.map(row => trajectoryDataRow(
+    row.label,
+    row.mix,
+    row.pressureBar
+  )));
 
   const status = document.getElementById('ternary-data-status');
-  if (status) {
-    status.textContent = `Data covers ${enabledBankCount} enabled supply bank${enabledBankCount === 1 ? '' : 's'} and ${trajectory.length} trajectory points.`;
-  }
+  if (status) status.textContent = data.status;
 }
 
 
-export function renderTernaryDiagram(canvas, { banks, initialMix, targetMix, trajectory }) {
+export function renderTernaryDiagram(canvas, { banks, initialMix, targetMix, trajectory, mode = 'optimizer' }) {
   if (!canvas) return;
   canvas.setAttribute('aria-label', 'Gas composition ternary diagram');
   const coordinates = document.getElementById('ternary-coords-hover');
   if (coordinates) coordinates.textContent = 'Hover for gas fractions';
-  renderAccessibleChartData(banks, initialMix, targetMix, trajectory);
+  renderAccessibleChartData({ banks, initialMix, targetMix, trajectory, mode });
   const rect = canvas.getBoundingClientRect();
   if (rect.width === 0 || rect.height === 0) return;
 

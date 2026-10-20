@@ -133,6 +133,88 @@ test('thermal series ends at the final ambient-settled state', () => {
   assert.equal(series.final.elapsedMinutes, 23);
 });
 
+test('compare series retains explicit waits before adding an ambient-settled projection', () => {
+  const series = buildThermalSeries([
+    {
+      title: 'Add trimix',
+      recipeLabel: 'Add trimix',
+      recipeAction: 'Decant',
+      recipeGas: 'Trimix',
+      thermal: {
+        durationMinutes: 2,
+        waitMinutes: 0,
+        temperatureStartC: 20,
+        temperatureAtTransferEndC: 32,
+        pressureAtTransferEndBar: 125,
+        temperatureAfterWaitC: 32,
+        pressureAfterWaitBar: 125
+      }
+    },
+    {
+      type: 'wait',
+      title: 'Wait 15 minutes',
+      recipeLabel: 'Wait 15 minutes',
+      recipeAction: 'Wait',
+      thermal: {
+        durationMinutes: 0,
+        waitMinutes: 15,
+        temperatureStartC: 32,
+        temperatureAtTransferEndC: 32,
+        pressureAtTransferEndBar: 125,
+        temperatureAfterWaitC: 24,
+        pressureAfterWaitBar: 121
+      }
+    }
+  ], {
+    initialPressureBar: 100,
+    initialTemperatureC: 20
+  }, {
+    pressureBar: 119,
+    temperatureC: 20,
+    durationMinutes: 46
+  });
+
+  assert.deepEqual(series.points.map(point => point.phase), [
+    'start', 'transfer-end', 'settled',
+    'start', 'transfer-end', 'settled',
+    'ambient-settled'
+  ]);
+  assert.deepEqual(series.points.map(point => point.elapsedMinutes), [0, 2, 2, 2, 2, 17, 63]);
+  assert.deepEqual(series.bands.map(band => band.endMinute), [2, 17]);
+  assert.equal(series.points.at(-1).label, 'Ambient-settled projection');
+  assert.equal(series.final.pressureBar, 119);
+  assert.equal(series.final.temperatureC, 20);
+  assert.equal(series.final.elapsedMinutes, 63);
+});
+
+test('keep-only compare series projects from the initial state to ambient settled', () => {
+  const series = buildThermalSeries([{ type: 'keep' }], {
+    initialPressureBar: 100,
+    initialTemperatureC: 24
+  }, {
+    pressureBar: 98,
+    temperatureC: 20,
+    durationMinutes: 46
+  });
+
+  assert.deepEqual(series.bands, []);
+  assert.deepEqual(series.points.map(point => [
+    point.phase,
+    point.elapsedMinutes,
+    point.pressureBar,
+    point.temperatureC
+  ]), [['ambient-settled', 46, 98, 20]]);
+  assert.deepEqual(series.samples.map(sample => [
+    sample.elapsedMinutes,
+    sample.pressureBar,
+    sample.temperatureC
+  ]), [[0, 100, 24], [46, 98, 20]]);
+  assert.deepEqual(series.segments, [{
+    style: 'estimated',
+    samples: series.samples
+  }]);
+});
+
 test('empty or incomplete protocol produces no chart points', () => {
   assert.deepEqual(buildThermalSeries([]), { points: [], samples: [], bands: [], segments: [], final: null });
   assert.deepEqual(buildThermalSeries([{ title: 'Missing thermal state' }]), {

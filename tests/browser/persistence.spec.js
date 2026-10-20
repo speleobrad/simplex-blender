@@ -61,7 +61,7 @@ test.describe('persistence and failure states', () => {
     });
     await page.getByRole('button', { name: 'Save settings', exact: true }).click();
     await page.reload();
-    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await page.getByRole('tab', { name: 'Settings', exact: true }).click();
     await expect(page.getByRole('combobox', { name: 'Gas model' })).toHaveValue('ideal');
   });
 

@@ -22,9 +22,10 @@ export async function openSettingsCategory(page, category) {
     throw new RangeError(`Unknown settings category: ${category}`);
   }
   const dialog = settingsDialog(page);
-  if (!(await dialog.evaluate(element => element.open).catch(() => false))) {
-    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  if (await page.locator('#screen-settings').getAttribute('hidden') !== null) {
+    await page.getByRole('tab', { name: 'Settings', exact: true }).click();
   }
+  await expect(page.locator('#screen-settings')).toBeVisible();
   await expect(dialog).toBeVisible();
   const button = dialog.locator('.settings-category-button:visible').filter({ hasText: label }).first();
   await button.click();

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { calculateMaxZoom, createVertices, formatGasMix, getInfeasibleRegionVertices, getNextZoom, toCanvasPoint, transformPointForZoom } from '../js/ui/ternary.js';
+import { buildAccessibleTernaryData, calculateMaxZoom, createVertices, formatGasMix, getInfeasibleRegionVertices, getNextZoom, toCanvasPoint, transformPointForZoom } from '../js/ui/ternary.js';
 
 test('air is the solid-region vertex on the O2/N2 edge', () => {
   const vertices = createVertices(300, 300);
@@ -69,4 +69,26 @@ test('formats gas composition as O2/He without redundant decimal zeros', () => {
   assert.equal(formatGasMix(21, 0), '21/0');
   assert.equal(formatGasMix(0, 100), '0/100');
   assert.equal(formatGasMix(19.46, 40.04), '19.5/40');
+});
+
+test('compare accessible data keeps manual stages without supply banks', () => {
+  const data = buildAccessibleTernaryData({
+    mode: 'compare',
+    banks: [],
+    initialMix: { oxygenPercent: 21, heliumPercent: 0, nitrogenPercent: 79 },
+    targetMix: { oxygenPercent: 18, heliumPercent: 35, nitrogenPercent: 47 },
+    trajectory: [
+      { step: 0, label: 'Start mix', oxygenPercent: 21, heliumPercent: 0, nitrogenPercent: 79, pressureBar: 100 },
+      { step: 1, label: 'Step 1', oxygenPercent: 20, heliumPercent: 15, nitrogenPercent: 65, pressureBar: 120 },
+      { step: 2, label: 'Step 2', oxygenPercent: 18, heliumPercent: 35, nitrogenPercent: 47, pressureBar: 200 }
+    ]
+  });
+
+  assert.deepEqual(data.mixRows.map(row => row.label), ['Air reference', 'Initial mix', 'Final mix']);
+  assert.deepEqual(data.trajectoryRows.map(row => [row.label, row.pressureBar]), [
+    ['Start mix', 100],
+    ['Step 1', 120],
+    ['Step 2', 200]
+  ]);
+  assert.equal(data.status, 'Data covers 2 recipe stages.');
 });

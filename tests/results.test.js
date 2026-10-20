@@ -36,7 +36,19 @@ class FakeElement {
 function createFakeDocument() {
   const elements = new Map([
     ['steps-container', new FakeElement()],
-    ['blend-status', new FakeElement()]
+    ['blend-status', new FakeElement()],
+    ['summary-banner', new FakeElement()],
+    ['compare-summary', new FakeElement()],
+    ['compare-start-state', new FakeElement()],
+    ['compare-recipe-end-state', new FakeElement()],
+    ['compare-ambient-settled-state', new FakeElement()],
+    ['res-retained-p', new FakeElement()],
+    ['res-retained-pct', new FakeElement()],
+    ['res-vented-p', new FakeElement()],
+    ['res-vented-litres', new FakeElement()],
+    ['res-he-salvaged', new FakeElement()],
+    ['res-final-p', new FakeElement()],
+    ['res-final-mix', new FakeElement()]
   ]);
   return {
     createElement(tagName) {

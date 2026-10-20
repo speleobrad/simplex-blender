@@ -1,7 +1,10 @@
 import { calculatorInputSignature, signatureAfterClearingMeasurement } from './interim-measurements.js';
 import { optimizeBlend } from './optimizer.js';
-import { parseNumericInput, splitGasInput } from './gas-input.js';
+import { isValidGasComposition, parseNumericInput, splitGasInput } from './gas-input.js';
 import { validateCalculatorInputs, validateSupplyBankInput } from './input-validation.js';
+import { buildCompareProtocol, createCompareRow, normalizeComparePressureFields, validateCompareRecipe } from './compare-recipe.js';
+import { simulateCompareProtocol } from './thermodynamics.js';
+import { calcMolarDensity } from './physics.js';
 import {
   addEquipmentPresetToDraft,
   applyGasPresetToBank,
@@ -22,6 +25,7 @@ import { RESULT_TABS, setResultTab } from './result-tabs.js';
 import { loadOnboardingState } from './onboarding.js';
 import { loadAnalytics } from './analytics.js';
 import { createOnboardingController } from './ui/onboarding.js';
+import { renderCompareRecipe } from './ui/compare-recipe.js';
 import { renderResults } from './ui/results.js';
 import { renderSettingsDialog, renderPresetOptions } from './ui/settings-dialog.js';
 import { renderEquipmentSummary } from './ui/equipment-summary.js';
@@ -86,8 +90,15 @@ const state = {
   interimMeasurements: [],
   interimMeasurementSignature: null,
   lastInput: null,
-  lastResult: null
+  lastResult: null,
+  mode: 'optimize',
+  compareRows: [createCompareRow('keep', 'compare-row-1')],
+  compareErrors: [],
+  lastCompareInput: null,
+  lastCompareResult: null,
+  compareHasRun: false
 };
+let nextCompareRowNumber = 2;
 let onboardingSettingsOpen = false;
 
 
@@ -669,7 +680,130 @@ function readInput() {
   };
 }
 
+function compareInput() {
+  const input = readInput();
+  const { targetPressureBar, targetOxygenPercent, targetHeliumPercent, ...cylinder } = input.cylinder;
+  return { ...input, cylinder, settings: state.settings };
+}
+
+function compareSharedInputErrors(input) {
+  const targetPressureBar = Math.max(10, input.cylinder.initialPressureBar);
+  const errors = validateCalculatorInputs({ ...input.cylinder, targetPressureBar }, input.physics, input.thermal);
+  if (!isValidGasComposition(input.cylinder.initialOxygenPercent, input.cylinder.initialHeliumPercent)) {
+    errors.push('Initial oxygen and helium percentages must total no more than 100%.');
+  }
+  if (!['ideal', 'vdw'].includes(input.physics.model)) {
+    errors.push('Physics model must be ideal or vdw.');
+  }
+  return errors;
+}
+
+function compareWaitStates(input = compareInput()) {
+  const waitStates = {};
+  for (let index = 0; index < state.compareRows.length; index += 1) {
+    const row = state.compareRows[index];
+    if (row.type !== 'wait') continue;
+    try {
+      const protocol = buildCompareProtocol(state.compareRows.slice(0, index + 1), {
+        cylinder: input.cylinder,
+        physics: input.physics,
+        banks: input.banks,
+        settings: input.settings,
+        waitStates
+      });
+      const simulation = simulateCompareProtocol({
+        protocolSteps: protocol.protocolSteps,
+        cylinder: input.cylinder,
+        physics: input.physics,
+        thermal: input.thermal,
+        settings: input.settings
+      });
+      const recipeEnd = simulation.final.recipeEnd;
+      const totalMoles = calcMolarDensity(
+        recipeEnd.pressureBar,
+        recipeEnd.oxygenPercent,
+        recipeEnd.heliumPercent,
+        recipeEnd.temperatureC,
+        input.physics.model === 'vdw'
+      ) * input.cylinder.volumeL;
+      waitStates[row.id] = {
+        pressureBar: recipeEnd.pressureBar,
+        temperatureC: recipeEnd.temperatureC,
+        oxygenPercent: recipeEnd.oxygenPercent,
+        heliumPercent: recipeEnd.heliumPercent,
+        totalMoles,
+        oxygenMoles: totalMoles * (recipeEnd.oxygenPercent / 100),
+        heliumMoles: totalMoles * (recipeEnd.heliumPercent / 100),
+        mix: {
+          oxygenPercent: recipeEnd.oxygenPercent,
+          heliumPercent: recipeEnd.heliumPercent
+        }
+      };
+    } catch {
+      // Validation presents the underlying draft error; omit an unavailable modeled state.
+    }
+  }
+  return waitStates;
+}
+
+function comparePressureStarts(input = compareInput()) {
+  const starts = {};
+  const waitStates = compareWaitStates(input);
+  let currentPressure = input.cylinder.initialPressureBar;
+  for (const row of state.compareRows) {
+    if (row.type === 'add') {
+      starts[row.id] = currentPressure;
+      const normalized = normalizeComparePressureFields(row, currentPressure);
+      if (Number.isFinite(normalized.targetPressureBar)) currentPressure = normalized.targetPressureBar;
+    } else if (row.type === 'wait' && Number.isFinite(waitStates[row.id]?.pressureBar)) {
+      currentPressure = waitStates[row.id].pressureBar;
+    }
+  }
+  return starts;
+}
+
+function renderCompareEditor() {
+  renderCompareRecipe(byId('compare-recipe-editor'), {
+    rows: state.compareRows,
+    banks: state.banks,
+    errors: state.compareErrors,
+    pressureStarts: comparePressureStarts()
+  });
+}
+
+function renderCompareErrors() {
+  const container = byId('compare-recipe-errors');
+  container.replaceChildren(...state.compareErrors
+    .filter(({ rowId }) => rowId === null)
+    .map(({ message }) => {
+      const line = document.createElement('p');
+      line.className = 'text-xs text-rose-300';
+      line.textContent = message;
+      return line;
+    }));
+}
+
+function updateCompareStatus(message = '') {
+  byId('compare-run-status').textContent = message;
+}
+
 function ternaryData() {
+  if (state.mode === 'compare') {
+    const compare = state.lastCompareResult?.compare;
+    if (!compare || !state.lastCompareInput) return null;
+    const finalMix = compare.final.recipeEnd;
+    return {
+      mode: 'compare',
+      banks: [],
+      initialMix: compare.initialMix,
+      targetMix: {
+        oxygenPercent: finalMix.oxygenPercent,
+        heliumPercent: finalMix.heliumPercent,
+        nitrogenPercent: Math.max(0, 100 - finalMix.oxygenPercent - finalMix.heliumPercent)
+      },
+      trajectory: compare.trajectory
+    };
+  }
   if (!state.lastInput || !state.lastResult?.feasible) return null;
   const cylinder = state.lastInput.cylinder;
   return {
@@ -710,7 +844,84 @@ function invalidInputResult(errors) {
   };
 }
 
+function renderCompareResult() {
+  const compare = state.lastCompareResult?.compare;
+  if (!compare) {
+    clearTernaryDiagram(byId('ternary-canvas'));
+    return;
+  }
+  renderResults(state.lastCompareResult, state.lastCompareInput);
+  renderThermalCharts(state.lastCompareResult, state.lastCompareInput);
+  renderTernary();
+}
+
+function runCompare() {
+  const input = compareInput();
+  const sharedErrors = compareSharedInputErrors(input);
+  const waitStates = compareWaitStates(input);
+  const validation = validateCompareRecipe(state.compareRows, {
+    cylinder: input.cylinder,
+    banks: input.banks,
+    physics: input.physics,
+    settings: input.settings,
+    waitStates
+  });
+  state.compareErrors = [
+    ...sharedErrors.map(message => ({ rowId: null, field: 'recipe', message })),
+    ...validation.errors
+  ];
+  renderCompareErrors();
+  renderCompareEditor();
+  if (state.compareErrors.length > 0) {
+    updateCompareStatus('Correct the highlighted recipe inputs before running a comparison.');
+    return;
+  }
+
+  try {
+    const protocol = buildCompareProtocol(validation.normalizedRows, {
+      cylinder: input.cylinder,
+      physics: input.physics,
+      banks: input.banks,
+      settings: input.settings,
+      waitStates
+    });
+    const simulation = simulateCompareProtocol({
+      protocolSteps: protocol.protocolSteps,
+      cylinder: input.cylinder,
+      physics: input.physics,
+      thermal: input.thermal,
+      settings: input.settings
+    });
+    state.lastCompareInput = input;
+    state.lastCompareResult = {
+      mode: 'compare',
+      compare: { ...protocol, ...simulation }
+    };
+    state.compareHasRun = true;
+    state.compareErrors = [];
+    renderCompareErrors();
+    renderCompareEditor();
+    updateCompareStatus('Comparison run.');
+    renderCompareResult();
+    setTab('recipe');
+  } catch (error) {
+    state.compareErrors = [{ rowId: null, field: 'recipe', message: error.message }];
+    renderCompareErrors();
+    renderCompareEditor();
+    updateCompareStatus('Correct the highlighted recipe inputs before running a comparison.');
+  }
+}
+
 function recalculate() {
+  renderSupplyBanks(state.banks, state.settings.gasPresets);
+  renderEquipmentSummary(state.settings);
+  if (state.mode === 'compare') {
+    renderCompareEditor();
+    renderCompareErrors();
+    renderCompareResult();
+    return;
+  }
+
   let input = { ...readInput(), settings: state.settings };
   const recipeSignature = calculatorInputSignature(input);
   if (state.interimMeasurements.some(Boolean)
@@ -731,6 +942,31 @@ function recalculate() {
   if (result.feasible) renderTernary();
   else clearTernaryDiagram(byId('ternary-canvas'));
 }
+function setMode(mode) {
+  if (!['optimize', 'compare'].includes(mode)) return;
+  state.mode = mode;
+  for (const control of document.querySelectorAll('[data-action="select-mode"]')) {
+    const selected = control.dataset.mode === mode;
+    control.setAttribute('aria-pressed', String(selected));
+    control.className = selected
+      ? 'rounded-lg border border-cyan-500/40 bg-cyan-500/20 px-3 py-1.5 text-xs font-semibold text-cyan-300'
+      : 'rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-400';
+  }
+  byId('target-state-section').hidden = mode === 'compare';
+  byId('supply-banks-section').hidden = mode === 'compare';
+  byId('compare-recipe-section').hidden = mode !== 'compare';
+  if (mode === 'compare') {
+    renderCompareErrors();
+    renderCompareEditor();
+    renderCompareResult();
+  } else if (state.lastResult) {
+    renderResults(state.lastResult, state.lastInput);
+    renderThermalCharts(state.lastResult, state.lastInput);
+    if (state.lastResult.feasible) renderTernary();
+    else clearTernaryDiagram(byId('ternary-canvas'));
+  }
+}
+
 
 function selectScreen(screenId) {
   if (screenId === 'settings' && state.settingsDraft === null) {
@@ -874,8 +1110,45 @@ function updateBankFromInput(input) {
   recalculate();
 }
 
+function updateCompareRow(input, rerender) {
+  const index = state.compareRows.findIndex(row => row.id === input.dataset.rowId);
+  if (index < 0) return;
+  const row = state.compareRows[index];
+  const field = input.dataset.compareField;
+  let value = input.value;
+  if (['pressureAddedBar', 'targetPressureBar', 'waitMinutes', 'targetTemperatureC'].includes(field)) {
+    value = Number.parseFloat(value);
+  }
+
+  let updatedRow;
+  if (field === 'type') {
+    updatedRow = createCompareRow(value, row.id);
+  } else if (field === 'bankId') {
+    updatedRow = { ...row, bankId: value || null };
+  } else if (field === 'pressureAddedBar' || (field === 'targetPressureBar' && row.type === 'add')) {
+    const pressureInputMode = input.dataset.pressureInputMode;
+    const pressureStart = comparePressureStarts()[row.id];
+    updatedRow = normalizeComparePressureFields({
+      ...row,
+      [field]: value,
+      pressureInputMode
+    }, pressureStart);
+  } else {
+    updatedRow = { ...row, [field]: value };
+  }
+  state.compareRows.splice(index, 1, updatedRow);
+  state.compareErrors = [];
+  if (!rerender) return;
+  renderCompareErrors();
+  renderCompareEditor();
+}
+
 function handleInputOrChange(event) {
   const target = event.target;
+  if (target.dataset.compareField && target.dataset.rowId) {
+    updateCompareRow(target, event.type === 'change');
+    return;
+  }
   if (event.type === 'input' && target.dataset.settingsPresetImportUrl !== undefined) {
     state.settingsImport = { ...state.settingsImport, url: target.value, urlTouched: true };
     return;
@@ -972,11 +1245,46 @@ function clearInterimMeasurement(actionElement) {
   recalculate();
 }
 
+function moveCompareRow(rowId, offset) {
+  const index = state.compareRows.findIndex(row => row.id === rowId);
+  const destination = index + offset;
+  if (index < 0 || destination < 0 || destination >= state.compareRows.length) return;
+  [state.compareRows[index], state.compareRows[destination]] = [
+    state.compareRows[destination],
+    state.compareRows[index]
+  ];
+  renderCompareEditor();
+}
+
 function handleClick(event) {
   const actionElement = event.target.closest('[data-action]');
   if (!actionElement || actionElement.disabled) return;
 
   switch (actionElement.dataset.action) {
+    case 'select-mode':
+      setMode(actionElement.dataset.mode);
+      break;
+    case 'add-compare-row':
+      state.compareRows.push(createCompareRow('keep', `compare-row-${nextCompareRowNumber++}`));
+      state.compareErrors = [];
+      renderCompareErrors();
+      renderCompareEditor();
+      break;
+    case 'remove-compare-row':
+      state.compareRows = state.compareRows.filter(row => row.id !== actionElement.dataset.rowId);
+      state.compareErrors = [];
+      renderCompareErrors();
+      renderCompareEditor();
+      break;
+    case 'move-compare-row-up':
+      moveCompareRow(actionElement.dataset.rowId, -1);
+      break;
+    case 'move-compare-row-down':
+      moveCompareRow(actionElement.dataset.rowId, 1);
+      break;
+    case 'run-compare':
+      runCompare();
+      break;
     case 'add-bank':
       addBank();
       break;
