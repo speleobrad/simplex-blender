@@ -1,24 +1,26 @@
 import { test as base, expect } from '@playwright/test';
 import { seedStorage } from './storage-fixtures.js';
 
-const isKnownCdnIssue = (url, message = '') => {
-  const cdn = /(?:unpkg\.com|cdnjs\.cloudflare\.com|cdn\.jsdelivr\.net|google-analytics\.com)/i.test(url);
-  return cdn && /(?:failed to load resource|net::|blocked|driver\.js|collect)/i.test(message);
-};
+const isNonEssentialAnalytics = (url, message = '') => /google-analytics\.com|googletagmanager\.com/i.test(url)
+  || /google analytics|googletagmanager|gtag|analytics.*collect|collect.*analytics/i.test(message);
+
+function recordExternalFailure(runtime, url, errorText) {
+  if (!isNonEssentialAnalytics(url, errorText)) runtime.failedRequests.push({ url, errorText });
+}
 export async function captureRuntime(page) {
   const runtime = { errors: [], consoleMessages: [], failedRequests: [] };
   page.on('console', message => {
     const url = message.location().url;
-    if (message.type() === 'error' && !isKnownCdnIssue(url, message.text())) runtime.consoleMessages.push(message.text());
+    if (message.type() === 'error' && !isNonEssentialAnalytics(url, message.text())) runtime.consoleMessages.push(message.text());
   });
   page.on('pageerror', error => runtime.errors.push(error));
   page.on('requestfailed', request => {
     const message = request.failure()?.errorText ?? 'request failed';
-    if (!isKnownCdnIssue(request.url(), message)) runtime.failedRequests.push({ url: request.url(), errorText: message });
+    recordExternalFailure(runtime, request.url(), message);
   });
   page.on('response', response => {
-    if (response.status() >= 400 && new URL(response.url()).origin === new URL(page.url() || 'http://127.0.0.1').origin) {
-      runtime.failedRequests.push({ url: response.url(), errorText: `HTTP ${response.status()}` });
+    if (response.status() >= 400) {
+      recordExternalFailure(runtime, response.url(), `HTTP ${response.status()}`);
     }
   });
   return runtime;
@@ -39,6 +41,11 @@ export const test = base.extend({
     await use((scenarioName = 'factory') => seedStorage(page, scenarioName));
   },
   appPage: async ({ page, captureRuntime, seedStorage }, use) => {
+    await page.route(/google-analytics\.com|googletagmanager\.com/i, route => route.fulfill({
+      status: 204,
+      contentType: 'text/plain',
+      body: ''
+    }));
     await use({
       goto: async (scenarioName = 'factory') => {
         await page.evaluate(() => { window.name = ''; });

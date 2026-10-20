@@ -62,6 +62,8 @@ function resetPresetImportState(category = 'gas') {
   state.settingsImport = createPresetImportState(category);
 }
 
+const RESULT_TABS = ['recipe', 'ternary', 'thermal', 'summary', 'water-pressure'];
+
 const state = {
   banks: initialBanks,
   settings: initialSettings,
@@ -702,24 +704,47 @@ function recalculate() {
 }
 
 function setTab(tabId) {
-  if (!['recipe', 'ternary', 'thermal', 'summary', 'water-pressure'].includes(tabId)) return;
+  if (!RESULT_TABS.includes(tabId)) return;
   state.activeTab = tabId;
 
-  for (const paneName of ['recipe', 'ternary', 'thermal', 'summary', 'water-pressure']) {
+  for (const paneName of RESULT_TABS) {
     const pane = byId(`tab-pane-${paneName}`);
     const button = byId(`tab-btn-${paneName}`);
     if (!pane || !button) continue;
 
     const selected = paneName === tabId;
     pane.classList.toggle('hidden', !selected);
+    pane.hidden = !selected;
+    pane.setAttribute('aria-hidden', String(!selected));
     button.classList.toggle('bg-cyan-500/20', selected);
     button.setAttribute('aria-selected', String(selected));
+    button.setAttribute('tabindex', selected ? '0' : '-1');
     button.className = selected
       ? 'shrink-0 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm transition'
       : 'shrink-0 px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-slate-200 transition';
-
   }
   if (tabId === 'ternary') requestAnimationFrame(renderTernary);
+}
+
+function handleResultTabKeydown(event) {
+  const button = event.target.closest?.('#results-navigation [role="tab"]');
+  if (!button) return;
+  const tabList = button.closest('[role="tablist"]');
+  const tabs = [...(tabList?.querySelectorAll('[role="tab"]') ?? [])];
+  const currentIndex = tabs.indexOf(button);
+  if (currentIndex < 0) return;
+
+  let destinationIndex = currentIndex;
+  if (event.key === 'ArrowLeft') destinationIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+  if (event.key === 'ArrowRight') destinationIndex = (currentIndex + 1) % tabs.length;
+  if (event.key === 'Home') destinationIndex = 0;
+  if (event.key === 'End') destinationIndex = tabs.length - 1;
+  if (destinationIndex === currentIndex) return;
+
+  event.preventDefault();
+  const destination = tabs[destinationIndex];
+  setTab(destination.dataset.tab);
+  destination.focus();
 }
 
 
@@ -1016,9 +1041,11 @@ function initialize() {
   document.addEventListener('change', handleInputOrChange);
   document.addEventListener('click', handleClick);
   document.addEventListener('keydown', handleGasShortcut);
+  document.addEventListener('keydown', handleResultTabKeydown);
   document.addEventListener('paste', handleGasPaste);
   byId('settings-dialog').addEventListener('close', handleSettingsClosed);
   applyTheme(state.theme);
+  setTab(state.activeTab);
   updateStorageWarning();
   refreshPresetOptions();
   updateWaitModeFields();

@@ -1,4 +1,5 @@
 [
   { "name": "EAN 32", "oxygenPercent": 32, "heliumPercent": 0 },
-  { "name": "Tx 18/45", "oxygenPercent": 18, "heliumPercent": 45 }
+  { "name": "Tx 18/45", "oxygenPercent": 18, "heliumPercent": 45 },
+  { "name": "Browser fixture gas", "oxygenPercent": 37, "heliumPercent": 12 }
 ]

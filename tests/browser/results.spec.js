@@ -13,14 +13,43 @@ test.describe('result tabs', () => {
     await expect(page.locator('#steps-container')).toBeVisible();
   });
 
-  test('supports keyboard movement through the narrow tab list', async ({ appPage }) => {
+  test('uses roving focus and synchronizes selection for result keyboard navigation', async ({ appPage }) => {
     const page = await populated(appPage);
-    const list = page.locator('#results-navigation > div').first();
+    const tabs = page.locator('#results-navigation [role="tab"]');
+    await expect(tabs).toHaveCount(5);
+    await expect(page.locator('#tab-btn-recipe')).toHaveAttribute('tabindex', '0');
+    for (const id of ['ternary', 'thermal', 'summary', 'water-pressure']) {
+      await expect(page.locator(`#tab-btn-${id}`)).toHaveAttribute('tabindex', '-1');
+    }
+
     await page.locator('#tab-btn-recipe').focus();
-    await page.keyboard.press('Tab');
+    await page.keyboard.press('ArrowRight');
     await expect(page.locator('#tab-btn-ternary')).toBeFocused();
-    await page.keyboard.press('Tab');
-    await expect(page.locator('#tab-btn-thermal')).toBeFocused();
+    await expect(page.locator('#tab-btn-ternary')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('#tab-btn-ternary')).toHaveAttribute('tabindex', '0');
+    await expect(page.locator('#tab-btn-recipe')).toHaveAttribute('aria-selected', 'false');
+    await expect(page.locator('#tab-pane-ternary')).toHaveAttribute('aria-hidden', 'false');
+    await expect(page.locator('#tab-pane-recipe')).toHaveAttribute('aria-hidden', 'true');
+
+    await page.keyboard.press('End');
+    await expect(page.locator('#tab-btn-water-pressure')).toBeFocused();
+    await expect(page.locator('#tab-btn-water-pressure')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('#tab-btn-water-pressure')).toHaveAttribute('tabindex', '0');
+    await page.keyboard.press('ArrowLeft');
+    await expect(page.locator('#tab-btn-summary')).toBeFocused();
+    await expect(page.locator('#tab-btn-summary')).toHaveAttribute('aria-selected', 'true');
+
+    await page.keyboard.press('Home');
+    await expect(page.locator('#tab-btn-recipe')).toBeFocused();
+    await expect(page.locator('#tab-btn-recipe')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('#tab-btn-recipe')).toHaveAttribute('tabindex', '0');
+    await expect(page.locator('#tab-pane-recipe')).toBeVisible();
+  });
+
+  test('keeps the result tab list contained at narrow widths', async ({ appPage }) => {
+    const page = await populated(appPage);
+    const list = page.locator('#results-navigation [role="tablist"]');
+    await expect(list).toBeVisible();
     expect(await list.evaluate(element => element.scrollWidth >= element.clientWidth)).toBeTruthy();
   });
 

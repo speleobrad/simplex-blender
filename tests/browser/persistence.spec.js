@@ -1,8 +1,12 @@
+import { fileURLToPath } from 'node:url';
 import { test, expect } from './fixtures/app-fixtures.js';
 import { injectStorageFailure } from './fixtures/storage-fixtures.js';
 import { assertResultPanelExclusive, fillWorkingTank } from './helpers/blending.js';
 import { acceptConsent, completeOrExitTour } from './helpers/onboarding.js';
 import { openSettingsCategory, saveSettings } from './helpers/settings.js';
+
+const validGasFixture = fileURLToPath(new URL('./fixtures/import-fixtures/valid-gases.json', import.meta.url));
+const invalidFixture = fileURLToPath(new URL('./fixtures/import-fixtures/invalid.json', import.meta.url));
 
 const settingsImportStatus = page => page.locator('#settings-preset-import-status');
 const settingsErrors = page => page.locator('#settings-errors');
@@ -21,6 +25,10 @@ async function uploadJson(page, name, source) {
     mimeType: 'application/json',
     buffer: Buffer.from(source)
   });
+  await expect(settingsImportStatus(page)).toBeVisible();
+}
+async function uploadFixture(page, path) {
+  await page.locator('#settings-preset-import-file').setInputFiles(path);
   await expect(settingsImportStatus(page)).toBeVisible();
 }
 
@@ -67,12 +75,26 @@ test.describe('persistence and failure states', () => {
     await expect(page.locator('#ternary-steps-summary')).toContainText(/ready|unavailable|invalid|no/i);
   });
 
-  test('reports malformed and unavailable preset imports', async ({ appPage }) => {
+  test('loads valid checked-in local preset data and reports the import result', async ({ appPage }) => {
     const page = await appPage.goto('settings');
     await openSettingsCategory(page, 'preset-management');
 
-    await uploadJson(page, 'malformed.json', '{"name":');
-    await expect(settingsImportStatus(page)).toContainText(/not valid JSON/i);
+    await uploadFixture(page, validGasFixture);
+    await expect(settingsImportStatus(page)).toContainText('Loaded 3 entries. 1 new 2 already present 0 rejected');
+    await expect(page.locator('#settings-preset-import-candidates')).toContainText('Browser fixture gas');
+    await expect(page.getByRole('button', { name: 'Import selected', exact: true })).toBeEnabled();
+    await page.getByRole('button', { name: 'Import selected', exact: true }).click();
+    await expect(settingsImportStatus(page)).toHaveText('Imported 1 preset.');
+    await expect(page.evaluate(() => JSON.parse(localStorage.getItem('simplex-gas-remixer-settings')).gasPresets
+      .some(preset => preset.name === 'Browser fixture gas'))).resolves.toBe(true);
+  });
+
+  test('reports invalid checked-in local preset data and unavailable imports', async ({ appPage }) => {
+    const page = await appPage.goto('settings');
+    await openSettingsCategory(page, 'preset-management');
+
+    await uploadFixture(page, invalidFixture);
+    await expect(settingsImportStatus(page)).toContainText(/Gas presets must be an array/i);
     await expect(page.getByRole('button', { name: 'Import selected', exact: true })).toBeDisabled();
     await page.evaluate(() => {
       const originalFetch = window.fetch;
@@ -108,16 +130,14 @@ test.describe('persistence and failure states', () => {
     const page = await appPage.goto('settings');
     await openSettingsCategory(page, 'preset-management');
     const before = await page.evaluate(() => localStorage.getItem('simplex-gas-remixer-settings'));
-    await uploadJson(page, 'new-gas.json', JSON.stringify([
-      { name: 'Browser-only gas', oxygenPercent: 37, heliumPercent: 12 }
-    ]));
+    await uploadFixture(page, validGasFixture);
     await expect(page.getByRole('button', { name: 'Import selected', exact: true })).toBeEnabled();
 
     await injectStorageFailure(page, 'settings-write');
     await page.getByRole('button', { name: 'Import selected', exact: true }).click();
     await expect(settingsImportStatus(page)).toContainText(/were not imported/i);
     await expect(page.evaluate(() => localStorage.getItem('simplex-gas-remixer-settings'))).resolves.toBe(before);
-    await expect(page.locator('#settings-preset-import-candidates')).toContainText('Browser-only gas');
+    await expect(page.locator('#settings-preset-import-candidates')).toContainText('Browser fixture gas');
   });
 
   test('factory reset restores defaults and clears consent state', async ({ appPage }) => {
