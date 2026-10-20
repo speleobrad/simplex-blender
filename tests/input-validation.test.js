@@ -97,14 +97,16 @@ test('rejects a temperature wait target at or below ambient', () => {
       tankMaterial: 'steel',
       coolingMedium: 'air',
       ambientTemperatureC: 25,
+      inletTemperatureC: 25,
+      targetMediumTemperatureC: 24,
+      targetInWaterTemperatureC: 1,
       waitMode: 'temperature',
-      waitMinutes: 10,
-      targetTemperatureC: 25
+      waitMinutes: 10
     }
   );
   assert.match(errors.join(' '), /target.*ambient/i);
 });
-test('allows a settled temperature below ambient for water cooling', () => {
+test('rejects target-medium below ambient regardless of cooling medium', () => {
   const errors = validateCalculatorInputs(
     { volumeL: 12, initialPressureBar: 50, targetPressureBar: 200 },
     { temperatureC: 25 },
@@ -112,14 +114,14 @@ test('allows a settled temperature below ambient for water cooling', () => {
       tankMaterial: 'steel',
       coolingMedium: 'water',
       ambientTemperatureC: 25,
-      settledTemperatureC: 15,
+      inletTemperatureC: 25,
+      targetMediumTemperatureC: 15,
+      targetInWaterTemperatureC: 15,
       waitMode: 'minutes',
-      waitMinutes: 10,
-      targetTemperatureC: 15
+      waitMinutes: 10
     }
   );
-
-  assert.deepEqual(errors, []);
+  assert.match(errors.join(' '), /target-medium temperature cannot be below ambient/i);
 });
 
 test('rejects a settled temperature below ambient for air cooling', () => {
@@ -142,7 +144,7 @@ test('rejects a settled temperature below ambient for air cooling', () => {
   assert.match(errors.join(' '), /target-medium temperature cannot be below ambient/i);
 });
 
-test('fixed-minute waits do not validate the hidden target temperature against ambient', () => {
+test('fixed-minute waits require a target-medium temperature at or above ambient', () => {
   const errors = validateCalculatorInputs(
     { volumeL: 12, initialPressureBar: 80, targetPressureBar: 210 },
     { temperatureC: 20 },
@@ -150,13 +152,14 @@ test('fixed-minute waits do not validate the hidden target temperature against a
       tankMaterial: 'steel',
       coolingMedium: 'air',
       ambientTemperatureC: 26,
+      inletTemperatureC: 26,
+      targetMediumTemperatureC: 26,
+      targetInWaterTemperatureC: 25,
       waitMode: 'minutes',
-      waitMinutes: 10,
-      targetTemperatureC: 25
+      waitMinutes: 10
     }
   );
-
-  assert.doesNotMatch(errors.join(' '), /target.*ambient/i);
+  assert.deepEqual(errors, []);
 });
 
 

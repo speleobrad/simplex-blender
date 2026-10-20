@@ -539,7 +539,7 @@ test('emits a drain for a representable pressure reduction below the old mole cu
       targetOxygenPercent: 21,
       targetHeliumPercent: 0
     },
-    physics: { model: 'ideal', temperatureC: 50 },
+    physics: { model: 'ideal', temperatureC: 40 },
     banks: []
   });
 
@@ -1545,7 +1545,9 @@ test('allows water cooling to settle below ambient while hitting the requested p
       tankMaterial: 'steel',
       coolingMedium: 'water',
       ambientTemperatureC: 25,
-      settledTemperatureC: 15,
+      inletTemperatureC: 25,
+      targetMediumTemperatureC: 25,
+      targetInWaterTemperatureC: 15,
       waitMode: 'minutes',
       waitMinutes: 10,
       targetTemperatureC: 15
@@ -1569,7 +1571,7 @@ test('allows water cooling to settle below ambient while hitting the requested p
   });
 
   assert.equal(result.feasible, true);
-  assert.equal(result.thermal.finalAmbientTemperatureC, 15);
+  assert.equal(result.thermal.finalAmbientTemperatureC, 25);
   assert.ok(Math.abs(result.thermal.finalAmbientPressureBar - 200) < 1e-5);
 });
 
@@ -1590,6 +1592,8 @@ test('fixed-minute waits allow a hidden target temperature below ambient', () =>
       coolingMedium: 'air',
       ambientTemperatureC: 30,
       inletTemperatureC: 29,
+      targetMediumTemperatureC: 30,
+      targetInWaterTemperatureC: 25,
       waitMode: 'minutes',
       waitMinutes: 10,
       targetTemperatureC: 25
@@ -1628,8 +1632,10 @@ test('rejects invalid thermal inputs with the existing invalid result shape', ()
   };
   const validThermal = {
     tankMaterial: 'steel',
-    coolingMedium: 'air',
     ambientTemperatureC: 20,
+    inletTemperatureC: 20,
+    targetMediumTemperatureC: 25,
+    targetInWaterTemperatureC: 20,
     waitMode: 'minutes',
     waitMinutes: 10,
     targetTemperatureC: 25

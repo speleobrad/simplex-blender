@@ -1,11 +1,11 @@
 
-## Fix round 1 completion
+## Fix round 2 completion
 
-Migrated obsolete input-validation fixtures to the approved 5–40°C physics/ambient contract, target-medium wording, and required semantic fields.
+Migrated obsolete validation and optimizer fixtures to semantic target-medium/target-in-water fields and ambient convergence expectations. Added target-medium invariant coverage.
 
-Command: `node --test tests/input-validation.test.js tests/compare-recipe.test.js tests/onboarding-markup.test.js`
-Output: 34 tests, 34 passed, 0 failed.
+Command: `node --test tests/input-validation.test.js tests/compare-recipe.test.js tests/onboarding-markup.test.js tests/optimizer.test.js`
+Output: 99 tests, 99 passed, 0 failed.
 
-Commit: pending (test migration completion).
+Commit: pending (round 2 test migration).
 
-Concerns: none for Task 1 scope.
+Concerns: none.
