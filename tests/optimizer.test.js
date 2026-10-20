@@ -1529,7 +1529,7 @@ test('settles the recipe at the requested target temperature', () => {
   assert.equal(result.thermal.finalAmbientTemperatureC, 30);
   assert.ok(Math.abs(result.thermal.finalAmbientPressureBar - 210) < 1e-5);
 });
-test('allows water cooling to settle below ambient while hitting the requested pressure', () => {
+test('projects a below-ambient water target after ambient settling', () => {
   const result = optimizeBlend({
     cylinder: {
       volumeL: 12,
@@ -1572,7 +1572,9 @@ test('allows water cooling to settle below ambient while hitting the requested p
 
   assert.equal(result.feasible, true);
   assert.equal(result.thermal.finalAmbientTemperatureC, 25);
-  assert.ok(Math.abs(result.thermal.finalAmbientPressureBar - 200) < 1e-5);
+  assert.equal(result.thermal.finalInWaterTemperatureC, 15);
+  assert.ok(Math.abs(result.thermal.finalAmbientPressureBar - result.thermal.ambientSettledTargetPressureBar) < 1e-5);
+  assert.ok(Math.abs(result.thermal.finalInWaterPressureBar - 200) < 1e-5);
 });
 
 test('fixed-minute waits allow a hidden target temperature below ambient', () => {
