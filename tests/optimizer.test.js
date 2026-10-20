@@ -1785,3 +1785,27 @@ test('thermal infeasibility preserves the no-positive-candidate result shape', (
   assert.deepEqual(result.protocolSteps, []);
   assert.equal(result.thermal, null);
 });
+test('normalizes the requested in-water target and reports all thermal states', () => {
+  const result = optimizeBlend({
+    cylinder: {
+      volumeL: 12, initialPressureBar: 50, initialOxygenPercent: 21, initialHeliumPercent: 0,
+      targetPressureBar: 188.6, targetOxygenPercent: 18, targetHeliumPercent: 45
+    },
+    physics: { model: 'vdw', temperatureC: 25 },
+    thermal: {
+      tankMaterial: 'steel', coolingMedium: 'water', ambientTemperatureC: 25,
+      inletTemperatureC: 25, targetMediumTemperatureC: 25, targetInWaterTemperatureC: 10,
+      waitMode: 'minutes', waitMinutes: 10
+    },
+    banks: [{ id: '1845', name: '18/45', volumeL: 50, pressureBar: 200, minimumPressureBar: 20, oxygenPercent: 18, heliumPercent: 45, enabled: true }],
+    settings: { booster: { minimumSourcePressureBar: 0, maxCompressorPressureBar: 350, maxBoosterOutputPressureBar: 350, cylinderVolumeCm3: 9, oxygenBoostBpm: 50, otherBoostBpm: 50, oxygenDecantRateBarPerMin: 5, otherDecantRateBarPerMin: 5, compressorInletFlowLPerMin: 100 } }
+  });
+  assert.equal(result.feasible, true);
+  assert.ok(Math.abs(result.thermal.ambientSettledTargetPressureBar - 200) < 0.2);
+  assert.ok(Math.abs(result.thermal.finalAmbientPressureBar - 200) < 0.2);
+  assert.ok(Math.abs(result.thermal.finalAmbientTemperatureC - 25) < 1e-9);
+  assert.ok(Math.abs(result.thermal.finalInWaterTemperatureC - 10) < 1e-9);
+  assert.ok(Math.abs(result.thermal.finalInWaterPressureBar - 188.6) < 0.2);
+  assert.equal(result.thermal.requestedInWaterPressureBar, 188.6);
+  assert.equal(result.thermal.requestedInWaterTemperatureC, 10);
+});

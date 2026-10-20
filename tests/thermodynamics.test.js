@@ -1007,3 +1007,33 @@ test('non-final fixed-minute wait equal to ambient keeps duration and cools expo
   assert.ok(wait.temperatureAtTransferEndC > wait.temperatureAfterWaitC && wait.temperatureAfterWaitC > 20);
   assert.ok(Math.abs(wait.temperatureAfterWaitC - calculateTemperatureAfterWait({ transferEndTemperatureC: wait.temperatureAtTransferEndC, ambientTemperatureC: 20, waitMinutes: 5, tauMinutes: 18 })) < 1e-9);
 });
+test('normal waits converge to ambient for air and water', () => {
+  for (const coolingMedium of ['air', 'water']) {
+    const simulation = simulateThermalProtocol({
+      protocolSteps: [
+        { type: 'decant', operation: 'Decant', receiverEndPressureBar: 100, resultingPressureBar: 100, resultingMix: { oxygenPercent: 21, heliumPercent: 0 }, sourceOxygenPercent: 21, sourceHeliumPercent: 0 },
+        { type: 'decant', operation: 'Decant', receiverEndPressureBar: 120, resultingPressureBar: 120, resultingMix: { oxygenPercent: 21, heliumPercent: 0 }, sourceOxygenPercent: 21, sourceHeliumPercent: 0 }
+      ],
+      cylinder: { initialPressureBar: 50, volumeL: 12 },
+      physics: { model: 'ideal', temperatureC: 20 },
+      thermal: { tankMaterial: 'steel', coolingMedium, ambientTemperatureC: 20, targetMediumTemperatureC: 20, waitMode: 'temperature', waitMinutes: 0 },
+      settings: { booster: { otherDecantRateBarPerMin: 5 } }
+    });
+    assert.equal(simulation.protocolSteps[0].thermal.temperatureAfterWaitC, 20);
+  }
+});
+
+test('equal target medium and ambient produces finite convergence', () => {
+  const simulation = simulateThermalProtocol({
+    protocolSteps: [
+      { type: 'decant', operation: 'Decant', receiverEndPressureBar: 100, resultingPressureBar: 100, resultingMix: { oxygenPercent: 21, heliumPercent: 0 }, sourceOxygenPercent: 21, sourceHeliumPercent: 0 },
+      { type: 'decant', operation: 'Decant', receiverEndPressureBar: 120, resultingPressureBar: 120, resultingMix: { oxygenPercent: 21, heliumPercent: 0 }, sourceOxygenPercent: 21, sourceHeliumPercent: 0 }
+    ],
+    cylinder: { initialPressureBar: 50, volumeL: 12 },
+    physics: { model: 'ideal', temperatureC: 20 },
+    thermal: { tankMaterial: 'steel', coolingMedium: 'air', ambientTemperatureC: 20, targetMediumTemperatureC: 20, waitMode: 'temperature' },
+    settings: { booster: { otherDecantRateBarPerMin: 5 } }
+  });
+  assert.ok(Number.isFinite(simulation.protocolSteps[0].thermal.waitMinutes));
+  assert.equal(simulation.protocolSteps[0].thermal.temperatureAfterWaitC, 20);
+});
