@@ -1,4 +1,6 @@
 import { test, expect } from './fixtures/app-fixtures.js';
+import { assertContained, assertInsideViewport, assertNoUnexpectedOverlap } from './assertions/layout.js';
+import { assertResultPanelExclusive, fillWorkingTank } from './helpers/blending.js';
 import { addBank, bankRows, editBank, removeBank } from './helpers/inventory.js';
 
 async function assertNoFiniteAir(page) {
@@ -62,15 +64,22 @@ test.describe('inventory supply banks', () => {
   test('exposes transfer temperature and keeps dynamic rows separated at narrow width', async ({ appPage }, testInfo) => {
     const page = await appPage.goto('tourSeen');
     const inlet = page.getByRole('spinbutton', { name: 'Incoming gas temperature' });
-    await inlet.fill('12.5');
+    await fillWorkingTank(page, { inletTemperature: -10 });
+    await expect(inlet).toHaveValue('-10');
+    const thermalPanel = await assertResultPanelExclusive(page, 'Thermal graphs');
+    const coldOutput = await thermalPanel.locator('#thermal-chart-data').innerText();
+
+    await inlet.fill('80');
     await inlet.blur();
-    await expect(inlet).toHaveValue('12.5');
+    await expect(inlet).toHaveValue('80');
+    await expect.poll(async () => thermalPanel.locator('#thermal-chart-data').innerText()).not.toBe(coldOutput);
 
     const first = await addBank(page);
     const second = await addBank(page);
     await expect(first).toBeVisible();
     await expect(second).toBeVisible();
-    const boxes = await bankRows(page).evaluateAll(rows => rows.map(row => {
+    const rows = bankRows(page);
+    const boxes = await rows.evaluateAll(items => items.map(row => {
       const rect = row.getBoundingClientRect();
       return { top: rect.top, bottom: rect.bottom, height: rect.height };
     }));
@@ -78,6 +87,18 @@ test.describe('inventory supply banks', () => {
     for (let index = 1; index < boxes.length; index += 1) {
       expect(boxes[index - 1].bottom).toBeLessThanOrEqual(boxes[index].top + 1);
     }
+    const table = page.locator('#tanks-table');
+    await assertContained(page, table.locator('th'), table);
+    await assertNoUnexpectedOverlap(page, table.locator('th'), { allowContainment: false });
+    for (let index = 0; index < await rows.count(); index += 1) {
+      const row = rows.nth(index);
+      const controls = row.locator('input, select, button');
+      await assertContained(page, controls, row);
+      await assertNoUnexpectedOverlap(page, controls, { allowContainment: false });
+    }
+    const supplyHeading = page.locator('#supply-banks-section h2');
+    await supplyHeading.scrollIntoViewIfNeeded();
+    await assertInsideViewport(page, supplyHeading);
     if (testInfo.project.name === 'mobile') {
       await expect(page.locator('#tanks-table')).toBeVisible();
       await expect(page.locator('#supply-banks-section')).toBeVisible();
