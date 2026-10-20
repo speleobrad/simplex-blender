@@ -4,6 +4,7 @@ import { isValidGasComposition } from './gas-input.js';
 import { validateCalculatorInputs, validateSupplyBankInput } from './input-validation.js';
 import { simulateThermalProtocol, calculatePressureAtTemperature } from './thermodynamics.js';
 
+const INTERNAL_THERMAL_TARGET = Symbol('internal thermal target');
 const NORMAL_RETAINED_GAS_COST = -5;
 const SAFETY_SOURCE_COST_RANGE = 10_101;
 
@@ -867,7 +868,7 @@ function validateBlendInput(input) {
   const { cylinder, physics, banks } = input;
   if (!cylinder || typeof cylinder !== 'object') return ['Cylinder input is missing.'];
 
-  const validationCylinder = input._internalThermalTarget
+  const validationCylinder = input[INTERNAL_THERMAL_TARGET]
     ? { ...cylinder, targetPressureBar: Math.min(350, Math.max(10, cylinder.targetPressureBar)) }
     : cylinder;
   const errors = validateCalculatorInputs(validationCylinder, physics, input.thermal);
@@ -1588,7 +1589,7 @@ function thermalState(candidate, requestedInWaterPressureBar, requestedInWaterTe
 function evaluateThermalCandidate(input, optimizeStatic, targetPressureBar) {
   const candidateInput = {
     ...input,
-    _internalThermalTarget: true,
+    [INTERNAL_THERMAL_TARGET]: true,
     cylinder: {
       ...input.cylinder,
       targetPressureBar

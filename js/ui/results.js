@@ -281,13 +281,13 @@ function renderProtocol(protocolSteps, alertMessage = null, calculation = null, 
   container.replaceChildren(...(alertMessage ? [alertMessage, ...cards] : cards));
 }
 
-function renderBlendSummary(blend, units = 'metric') {
+function renderBlendSummary(blend, units = 'metric', requestedInWaterPressureBar = null) {
   setText('res-retained-p', formatUnitValue(blend.retainedPressureBar, 'pressureBar', units));
   setText('res-retained-pct', `${blend.retainedPercent.toFixed(0)}% kept`);
   setText('res-vented-p', formatUnitValue(blend.ventedPressureBar, 'pressureBar', units));
   setText('res-vented-litres', `${formatUnitValue(blend.ventedGasLitres, 'volumeL', units)} lost`);
   setText('res-he-salvaged', formatUnitValue(blend.heliumSalvagedLitres, 'volumeL', units, 0));
-  setText('res-final-p', formatUnitValue(blend.finalPressureBar, 'pressureBar', units));
+  setText('res-final-p', formatUnitValue(requestedInWaterPressureBar ?? blend.finalPressureBar, 'pressureBar', units));
   setText('res-final-mix', `Tx ${blend.finalOxygenPercent}/${blend.finalHeliumPercent}`);
 }
 
@@ -403,7 +403,7 @@ export function renderResults(result, calculation = null) {
         workingPressureBar: calculation?.cylinder?.workingPressureBar,
         useVdw: calculation?.physics?.model === 'vdw'
       });
-      renderBlendSummary(maximum.blend, units);
+      renderBlendSummary(maximum.blend, units, maximum.thermal?.requestedInWaterPressureBar);
       renderProtocol(
         maximum.protocolSteps,
         renderInfeasible(
@@ -435,7 +435,7 @@ export function renderResults(result, calculation = null) {
     return;
   }
 
-  renderBlendSummary(result.blend, units);
+  renderBlendSummary(result.blend, units, result.thermal?.requestedInWaterPressureBar);
   renderThermalSummary(result.thermal, result.protocolSteps);
   renderWaterPressurePane({
     thermal: result.thermal,
