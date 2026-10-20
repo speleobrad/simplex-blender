@@ -1721,6 +1721,12 @@ function optimizeThermalBlend(input, optimizeStatic) {
       MINIMUM_TARGET_PRESSURE_BAR
     );
     if (!floor.result.feasible) {
+      const fallback = thermalizedMaximumResult(
+        floor,
+        requestedInWaterPressureBar,
+        requestedInWaterTemperatureC,
+        ambientSettledTargetPressureBar
+      );
       const ambientDiagnostic = `Ambient-settled target: ${ambientSettledTargetPressureBar.toFixed(1)} bar.`;
       return {
         ...fallback,
