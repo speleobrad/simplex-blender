@@ -110,8 +110,6 @@ test.describe('continued browser sessions', () => {
     await expect(rowC.getByRole('spinbutton', { name: /pressure in bar$/i })).toHaveValue('150');
     await expect(sessionC.page.evaluate(() => JSON.parse(localStorage.getItem('simplex-gas-remixer-banks')).find(bank => bank.name === 'Imperial session bank'))).resolves.toMatchObject({ volumeL: 12, pressureBar: 150 });
     await closeSession(sessionC);
-    await closeSession(sessionB);
-    await closeSession({ context: pageA.context() });
   });
 
   test('persists theme but discards an unsaved settings draft in the next session', async ({ appPage }) => {
