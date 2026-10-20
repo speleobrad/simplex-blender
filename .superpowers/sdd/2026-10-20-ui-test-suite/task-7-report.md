@@ -36,3 +36,16 @@
 
 ### Concerns
 - Playwright emitted existing `NO_COLOR`/`FORCE_COLOR` warnings; no test failures occurred.
+
+## Task 7 review fixes
+
+### Findings addressed
+- Continued-session onboarding now launches the header's accessible “Show the guided tour” control in Session B, verifies the Welcome popover, exits through the shared onboarding helper, and still performs runtime diagnostics during teardown.
+- Continued-session inventory now persists and verifies a named gas preset plus its numeric composition in Session B, verifies a visible recipe step contributed by the enabled bank, and confirms that contribution disappears after disable and removal in later sessions.
+
+### Exact command and output
+- `npm run test:ui -- tests/browser/multi-session.spec.js`
+  - `15 passed (16.5s)`
+
+### Concerns
+- Playwright emitted existing `NO_COLOR`/`FORCE_COLOR` warnings; no test failures occurred.

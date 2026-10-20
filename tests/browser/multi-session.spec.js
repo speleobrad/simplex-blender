@@ -3,6 +3,7 @@ import { createContinuedSession } from './fixtures/storage-fixtures.js';
 import { addBank, bankRows, editBank, removeBank } from './helpers/inventory.js';
 import { openSettingsCategory, saveSettings, cancelSettings } from './helpers/settings.js';
 import { toggleTheme } from './helpers/navigation.js';
+import { completeOrExitTour } from './helpers/onboarding.js';
 import { assertRuntimeClean } from './assertions/runtime.js';
 
 const onboarding = page => page.evaluate(() => JSON.parse(localStorage.getItem('simplex-gas-remixer-onboarding')));
@@ -21,6 +22,9 @@ test.describe('continued browser sessions', () => {
     const sessionB = await createContinuedSession(pageA);
     await expect(sessionB.page.getByRole('dialog', { name: 'Analytics consent', exact: true })).toHaveCount(0);
     await expect(sessionB.page.locator('.driver-popover')).toHaveCount(0);
+    await sessionB.page.getByRole('button', { name: 'Show the guided tour', exact: true }).click();
+    await expect(sessionB.page.locator('.driver-popover-title')).toHaveText('Welcome to Simplex Blender');
+    await completeOrExitTour(sessionB.page, 'Escape');
     await closeSession(sessionB);
   });
 
@@ -28,29 +32,39 @@ test.describe('continued browser sessions', () => {
     const pageA = await appPage.goto('tourSeen');
     const index = await bankRows(pageA).count();
     const rowA = await addBank(pageA);
-    await editBank(pageA, index, { name: 'Continued-session bank', volumeL: 32, pressureBar: 180, oxygenPercent: 36, heliumPercent: 24, enabled: true });
+    await editBank(pageA, index, {
+      gasPreset: 'Tx 18/45',
+      name: 'Continued-session bank',
+      volumeL: 32,
+      pressureBar: 180,
+      enabled: true
+    });
     await expect(rowA.getByRole('textbox', { name: /bank name$/i })).toHaveValue('Continued-session bank');
     const sessionB = await createContinuedSession(pageA);
     const rowB = bankRows(sessionB.page).nth(index);
     await expect(rowB.getByRole('textbox', { name: /bank name$/i })).toHaveValue('Continued-session bank');
+    await expect(rowB.getByRole('combobox', { name: /^Gas preset for /i })).toHaveValue('gas:Tx 18/45');
     await expect(rowB.getByRole('spinbutton', { name: /volume in litres$/i })).toHaveValue('32');
     await expect(rowB.getByRole('spinbutton', { name: /pressure in bar$/i })).toHaveValue('180');
-    await expect(rowB.getByRole('spinbutton', { name: /oxygen percentage$/i })).toHaveValue('36');
-    await expect(rowB.getByRole('spinbutton', { name: /helium percentage$/i })).toHaveValue('24');
+    await expect(rowB.getByRole('spinbutton', { name: /oxygen percentage$/i })).toHaveValue('18');
+    await expect(rowB.getByRole('spinbutton', { name: /helium percentage$/i })).toHaveValue('45');
     await expect(rowB.getByRole('checkbox', { name: /Use Continued-session bank/i })).toBeChecked();
+    await expect(sessionB.page.locator('#steps-container')).toContainText(/from Continued-session bank to/i);
     await editBank(sessionB.page, index, { enabled: false });
     const sessionC = await createContinuedSession(sessionB.page);
     const rowC = bankRows(sessionC.page).nth(index);
     await expect(rowC.getByRole('spinbutton', { name: /volume in litres$/i })).toHaveValue('32');
     await expect(rowC.getByRole('spinbutton', { name: /pressure in bar$/i })).toHaveValue('180');
-    await expect(rowC.getByRole('spinbutton', { name: /oxygen percentage$/i })).toHaveValue('36');
-    await expect(rowC.getByRole('spinbutton', { name: /helium percentage$/i })).toHaveValue('24');
+    await expect(rowC.getByRole('spinbutton', { name: /oxygen percentage$/i })).toHaveValue('18');
+    await expect(rowC.getByRole('spinbutton', { name: /helium percentage$/i })).toHaveValue('45');
     await expect(rowC.getByRole('checkbox', { name: /Use Continued-session bank/i })).not.toBeChecked();
+    await expect(sessionC.page.locator('#steps-container')).not.toContainText('Continued-session bank');
     await removeBank(sessionC.page, index);
     const sessionD = await createContinuedSession(sessionC.page);
     await expect.poll(() => bankRows(sessionD.page).evaluateAll(rows => rows.some(row => (
       row.querySelector('input[aria-label$="bank name"]')?.value === 'Continued-session bank'
     )))).toBe(false);
+    await expect(sessionD.page.locator('#steps-container')).not.toContainText('Continued-session bank');
     await closeSession(sessionD);
   });
 
