@@ -1,3 +1,6 @@
+import { assertVisibleFocus } from './accessibility.js';
+
+import { assertNoClippedText } from './runtime.js';
 const DEFAULT_TOLERANCE = 1;
 
 function locatorText(locator) {
@@ -187,5 +190,49 @@ export async function assertNoUnexpectedOverlap(page, locator, options = {}) {
   }
   const diagnostics = { passed: failures.length === 0, tolerance, failures };
   if (failures.length) throw failure('assertNoUnexpectedOverlap', diagnostics);
+  return diagnostics;
+}
+
+/**
+ * Exercise a responsive surface as one contract: the document must not gain
+ * horizontal overflow, visible children must stay inside their surface, and
+ * one named control must retain a visible keyboard focus indicator.
+ */
+export async function assertResponsiveSurface(page, surface, selectors = {}) {
+  const surfaceLocator = typeof surface === 'string' ? page.locator(surface) : surface;
+  const childrenSelector = selectors.children ?? selectors.content;
+  const focusSelector = selectors.focus;
+  const diagnostics = {
+    surface: typeof surface === 'string' ? surface : surfaceLocator.toString(),
+    checks: {}
+  };
+  diagnostics.checks.overflow = await assertNoUnexpectedOverflow(page, selectors.overflowOptions);
+  if (childrenSelector && selectors.containment !== false) {
+    diagnostics.checks.containment = await assertContained(
+      page,
+      typeof childrenSelector === 'string' ? page.locator(childrenSelector) : childrenSelector,
+      surfaceLocator,
+      selectors.containmentOptions
+    );
+  }
+  if (focusSelector) {
+    const focusLocator = typeof focusSelector === 'string' ? page.locator(focusSelector) : focusSelector;
+    await focusLocator.first().scrollIntoViewIfNeeded();
+    diagnostics.checks.focus = await assertVisibleFocus(page, focusLocator.first(), selectors.focusOptions);
+  }
+  if (selectors.overlap) {
+    diagnostics.checks.overlap = await assertNoUnexpectedOverlap(
+      page,
+      typeof selectors.overlap === 'string' ? page.locator(selectors.overlap) : selectors.overlap,
+      selectors.overlapOptions
+    );
+  }
+  if (selectors.clip) {
+    diagnostics.checks.clipping = await assertNoClippedText(
+      page,
+      typeof selectors.clip === 'string' ? page.locator(selectors.clip) : selectors.clip,
+      selectors.clipOptions
+    );
+  }
   return diagnostics;
 }
