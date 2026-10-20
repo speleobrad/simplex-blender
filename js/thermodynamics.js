@@ -372,9 +372,6 @@ function stepMix(step) {
   };
 }
 
-// Target-state waits accept a pressure projection within 0.2 bar, matching the
-// precision presented for compare recipe pressure values.
-const COMPARE_TARGET_PRESSURE_TOLERANCE_BAR = 0.2;
 
 function compareTargetWaitError(message, details) {
   const error = new RangeError(message);
@@ -832,12 +829,10 @@ export function simulateCompareProtocol({
       : 0;
     if (isWait && step.waitMode === 'target') {
       const targetTemperatureC = step.targetTemperatureC;
-      const targetPressureBar = step.targetPressureBar;
-      if (!Number.isFinite(targetTemperatureC) || !Number.isFinite(targetPressureBar)
+      if (!Number.isFinite(targetTemperatureC)
         || targetTemperatureC <= thermal.ambientTemperatureC
         || temperatureAtTransferEndC < targetTemperatureC) {
         throw compareTargetWaitError('Compare target wait cannot reach the requested target temperature.', {
-          targetPressureBar,
           targetTemperatureC,
           temperatureAtTransferEndC,
           ambientTemperatureC: thermal.ambientTemperatureC
@@ -865,15 +860,6 @@ export function simulateCompareProtocol({
       volumeL: cylinder.volumeL,
       useVdw
     }));
-    if (isWait && step.waitMode === 'target'
-      && Math.abs(pressureAfterWaitBar - step.targetPressureBar) > COMPARE_TARGET_PRESSURE_TOLERANCE_BAR) {
-      throw compareTargetWaitError('Compare target pressure is inconsistent with the requested target temperature.', {
-        targetPressureBar: step.targetPressureBar,
-        projectedPressureBar: pressureAfterWaitBar,
-        targetTemperatureC: step.targetTemperatureC,
-        toleranceBar: COMPARE_TARGET_PRESSURE_TOLERANCE_BAR
-      });
-    }
     const thermalStep = {
       rateSource: transfer.rateSource,
       rateBarPerMin: transfer.rateBarPerMin,

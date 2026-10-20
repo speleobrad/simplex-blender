@@ -15,6 +15,40 @@ export const COMPARE_METHODS = [
   { value: 'compressor', label: 'Compressor' }
 ];
 
+export const COMPRESSOR_AIR_ID = 'compressor-air';
+
+const COMPRESSOR_AIR_DEFAULT_PRESSURE_BAR = 232;
+
+function compressorAirBank(settings) {
+  const maxPressureBar = Number.isFinite(settings?.booster?.maxCompressorPressureBar)
+    ? settings.booster.maxCompressorPressureBar
+    : COMPRESSOR_AIR_DEFAULT_PRESSURE_BAR;
+  return {
+    id: COMPRESSOR_AIR_ID,
+    name: 'Compressor Air',
+    volumeL: 1,
+    pressureBar: maxPressureBar,
+    oxygenPercent: 21,
+    heliumPercent: 0,
+    enabled: true,
+    isCompressor: true
+  };
+}
+
+function isCompressorAir(bankId) {
+  return bankId === COMPRESSOR_AIR_ID;
+}
+
+function isCompressorBank(bank) {
+  return bank?.isCompressor === true;
+}
+
+function copySourceBank(bank) {
+  const copy = copiedBank(bank);
+  if (isCompressorBank(bank)) copy.isCompressor = true;
+  return copy;
+}
+
 const MAX_PRESSURE_BAR = 350;
 const MAX_WAIT_MINUTES = 1440;
 const MIN_WAIT_TEMPERATURE_C = -100;
@@ -39,7 +73,6 @@ export function createCompareRow(type = 'keep', id = `compare-${Date.now()}-${Ma
       type,
       waitMode: 'minutes',
       waitMinutes: 0,
-      targetPressureBar: null,
       targetTemperatureC: null
     };
   }
@@ -84,7 +117,7 @@ function validTemperature(value) {
 }
 
 function copiedBank(bank) {
-  return {
+  const copy = {
     id: bank.id,
     name: bank.name,
     volumeL: bank.volumeL,
@@ -93,6 +126,8 @@ function copiedBank(bank) {
     heliumPercent: bank.heliumPercent,
     enabled: bank.enabled
   };
+  if (isCompressorBank(bank)) copy.isCompressor = true;
+  return copy;
 }
 
 function indexedBanks(banks) {
@@ -114,17 +149,21 @@ function isUsableBank(bank) {
     && isValidGasComposition(bank.oxygenPercent, bank.heliumPercent);
 }
 
-function validateAddRow(row, rowId, currentPressure, pressureCeilingBar, bankIndex, errors) {
+function validateAddRow(row, rowId, currentPressure, pressureCeilingBar, bankIndex, settings, errors) {
   if (!['added', 'target'].includes(row.pressureInputMode)) {
     error(errors, rowId, 'pressureInputMode', 'Choose whether pressure added or receiver target is being edited.');
     return currentPressure;
   }
 
-  const bank = bankIndex.byId.get(row.bankId);
-  if (!bank || bankIndex.duplicateIds.has(row.bankId) || !isUsableBank(bank)) {
-    error(errors, rowId, 'bankId', 'Select an enabled supply bank with valid finite inventory.');
+  const bank = isCompressorAir(row.bankId)
+    ? compressorAirBank(settings)
+    : bankIndex.byId.get(row.bankId);
+  if (isCompressorAir(row.bankId)) {
+    row.sourceBank = copySourceBank(bank);
+  } else if (!bank || bankIndex.duplicateIds.has(row.bankId) || !isUsableBank(bank)) {
+    error(errors, rowId, 'bankId', 'Select an enabled supply bank or Compressor Air.');
   } else {
-    row.sourceBank = copiedBank(bank);
+    row.sourceBank = copySourceBank(bank);
   }
 
   const activePressure = row.pressureInputMode === 'target'
@@ -147,6 +186,13 @@ function validateAddRow(row, rowId, currentPressure, pressureCeilingBar, bankInd
   if (normalized.targetPressureBar > pressureCeilingBar) {
     error(errors, rowId, 'targetPressureBar', `Add target pressure cannot exceed the cylinder working pressure of ${pressureCeilingBar} bar.`);
     return currentPressure;
+  }
+  if (isCompressorAir(row.bankId)) {
+    const compressorCeilingBar = compressorAirBank(settings).pressureBar;
+    if (normalized.targetPressureBar > compressorCeilingBar) {
+      error(errors, rowId, 'targetPressureBar', `Compressor Air cannot reach above its ${compressorCeilingBar} bar pressure limit.`);
+      return currentPressure;
+    }
   }
   if (normalized.pressureAddedBar < 0 || normalized.targetPressureBar < currentPressure) {
     error(errors, rowId, activeField, 'Add target pressure cannot be below the current pressure.');
@@ -177,7 +223,7 @@ export function validateCompareRecipe(rows, { cylinder, banks = [], physics, set
       continue;
     }
     if (type === 'add') {
-      currentPressure = validateAddRow(row, rowId, currentPressure, pressureCeilingBar, bankIndex, errors);
+      currentPressure = validateAddRow(row, rowId, currentPressure, pressureCeilingBar, bankIndex, settings, errors);
       continue;
     }
     if (type === 'wait') {
@@ -188,9 +234,6 @@ export function validateCompareRecipe(rows, { cylinder, banks = [], physics, set
           error(errors, rowId, 'waitMinutes', 'Wait duration must be between 0 and 1440 minutes.');
         }
       } else {
-        if (!validPressure(row.targetPressureBar)) {
-          error(errors, rowId, 'targetPressureBar', 'Target wait pressure must be between 0 and 350 bar.');
-        }
         if (!validTemperature(row.targetTemperatureC)) {
           error(errors, rowId, 'targetTemperatureC', 'Target wait temperature must be between -100 and 100 °C.');
         }
@@ -415,6 +458,41 @@ function plannedTransferStep(type, row, sourceStart, sourceEnd, receiverStart, r
   };
 }
 
+function plannedCompressorStep(row, receiverStart, receiverEnd) {
+  return {
+    type: 'add',
+    method: 'compressor',
+    compareRowId: row.id,
+    sourceBankId: row.sourceBank.id,
+    sourceBankName: row.sourceBank.name,
+    sourceComposition: {
+      oxygenPercent: row.sourceBank.oxygenPercent,
+      heliumPercent: row.sourceBank.heliumPercent
+    },
+    sourceOxygenPercent: row.sourceBank.oxygenPercent,
+    sourceHeliumPercent: row.sourceBank.heliumPercent,
+    sourceStartPressureBar: null,
+    sourceEndPressureBar: null,
+    sourceState: null,
+    sourceMolesAfter: null,
+    receiverStartPressureBar: receiverStart.pressureBar,
+    receiverEndPressureBar: receiverEnd.pressureBar,
+    resultingPressureBar: receiverEnd.pressureBar,
+    resultingMix: { ...receiverEnd.mix },
+    transferRate: {
+      source: 'compressor',
+      rateBarPerMin: null,
+      estimatedDurationMinutes: null
+    },
+    operation: 'Top-up',
+    recipeAction: 'Top-up',
+    recipeGas: row.sourceBank.name,
+    title: 'Top-up',
+    recipeLabel: 'Top-up'
+  };
+}
+
+
 function passiveStep(row, receiver) {
   const operation = row.type === 'wait' ? 'Wait' : 'Keep';
   return {
@@ -440,6 +518,9 @@ function passiveStep(row, receiver) {
 function equipmentLimits(settings) {
   const booster = settings?.booster ?? {};
   return {
+    maxCompressorPressureBar: Number.isFinite(booster.maxCompressorPressureBar)
+      ? booster.maxCompressorPressureBar
+      : COMPRESSOR_AIR_DEFAULT_PRESSURE_BAR,
     minimumSourcePressureBar: Number.isFinite(booster.minimumSourcePressureBar)
       ? booster.minimumSourcePressureBar
       : 0,
@@ -567,6 +648,33 @@ export function buildCompareProtocol(rows, { cylinder, physics, banks = [], sett
     if (targetPressureBar > receiverPressureCeilingBar + PRESSURE_TOLERANCE_BAR) {
       throw new RangeError(`Compare protocol target pressure cannot exceed the cylinder working pressure of ${receiverPressureCeilingBar} bar.`);
     }
+    if (isCompressorBank(row.sourceBank)) {
+      const sourceBank = row.sourceBank;
+      const requiredMoles = solveAddedMoles(
+        receiver,
+        targetPressureBar,
+        sourceBank,
+        volumeL,
+        temperatureC,
+        useVdw
+      );
+      const receiverStart = receiver;
+      const receiverFinal = receiverAfterAddedMoles(
+        receiver,
+        requiredMoles,
+        sourceBank,
+        volumeL,
+        temperatureC,
+        useVdw
+      );
+      receiverFinal.pressureBar = targetPressureBar;
+      const step = plannedCompressorStep(row, receiverStart, receiverFinal);
+      protocolSteps.push(step);
+      trajectoryStep = addTrajectoryPoint(trajectory, step, trajectoryStep);
+      receiver = receiverFinal;
+      continue;
+    }
+
     const source = bankStates.get(row.sourceBank.id);
     const sourceBank = source.bank;
     const requiredMoles = solveAddedMoles(

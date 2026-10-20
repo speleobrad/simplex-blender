@@ -1,4 +1,4 @@
-import { COMPARE_ROW_TYPES } from '../compare-recipe.js';
+import { COMPARE_ROW_TYPES, COMPRESSOR_AIR_ID } from '../compare-recipe.js';
 
 const inputClass = 'w-full rounded border border-ocean-700 bg-ocean-900 px-2 py-1 font-mono text-xs text-slate-100';
 
@@ -92,16 +92,21 @@ function addGasFields(card, row, rowNumber, banks, errors, pressureStart) {
   const enabledBanks = banks.filter(bank => bank.enabled && typeof bank.name === 'string' && bank.name.trim().length > 0);
   const bankField = element('div', { className: 'col-span-2' });
   const bank = select([
-    { value: '', label: 'Select supply bank' },
+    { value: '', label: 'Select gas source' },
+    { value: COMPRESSOR_AIR_ID, label: 'Compressor Air (infinite)' },
     ...enabledBanks.map(candidate => ({ value: candidate.id, label: candidate.name }))
   ], row.bankId ?? '');
-  appendLabelledControl(bankField, row, rowNumber, 'bankId', 'Supply bank', bank, errors);
+  appendLabelledControl(bankField, row, rowNumber, 'bankId', 'Gas source', bank, errors);
 
-  const selectedBank = enabledBanks.find(candidate => candidate.id === row.bankId);
+  const selectedBank = row.bankId === COMPRESSOR_AIR_ID
+    ? { name: 'Compressor Air', oxygenPercent: 21, heliumPercent: 0, infinite: true }
+    : enabledBanks.find(candidate => candidate.id === row.bankId);
   if (selectedBank) {
     const details = element('p', {
       className: 'col-span-2 text-[10px] text-slate-400',
-      text: `${selectedBank.name}: O₂ ${selectedBank.oxygenPercent}% · He ${selectedBank.heliumPercent}% · ${selectedBank.volumeL} L · ${selectedBank.pressureBar} bar`
+      text: selectedBank.infinite
+        ? 'Compressor Air: O₂ 21% · He 0% · Infinite supply'
+        : `${selectedBank.name}: O₂ ${selectedBank.oxygenPercent}% · He ${selectedBank.heliumPercent}% · ${selectedBank.volumeL} L · ${selectedBank.pressureBar} bar`
     });
     fields.append(details);
   }
@@ -136,11 +141,9 @@ function rowFields(card, row, rowNumber, banks, errors, pressureStarts) {
     ], row.waitMode), errors);
     fields.append(modeField);
     if (row.waitMode === 'target') {
-      const pressureField = element('div');
-      appendLabelledControl(pressureField, row, rowNumber, 'targetPressureBar', 'Target pressure (bar)', input(row, 'targetPressureBar', row.targetPressureBar, 'number'), errors);
       const temperatureField = element('div');
       appendLabelledControl(temperatureField, row, rowNumber, 'targetTemperatureC', 'Target temperature (°C)', input(row, 'targetTemperatureC', row.targetTemperatureC, 'number'), errors);
-      fields.append(pressureField, temperatureField);
+      fields.append(temperatureField);
     } else {
       const waitField = element('div');
       appendLabelledControl(waitField, row, rowNumber, 'waitMinutes', 'Wait time (minutes)', input(row, 'waitMinutes', row.waitMinutes, 'number'), errors);

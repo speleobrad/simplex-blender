@@ -10,10 +10,10 @@ Compare mode adds:
 
 1. A switch between the existing Optimize workflow and Compare recipe.
 2. An in-memory ordered editor with Keep, Add gas, and Wait rows.
-3. Add-gas rows that select an enabled, named Supply bank and infer its composition and inventory data.
+3. Add-gas rows that select an enabled, named Supply bank or unlimited Compressor Air and infer the selected source data.
 4. Linked pressure-added and receiver-target controls for each Add row.
-5. Finite, local source-bank accounting and automatic Decant, Equalize, and Boost stage selection.
-6. Wait rows that model either a fixed duration or a target pressure and temperature.
+5. Finite, local source-bank accounting and automatic Decant, Equalize, Boost, and compressor Top-up stage selection.
+6. Wait rows that model either a fixed duration or cooling until a target temperature is reached.
 7. Manual-protocol result cards, thermal charts, a composition trajectory, and tank summary.
 
 Compare mode does not persist recipes or its local bank consumption, import or export recipes, automatically reorder rows, or alter the Optimize workflow or persisted Supply-bank settings.
@@ -40,8 +40,8 @@ Compare starts with one Keep row. Rows can be added, removed, and moved. Editing
 Rows show fields appropriate to their type:
 
 - **Keep**: retains the current modeled receiver state.
-- **Add gas**: selects an enabled Supply bank with a nonblank name. The editor displays the selected bank's inferred O₂/He composition, volume, and current pressure. Entering either **Pressure added** or **Receiver target pressure** updates the other from the receiver pressure at that row.
-- **Wait**: uses either a fixed duration in minutes or a target pressure and target temperature.
+- **Add gas**: selects an enabled named Supply bank or **Compressor Air**. Finite bank sources display inferred O₂/He composition, volume, and current pressure; Compressor Air is 21/0 and unlimited. Entering either **Pressure added** or **Receiver target pressure** updates the other from the receiver pressure at that row.
+- **Wait**: uses either a fixed duration in minutes or a target temperature. The pressure reached after cooling is calculated by the thermodynamic model.
 
 An Add row consumes only an in-memory copy of its selected Supply bank. The planner rejects transfers that cannot retain the configured source minimum pressure. It automatically uses:
 
@@ -85,7 +85,7 @@ Planning copies the selected banks, converts their and the receiver's state to m
 
 Compare simulation uses the selected gas model, cylinder geometry/material/mass, ambient and inlet-gas temperatures, cooling medium, and equipment rates already used by Optimize.
 
-Each automatic transfer stage carries its source start/end pressure, receiver start/end pressure, resulting mix, rate source, rate, and estimated duration. Compare does not insert an implicit configured wait between stages. A fixed-minute Wait runs cooling for that duration. A target-state Wait solves cooling to the requested pressure and temperature; an unreachable or inconsistent target pair is rejected and leaves the preceding successful result visible.
+Each automatic transfer stage carries its source start/end pressure when applicable, receiver start/end pressure, resulting mix, rate source, rate, and estimated duration. Compare does not insert an implicit configured wait between stages. A fixed-minute Wait runs cooling for that duration. A target-temperature Wait solves cooling until the requested temperature and calculates the resulting pressure; a target below ambient or above the current transfer temperature is rejected and leaves the preceding successful result visible.
 
 The simulator returns protocol steps and:
 
@@ -116,9 +116,9 @@ An invalid draft displays inline errors. A first invalid run has no result; a la
 
 ## Error handling and edge cases
 
-- Add and Wait pressures must be finite and in the supported range; an Add target must not exceed cylinder working pressure.
-- Wait minutes must be finite and between 0 and 1440. Target wait temperature must be between -100 °C and 100 °C, above ambient, and form a reachable pressure/temperature pair.
-- Add rows require a valid enabled, named bank with positive finite volume and valid composition.
+- Add pressure fields and target temperatures must be finite and in the supported range; an Add target must not exceed cylinder working pressure.
+- Wait minutes must be finite and between 0 and 1440. Target wait temperature must be between -100 °C and 100 °C and reachable by cooling above ambient.
+- Finite Add rows require a valid enabled, named bank with positive finite volume and valid composition; Compressor Air uses the configured compressor source.
 - A source must retain the configured minimum pressure after each planned transfer.
 - The configured booster maximum limits stages that require Boost.
 - Compare recipe state and local source consumption are not persisted; bank settings and Optimize validation remain unchanged.
@@ -126,10 +126,10 @@ An invalid draft displays inline errors. A first invalid run has no result; a la
 ## Acceptance criteria
 
 1. Users can switch modes without losing the current workflow inputs.
-2. Compare drafts support Keep, bank-backed Add gas, and fixed-minute or target-state Wait rows, including editing, reordering, adding, and removing rows.
-3. Add gas lists enabled named Supply banks, shows inferred source data, and synchronizes pressure-added and receiver-target values.
-4. Finite local source accounting automatically plans Decant, Equalize, and Boost stages while preserving the configured source minimum.
-5. Wait results feed subsequent planning, and invalid target-state waits retain the prior successful result.
+2. Compare drafts support Keep, bank-backed or Compressor Air Add gas, and fixed-minute or target-temperature Wait rows, including editing, reordering, adding, and removing rows.
+3. Add gas lists Compressor Air and enabled named Supply banks, shows inferred source data, and synchronizes pressure-added and receiver-target values.
+4. Finite local source accounting automatically plans Decant, Equalize, and Boost stages while Compressor Air plans unlimited compressor Top-up stages within its pressure ceiling.
+5. Wait results feed subsequent planning, and invalid target-temperature waits retain the prior successful result.
 6. Results distinguish recipe-end and ambient-settled states; Thermal graphs, Diagram, and Tank summary render the Compare trajectory.
 7. Compare does not persist a recipe or mutate persisted Supply banks; Optimize remains unchanged.
 

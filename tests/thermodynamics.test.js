@@ -932,11 +932,11 @@ test('compare simulation maps explicit decant, equalize, and boost stages', () =
   assert.ok(result.protocolSteps.every(step => step.thermal.durationMinutes >= 0));
 });
 
-test('compare target wait reaches the requested pressure and temperature', () => {
+test('compare target wait reaches the requested temperature and projects pressure', () => {
   const result = simulateCompareProtocol({
     protocolSteps: [{
       type: 'wait', waitMode: 'target',
-      targetPressureBar: 98.4, targetTemperatureC: 25,
+      targetTemperatureC: 25,
       receiverStartPressureBar: 100, resultingPressureBar: 100,
       resultingMix: { oxygenPercent: 21, heliumPercent: 0 }
     }],
@@ -950,11 +950,11 @@ test('compare target wait reaches the requested pressure and temperature', () =>
   assert.ok(Math.abs(wait.thermal.pressureAfterWaitBar - 98.4) < 0.2);
 });
 
-test('compare target wait permits an already reached target state', () => {
+test('compare target wait permits an already reached target temperature', () => {
   const result = simulateCompareProtocol({
     protocolSteps: [{
       type: 'wait', waitMode: 'target',
-      targetPressureBar: 100, targetTemperatureC: 30,
+      targetTemperatureC: 30,
       receiverStartPressureBar: 100, resultingPressureBar: 100,
       resultingMix: { oxygenPercent: 21, heliumPercent: 0 }
     }],
@@ -970,11 +970,11 @@ test('compare target wait permits an already reached target state', () => {
   assert.ok(Math.abs(wait.pressureAfterWaitBar - 100) < 1e-9);
 });
 
-test('compare rejects an unreachable target-state wait', () => {
+test('compare rejects a target temperature that cannot be reached by cooling', () => {
   assert.throws(() => simulateCompareProtocol({
     protocolSteps: [{
       type: 'wait', waitMode: 'target',
-      targetPressureBar: 120, targetTemperatureC: 25,
+      targetTemperatureC: 15,
       receiverStartPressureBar: 100, resultingPressureBar: 100,
       resultingMix: { oxygenPercent: 21, heliumPercent: 0 }
     }],
@@ -982,7 +982,7 @@ test('compare rejects an unreachable target-state wait', () => {
     physics: { model: 'ideal', temperatureC: 30 },
     thermal: { tankMaterial: 'steel', coolingMedium: 'air', ambientTemperatureC: 20 },
     settings: {}
-  }), /target pressure/i);
+  }), /target temperature/i);
 });
 
 test('optimizer thermal simulation retains its final ambient cool-off', () => {

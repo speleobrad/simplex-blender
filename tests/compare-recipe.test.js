@@ -20,6 +20,9 @@ const physics = { model: 'ideal', temperatureC: 20 };
 const settings = {
   booster: {
     minimumSourcePressureBar: 5,
+    maxCompressorPressureBar: 232,
+    compressorInletFlowLPerMin: 100,
+    compressorTemperatureModifierC: 5,
     maxBoosterOutputPressureBar: 300,
     oxygenDecantRateBarPerMin: 5,
     otherDecantRateBarPerMin: 10,
@@ -48,6 +51,39 @@ const banks = [
   }
 ];
 
+test('accepts unlimited compressor Air without a supply-bank record', () => {
+  const result = validateCompareRecipe([{
+    id: 'air',
+    type: 'add',
+    bankId: 'compressor-air',
+    pressureAddedBar: 150,
+    targetPressureBar: 200,
+    pressureInputMode: 'target'
+  }], { cylinder, banks, physics, settings });
+
+  assert.equal(result.valid, true);
+  assert.deepEqual(result.normalizedRows[0].sourceBank, {
+    id: 'compressor-air',
+    name: 'Compressor Air',
+    volumeL: 1,
+    pressureBar: 232,
+    oxygenPercent: 21,
+    heliumPercent: 0,
+    enabled: true,
+    isCompressor: true
+  });
+
+  const protocol = buildCompareProtocol(result.normalizedRows, {
+    cylinder, banks, physics, settings
+  });
+  assert.deepEqual(protocol.protocolSteps.map(step => [step.type, step.method, step.operation]), [
+    ['add', 'compressor', 'Top-up']
+  ]);
+  assert.equal(protocol.protocolSteps[0].sourceBankId, 'compressor-air');
+  assert.equal(protocol.protocolSteps[0].sourceEndPressureBar, null);
+  assert.equal(banks.length, 2);
+});
+
 test('creates independent keep rows', () => {
   const first = createCompareRow('keep', 'row-1');
   const second = createCompareRow('keep', 'row-2');
@@ -69,7 +105,6 @@ test('creates a bank-backed add row and target-state wait row', () => {
     type: 'wait',
     waitMode: 'minutes',
     waitMinutes: 0,
-    targetPressureBar: null,
     targetTemperatureC: null
   });
 });
@@ -282,16 +317,15 @@ test('consumes finite source moles at the modeled wait temperature for a followi
   assert.ok(Math.abs(add.sourceMolesAfter - (initialSourceMoles - expectedAddedMoles)) < 1e-9);
 });
 
-test('requires both pressure and temperature for a target-state wait', () => {
+test('accepts a target-temperature wait without a target pressure', () => {
   const result = validateCompareRecipe([{
     id: 'wait',
     type: 'wait',
     waitMode: 'target',
-    targetPressureBar: null,
     targetTemperatureC: 20
   }], { cylinder, banks, physics, settings });
-  assert.equal(result.valid, false);
-  assert.ok(result.errors.some(error => error.field === 'targetPressureBar'));
+  assert.equal(result.valid, true);
+  assert.equal(result.errors.length, 0);
 });
 
 test('rejects pressure modes that would reduce receiver pressure or exceed the limit', () => {
