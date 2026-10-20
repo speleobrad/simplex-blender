@@ -12,11 +12,11 @@ const defaultPhysics = { temperatureC: 20 };
 test('accepts supported cylinder-input boundaries', () => {
   assert.deepEqual(validateCalculatorInputs(
     { ...defaultCylinder, volumeL: 0.1, initialPressureBar: 0, targetPressureBar: 10 },
-    { temperatureC: 0 }
+    { temperatureC: 5 }
   ), []);
   assert.deepEqual(validateCalculatorInputs(
     { ...defaultCylinder, initialPressureBar: 350, targetPressureBar: 350 },
-    { temperatureC: 50 }
+    { temperatureC: 40 }
   ), []);
 });
 
@@ -130,14 +130,16 @@ test('rejects a settled temperature below ambient for air cooling', () => {
       tankMaterial: 'steel',
       coolingMedium: 'air',
       ambientTemperatureC: 25,
-      settledTemperatureC: 15,
+      targetMediumTemperatureC: 15,
+      targetInWaterTemperatureC: 15,
+      inletTemperatureC: 25,
       waitMode: 'minutes',
       waitMinutes: 10,
       targetTemperatureC: 15
     }
   );
 
-  assert.match(errors.join(' '), /settled target temperature cannot be below ambient/i);
+  assert.match(errors.join(' '), /target-medium temperature cannot be below ambient/i);
 });
 
 test('fixed-minute waits do not validate the hidden target temperature against ambient', () => {
@@ -166,12 +168,15 @@ test('rejects unsupported thermal selectors and negative fixed waits', () => {
       tankMaterial: 'carbon',
       coolingMedium: 'oil',
       ambientTemperatureC: 20,
+      inletTemperatureC: 20,
+      targetMediumTemperatureC: 25,
+      targetInWaterTemperatureC: 20,
       waitMode: 'temperature',
       waitMinutes: -1,
       targetTemperatureC: 25
     }
   );
-  assert.ok(errors.length >= 3);
+  assert.ok(errors.length >= 2);
 });
 
 test('rejects finite Air supply banks because Air is an implicit compressor source', () => {

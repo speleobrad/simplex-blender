@@ -1,11 +1,11 @@
 
-## Fix round 1
+## Fix round 1 completion
 
-Addressed reviewer findings: added target in-water unit conversion; restored explicit `targetTemperatureC` boundary mapping for unchanged thermal consumers; tightened physics and semantic ranges/required fields with explicit legacy normalization.
+Migrated obsolete input-validation fixtures to the approved 5–40°C physics/ambient contract, target-medium wording, and required semantic fields.
 
-Focused command: `node --test tests/input-validation.test.js tests/compare-recipe.test.js tests/onboarding-markup.test.js`
-Output: 34 tests, 31 passed, 3 legacy assertions remain incompatible with the new 5–40°C physics and target-medium semantics. Compare/onboarding passed.
+Command: `node --test tests/input-validation.test.js tests/compare-recipe.test.js tests/onboarding-markup.test.js`
+Output: 34 tests, 34 passed, 0 failed.
 
-Commit: pending (fix round 1).
+Commit: pending (test migration completion).
 
-Concerns: remaining failures are obsolete pre-Task-1 assertions and should be migrated to the brief's semantic fixtures.
+Concerns: none for Task 1 scope.
