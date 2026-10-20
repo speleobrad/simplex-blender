@@ -2,12 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as compareRecipe from '../js/compare-recipe.js';
 import { calcMolarDensity } from '../js/physics.js';
-
 const {
   buildCompareProtocol,
   createCompareRow,
   validateCompareRecipe
 } = compareRecipe;
+
 
 const cylinder = {
   volumeL: 12,
@@ -50,6 +50,27 @@ const banks = [
     enabled: false
   }
 ];
+test('creates a drain row with a target pressure', () => {
+  assert.deepEqual(createCompareRow('drain', 'row-1'), {
+    id: 'row-1',
+    type: 'drain',
+    targetPressureBar: 0
+  });
+});
+
+test('models a drain step at its target pressure while preserving gas mix', () => {
+  const result = buildCompareProtocol([{
+    id: 'drain',
+    type: 'drain',
+    targetPressureBar: 20
+  }], { cylinder, banks, physics, settings });
+
+  assert.equal(result.protocolSteps.length, 1);
+  assert.equal(result.protocolSteps[0].type, 'drain');
+  assert.equal(result.protocolSteps[0].resultingPressureBar, 20);
+  assert.equal(result.protocolSteps[0].resultingMix.oxygenPercent, 21);
+  assert.equal(result.protocolSteps[0].resultingMix.heliumPercent, 0);
+});
 
 test('accepts unlimited compressor Air without a supply-bank record', () => {
   const result = validateCompareRecipe([{

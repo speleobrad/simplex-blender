@@ -46,3 +46,14 @@ test.describe('working tank blending inputs', () => {
     await expect(page.locator('#ambient-temperature')).toBeVisible();
   });
 });
+
+test('opens What-if and models an exact drain step', async ({ appPage }) => {
+  const page = await load(appPage);
+  await page.locator('[data-action="select-screen"][data-screen="what-if"]').click();
+  await expect(page.locator('#screen-what-if')).toBeVisible();
+  await page.locator('[data-row-id="compare-row-1"] [data-compare-field="targetPressureBar"]').fill('20');
+  const runButton = page.locator('[data-action="run-compare"]');
+  await runButton.evaluate(button => button.click());
+  await expect(page.locator('#what-if-result')).toContainText(/Final: 20\.0 bar/);
+  await expect(page.locator('#what-if-result')).toContainText(/Drain/);
+});

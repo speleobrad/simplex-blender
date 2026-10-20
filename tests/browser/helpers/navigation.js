@@ -3,7 +3,7 @@ import { expect } from '@playwright/test';
 const PRIMARY_PANELS = {
   Blending: '#working-tank-section',
   Inventory: '#supply-banks-section',
-  Settings: '#settings-dialog'
+  Settings: '#screen-settings'
 };
 
 const RESULT_PANELS = {
@@ -32,8 +32,15 @@ export async function selectPrimaryScreen(page, name) {
   if (!Object.hasOwn(PRIMARY_PANELS, name)) {
     throw new RangeError(`Unknown primary screen: ${name}`);
   }
-
   const tab = page.getByRole('tab', { name, exact: true });
+  if (name === 'Settings') {
+    await tab.click();
+    await expect(tab).toHaveAttribute('aria-selected', 'true');
+    const panel = page.locator(PRIMARY_PANELS[name]);
+    await expect(panel).toBeVisible();
+    await expect(panel.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
+    return panel;
+  }
   if (await tab.count()) {
     await tab.click();
     await expect(tab).toHaveAttribute('aria-selected', 'true');

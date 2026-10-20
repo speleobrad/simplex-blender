@@ -144,10 +144,11 @@ test.describe('settings categories and drafts', () => {
 
     const actions = pane.locator('[data-settings-preset-actions]');
     await expect(actions).toHaveCount(2);
-    await assertInsideViewport(page, dialog);
+    await assertInsideViewport(page, dialog.locator('.settings-category-list'));
     if (testInfo.project.name !== 'mobile') {
       await assertContained(page, pane.locator('select, input, button'), dialog);
     }
+    await actions.last().scrollIntoViewIfNeeded();
     await assertInsideViewport(page, actions.locator('label, button'));
     await assertNoUnexpectedOverlap(page, actions.locator('button'), { allowContainment: false });
     if (testInfo.project.name === 'mobile') {

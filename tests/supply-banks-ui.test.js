@@ -70,7 +70,8 @@ test('renders inventory bank values and main-screen-sized editable controls', ()
 
     const inputs = tbody.querySelectorAll('input').filter(input => input.type !== 'checkbox');
     assert.deepEqual(inputs.map(input => input.value), ['Helium', 40, 150, 0, 100]);
-    assert.ok(inputs.slice(1).every(input => input.className.includes('w-20')));
+    assert.ok(inputs.slice(1, 3).every(input => input.className.includes('w-28')));
+    assert.ok(inputs.slice(3).every(input => input.className.includes('w-20')));
   } finally {
     globalThis.document = previousDocument;
   }

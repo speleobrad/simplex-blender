@@ -133,6 +133,19 @@ function rowFields(card, row, rowNumber, banks, errors, pressureStarts) {
   }
 
   const fields = element('div', { className: 'grid grid-cols-2 gap-2' });
+  if (row.type === 'drain') {
+    const targetField = element('div');
+    appendLabelledControl(
+      targetField,
+      row,
+      rowNumber,
+      'targetPressureBar',
+      'Drain target pressure (bar)',
+      input(row, 'targetPressureBar', row.targetPressureBar, 'number'),
+      errors
+    );
+    fields.append(targetField);
+  }
   if (row.type === 'wait') {
     const modeField = element('div');
     appendLabelledControl(modeField, row, rowNumber, 'waitMode', 'Wait mode', select([

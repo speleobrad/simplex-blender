@@ -366,10 +366,14 @@ export function renderResults(result, calculation = null) {
     return;
   }
   if (result.gas) {
-    setText('lbl-init-p', result.gas.initialPressureBar);
+    setText('lbl-init-p', formatUnitValue(result.gas.initialPressureBar, 'pressureBar', units));
     setText(
       'lbl-target-p',
-      result.thermal?.requestedSettledTargetPressureBar ?? result.gas.targetPressureBar
+      formatUnitValue(
+        result.thermal?.requestedSettledTargetPressureBar ?? result.gas.targetPressureBar,
+        'pressureBar',
+        units
+      )
     );
   } else {
     for (const id of ['lbl-init-p', 'lbl-target-p']) {

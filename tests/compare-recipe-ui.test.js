@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 import { renderCompareRecipe } from '../js/ui/compare-recipe.js';
+import { createCompareRow } from '../js/compare-recipe.js';
 
 class FakeElement {
   constructor(tagName = 'div') {
@@ -158,6 +159,28 @@ test('renders target-temperature wait controls and associates field errors', () 
     assert.equal(controls.find(element => hasAttribute(element, 'data-action', 'move-compare-row-up')).disabled, true);
     const lastControls = findAll(container, element => hasAttribute(element, 'data-row-id', 'wait-1'));
     assert.equal(lastControls.find(element => hasAttribute(element, 'data-action', 'move-compare-row-down')).disabled, true);
+  } finally {
+    globalThis.document = previousDocument;
+  }
+});
+
+test('renders a drain row with a target-pressure control', () => {
+  const previousDocument = globalThis.document;
+  globalThis.document = createFakeDocument();
+  const container = new FakeElement();
+
+  try {
+    renderCompareRecipe(container, {
+      rows: [createCompareRow('drain', 'drain-1')],
+      banks: [],
+      errors: []
+    });
+    const target = findAll(container, element => (
+      hasAttribute(element, 'data-row-id', 'drain-1')
+      && hasAttribute(element, 'data-compare-field', 'targetPressureBar')
+    ));
+    assert.equal(target.length, 1);
+    assert.match(container.textContent, /Drain target pressure/);
   } finally {
     globalThis.document = previousDocument;
   }

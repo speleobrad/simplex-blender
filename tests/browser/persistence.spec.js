@@ -37,7 +37,7 @@ test.describe('persistence and failure states', () => {
     const page = await appPage.goto('invalidSavedData');
     await dismissFreshConsent(page);
 
-    const warning = page.getByRole('alert').filter({ hasText: /saved presets|supply banks/i });
+    const warning = page.getByRole('alert').filter({ hasText: /saved (?:inventory|presets)|supply banks/i });
     await expect(warning).toBeVisible();
     await expect(page.locator('#working-tank-section')).toBeVisible();
     await assertResultPanelExclusive(page, 'Recipe');

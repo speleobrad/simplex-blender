@@ -74,7 +74,7 @@ const state = {
   settings: initialSettings,
   settingsDraft: null,
   settingsSession: 0,
-  settingsCategory: 'general',
+  settingsCategory: 'model',
   settingsImport: createPresetImportState(),
   settingsReturnScreen: 'blending',
   theme: loadTheme(settingsStorage),
@@ -92,7 +92,7 @@ const state = {
   lastInput: null,
   lastResult: null,
   mode: 'optimize',
-  compareRows: [createCompareRow('keep', 'compare-row-1')],
+  compareRows: [createCompareRow('drain', 'compare-row-1')],
   compareErrors: [],
   lastCompareInput: null,
   lastCompareResult: null,
@@ -144,6 +144,12 @@ function convertDisplayedInputs(fromUnits, toUnits) {
       ? formatInputValue(canonical, quantity, toUnits)
       : String(convertToDisplay(canonical, quantity, toUnits));
   }
+  for (const [id, label] of [['init-p', 'Start pressure'], ['target-p', 'Target pressure']]) {
+    const input = byId(id);
+    if (input) input.setAttribute('aria-label', `${label} in ${unitLabel('pressureBar', toUnits)}`);
+  }
+
+
 
   const pressureStep = toUnits === 'imperial' ? '0.1' : '1';
   for (const [id, minimumBar] of [['init-p', 0], ['target-p', 10]]) {
@@ -254,7 +260,7 @@ function toggleTheme() {
 
 
 function setSettingsCategory(category) {
-  const categories = ['general', 'units', 'gas-presets', 'cylinder-presets', 'equipment', 'preset-management'];
+  const categories = ['model', 'units', 'gas-presets', 'cylinder-presets', 'equipment', 'preset-management'];
   if (!categories.includes(category)) return;
   state.settingsCategory = category;
   for (const candidate of categories) {
@@ -497,9 +503,12 @@ function updateSettingsDraft(input) {
   const collection = input.dataset.settingsCollection;
   const index = Number(input.dataset.settingsIndex);
   const field = input.dataset.settingsField;
+  const quantity = { volumeL: 'volumeL', massKg: 'massKg', workingPressureBar: 'pressureBar' }[field];
   const value = collection === 'physics' || collection === 'general' || collection === 'units' || field === 'name' || field === 'material'
     ? input.value
-    : Number.parseFloat(input.value);
+    : quantity
+      ? convertFromDisplay(Number.parseFloat(input.value), quantity, state.settingsDraft.units)
+      : Number.parseFloat(input.value);
   if (collection === 'physics') state.settingsDraft.physics[field] = value;
   else if (collection === 'general' || collection === 'units') state.settingsDraft.units = value;
   else if (collection === 'cylinderPresets') state.settingsDraft.cylinderPresets[index][field] = value;
@@ -583,6 +592,7 @@ function saveSettingsDraft() {
   state.settingsDraft = null;
   refreshPresetOptions(selectedCylinderName);
   recalculate();
+  selectScreen(state.settingsReturnScreen);
 }
 
 function applyCylinderGasPreset(select) {
@@ -788,7 +798,7 @@ function updateCompareStatus(message = '') {
 }
 
 function ternaryData() {
-  if (state.mode === 'compare') {
+  if (state.activeScreen === 'what-if' || state.mode === 'compare') {
     const compare = state.lastCompareResult?.compare;
     if (!compare || !state.lastCompareInput) return null;
     const finalMix = compare.final.recipeEnd;
@@ -826,7 +836,9 @@ function ternaryData() {
 
 function renderTernary() {
   const data = ternaryData();
-  if (data) renderTernaryDiagram(byId('ternary-canvas'), data);
+  if (data) {
+    renderTernaryDiagram(byId('ternary-canvas'), data);
+  }
 }
 
 function invalidInputResult(errors) {
@@ -853,6 +865,50 @@ function renderCompareResult() {
   renderResults(state.lastCompareResult, state.lastCompareInput);
   renderThermalCharts(state.lastCompareResult, state.lastCompareInput);
   renderTernary();
+}
+
+function renderWhatIfResult() {
+  const container = byId('what-if-result');
+  if (!container) return;
+  const compare = state.lastCompareResult?.compare;
+  if (!compare) {
+    container.replaceChildren(Object.assign(document.createElement('p'), {
+      textContent: 'Run the sequence to see the modeled result.'
+    }));
+    return;
+  }
+  const stateText = value => {
+    const temperature = Number.isFinite(value.temperatureC) ? ` at ${value.temperatureC.toFixed(1)} °C` : '';
+    return `${value.pressureBar.toFixed(1)} bar${temperature} · Tx ${value.oxygenPercent.toFixed(1)}/${value.heliumPercent.toFixed(1)}`;
+  };
+  const summary = document.createElement('div');
+  summary.className = 'rounded-xl border border-ocean-700 bg-ocean-950/60 p-3 space-y-1';
+  summary.textContent = `Start: ${stateText({
+    pressureBar: compare.trajectory?.[0]?.pressureBar ?? 0,
+    ...compare.initialMix,
+    temperatureC: state.lastCompareInput?.physics?.temperatureC
+  })}`;
+  const final = document.createElement('p');
+  final.textContent = `Final: ${stateText(compare.final.recipeEnd)}`;
+  summary.append(final);
+  const settled = document.createElement('p');
+  settled.textContent = `After settling: ${stateText(compare.final.ambientSettled)}`;
+  summary.append(settled);
+  const heading = document.createElement('h3');
+  heading.className = 'font-semibold text-slate-200';
+  heading.textContent = 'Steps';
+  const steps = document.createElement('ol');
+  steps.className = 'space-y-2';
+  for (const [index, step] of compare.protocolSteps.entries()) {
+    const item = document.createElement('li');
+    item.className = 'rounded-lg border border-ocean-800 bg-ocean-950/40 p-2';
+    const result = step.resultingMix
+      ? ` → ${step.resultingPressureBar.toFixed(1)} bar · Tx ${step.resultingMix.oxygenPercent.toFixed(1)}/${step.resultingMix.heliumPercent.toFixed(1)}`
+      : '';
+    item.textContent = `${index + 1}. ${step.operation ?? step.title}${step.recipeGas ? ` · ${step.recipeGas}` : ''}${result}`;
+    steps.append(item);
+  }
+  container.replaceChildren(summary, heading, steps);
 }
 
 function runCompare() {
@@ -903,7 +959,7 @@ function runCompare() {
     renderCompareEditor();
     updateCompareStatus('Comparison run.');
     renderCompareResult();
-    setTab('recipe');
+    renderWhatIfResult();
   } catch (error) {
     state.compareErrors = [{ rowId: null, field: 'recipe', message: error.message }];
     renderCompareErrors();
@@ -915,10 +971,10 @@ function runCompare() {
 function recalculate() {
   renderSupplyBanks(state.banks, state.settings.gasPresets);
   renderEquipmentSummary(state.settings);
-  if (state.mode === 'compare') {
+  if (state.activeScreen === 'what-if') {
     renderCompareEditor();
     renderCompareErrors();
-    renderCompareResult();
+    renderWhatIfResult();
     return;
   }
 
@@ -942,30 +998,6 @@ function recalculate() {
   if (result.feasible) renderTernary();
   else clearTernaryDiagram(byId('ternary-canvas'));
 }
-function setMode(mode) {
-  if (!['optimize', 'compare'].includes(mode)) return;
-  state.mode = mode;
-  for (const control of document.querySelectorAll('[data-action="select-mode"]')) {
-    const selected = control.dataset.mode === mode;
-    control.setAttribute('aria-pressed', String(selected));
-    control.className = selected
-      ? 'rounded-lg border border-cyan-500/40 bg-cyan-500/20 px-3 py-1.5 text-xs font-semibold text-cyan-300'
-      : 'rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-400';
-  }
-  byId('target-state-section').hidden = mode === 'compare';
-  byId('supply-banks-section').hidden = mode === 'compare';
-  byId('compare-recipe-section').hidden = mode !== 'compare';
-  if (mode === 'compare') {
-    renderCompareErrors();
-    renderCompareEditor();
-    renderCompareResult();
-  } else if (state.lastResult) {
-    renderResults(state.lastResult, state.lastInput);
-    renderThermalCharts(state.lastResult, state.lastInput);
-    if (state.lastResult.feasible) renderTernary();
-    else clearTernaryDiagram(byId('ternary-canvas'));
-  }
-}
 
 
 function selectScreen(screenId) {
@@ -975,13 +1007,21 @@ function selectScreen(screenId) {
   }
   if (!setPrimaryScreen(document, screenId)) return;
   state.activeScreen = screenId;
-}
+  if (screenId === 'what-if') {
+    renderCompareEditor();
+    renderCompareErrors();
+    renderWhatIfResult();
+  }
 
+}
 function setTab(tabId, focus = false) {
   if (!setResultTab(document, tabId)) return;
   state.activeTab = tabId;
   if (focus) byId(`tab-btn-${tabId}`)?.focus();
-  if (tabId === 'ternary') requestAnimationFrame(renderTernary);
+  if (tabId === 'ternary') {
+    renderTernary();
+    byId('ternary-coords-hover').textContent = 'Move over diagram for gas fractions';
+  }
 }
 
 function handleResultTabKeydown(event) {
@@ -1188,6 +1228,13 @@ function handleInputOrChange(event) {
   }
 
   if (target.dataset.recalculate === event.type) {
+    if (event.type === 'input' && ['init-p', 'target-p'].includes(target.id)) {
+      const displayValue = Number.parseFloat(target.value);
+      if (Number.isFinite(displayValue)) {
+        const canonicalValue = convertFromDisplay(displayValue, 'pressureBar', state.settings.units);
+        target.value = formatInputValue(canonicalValue, 'pressureBar', state.settings.units);
+      }
+    }
     markGasPresetCustom(target);
     if (target.id === 'wait-mode') updateWaitModeFields();
     recalculate();
@@ -1261,11 +1308,8 @@ function handleClick(event) {
   if (!actionElement || actionElement.disabled) return;
 
   switch (actionElement.dataset.action) {
-    case 'select-mode':
-      setMode(actionElement.dataset.mode);
-      break;
     case 'add-compare-row':
-      state.compareRows.push(createCompareRow('keep', `compare-row-${nextCompareRowNumber++}`));
+      state.compareRows.push(createCompareRow('drain', `compare-row-${nextCompareRowNumber++}`));
       state.compareErrors = [];
       renderCompareErrors();
       renderCompareEditor();

@@ -158,18 +158,34 @@ function attachPointerReadout(canvas) {
   const output = document.getElementById('ternary-coords-hover');
   if (!output) return;
 
-  canvas.addEventListener('pointermove', event => {
-    if (!activeCanvases.has(canvas)) return;
+  const updateReadout = event => {
+    if (!verticesByCanvas.has(canvas) && !canvas.getBoundingClientRect().width) return;
     const rect = canvas.getBoundingClientRect();
-    const vertices = verticesByCanvas.get(canvas);
+    let vertices = verticesByCanvas.get(canvas);
+    if (!vertices && rect.width > 0 && rect.height > 0) {
+      vertices = createVertices(rect.width, rect.height);
+      verticesByCanvas.set(canvas, vertices);
+    }
     if (!vertices) return;
     const mix = getCompositionAtPoint(event.clientX - rect.left, event.clientY - rect.top, vertices);
     output.textContent = `${mix.oxygenPercent.toFixed(1)}% O₂ · ${mix.heliumPercent.toFixed(1)}% He · ${mix.nitrogenPercent.toFixed(1)}% N₂`;
-  });
-  canvas.addEventListener('pointerleave', () => {
+  };
+  const documentUpdate = event => {
+    updateReadout(event);
+  };
+  document.addEventListener('mousemove', documentUpdate, true);
+  const eventTarget = canvas.parentElement ?? canvas;
+  eventTarget.addEventListener('pointermove', updateReadout);
+  eventTarget.addEventListener('mousemove', updateReadout);
+  canvas.addEventListener('pointermove', updateReadout);
+  canvas.addEventListener('mousemove', updateReadout);
+  const resetReadout = () => {
     if (activeCanvases.has(canvas)) output.textContent = 'Hover for gas fractions';
-  });
-  canvasesWithPointerReadout.add(canvas);
+  };
+  eventTarget.addEventListener('pointerleave', resetReadout);
+  eventTarget.addEventListener('mouseleave', resetReadout);
+  canvas.addEventListener('pointerleave', resetReadout);
+  canvas.addEventListener('mouseleave', resetReadout);
 }
 
 function attachWheelZoom(canvas, redraw) {
@@ -465,9 +481,9 @@ function renderAccessibleChartData({ banks, initialMix, targetMix, trajectory, m
 export function renderTernaryDiagram(canvas, { banks, initialMix, targetMix, trajectory, mode = 'optimizer' }) {
   if (!canvas) return;
   canvas.setAttribute('aria-label', 'Gas composition ternary diagram');
-  const coordinates = document.getElementById('ternary-coords-hover');
-  if (coordinates) coordinates.textContent = 'Hover for gas fractions';
   renderAccessibleChartData({ banks, initialMix, targetMix, trajectory, mode });
+  attachPointerReadout(canvas);
+  activeCanvases.add(canvas);
   const rect = canvas.getBoundingClientRect();
   if (rect.width === 0 || rect.height === 0) return;
 
@@ -588,8 +604,9 @@ export function clearTernaryDiagram(canvas) {
 
 export function observeTernaryCanvas(canvas, redraw) {
   if (!canvas) return null;
+  attachPointerReadout(canvas);
+  activeCanvases.add(canvas);
   attachWheelZoom(canvas, redraw);
-  if (!window.ResizeObserver) return null;
   const observer = new ResizeObserver(redraw);
   observer.observe(canvas.parentElement);
   return observer;

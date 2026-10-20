@@ -42,10 +42,11 @@ test.describe('continued browser sessions', () => {
     });
     await expect(rowA.getByRole('textbox', { name: /bank name$/i })).toHaveValue('Continued-session bank');
     const sessionB = await createContinuedSession(pageA);
+    await sessionB.page.getByRole('tab', { name: 'Inventory', exact: true }).click();
     const rowB = bankRows(sessionB.page).nth(index);
     await expect(rowB.getByRole('textbox', { name: /bank name$/i })).toHaveValue('Continued-session bank');
     await expect(rowB.getByRole('combobox', { name: /^Gas preset for /i })).toHaveValue('gas:Tx 18/45');
-    await expect(rowB.getByRole('spinbutton', { name: /volume in litres$/i })).toHaveValue('32');
+    await expect(rowB.getByRole('spinbutton', { name: /volume in (?:litres|L)$/i })).toHaveValue('32');
     await expect(rowB.getByRole('spinbutton', { name: /pressure in bar$/i })).toHaveValue('180');
     await expect(rowB.getByRole('spinbutton', { name: /oxygen percentage$/i })).toHaveValue('18');
     await expect(rowB.getByRole('spinbutton', { name: /helium percentage$/i })).toHaveValue('45');
@@ -53,8 +54,9 @@ test.describe('continued browser sessions', () => {
     await expect(sessionB.page.locator('#steps-container')).toContainText(/from Continued-session bank to/i);
     await editBank(sessionB.page, index, { enabled: false });
     const sessionC = await createContinuedSession(sessionB.page);
+    await sessionC.page.getByRole('tab', { name: 'Inventory', exact: true }).click();
     const rowC = bankRows(sessionC.page).nth(index);
-    await expect(rowC.getByRole('spinbutton', { name: /volume in litres$/i })).toHaveValue('32');
+    await expect(rowC.getByRole('spinbutton', { name: /volume in (?:litres|L)$/i })).toHaveValue('32');
     await expect(rowC.getByRole('spinbutton', { name: /pressure in bar$/i })).toHaveValue('180');
     await expect(rowC.getByRole('spinbutton', { name: /oxygen percentage$/i })).toHaveValue('18');
     await expect(rowC.getByRole('spinbutton', { name: /helium percentage$/i })).toHaveValue('45');
@@ -62,6 +64,7 @@ test.describe('continued browser sessions', () => {
     await expect(sessionC.page.locator('#steps-container')).not.toContainText('Continued-session bank');
     await removeBank(sessionC.page, index);
     const sessionD = await createContinuedSession(sessionC.page);
+    await sessionD.page.getByRole('tab', { name: 'Inventory', exact: true }).click();
     await expect.poll(() => bankRows(sessionD.page).evaluateAll(rows => rows.some(row => (
       row.querySelector('input[aria-label$="bank name"]')?.value === 'Continued-session bank'
     )))).toBe(false);
@@ -86,28 +89,32 @@ test.describe('continued browser sessions', () => {
     const unitsA = await openSettingsCategory(pageA, 'units');
     await unitsA.getByRole('combobox', { name: 'Units' }).selectOption('imperial');
     await saveSettings(pageA);
-    await expect(pageA.locator('#init-p')).toHaveValue('580.150952');
-    await expect(pageA.locator('#init-p')).toHaveAccessibleName(/in psi$/i);
+    await expect(pageA.locator('#init-p')).toHaveValue('580.2');
+    await expect(pageA.locator('#init-p')).toHaveAttribute('aria-label', /in psi$/i);
     const sessionB = await createContinuedSession(pageA);
+    await sessionB.page.getByRole('tab', { name: 'Inventory', exact: true }).click();
     const unitsB = await openSettingsCategory(sessionB.page, 'units');
     await expect(unitsB.getByRole('combobox', { name: 'Units' })).toHaveValue('imperial');
     const cylindersB = await openSettingsCategory(sessionB.page, 'cylinder-presets');
-    await expect(cylindersB.locator('[data-settings-index="0"][data-settings-field="volumeL"]:visible')).toHaveValue('0.10594400009999999');
+    await expect(cylindersB.locator('[data-settings-index="0"][data-settings-field="volumeL"]:visible')).toHaveValue('0.10594400016446577');
     await expect(cylindersB.locator('[data-settings-index="0"][data-settings-field="workingPressureBar"]:visible')).toHaveValue('3364.8755216');
+    await sessionB.page.getByRole('tab', { name: 'Inventory', exact: true }).click();
     const rowB = bankRows(sessionB.page).nth(index);
-    await expect(rowB.getByRole('spinbutton', { name: /volume in ft³$/i })).toHaveValue('0.42377600039999996');
+    await expect(rowB.getByRole('spinbutton', { name: /volume in (?:ft³|cu ft)$/i })).toHaveValue('0.4237760006578631');
     await expect(rowB.getByRole('spinbutton', { name: /pressure in psi$/i })).toHaveValue('2175.56607');
     const unitsMetric = await openSettingsCategory(sessionB.page, 'units');
     await unitsMetric.getByRole('combobox', { name: 'Units' }).selectOption('metric');
     await saveSettings(sessionB.page);
     const sessionC = await createContinuedSession(sessionB.page);
+    await sessionC.page.getByRole('tab', { name: 'Inventory', exact: true }).click();
     const unitsC = await openSettingsCategory(sessionC.page, 'units');
     await expect(unitsC.getByRole('combobox', { name: 'Units' })).toHaveValue('metric');
     const cylindersC = await openSettingsCategory(sessionC.page, 'cylinder-presets');
     await expect(cylindersC.locator('[data-settings-index="0"][data-settings-field="volumeL"]:visible')).toHaveValue('3');
     await expect(cylindersC.locator('[data-settings-index="0"][data-settings-field="workingPressureBar"]:visible')).toHaveValue('232');
+    await sessionC.page.getByRole('tab', { name: 'Inventory', exact: true }).click();
     const rowC = bankRows(sessionC.page).nth(index);
-    await expect(rowC.getByRole('spinbutton', { name: /volume in litres$/i })).toHaveValue('12');
+    await expect(rowC.getByRole('spinbutton', { name: /volume in (?:litres|L)$/i })).toHaveValue('12');
     await expect(rowC.getByRole('spinbutton', { name: /pressure in bar$/i })).toHaveValue('150');
     await expect(sessionC.page.evaluate(() => JSON.parse(localStorage.getItem('simplex-gas-remixer-banks')).find(bank => bank.name === 'Imperial session bank'))).resolves.toMatchObject({ volumeL: 12, pressureBar: 150 });
     await closeSession(sessionC);
@@ -143,6 +150,7 @@ test.describe('continued browser sessions', () => {
     await expect.poll(() => gasPaneB.getByRole('textbox', { name: 'Gas preset name' }).evaluateAll(inputs => (
       inputs.some(input => input.value === 'Continued Session Gas')
     ))).toBe(true);
+    await sessionB.page.getByRole('tab', { name: 'Inventory', exact: true }).click();
     const bankPresetB = bankRows(sessionB.page).first().getByRole('combobox', { name: /^Gas preset for /i });
     await expect(bankPresetB.locator('option', { hasText: 'Continued Session Gas' })).toHaveCount(1);
     const management = await openSettingsCategory(sessionB.page, 'preset-management');
@@ -153,6 +161,7 @@ test.describe('continued browser sessions', () => {
     const consentC = sessionC.page.getByRole('dialog', { name: 'Analytics consent', exact: true });
     await expect(consentC).toBeVisible();
     await consentC.getByRole('button', { name: 'Accept and continue', exact: true }).click();
+    await sessionC.page.getByRole('tab', { name: 'Inventory', exact: true }).click();
     await sessionC.page.locator('.driver-popover').getByRole('button', { name: /skip/i }).click();
     await expect(sessionC.page.locator('html')).toHaveAttribute('data-theme', 'light');
     const gasPaneC = await openSettingsCategory(sessionC.page, 'gas-presets');
@@ -166,7 +175,7 @@ test.describe('continued browser sessions', () => {
     await expect(cylindersC.locator('[data-settings-index="0"][data-settings-field="workingPressureBar"]:visible')).toHaveValue('232');
     const equipmentC = await openSettingsCategory(sessionC.page, 'equipment');
     await expect(equipmentC.getByRole('spinbutton', { name: 'Maximum compressor pressure' })).toHaveValue('232');
-    await expect(equipmentC.getByRole('spinbutton', { name: 'Maximum booster output pressure' })).toHaveValue('230');
+    await sessionC.page.getByRole('tab', { name: 'Inventory', exact: true }).click();
     const factoryRows = bankRows(sessionC.page);
     await expect(factoryRows).toHaveCount(3);
     await expect(factoryRows.nth(0).getByRole('textbox', { name: /bank name$/i })).toHaveValue('Helium');

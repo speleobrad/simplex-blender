@@ -4,11 +4,12 @@ import { readFileSync } from 'node:fs';
 
 const markup = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
-test('provides optimize and compare mode controls with the compare editor', () => {
-  assert.match(markup, /data-action="select-mode"[^>]*data-mode="optimize"/);
-  assert.match(markup, /data-action="select-mode"[^>]*data-mode="compare"/);
+test('provides a top-level What-if editor for exact tank operations', () => {
+  assert.match(markup, /id="primary-tab-what-if"[^>]*data-screen="what-if"/);
+  assert.match(markup, /id="screen-what-if"[^>]*role="tabpanel"/);
   assert.match(markup, /id="compare-recipe-editor"/);
-  assert.match(markup, /data-action="run-compare"/);
+  assert.doesNotMatch(markup, /data-action="select-mode"/);
+  assert.doesNotMatch(markup, /id="recipe-mode-title"/);
 });
 
 test('retains compare result hosts for the result renderer', () => {

@@ -11,7 +11,7 @@ const CATEGORIES = {
 };
 
 function settingsDialog(page) {
-  return page.locator('#settings-dialog');
+  return page.locator('#screen-settings');
 }
 
 /** Open Settings when needed, select a category, and verify its active pane. */

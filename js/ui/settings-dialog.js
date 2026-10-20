@@ -1,6 +1,6 @@
 import { PRESET_IMPORT_DEFAULT_URLS } from '../preset-import.js';
 import { sortCylinderPresetEntries, sortGasPresetEntries } from '../settings.js';
-
+import { convertToDisplay } from '../units.js';
 const CUSTOM_PRESET = 'custom';
 
 function createPresetInput({ value, type, collection, index, field, label, min, max, step }) {
@@ -125,8 +125,22 @@ function createCylinderField(label, content) {
   field.append(labelElement, content);
   return field;
 }
+function cylinderDisplayValue(value, field, units) {
+  const quantity = { volumeL: 'volumeL', massKg: 'massKg', workingPressureBar: 'pressureBar' }[field];
+  return quantity ? convertToDisplay(value, quantity, units) : value;
+}
 
-function createCylinderCard(preset, index, presetCount) {
+function cylinderUnitLabel(field, units) {
+  const labels = {
+    volumeL: 'litres',
+    massKg: 'kilograms',
+    workingPressureBar: 'bar'
+  };
+  return labels[field] ?? '';
+}
+
+
+function createCylinderCard(preset, index, presetCount, units) {
   const card = document.createElement('article');
   card.className = 'rounded-xl border border-ocean-800/80 bg-ocean-950/40 p-3 sm:hidden';
   const header = document.createElement('div');
@@ -145,27 +159,27 @@ function createCylinderCard(preset, index, presetCount) {
   fields.className = 'mt-3 grid grid-cols-2 gap-2';
   fields.append(
     createCylinderField('Material', createMaterialSelect(preset, index)),
-    createCylinderField('Volume (L)', createCylinderNumberInput({
-      value: preset.volumeL,
+    createCylinderField(`Volume (${cylinderUnitLabel('volumeL', units)})`, createCylinderNumberInput({
+      value: cylinderDisplayValue(preset.volumeL, 'volumeL', units),
       index,
       field: 'volumeL',
-      label: `${preset.name || 'Cylinder'} internal volume in litres`,
+      label: `${preset.name || 'Cylinder'} internal volume in ${cylinderUnitLabel('volumeL', units)}`,
       min: 0.1,
       step: 0.1
     })),
-    createCylinderField('Mass (kg)', createCylinderNumberInput({
-      value: preset.massKg,
+    createCylinderField(`Mass (${cylinderUnitLabel('massKg', units)})`, createCylinderNumberInput({
+      value: cylinderDisplayValue(preset.massKg, 'massKg', units),
       index,
       field: 'massKg',
-      label: `${preset.name || 'Cylinder'} mass in kilograms`,
+      label: `${preset.name || 'Cylinder'} mass in ${cylinderUnitLabel('massKg', units)}`,
       min: 0.1,
       step: 0.1
     })),
-    createCylinderField('Max pressure (bar)', createCylinderNumberInput({
-      value: preset.workingPressureBar,
+    createCylinderField(`Max pressure (${cylinderUnitLabel('workingPressureBar', units)})`, createCylinderNumberInput({
+      value: cylinderDisplayValue(preset.workingPressureBar, 'workingPressureBar', units),
       index,
       field: 'workingPressureBar',
-      label: `${preset.name || 'Cylinder'} working pressure in bar`,
+      label: `${preset.name || 'Cylinder'} working pressure in ${cylinderUnitLabel('workingPressureBar', units)}`,
       min: 10,
       max: 350,
       step: 1
@@ -183,14 +197,14 @@ function createCylinderCard(preset, index, presetCount) {
   return card;
 }
 
-function renderCylinderRows(presets) {
+function renderCylinderRows(presets, units) {
   const container = document.getElementById('settings-cylinder-presets');
   if (!container) return;
   const sortedPresets = sortCylinderPresetEntries(presets);
   const cards = document.createElement('div');
   cards.className = 'space-y-2 sm:hidden';
   for (const { preset, index } of sortedPresets) {
-    cards.append(createCylinderCard(preset, index, presets.length));
+    cards.append(createCylinderCard(preset, index, presets.length, units));
   }
 
   const table = document.createElement('table');
@@ -232,27 +246,27 @@ function renderCylinderRows(presets) {
       createTableCell(name, 'px-1.5 py-1'),
       createTableCell(createMaterialSelect(preset, index), 'px-1.5 py-1'),
       createTableCell(createCylinderNumberInput({
-        value: preset.volumeL,
+        value: cylinderDisplayValue(preset.volumeL, 'volumeL', units),
         index,
         field: 'volumeL',
-        label: `${preset.name || 'Cylinder'} internal volume in litres`,
+        label: `${preset.name || 'Cylinder'} internal volume in ${cylinderUnitLabel('volumeL', units)}`,
         min: 0.1,
         step: 0.1
       }), 'px-1.5 py-1'),
       createTableCell(createCylinderNumberInput({
-        value: preset.massKg,
+        value: cylinderDisplayValue(preset.massKg, 'massKg', units),
         index,
         field: 'massKg',
         width: 'w-16',
-        label: `${preset.name || 'Cylinder'} mass in kilograms`,
+        label: `${preset.name || 'Cylinder'} mass in ${cylinderUnitLabel('massKg', units)}`,
         min: 0.1,
         step: 0.1
       }), 'px-1.5 py-1'),
       createTableCell(createCylinderNumberInput({
-        value: preset.workingPressureBar,
+        value: cylinderDisplayValue(preset.workingPressureBar, 'workingPressureBar', units),
         index,
         field: 'workingPressureBar',
-        label: `${preset.name || 'Cylinder'} working pressure in bar`,
+        label: `${preset.name || 'Cylinder'} working pressure in ${cylinderUnitLabel('workingPressureBar', units)}`,
         min: 10,
         max: 350,
         step: 1
@@ -378,7 +392,6 @@ export function renderPresetImport(settings, importState = {}) {
     || !(importState.candidates ?? []).some(candidate => (
       candidate.status === 'new'
       && candidate.selectable !== false
-      && selectedIds.has(candidate.id)
     ));
   importButton.textContent = importState.loading ? 'Loading…' : 'Import selected';
 }
@@ -389,7 +402,7 @@ export function renderSettingsDialog(settings, importState) {
   const physicsModel = document.getElementById('settings-physics-model');
   if (physicsModel && settings.physics?.model) physicsModel.value = settings.physics.model;
   renderGasRows(settings.gasPresets);
-  renderCylinderRows(settings.cylinderPresets);
+  renderCylinderRows(settings.cylinderPresets, settings.units);
   renderEquipmentPresetSelector(
     'settings-compressor-preset',
     settings.compressorPresets,

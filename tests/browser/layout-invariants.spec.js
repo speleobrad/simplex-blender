@@ -117,13 +117,14 @@ test.describe('layout invariants', () => {
 
   test('viewport-relative boxes stay correct after scrolling', async ({ appPage }) => {
     const page = await loadApplication(appPage);
+    await page.getByRole('tab', { name: 'Inventory', exact: true }).click();
     const visible = page.locator('#equipment-section');
     await visible.scrollIntoViewIfNeeded();
     await assertInsideViewport(page, visible);
     await page.evaluate(() => {
       const fixture = document.createElement('div');
       fixture.id = 'synthetic-scrolled-offscreen';
-      fixture.style.cssText = 'position:absolute;left:0;top:0;width:40px;height:20px;';
+      fixture.style.cssText = 'position:fixed;left:0;top:100vh;width:40px;height:20px;';
       document.body.append(fixture);
       window.scrollTo(0, document.body.scrollHeight);
     });

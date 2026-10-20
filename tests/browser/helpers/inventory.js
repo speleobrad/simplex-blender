@@ -26,6 +26,7 @@ export function bankRow(page, rowIndex) {
  * volumeL, pressureBar, oxygenPercent, heliumPercent, enabled, or gasPreset.
  */
 export async function editBank(page, rowIndex, values) {
+  await page.getByRole('tab', { name: 'Inventory', exact: true }).click();
   const row = bankRow(page, rowIndex);
   await expect(row).toBeVisible();
   for (const [field, value] of Object.entries(values)) {
@@ -51,12 +52,12 @@ export async function editBank(page, rowIndex, values) {
 export async function addBank(page) {
   const rows = bankRows(page);
   const count = await rows.count();
+  await page.getByRole('tab', { name: 'Inventory', exact: true }).click();
   await bankPanel(page).getByRole('button', { name: 'Add Bank', exact: true }).click();
   await expect(rows).toHaveCount(count + 1);
   return rows.nth(count);
 }
 
-/** Remove the supplied row, keeping the action scoped to that row. */
 export async function removeBank(page, rowIndex) {
   const rows = bankRows(page);
   const count = await rows.count();

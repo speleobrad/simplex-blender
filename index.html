@@ -35,6 +35,7 @@
       <nav id="primary-navigation" aria-label="Primary navigation" class="order-3 flex w-full items-center justify-center gap-1 rounded-xl border border-ocean-800 bg-ocean-950 p-1 sm:order-none sm:w-auto">
         <div role="tablist" aria-label="Primary screens" class="flex items-center gap-1">
           <button type="button" id="primary-tab-blending" role="tab" data-action="select-screen" data-screen="blending" aria-controls="screen-blending" aria-selected="true" aria-current="page" class="primary-nav-button rounded-lg border border-cyan-500/40 bg-cyan-500/20 px-3 py-1.5 text-xs font-semibold text-cyan-300 shadow-sm transition">Blending</button>
+          <button type="button" id="primary-tab-what-if" role="tab" data-action="select-screen" data-screen="what-if" aria-controls="screen-what-if" aria-selected="false" aria-current="false" class="primary-nav-button rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-400 transition hover:text-slate-200">What-if</button>
           <button type="button" id="primary-tab-inventory" role="tab" data-action="select-screen" data-screen="inventory" aria-controls="screen-inventory" aria-selected="false" aria-current="false" class="primary-nav-button rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-400 transition hover:text-slate-200">Inventory</button>
           <button type="button" id="settings-launch" role="tab" data-action="select-screen" data-screen="settings" aria-controls="screen-settings" aria-selected="false" aria-current="false" class="primary-nav-button rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-400 transition hover:text-slate-200">Settings</button>
         </div>
@@ -66,7 +67,7 @@
       <div class="py-5">
         <div class="settings-category-scroll relative min-w-0">
         <nav aria-label="Settings categories" class="settings-category-list flex gap-2 overflow-x-auto border-b border-ocean-800 pb-3">
-          <button type="button" data-action="select-settings-category" data-settings-category="general" aria-controls="settings-pane-general" aria-selected="true" class="settings-category-button settings-category-selected shrink-0 rounded-lg border border-cyan-500/40 px-3 py-2 text-left text-xs font-semibold text-cyan-300 transition hover:bg-ocean-800/70">General</button>
+          <button type="button" data-action="select-settings-category" data-settings-category="model" aria-controls="settings-pane-model" aria-selected="true" class="settings-category-button settings-category-selected shrink-0 rounded-lg border border-cyan-500/40 px-3 py-2 text-left text-xs font-semibold text-cyan-300 transition hover:bg-ocean-800/70">Model</button>
           <button type="button" data-action="select-settings-category" data-settings-category="units" aria-controls="settings-pane-units" aria-selected="false" class="settings-category-button shrink-0 rounded-lg border border-transparent px-3 py-2 text-left text-xs font-semibold text-slate-400 transition hover:border-ocean-700 hover:bg-ocean-800/70 hover:text-slate-200">Units</button>
           <button type="button" data-action="select-settings-category" data-settings-category="gas-presets" aria-controls="settings-pane-gas-presets" aria-selected="false" class="settings-category-button shrink-0 rounded-lg border border-transparent px-3 py-2 text-left text-xs font-semibold text-slate-400 transition hover:border-ocean-700 hover:bg-ocean-800/70 hover:text-slate-200">Gas presets</button>
           <button type="button" data-action="select-settings-category" data-settings-category="cylinder-presets" aria-controls="settings-pane-cylinder-presets" aria-selected="false" class="settings-category-button shrink-0 rounded-lg border border-transparent px-3 py-2 text-left text-xs font-semibold text-slate-400 transition hover:border-ocean-700 hover:bg-ocean-800/70 hover:text-slate-200">Cylinder presets</button>
@@ -75,9 +76,14 @@
         </nav>
         </div>
         <div class="min-w-0">
-          <section id="settings-pane-general" aria-labelledby="settings-pane-general-title">
-            <h3 id="settings-pane-general-title" class="mb-3 text-sm font-semibold text-slate-200">General</h3>
-            <p class="mt-1 text-[10px] text-slate-500">Configure calculator preferences and saved presets.</p>
+          <section id="settings-pane-model" aria-labelledby="settings-pane-model-title">
+            <h3 id="settings-pane-model-title" class="mb-3 text-sm font-semibold text-slate-200">Model</h3>
+            <label for="settings-physics-model" class="block text-xs text-slate-400">Gas model</label>
+            <select id="settings-physics-model" data-settings-collection="physics" data-settings-field="model" aria-label="Gas model" class="mt-1 w-full rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-xs text-slate-100">
+              <option value="vdw">Van der Waals (real gas)</option>
+              <option value="ideal">Ideal gas</option>
+            </select>
+            <p class="mt-1 text-[10px] text-slate-500">Choose the pressure model used by the calculator.</p>
           </section>
 
           <section id="settings-pane-units" aria-labelledby="settings-pane-units-title" class="hidden">
@@ -399,22 +405,6 @@
 
         </div>
       </section>
-      <section aria-labelledby="recipe-mode-title" class="bg-ocean-900/90 border border-ocean-800 rounded-2xl p-5 shadow-xl">
-        <h2 id="recipe-mode-title" class="text-sm font-bold uppercase tracking-wider text-slate-200">Recipe mode</h2>
-        <div class="mt-3 inline-flex rounded-xl border border-ocean-800 bg-ocean-950 p-1" role="group" aria-label="Recipe mode">
-          <button type="button" data-action="select-mode" data-mode="optimize" aria-pressed="true" class="rounded-lg border border-cyan-500/40 bg-cyan-500/20 px-3 py-1.5 text-xs font-semibold text-cyan-300">Optimize</button>
-          <button type="button" data-action="select-mode" data-mode="compare" aria-pressed="false" class="rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-400">Compare</button>
-        </div>
-      </section>
-
-      <section id="compare-recipe-section" aria-labelledby="compare-recipe-title" hidden class="bg-ocean-900/90 border border-ocean-800 rounded-2xl p-5 shadow-xl">
-        <h2 id="compare-recipe-title" class="text-sm font-bold uppercase tracking-wider text-slate-200">Compare recipe</h2>
-        <p id="compare-recipe-description" class="mt-2 text-xs text-slate-400">Build a sequence of tank operations and compare its modeled pressure, gas mix, and temperature states.</p>
-        <div id="compare-recipe-errors" class="mt-3" aria-live="polite"></div>
-        <div id="compare-run-status" role="status" aria-live="polite" class="mt-3 text-xs text-slate-400"></div>
-        <div id="compare-recipe-editor" class="mt-3" aria-describedby="compare-recipe-description"></div>
-        <button type="button" data-action="run-compare" class="mt-3 rounded-lg border border-cyan-500/50 bg-cyan-500/20 px-3 py-1.5 text-xs font-semibold text-cyan-200 hover:bg-cyan-500/30">Run comparison</button>
-      </section>
 
 
 
@@ -593,7 +583,23 @@
 
     </div>
     </div>
+    <div id="screen-what-if" data-primary-screen="what-if" role="tabpanel" aria-labelledby="primary-tab-what-if" hidden class="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-2">
+      <section class="bg-ocean-900/90 border border-ocean-800 rounded-2xl p-5 shadow-xl">
+        <h2 id="compare-recipe-title" class="text-sm font-bold uppercase tracking-wider text-slate-200">What-if sequence</h2>
+        <p id="compare-recipe-description" class="mt-2 text-xs text-slate-400">Define exact drain, add, and wait steps. The starting state and equipment settings come from Blending.</p>
+        <div id="compare-recipe-errors" class="mt-3" aria-live="polite"></div>
+        <div id="compare-run-status" role="status" aria-live="polite" class="mt-3 text-xs text-slate-400"></div>
+        <div id="compare-recipe-editor" class="mt-3" aria-describedby="compare-recipe-description"></div>
+      </section>
+      <section class="bg-ocean-900/90 border border-ocean-800 rounded-2xl p-5 shadow-xl">
+        <h2 class="text-sm font-bold uppercase tracking-wider text-slate-200">Projected result</h2>
+        <div id="what-if-result" class="mt-3 space-y-3 text-xs text-slate-300" aria-live="polite">
+          <p>Run the sequence to see the modeled result.</p>
+        </div>
+      </section>
+    </div>
     <div id="screen-inventory" data-primary-screen="inventory" role="tabpanel" aria-labelledby="primary-tab-inventory" hidden class="flex min-w-0 flex-col gap-6">
+      <div id="inventory-section" class="flex min-w-0 flex-col gap-6">
       <!-- Equipment summary card -->
       <section id="equipment-section" class="bg-ocean-900/90 border border-ocean-800 rounded-2xl p-5 shadow-xl">
         <div class="flex items-center gap-2 pb-3 mb-3 border-b border-ocean-800">
@@ -604,7 +610,7 @@
           <!-- Rendered via JS -->
         </div>
       </section>
-      <section id="inventory-section" class="bg-ocean-900/90 border border-ocean-800 rounded-2xl p-5 shadow-xl flex min-h-[24rem] flex-col">
+      <section id="supply-banks-section" class="bg-ocean-900/90 border border-ocean-800 rounded-2xl p-5 shadow-xl flex min-h-[24rem] flex-col">
         <div class="flex items-center justify-between pb-3 mb-3 border-b border-ocean-800">
           <div class="flex items-center gap-2">
             <span class="w-2.5 h-2.5 rounded-full bg-indigo-400"></span>
@@ -612,7 +618,7 @@
           </div>
           <button type="button" data-action="add-bank" class="px-2.5 py-1 bg-ocean-800 hover:bg-ocean-700 text-cyan-300 border border-ocean-700 rounded-lg text-xs font-mono flex items-center gap-1 transition">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-            Add bank
+            Add Bank
           </button>
         </div>
         <div class="min-w-0 max-w-full overflow-x-auto flex-1">
@@ -645,6 +651,7 @@
           </div>
         </section>
       </section>
+      </div>
     </div>
   </main>
 

@@ -22,11 +22,13 @@ function element() {
 function documentFixture() {
   const panes = {
     blending: element(),
+    'what-if': element(),
     inventory: element(),
     settings: element()
   };
   const buttons = {
     blending: element(),
+    'what-if': element(),
     inventory: element(),
     settings: element()
   };
@@ -35,9 +37,10 @@ function documentFixture() {
     buttons,
     getElementById(id) {
       return id === 'screen-blending' ? panes.blending
-        : id === 'screen-inventory' ? panes.inventory
-          : id === 'screen-settings' ? panes.settings
-            : null;
+        : id === 'screen-what-if' ? panes['what-if']
+          : id === 'screen-inventory' ? panes.inventory
+            : id === 'screen-settings' ? panes.settings
+              : null;
     },
     querySelector(selector) {
       const screen = selector.match(/data-screen="([^"]+)"/)?.[1];

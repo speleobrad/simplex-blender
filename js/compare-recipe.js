@@ -3,12 +3,11 @@ import { calcMolarDensity, calcPressure } from './physics.js';
 import { calculateBoosterFillRate } from './thermodynamics.js';
 
 export const COMPARE_ROW_TYPES = [
-  { value: 'keep', label: 'Keep' },
+  { value: 'drain', label: 'Drain' },
   { value: 'add', label: 'Add gas' },
   { value: 'wait', label: 'Wait' }
 ];
 
-// Retained until the Compare editor switches to automatic stage selection.
 export const COMPARE_METHODS = [
   { value: 'decant', label: 'Decant' },
   { value: 'boost', label: 'Boost' },
@@ -16,6 +15,7 @@ export const COMPARE_METHODS = [
 ];
 
 export const COMPRESSOR_AIR_ID = 'compressor-air';
+
 
 const COMPRESSOR_AIR_DEFAULT_PRESSURE_BAR = 232;
 
@@ -56,7 +56,10 @@ const MAX_WAIT_TEMPERATURE_C = 100;
 const PRESSURE_TOLERANCE_BAR = 1e-7;
 const STEP_COLORS = ['#06b6d4', '#f59e0b', '#10b981', '#a855f7', '#ec4899'];
 
-export function createCompareRow(type = 'keep', id = `compare-${Date.now()}-${Math.random()}`) {
+export function createCompareRow(type = 'drain', id = `compare-${Date.now()}-${Math.random()}`) {
+  if (type === 'drain') {
+    return { id, type, targetPressureBar: 0 };
+  }
   if (type === 'add') {
     return {
       id,
@@ -218,8 +221,18 @@ export function validateCompareRecipe(rows, { cylinder, banks = [], physics, set
 
   for (const row of normalizedRows) {
     const { id: rowId, type } = row;
-    if (!['keep', 'add', 'wait'].includes(type)) {
+    if (!['drain', 'keep', 'add', 'wait'].includes(type)) {
       error(errors, rowId, 'type', 'Select a valid recipe row type.');
+      continue;
+    }
+    if (type === 'drain') {
+      if (!validPressure(row.targetPressureBar)) {
+        error(errors, rowId, 'targetPressureBar', 'Drain target pressure must be between 0 and 350 bar.');
+      } else if (Number.isFinite(currentPressure) && row.targetPressureBar > currentPressure) {
+        error(errors, rowId, 'targetPressureBar', 'Drain target pressure cannot exceed the current pressure.');
+      } else {
+        currentPressure = row.targetPressureBar;
+      }
       continue;
     }
     if (type === 'add') {
@@ -494,7 +507,7 @@ function plannedCompressorStep(row, receiverStart, receiverEnd) {
 
 
 function passiveStep(row, receiver) {
-  const operation = row.type === 'wait' ? 'Wait' : 'Keep';
+  const operation = row.type === 'wait' ? 'Wait' : row.type === 'drain' ? 'Drain' : 'Keep';
   return {
     ...row,
     type: row.type,
@@ -512,6 +525,27 @@ function passiveStep(row, receiver) {
     recipeGas: null,
     title: operation,
     recipeLabel: operation
+  };
+}
+
+function receiverAfterDrain(receiver, targetPressureBar, volumeL, temperatureC, useVdw) {
+  const receiverTemperatureC = Number.isFinite(receiver.temperatureC)
+    ? receiver.temperatureC
+    : temperatureC;
+  const totalMoles = calcMolarDensity(
+    targetPressureBar,
+    receiver.mix.oxygenPercent,
+    receiver.mix.heliumPercent,
+    receiverTemperatureC,
+    useVdw
+  ) * volumeL;
+  return {
+    totalMoles,
+    oxygenMoles: totalMoles * (receiver.mix.oxygenPercent / 100),
+    heliumMoles: totalMoles * (receiver.mix.heliumPercent / 100),
+    mix: { ...receiver.mix },
+    temperatureC: receiverTemperatureC,
+    pressureBar: targetPressureBar
   };
 }
 
@@ -617,6 +651,24 @@ export function buildCompareProtocol(rows, { cylinder, physics, banks = [], sett
   let trajectoryStep = 0;
 
   for (const row of validation.normalizedRows) {
+    if (row.type === 'drain') {
+      const receiverStart = receiver;
+      const receiverFinal = receiverAfterDrain(
+        receiver,
+        row.targetPressureBar,
+        volumeL,
+        temperatureC,
+        useVdw
+      );
+      const step = passiveStep(row, receiverStart);
+      step.receiverEndPressureBar = receiverFinal.pressureBar;
+      step.resultingPressureBar = receiverFinal.pressureBar;
+      step.resultingMix = { ...receiverFinal.mix };
+      protocolSteps.push(step);
+      trajectoryStep = addTrajectoryPoint(trajectory, step, trajectoryStep);
+      receiver = receiverFinal;
+      continue;
+    }
     if (row.type !== 'add') {
       const step = passiveStep(row, receiver);
       const waitState = row.type === 'wait' ? waitStates[row.id] : null;

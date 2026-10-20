@@ -51,6 +51,16 @@ export const test = base.extend({
         await page.evaluate(() => { window.name = ''; });
         await seedStorage(scenarioName);
         await page.goto('/index.html');
+        const consentDialog = page.getByRole('dialog', { name: 'Analytics consent', exact: true });
+        if (await consentDialog.count()) return page;
+        const screenTab = /inventory/i.test(scenarioName)
+          ? page.getByRole('tab', { name: 'Inventory', exact: true })
+          : page.getByRole('tab', { name: 'Blending', exact: true });
+        if ((await screenTab.getAttribute('aria-selected')) !== 'true') await screenTab.click();
+        if (!/inventory/i.test(scenarioName)) {
+          const recipeTab = page.getByRole('tab', { name: 'Recipe', exact: true });
+          if ((await recipeTab.getAttribute('aria-selected')) !== 'true') await recipeTab.click();
+        }
         return page;
       },
       page,
