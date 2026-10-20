@@ -85,13 +85,14 @@ export function scheduleSafeThermalProtocol({
         resultingPressureBar: pressureBar,
         resultingMix: preceding?.resultingMix ?? {},
         waitMinutes: 0,
-        automaticWaitMinutes: 1,
+        configuredWaitMinutes: 0,
+        automaticWaitMinutes: 0,
         automaticWaitMetadata: {
           stepIndex: unsafeIndex,
           stepIdentifier: `automatic-wait-${unsafeIndex}`,
           configuredWaitMinutes: 0,
-          actualWaitMinutes: 1,
-          addedWaitMinutes: 1,
+          actualWaitMinutes: 0,
+          addedWaitMinutes: 0,
           warning: '!'
         }
       });
@@ -162,8 +163,7 @@ export function scheduleSafeThermalProtocol({
           receiverEndPressureBar: boundary,
           resultingPressureBar: boundary,
           resultingMix: transferStep.resultingMix,
-          waitMinutes: 0,
-          automaticWaitMinutes: 1,
+          automaticWaitMinutes: 0,
           automaticWaitMetadata: {
             stepIndex: unsafeIndex + 1,
             stepIdentifier: `automatic-wait-${unsafeIndex + 1}`,
