@@ -1875,13 +1875,32 @@ function thermalizedMaximumResult(candidate, requestedInWaterPressureBar, reques
       }
     };
   }
-  const simulation = simulateThermalProtocol({
+  const scheduled = scheduleSafeThermalProtocol({
     protocolSteps: maximum.protocolSteps,
     cylinder: candidate.candidateInput.cylinder,
     physics: candidate.candidateInput.physics,
     thermal: candidate.candidateInput.thermal,
     settings: candidate.candidateInput.settings
   });
+  if (scheduled.unsafe) {
+    return {
+      ...candidate.result,
+      gas: candidate.result.gas && { ...candidate.result.gas, targetPressureBar: requestedInWaterPressureBar },
+      maximumPressure: null,
+      thermal: {
+        finalTransferEndPressureBar: null,
+        finalTransferEndTemperatureC: null,
+        finalAmbientPressureBar: null,
+        finalAmbientTemperatureC: null,
+        finalInWaterPressureBar: null,
+        finalInWaterTemperatureC: null,
+        requestedInWaterPressureBar,
+        requestedInWaterTemperatureC,
+        ambientSettledTargetPressureBar
+      }
+    };
+  }
+  const simulation = scheduled.simulation;
   const maximumCandidate = { ...candidate, simulation };
   return {
     ...candidate.result,
