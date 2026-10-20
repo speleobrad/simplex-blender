@@ -23,7 +23,9 @@ export function displayStep(value, quantity, units = 'metric') {
 }
 export function formatQuantity(value, quantity, units = 'metric') {
   const display = convertToDisplay(value, quantity, units);
-  return `${Number.isFinite(display) ? display.toFixed(2) : '—'} ${getUnitLabel(quantity, units)}`;
+  if (!Number.isFinite(display)) return `— ${getUnitLabel(quantity, units)}`;
+  const formatted = display.toFixed(2).replace(/\.?0+$/, '');
+  return `${formatted} ${getUnitLabel(quantity, units)}`;
 }
 export function formatPressure(value, units = 'metric') {
   const display = convertToDisplay(value, 'pressure', units);
