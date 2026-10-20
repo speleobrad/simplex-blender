@@ -24,3 +24,15 @@
 
 ### Concerns
 - Continued-session runtime diagnostics are asserted when the prior continued context is handed off or explicitly closed; the initial `app-fixtures.js` page remains covered by its existing fixture teardown.
+
+## Task 7 follow-up
+
+### Finding addressed
+- Added the exact final factory-state assertion `await expect(sessionC.page.locator('html')).toHaveAttribute('data-theme', 'light');` after the reset session completes onboarding, ensuring factory reset restores the light theme.
+
+### Exact command and output
+- `npm run test:ui -- tests/browser/multi-session.spec.js`
+  - `15 passed (16.9s)`
+
+### Concerns
+- Playwright emitted existing `NO_COLOR`/`FORCE_COLOR` warnings; no test failures occurred.

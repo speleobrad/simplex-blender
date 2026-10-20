@@ -116,6 +116,7 @@ test.describe('continued browser sessions', () => {
     await expect(consentC).toBeVisible();
     await consentC.getByRole('button', { name: 'Accept and continue', exact: true }).click();
     await sessionC.page.locator('.driver-popover').getByRole('button', { name: /skip/i }).click();
+    await expect(sessionC.page.locator('html')).toHaveAttribute('data-theme', 'light');
     const gasPaneC = await openSettingsCategory(sessionC.page, 'gas-presets');
     await expect(gasPaneC.getByRole('textbox', { name: 'Gas preset name' }).first()).toHaveValue('Air');
     await expect.poll(() => gasPaneC.getByRole('textbox', { name: 'Gas preset name' }).evaluateAll(inputs => (
