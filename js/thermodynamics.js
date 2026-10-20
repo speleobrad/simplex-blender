@@ -689,7 +689,8 @@ export function simulateThermalProtocol({
       ? temperatureAtTransferEndC
       : isFinalStep
         ? settledTemperatureC
-        : Math.abs(intermediateTargetTemperatureC - thermal.ambientTemperatureC) < 1e-9
+        : thermal.waitMode === 'temperature'
+          && Math.abs(intermediateTargetTemperatureC - thermal.ambientTemperatureC) < 1e-9
           ? thermal.ambientTemperatureC
           : calculateTemperatureAfterWait({
             transferEndTemperatureC: temperatureAtTransferEndC,
