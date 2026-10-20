@@ -21,11 +21,11 @@ function tourDestinations() {
         ?? (destination.targetId ? [destination.targetId] : step.targetId ? [step.targetId] : []);
       return {
         stepIndex,
-        viewIndex,
         title: destination.title ?? step.title,
         body: destination.body ?? step.body,
         targetId: targetIds[0] ?? null,
         secondaryTargetIds: targetIds.slice(1),
+        screen: destination.screen ?? step.screen ?? 'blending',
         tab: destination.tab ?? step.tab ?? null,
         settingsCategory: destination.settingsCategory ?? null
       };
@@ -114,6 +114,7 @@ export function createOnboardingController({
     const destination = destinations[index];
     if (!destination) return;
     onNavigate({
+      screen: destination.screen,
       tab: destination.tab,
       settingsCategory: destination.settingsCategory
     });
@@ -175,7 +176,7 @@ export function createOnboardingController({
     });
     const notice = createElement(document, 'p', {
       className: 'onboarding-consent-notice',
-      text: 'Simplex Blender stores settings, supply banks, theme, and onboarding state in this browser. Your consent preference is stored locally on this device.'
+      text: 'Simplex Blender stores settings, Inventory, theme, and onboarding state in this browser. Your consent preference is stored locally on this device.'
     });
     consentErrorElement = createElement(document, 'p', {
       className: 'onboarding-consent-error',
@@ -280,7 +281,7 @@ export function createOnboardingController({
       onNextClick: (_element, _step, options) => {
         const nextIndex = (options.index ?? activeIndex) + 1;
         if (nextIndex >= destinations.length) {
-          closeInternal(true, true);
+          close();
           return;
         }
         moveTo(nextIndex, options.driver);
@@ -288,11 +289,8 @@ export function createOnboardingController({
       onPrevClick: (_element, _step, options) => {
         moveTo((options.index ?? activeIndex) - 1, options.driver);
       },
-      onDoneClick: () => {
-        onNavigate({ tab: 'recipe', settingsCategory: null });
-        closeInternal(true, true);
-      },
-      onCloseClick: () => closeInternal(true, true),
+      onDoneClick: () => close(),
+      onCloseClick: () => close(),
       onDestroyed: () => {
         if (mode === 'wizard') closeInternal(true, false);
       }
@@ -311,8 +309,8 @@ export function createOnboardingController({
     }
     startTour();
   }
-
   function close() {
+    onNavigate({ screen: 'blending', tab: 'recipe', settingsCategory: null });
     closeInternal(true, true);
   }
 

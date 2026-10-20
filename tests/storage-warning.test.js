@@ -16,19 +16,19 @@ function warningElement() {
   };
 }
 
-test('shows bank-save failures in the visible warning element', () => {
+test('shows Inventory-save failures in the visible warning element', () => {
   const warning = warningElement();
 
   renderStorageWarning(warning, { bankSaveFailure: new Error('storage unavailable') });
 
-  assert.match(warning.textContent, /supply bank changes could not be saved/i);
+  assert.match(warning.textContent, /Inventory changes could not be saved/i);
   assert.equal(warning.classes.has('hidden'), false);
 });
-test('reports supply-bank save failures in the visible storage warning', () => {
+test('reports Inventory save failures in the visible storage warning', () => {
   const messages = getStorageWarningMessages({ bankSaveFailure: new Error('storage unavailable') });
 
   assert.equal(messages.length, 1);
-  assert.match(messages[0], /supply bank changes could not be saved/i);
+  assert.match(messages[0], /Inventory changes could not be saved/i);
 });
 
 test('reports onboarding-load failures in the visible storage warning', () => {

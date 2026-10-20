@@ -12,10 +12,13 @@ import {
   selectEquipmentPreset,
   validateSettings
 } from './settings.js';
+import { convertFromDisplay, convertToDisplay, formatInputValue, METRIC_UNITS, unitLabel } from './units.js';
 import { resetApplicationState } from './factory-reset.js';
 import { analyzePresetSource, mergeSelectedPresets, PRESET_IMPORT_DEFAULT_URLS } from './preset-import.js';
 import { loadSupplyBanks, saveSupplyBanks } from './bank-storage.js';
 import { loadTheme, saveTheme } from './theme.js';
+import { setPrimaryScreen } from './navigation.js';
+import { RESULT_TABS, setResultTab } from './result-tabs.js';
 import { loadOnboardingState } from './onboarding.js';
 import { loadAnalytics } from './analytics.js';
 import { createOnboardingController } from './ui/onboarding.js';
@@ -26,7 +29,6 @@ import { renderSupplyBanks } from './ui/supply-banks.js';
 import { renderStorageWarning } from './ui/storage-warning.js';
 import { renderThermalCharts } from './ui/thermal-charts.js';
 import { changeTernaryZoom, clearTernaryDiagram, observeTernaryCanvas, renderTernaryDiagram } from './ui/ternary.js';
-import { convertFromDisplay, convertToDisplay, getUnitLabel, displayStep } from './units.js';
 
 const settingsStorage = {
   getItem: key => window.localStorage.getItem(key),
@@ -63,15 +65,14 @@ function resetPresetImportState(category = 'gas') {
   state.settingsImport = createPresetImportState(category);
 }
 
-const RESULT_TABS = ['recipe', 'ternary', 'thermal', 'summary', 'water-pressure'];
-
 const state = {
   banks: initialBanks,
   settings: initialSettings,
   settingsDraft: null,
   settingsSession: 0,
-  settingsCategory: 'model',
+  settingsCategory: 'general',
   settingsImport: createPresetImportState(),
+  settingsReturnScreen: 'blending',
   theme: loadTheme(settingsStorage),
   onboarding: null,
   onboardingController: null,
@@ -80,6 +81,7 @@ const state = {
   banksLoadFailure,
   bankSaveFailure: null,
   bankInputFailure: null,
+  activeScreen: 'blending',
   activeTab: 'recipe',
   interimMeasurements: [],
   interimMeasurementSignature: null,
@@ -114,24 +116,47 @@ function refreshPresetOptions(selectedCylinderName = null) {
 
 const byId = id => document.getElementById(id);
 const numberValue = id => parseNumericInput(byId(id).value);
+const canonicalNumberValue = (id, quantity) => convertFromDisplay(numberValue(id), quantity, state.settings.units);
 
+function convertDisplayedInputs(fromUnits, toUnits) {
+  for (const [id, quantity] of [
+    ['init-p', 'pressureBar'],
+    ['target-p', 'pressureBar'],
+    ['ambient-temperature', 'temperatureC'],
+    ['inlet-gas-temperature', 'temperatureC'],
+    ['wait-target-temperature', 'temperatureC']
+  ]) {
+    const input = byId(id);
+    if (!input) continue;
+    const canonical = convertFromDisplay(Number.parseFloat(input.value), quantity, fromUnits);
+    input.value = quantity === 'pressureBar'
+      ? formatInputValue(canonical, quantity, toUnits)
+      : String(convertToDisplay(canonical, quantity, toUnits));
+  }
+
+  const pressureStep = toUnits === 'imperial' ? '0.1' : '1';
+  for (const [id, minimumBar] of [['init-p', 0], ['target-p', 10]]) {
+    const input = byId(id);
+    if (!input) continue;
+    input.min = formatInputValue(minimumBar, 'pressureBar', toUnits);
+    input.max = formatInputValue(350, 'pressureBar', toUnits);
+    input.step = pressureStep;
+  }
+}
 state.onboarding = loadOnboardingState(settingsStorage, error => {
   state.onboardingLoadFailure = error;
 });
 state.onboardingController = createOnboardingController({
   document,
   storage: settingsStorage,
-  initialState: state.onboarding,
   onNavigate: destination => {
-    const settingsDialog = byId('settings-dialog');
     const settingsCategory = destination?.settingsCategory ?? null;
+    const screen = destination?.screen ?? 'blending';
     if (settingsCategory) {
-      if (!settingsDialog.open) openSettings();
+      openSettings();
       setSettingsCategory(settingsCategory);
-      onboardingSettingsOpen = true;
     } else {
-      if (onboardingSettingsOpen && settingsDialog.open) settingsDialog.close();
-      onboardingSettingsOpen = false;
+      selectScreen(screen);
     }
     setTab(destination?.tab ?? 'recipe');
   },
@@ -197,7 +222,6 @@ function applyTheme(theme) {
   const nextTheme = isLight ? 'dark' : 'light';
   button.setAttribute('aria-label', `Switch to ${nextTheme} theme`);
   button.title = `Switch to ${nextTheme} theme`;
-  button.setAttribute('aria-pressed', String(isLight));
   label.textContent = isLight ? 'Dark' : 'Light';
   sunIcon.classList.toggle('hidden', isLight);
   moonIcon.classList.toggle('hidden', !isLight);
@@ -219,7 +243,7 @@ function toggleTheme() {
 
 
 function setSettingsCategory(category) {
-  const categories = ['model', 'units', 'gas-presets', 'cylinder-presets', 'equipment', 'preset-management'];
+  const categories = ['general', 'units', 'gas-presets', 'cylinder-presets', 'equipment', 'preset-management'];
   if (!categories.includes(category)) return;
   state.settingsCategory = category;
   for (const candidate of categories) {
@@ -236,6 +260,7 @@ function setSettingsCategory(category) {
 }
 
 function openSettings() {
+  if (state.activeScreen !== 'settings') state.settingsReturnScreen = state.activeScreen;
   state.settingsSession += 1;
   state.settingsDraft = copySettings(state.settings);
   resetPresetImportState();
@@ -245,7 +270,8 @@ function openSettings() {
   if (state.settingsLoadFailure) {
     displaySettingsErrors(['Saved presets could not be loaded; built-in defaults are in use. Saving will replace the unreadable saved presets.']);
   }
-  byId('settings-dialog').showModal();
+  setPrimaryScreen(document, 'settings');
+  state.activeScreen = 'settings';
 }
 
 function isActiveSettingsSession(session) {
@@ -460,20 +486,12 @@ function updateSettingsDraft(input) {
   const collection = input.dataset.settingsCollection;
   const index = Number(input.dataset.settingsIndex);
   const field = input.dataset.settingsField;
-  let value = collection === 'physics' || collection === 'settings' || field === 'name' || field === 'material'
+  const value = collection === 'physics' || collection === 'general' || collection === 'units' || field === 'name' || field === 'material'
     ? input.value
     : Number.parseFloat(input.value);
-  if (typeof value === 'number' && Number.isFinite(value) && input.dataset.settingsQuantity) {
-    value = convertFromDisplay(value, input.dataset.settingsQuantity, state.settingsDraft.units);
-    if (collection === 'booster' && field === 'cylinderVolumeCm3') value *= 1000;
-  }
   if (collection === 'physics') state.settingsDraft.physics[field] = value;
-  else if (collection === 'settings' && field === 'units') {
-    state.settingsDraft.units = value;
-    renderSettingsDraft();
-    setSettingsCategory(state.settingsCategory);
-    return;
-  } else if (collection === 'cylinderPresets') state.settingsDraft.cylinderPresets[index][field] = value;
+  else if (collection === 'general' || collection === 'units') state.settingsDraft.units = value;
+  else if (collection === 'cylinderPresets') state.settingsDraft.cylinderPresets[index][field] = value;
   else if (collection === 'booster') state.settingsDraft.booster[field] = value;
   else state.settingsDraft.gasPresets[index][field] = value;
 }
@@ -538,9 +556,6 @@ function saveSettingsDraft() {
     return;
   }
 
-  for (const [id, quantity] of [['init-p', 'pressure'], ['target-p', 'pressure'], ['ambient-temperature', 'temperature'], ['wait-target-temperature', 'temperature'], ['inlet-gas-temperature', 'temperature']]) {
-    canonicalPrimaryValue(id, quantity);
-  }
   const selectedCylinderName = byId('cylinder-preset')?.value || DEFAULT_CYLINDER_PRESET_NAME;
   try {
     saveSettings(state.settingsDraft, settingsStorage);
@@ -550,12 +565,11 @@ function saveSettingsDraft() {
     return;
   }
 
+  const previousUnits = state.settings.units;
   state.settings = copySettings(state.settingsDraft);
-  state.settingsLoadFailure = null;
+  convertDisplayedInputs(previousUnits, state.settings.units);
   updateStorageWarning();
   state.settingsDraft = null;
-  byId('settings-dialog').close();
-  syncPrimaryUnitInputs();
   refreshPresetOptions(selectedCylinderName);
   recalculate();
 }
@@ -607,10 +621,11 @@ function markGasPresetCustom(input) {
   byId(`${prefix}-gas-preset`).value = 'custom';
 }
 
-function handleSettingsClosed() {
+function cancelSettings() {
   state.settingsSession += 1;
   state.settingsDraft = null;
   clearSettingsErrors();
+  selectScreen(state.settingsReturnScreen);
 }
 
 
@@ -619,50 +634,7 @@ function updateWaitModeFields() {
   byId('wait-minutes-field').hidden = !isMinutesMode;
   byId('wait-target-temperature-field').hidden = isMinutesMode;
 }
-function establishCanonicalPrimaryDefaults() {
-  for (const id of ['init-p', 'target-p', 'ambient-temperature', 'wait-target-temperature', 'inlet-gas-temperature']) {
-    const input = byId(id);
-    if (input && input.dataset.canonicalValue === undefined) input.dataset.canonicalValue = input.value;
-  }
-}
 
-
-function syncPrimaryUnitInputs() {
-  const units = state.settings.units;
-  for (const [id, quantity, min, max, step] of [
-    ['init-p', 'pressure', 0, 350, 5], ['target-p', 'pressure', 10, 350, 5],
-    ['ambient-temperature', 'temperature', 0, 50, 0.1],
-    ['wait-target-temperature', 'temperature', 0, 100, 0.1],
-    ['inlet-gas-temperature', 'temperature', -20, 100, 0.1]
-  ]) {
-    const input = byId(id);
-    if (!input) continue;
-    const canonical = input.dataset.canonicalValue === undefined ? Number(input.value) : Number(input.dataset.canonicalValue);
-    if (Number.isFinite(canonical)) {
-      input.dataset.canonicalValue = String(canonical);
-      input.value = String(convertToDisplay(canonical, quantity, units));
-    }
-    input.min = String(convertToDisplay(min, quantity, units));
-    input.max = String(convertToDisplay(max, quantity, units));
-    input.step = String(displayStep(step, quantity, units));
-    const suffix = input.parentElement?.querySelector('span');
-    if (suffix) suffix.textContent = getUnitLabel(quantity, units);
-    input.setAttribute('aria-label', `${input.labels?.[0]?.textContent?.trim() || id} in ${getUnitLabel(quantity, units)}`);
-  }
-}
-
-
-function canonicalPrimaryValue(id, quantity) {
-  const input = byId(id);
-  const displayed = numberValue(id);
-  const cached = Number(input?.dataset.canonicalValue);
-  const cachedDisplay = convertToDisplay(cached, quantity, state.settings.units);
-  const value = Number.isFinite(cached) && displayed === cachedDisplay
-    ? cached
-    : convertFromDisplay(displayed, quantity, state.settings.units);
-  if (input && Number.isFinite(value)) input.dataset.canonicalValue = String(value);
-  return value;
-}
 
 function readInput() {
   const cylinderPreset = selectedCylinderPreset();
@@ -671,26 +643,26 @@ function readInput() {
       presetName: cylinderPreset.name,
       volumeL: cylinderPreset.volumeL,
       workingPressureBar: cylinderPreset.workingPressureBar,
-      initialPressureBar: canonicalPrimaryValue('init-p', 'pressure'),
+      initialPressureBar: canonicalNumberValue('init-p', 'pressureBar'),
       initialOxygenPercent: numberValue('init-o2'),
       initialHeliumPercent: numberValue('init-he'),
-      targetPressureBar: canonicalPrimaryValue('target-p', 'pressure'),
+      targetPressureBar: canonicalNumberValue('target-p', 'pressureBar'),
       targetOxygenPercent: numberValue('target-o2'),
       targetHeliumPercent: numberValue('target-he')
     },
     physics: {
       model: state.settings.physics.model,
-      temperatureC: canonicalPrimaryValue('ambient-temperature', 'temperature'),
+      temperatureC: canonicalNumberValue('ambient-temperature', 'temperatureC')
     },
     thermal: {
       tankMaterial: cylinderPreset.material,
       tankMassKg: cylinderPreset.massKg,
       coolingMedium: byId('cooling-medium').value,
-      ambientTemperatureC: canonicalPrimaryValue('ambient-temperature', 'temperature'),
-      inletTemperatureC: canonicalPrimaryValue('inlet-gas-temperature', 'temperature'),
+      ambientTemperatureC: canonicalNumberValue('ambient-temperature', 'temperatureC'),
+      inletTemperatureC: canonicalNumberValue('inlet-gas-temperature', 'temperatureC'),
       waitMode: byId('wait-mode').value,
       waitMinutes: numberValue('wait-minutes'),
-      targetTemperatureC: canonicalPrimaryValue('wait-target-temperature', 'temperature'),
+      targetTemperatureC: canonicalNumberValue('wait-target-temperature', 'temperatureC'),
       interimMeasurements: state.interimMeasurements
     },
     banks: state.banks
@@ -754,55 +726,41 @@ function recalculate() {
 
   renderSupplyBanks(state.banks, state.settings.gasPresets, state.settings.units);
   renderEquipmentSummary(state.settings, state.settings.units);
-  renderResults(result, input, state.settings.units);
-  syncPrimaryUnitInputs();
-  renderThermalCharts(result, input, state.settings.units);
+  renderResults(result, input);
+  renderThermalCharts(result, input);
   if (result.feasible) renderTernary();
   else clearTernaryDiagram(byId('ternary-canvas'));
 }
 
-function setTab(tabId) {
-  if (!RESULT_TABS.includes(tabId)) return;
-  state.activeTab = tabId;
-
-  for (const paneName of RESULT_TABS) {
-    const pane = byId(`tab-pane-${paneName}`);
-    const button = byId(`tab-btn-${paneName}`);
-    if (!pane || !button) continue;
-
-    const selected = paneName === tabId;
-    pane.classList.toggle('hidden', !selected);
-    pane.hidden = !selected;
-    pane.setAttribute('aria-hidden', String(!selected));
-    button.classList.toggle('bg-cyan-500/20', selected);
-    button.setAttribute('aria-selected', String(selected));
-    button.setAttribute('tabindex', selected ? '0' : '-1');
-    button.className = selected
-      ? 'shrink-0 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm transition'
-      : 'shrink-0 px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-slate-200 transition';
+function selectScreen(screenId) {
+  if (screenId === 'settings' && state.settingsDraft === null) {
+    openSettings();
+    return;
   }
+  if (!setPrimaryScreen(document, screenId)) return;
+  state.activeScreen = screenId;
+}
+
+function setTab(tabId, focus = false) {
+  if (!setResultTab(document, tabId)) return;
+  state.activeTab = tabId;
+  if (focus) byId(`tab-btn-${tabId}`)?.focus();
   if (tabId === 'ternary') requestAnimationFrame(renderTernary);
 }
 
 function handleResultTabKeydown(event) {
-  const button = event.target.closest?.('#results-navigation [role="tab"]');
+  const button = event.target.closest?.('[role="tab"]');
   if (!button) return;
-  const tabList = button.closest('[role="tablist"]');
-  const tabs = [...(tabList?.querySelectorAll('[role="tab"]') ?? [])];
-  const currentIndex = tabs.indexOf(button);
+  const currentIndex = RESULT_TABS.indexOf(button.dataset.tab);
   if (currentIndex < 0) return;
-
-  let destinationIndex = currentIndex;
-  if (event.key === 'ArrowLeft') destinationIndex = (currentIndex - 1 + tabs.length) % tabs.length;
-  if (event.key === 'ArrowRight') destinationIndex = (currentIndex + 1) % tabs.length;
-  if (event.key === 'Home') destinationIndex = 0;
-  if (event.key === 'End') destinationIndex = tabs.length - 1;
-  if (destinationIndex === currentIndex) return;
-
+  let nextIndex = currentIndex;
+  if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % RESULT_TABS.length;
+  else if (event.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + RESULT_TABS.length) % RESULT_TABS.length;
+  else if (event.key === 'Home') nextIndex = 0;
+  else if (event.key === 'End') nextIndex = RESULT_TABS.length - 1;
+  else return;
   event.preventDefault();
-  const destination = tabs[destinationIndex];
-  setTab(destination.dataset.tab);
-  destination.focus();
+  setTab(RESULT_TABS[nextIndex], true);
 }
 
 
@@ -882,22 +840,19 @@ function updateBankFromInput(input) {
   } else {
     const value = Number.parseFloat(input.value);
     if (!Number.isFinite(value)) {
-      input.value = String(input.dataset.bankQuantity
-        ? convertToDisplay(bank[bankField], input.dataset.bankQuantity, state.settings.units)
-        : bank[bankField]);
+      input.value = String(bank[bankField]);
       clearBankInputFailure(bank.id);
       return;
     }
-    updatedBank[bankField] = input.dataset.bankQuantity
-      ? convertFromDisplay(value, input.dataset.bankQuantity, state.settings.units)
+    const quantity = bankField === 'volumeL' ? 'volumeL' : bankField === 'pressureBar' ? 'pressureBar' : null;
+    updatedBank[bankField] = quantity
+      ? convertFromDisplay(value, quantity, state.settings.units)
       : value;
     if (bankField === 'oxygenPercent' || bankField === 'heliumPercent') updatedBank.gasPresetName = null;
   }
 
   if (updatedBank.oxygenPercent === 21 && updatedBank.heliumPercent === 0) {
-    input.value = String(input.dataset.bankQuantity
-      ? convertToDisplay(bank[bankField], input.dataset.bankQuantity, state.settings.units)
-      : bank[bankField]);
+    input.value = String(bank[bankField]);
     state.bankInputFailure = {
       bankId: bank.id,
       message: `${bank.name}: Air is supplied by the compressor and cannot be a finite supply bank.`
@@ -908,9 +863,7 @@ function updateBankFromInput(input) {
 
   const errors = validateSupplyBankInput(updatedBank);
   if (errors.length > 0) {
-    input.value = String(input.dataset.bankQuantity
-      ? convertToDisplay(bank[bankField], input.dataset.bankQuantity, state.settings.units)
-      : bank[bankField]);
+    input.value = String(bank[bankField]);
     state.bankInputFailure = { bankId: bank.id, message: `${bank.name}: ${errors[0]}` };
     updateStorageWarning();
     return;
@@ -995,8 +948,8 @@ function applyInterimMeasurement(actionElement) {
   const temperatureInput = form.querySelector('[name="temperatureC"]');
   const interimMeasurements = state.interimMeasurements.slice();
   interimMeasurements[index] = {
-    pressureBar: convertFromDisplay(Number(pressureInput.value), 'pressure', state.settings.units),
-    temperatureC: convertFromDisplay(Number(temperatureInput.value), 'temperature', state.settings.units)
+    pressureBar: Number(pressureInput.value),
+    temperatureC: Number(temperatureInput.value)
   };
   state.interimMeasurementSignature = calculatorInputSignature({
     ...readInput(),
@@ -1033,6 +986,9 @@ function handleClick(event) {
     case 'open-settings':
       openSettings();
       break;
+    case 'select-screen':
+      selectScreen(actionElement.dataset.screen);
+      break;
     case 'open-wizard':
       state.onboardingController.open();
       break;
@@ -1040,7 +996,7 @@ function handleClick(event) {
       toggleTheme();
       break;
     case 'cancel-settings':
-      byId('settings-dialog').close();
+      cancelSettings();
       break;
     case 'select-settings-category':
       setSettingsCategory(actionElement.dataset.settingsCategory);
@@ -1109,10 +1065,9 @@ function initialize() {
   document.addEventListener('keydown', handleGasShortcut);
   document.addEventListener('keydown', handleResultTabKeydown);
   document.addEventListener('paste', handleGasPaste);
-  byId('settings-dialog').addEventListener('close', handleSettingsClosed);
-  establishCanonicalPrimaryDefaults();
   applyTheme(state.theme);
-  setTab(state.activeTab);
+  convertDisplayedInputs(METRIC_UNITS, state.settings.units);
+  setPrimaryScreen(document, state.activeScreen);
   updateStorageWarning();
   refreshPresetOptions();
   updateWaitModeFields();

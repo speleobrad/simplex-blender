@@ -45,14 +45,30 @@ test.describe('responsive artifact surfaces', () => {
   });
 
   test('keeps inventory rows and dynamic controls within the supply surface', async ({ appPage }) => {
-    const page = await appPage.goto('populatedInventory');
+    const page = await appPage.goto('imperialInventory');
     await checkSurface(page, '#supply-banks-section', {
-      children: '#supply-banks-section > section',
       focus: '#tanks-tbody select:visible, #tanks-tbody button:visible',
       overlap: '#tanks-tbody > tr:visible',
-      clip: '#tanks-tbody select:visible, #tanks-tbody button:visible'
+      clip: '#tanks-tbody input:visible, #tanks-tbody select:visible, #tanks-tbody button:visible'
     });
   });
+  test('keeps working-tank summaries and controls separated at intermediate widths', async ({ appPage }) => {
+    const page = await appPage.goto('settings');
+    await page.evaluate(() => {
+      const settings = JSON.parse(localStorage.getItem('simplex-gas-remixer-settings') || '{}');
+      settings.units = 'imperial';
+      localStorage.setItem('simplex-gas-remixer-settings', JSON.stringify(settings));
+    });
+    await page.reload();
+    await page.setViewportSize({ width: 694, height: 900 });
+    const workingTankFields = '#working-tank-section > div.grid > div:nth-child(-n+2) :is(label, span, input, select)';
+    await checkSurface(page, '#working-tank-section', {
+      children: workingTankFields,
+      overlap: workingTankFields,
+      clip: workingTankFields
+    });
+  });
+
 
   test('keeps result tabs, diagrams, and thermal charts contained and focusable', async ({ appPage }) => {
     const page = await appPage.goto('tourSeen');

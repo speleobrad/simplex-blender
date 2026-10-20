@@ -1,34 +1,61 @@
-export const UNIT_SYSTEMS = Object.freeze({
-  metric: Object.freeze({ pressure: 'bar', volume: 'L', mass: 'kg', temperature: '°C', flow: 'L/min' }),
-  imperial: Object.freeze({ pressure: 'psi', volume: 'ft³', mass: 'lb', temperature: '°F', flow: 'cfm' })
-});
+export const METRIC_UNITS = 'metric';
+export const IMPERIAL_UNITS = 'imperial';
 
-const FACTORS = Object.freeze({ pressure: 14.5037738, volume: 0.0353146667, mass: 2.20462262185, flow: 0.0353146667 });
-const QUANTITIES = new Set(['pressure', 'volume', 'mass', 'temperature', 'flow']);
-export function normalizeUnits(units) { return units === 'imperial' ? 'imperial' : 'metric'; }
-export function getUnitLabel(quantity, units = 'metric') { return UNIT_SYSTEMS[normalizeUnits(units)][quantity] ?? ''; }
-export function unitLabel(quantity, units = 'metric') { return getUnitLabel(quantity, units); }
-export function convertToDisplay(value, quantity, units = 'metric') {
-  if (!Number.isFinite(value) || !QUANTITIES.has(quantity) || normalizeUnits(units) === 'metric') return value;
-  return quantity === 'temperature' ? value * 9 / 5 + 32 : value * FACTORS[quantity];
-}
-export function convertFromDisplay(value, quantity, units = 'metric') {
-  if (!Number.isFinite(value) || !QUANTITIES.has(quantity) || normalizeUnits(units) === 'metric') return value;
-  return quantity === 'temperature' ? (value - 32) * 5 / 9 : value / FACTORS[quantity];
+const LITRES_PER_CUBIC_FOOT = 28.316846592;
+const PSI_PER_BAR = 14.5037738;
+const POUNDS_PER_KILOGRAM = 2.20462262185;
+const CUBIC_INCHES_PER_CUBIC_CENTIMETRE = 0.0610237441;
+
+const UNIT_DEFINITIONS = {
+  pressureBar: { metric: ['bar', value => value], imperial: ['psi', value => value * PSI_PER_BAR, value => value / PSI_PER_BAR] },
+  volumeL: { metric: ['L', value => value], imperial: ['cu ft', value => value / LITRES_PER_CUBIC_FOOT, value => value * LITRES_PER_CUBIC_FOOT] },
+  massKg: { metric: ['kg', value => value], imperial: ['lb', value => value * POUNDS_PER_KILOGRAM, value => value / POUNDS_PER_KILOGRAM] },
+  temperatureC: { metric: ['°C', value => value], imperial: ['°F', value => value * 9 / 5 + 32, value => (value - 32) * 5 / 9] },
+  flowLPerMin: { metric: ['L/min', value => value], imperial: ['cu ft/min', value => value / LITRES_PER_CUBIC_FOOT, value => value * LITRES_PER_CUBIC_FOOT] },
+  volumeCm3: { metric: ['cm³', value => value], imperial: ['in³', value => value * CUBIC_INCHES_PER_CUBIC_CENTIMETRE, value => value / CUBIC_INCHES_PER_CUBIC_CENTIMETRE] }
+};
+
+function canonicalQuantity(quantity) {
+  return {
+    pressure: 'pressureBar',
+    volume: 'volumeL',
+    mass: 'massKg',
+    temperature: 'temperatureC',
+    flow: 'flowLPerMin',
+    volumeCm: 'volumeCm3'
+  }[quantity] ?? quantity;
 }
 
-export function displayStep(value, quantity, units = 'metric') {
-  if (!Number.isFinite(value) || !QUANTITIES.has(quantity) || normalizeUnits(units) === 'metric') return value;
-  return quantity === 'temperature' ? value * 9 / 5 : value * FACTORS[quantity];
+export function normalizeUnits(units) {
+  return units === IMPERIAL_UNITS ? IMPERIAL_UNITS : METRIC_UNITS;
 }
-export function formatQuantity(value, quantity, units = 'metric') {
-  const display = convertToDisplay(value, quantity, units);
-  if (!Number.isFinite(display)) return `— ${getUnitLabel(quantity, units)}`;
-  const formatted = display.toFixed(2).replace(/\.?0+$/, '');
-  return `${formatted} ${getUnitLabel(quantity, units)}`;
+
+export function unitLabel(quantity, units) {
+  return UNIT_DEFINITIONS[canonicalQuantity(quantity)]?.[normalizeUnits(units)]?.[0] ?? '';
 }
-export function formatPressure(value, units = 'metric') {
-  const display = convertToDisplay(value, 'pressure', units);
-  const precision = display === 0 || Math.abs(display) >= 1000 ? 0 : 1;
-  return `${Number.isFinite(display) ? display.toFixed(precision) : '—'} ${getUnitLabel('pressure', units)}`;
+
+export const getUnitLabel = unitLabel;
+
+export function convertToDisplay(value, quantity, units) {
+  const definition = UNIT_DEFINITIONS[canonicalQuantity(quantity)]?.[normalizeUnits(units)];
+  return definition ? definition[1](value) : value;
+}
+
+export function convertFromDisplay(value, quantity, units) {
+  const definition = UNIT_DEFINITIONS[canonicalQuantity(quantity)]?.[normalizeUnits(units)];
+  return definition?.[2] ? definition[2](value) : value;
+}
+
+
+export function formatUnitValue(value, quantity, units, digits = 1) {
+  return `${convertToDisplay(value, quantity, units).toFixed(digits)} ${unitLabel(quantity, units)}`;
+}
+export function displayStep(value, quantity, units) {
+  return convertToDisplay(value, quantity, units);
+}
+
+
+export function formatInputValue(value, quantity, units) {
+  const digits = quantity === 'pressureBar' && normalizeUnits(units) === IMPERIAL_UNITS ? 1 : 0;
+  return convertToDisplay(value, quantity, units).toFixed(digits);
 }

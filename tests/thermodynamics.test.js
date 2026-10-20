@@ -812,3 +812,4 @@ test('projects final gauge pressure across the requested water temperatures', ()
   assert.ok(projections[0].pressureBar < projections[4].pressureBar);
   assert.ok(projections[6].pressureBar > projections[4].pressureBar);
 });
+

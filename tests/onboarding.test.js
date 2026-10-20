@@ -60,13 +60,13 @@ test('invalid onboarding state is rejected before replacing saved data', () => {
 
 test('wizard steps cover the ordered tour destinations', () => {
   assert.deepEqual(WIZARD_STEPS.map(step => step.id), [
-    'welcome', 'working-tank', 'supply-banks', 'mixing-steps',
+    'welcome', 'working-tank', 'inventory', 'mixing-steps',
     'tank-summary', 'water-pressure', 'equipment', 'diagram'
   ]);
-  assert.equal(WIZARD_STEPS[0].targetId, null);
+  assert.equal(WIZARD_STEPS[0].targetId, 'primary-navigation');
   assert.deepEqual(
     WIZARD_STEPS.slice(1, 4).map(step => step.targetId),
-    ['working-tank-section', 'supply-banks-section', 'mixing-steps-section']
+    ['working-tank-section', 'inventory-section', 'mixing-steps-section']
   );
   const summary = WIZARD_STEPS.find(step => step.id === 'tank-summary');
   assert.deepEqual(summary.spotlights, [

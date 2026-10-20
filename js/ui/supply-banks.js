@@ -1,6 +1,5 @@
 import { getSelectedGasPreset, sortGasPresetEntries } from '../settings.js';
-import { convertToDisplay, getUnitLabel, normalizeUnits } from '../units.js';
-
+import { convertToDisplay, unitLabel } from '../units.js';
 const COLUMN_CLASSES = {
   name: 'py-2 px-2 min-w-32',
   volumeL: 'py-2 px-1',
@@ -9,13 +8,16 @@ const COLUMN_CLASSES = {
   heliumPercent: 'py-2 px-1'
 };
 
-const BANK_FIELDS = [
-  { key: 'name', label: 'bank name', type: 'text', className: 'w-24 bg-transparent border-b border-transparent hover:border-ocean-700 focus:border-cyan-400 focus:bg-ocean-900 rounded px-1 text-slate-200' },
-  { key: 'volumeL', quantity: 'volume', label: 'volume', type: 'number', min: 1, max: 200, step: 1, className: 'w-11 bg-ocean-950/60 border border-ocean-800 rounded px-1 py-0.5 text-center text-slate-300' },
-  { key: 'pressureBar', quantity: 'pressure', label: 'pressure', type: 'number', min: 1, max: 350, step: 5, className: 'w-12 bg-ocean-950/60 border border-ocean-800 rounded px-1 py-0.5 text-center text-slate-300' },
-  { key: 'oxygenPercent', label: 'oxygen percentage', type: 'number', min: 0, max: 100, step: 1, className: 'w-10 bg-emerald-950/40 border border-emerald-900/60 rounded px-1 py-0.5 text-center text-emerald-400 font-bold' },
-  { key: 'heliumPercent', label: 'helium percentage', type: 'number', min: 0, max: 100, step: 1, className: 'w-10 bg-amber-950/40 border border-amber-900/60 rounded px-1 py-0.5 text-center text-amber-400 font-bold' }
-];
+function bankFieldDefinition(key, units) {
+  const definitions = {
+    name: { key: 'name', label: 'bank name', type: 'text', className: 'w-full min-w-0 bg-transparent border-b border-transparent hover:border-ocean-700 focus:border-cyan-400 focus:bg-ocean-900 rounded px-1 text-slate-200' },
+    volumeL: { key: 'volumeL', label: `volume in ${unitLabel('volumeL', units)}`, type: 'number', min: 1, max: 200, step: 1, className: 'w-20 bg-ocean-950/60 border border-ocean-800 rounded px-1 py-0.5 text-center text-slate-300' },
+    pressureBar: { key: 'pressureBar', label: `pressure in ${unitLabel('pressureBar', units)}`, type: 'number', min: 1, max: 350, step: 5, className: 'w-20 bg-ocean-950/60 border border-ocean-800 rounded px-1 py-0.5 text-center text-slate-300' },
+    oxygenPercent: { key: 'oxygenPercent', label: 'oxygen percentage', type: 'number', min: 0, max: 100, step: 1, className: 'w-20 bg-emerald-950/40 border border-emerald-900/60 rounded px-1 py-0.5 text-center text-emerald-400 font-bold' },
+    heliumPercent: { key: 'heliumPercent', label: 'helium percentage', type: 'number', min: 0, max: 100, step: 1, className: 'w-20 bg-amber-950/40 border border-amber-900/60 rounded px-1 py-0.5 text-center text-amber-400 font-bold' }
+  };
+  return definitions[key];
+}
 
 function makeCell(className, child) {
   const cell = document.createElement('td');
@@ -27,24 +29,22 @@ function makeCell(className, child) {
 function makeBankInput(bank, field, units) {
   const input = document.createElement('input');
   input.type = field.type;
-  input.value = field.quantity ? convertToDisplay(bank[field.key], field.quantity, units) : bank[field.key];
+  input.value = field.key === 'volumeL' || field.key === 'pressureBar'
+    ? convertToDisplay(bank[field.key], field.key, units)
+    : bank[field.key];
   input.className = field.className;
   input.dataset.bankId = bank.id;
   input.dataset.bankField = field.key;
-  if (field.min !== undefined) input.min = String(field.quantity ? convertToDisplay(field.min, field.quantity, units) : field.min);
-  if (field.max !== undefined) input.max = String(field.quantity ? convertToDisplay(field.max, field.quantity, units) : field.max);
-  if (field.step !== undefined) input.step = String(field.quantity ? convertToDisplay(field.step, field.quantity, units) : field.step);
-  const metricLabels = { volume: 'volume in litres', pressure: 'pressure in bar' };
-  const label = field.quantity
-    ? (normalizeUnits(units) === 'metric' ? metricLabels[field.quantity] : `${field.label} in ${getUnitLabel(field.quantity, units)}`)
-    : field.label;
-  input.setAttribute('aria-label', label);
+  if (field.min !== undefined) input.min = field.min;
+  if (field.max !== undefined) input.max = field.max;
+  if (field.step !== undefined) input.step = field.step;
+  input.setAttribute('aria-label', `${bank.name} ${field.label}`);
   return input;
 }
 
 function makeGasPresetSelect(bank, gasPresets) {
   const select = document.createElement('select');
-  select.className = 'w-28 rounded border border-ocean-800 bg-ocean-950 px-1 py-0.5 text-[10px] text-slate-400';
+  select.className = 'w-20 rounded border border-ocean-800 bg-ocean-950 px-1 py-0.5 text-[10px] text-slate-400';
   select.dataset.action = 'select-bank-gas';
   select.dataset.bankId = bank.id;
   select.setAttribute('aria-label', `Gas preset for ${bank.name}`);
@@ -68,7 +68,7 @@ function makeGasPresetSelect(bank, gasPresets) {
 function makeBankNameControl(bank, gasPresets, units) {
   const control = document.createElement('div');
   control.className = 'flex min-w-28 flex-col gap-1';
-  control.append(makeBankInput(bank, BANK_FIELDS[0], units), makeGasPresetSelect(bank, gasPresets));
+  control.append(makeBankInput(bank, bankFieldDefinition('name', units), units), makeGasPresetSelect(bank, gasPresets));
   return control;
 }
 
@@ -90,12 +90,13 @@ export function renderSupplyBanks(banks, gasPresets, units = 'metric') {
     enabled.setAttribute('aria-label', `Use ${bank.name}`);
     row.append(makeCell('py-2 px-2', enabled));
 
-    for (const field of BANK_FIELDS) {
-      const child = field.key === 'name'
-        ? makeBankNameControl(bank, gasPresets, normalizeUnits(units))
-        : makeBankInput(bank, field, normalizeUnits(units));
-      row.append(makeCell(COLUMN_CLASSES[field.key], child));
+    for (const key of ['name', 'volumeL', 'pressureBar', 'oxygenPercent', 'heliumPercent']) {
+      const child = key === 'name'
+        ? makeBankNameControl(bank, gasPresets, units)
+        : makeBankInput(bank, bankFieldDefinition(key, units), units);
+      row.append(makeCell(COLUMN_CLASSES[key], child));
     }
+
     const remove = document.createElement('button');
     remove.type = 'button';
     remove.className = 'text-rose-400 hover:text-rose-300 px-1 py-0.5';
@@ -106,6 +107,5 @@ export function renderSupplyBanks(banks, gasPresets, units = 'metric') {
     row.append(makeCell('py-2 px-1 text-center', remove));
     return row;
   });
-
   tbody.replaceChildren(...rows);
 }

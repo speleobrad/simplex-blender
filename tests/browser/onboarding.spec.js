@@ -42,7 +42,7 @@ test.describe('consent and guided tour', () => {
     await nextTourStep(page);
     await expect(page.locator('.driver-popover-title')).toHaveText('Set up your working tank');
     await nextTourStep(page);
-    await expect(page.locator('.driver-popover-title')).toHaveText('Define your supplies');
+    await expect(page.locator('.driver-popover-title')).toHaveText('Manage your inventory');
     await nextTourStep(page);
     await expect(page.locator('.driver-popover-title')).toHaveText('Follow the mixing steps');
 

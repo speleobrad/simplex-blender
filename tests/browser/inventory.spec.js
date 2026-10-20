@@ -31,7 +31,7 @@ test.describe('inventory supply banks', () => {
     });
 
     await expect(row.getByRole('textbox', { name: /bank name$/i })).toHaveValue('Browser test bank');
-    await expect(row.getByRole('spinbutton', { name: /volume in litres$/i })).toHaveValue('32');
+    await expect(row.getByRole('spinbutton', { name: /volume in (?:litres|L)$/i })).toHaveValue('32');
     await expect(row.getByRole('spinbutton', { name: /pressure in bar$/i })).toHaveValue('180');
     await expect(row.getByRole('spinbutton', { name: /oxygen percentage$/i })).toHaveValue('36');
     await expect(row.getByRole('spinbutton', { name: /helium percentage$/i })).toHaveValue('24');
@@ -118,7 +118,7 @@ test.describe('inventory supply banks', () => {
     await expect(bankRows(page)).toHaveCount(index + 1);
     const persisted = bankRows(page).nth(index);
     await expect(persisted.getByRole('textbox', { name: /bank name$/i })).toHaveValue('Persistent reserve');
-    await expect(persisted.getByRole('spinbutton', { name: /volume in litres$/i })).toHaveValue('44');
+    await expect(persisted.getByRole('spinbutton', { name: /volume in (?:litres|L)$/i })).toHaveValue('44');
     await expect(persisted.getByRole('spinbutton', { name: /pressure in bar$/i })).toHaveValue('145');
     await assertNoFiniteAir(page);
   });

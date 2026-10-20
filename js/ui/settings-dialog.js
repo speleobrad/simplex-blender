@@ -1,58 +1,22 @@
 import { PRESET_IMPORT_DEFAULT_URLS } from '../preset-import.js';
 import { sortCylinderPresetEntries, sortGasPresetEntries } from '../settings.js';
-import { convertFromDisplay, convertToDisplay, displayStep, getUnitLabel, normalizeUnits } from '../units.js';
 
 const CUSTOM_PRESET = 'custom';
-let activeUnits = 'metric';
 
-function fieldQuantity(collection, field) {
-  if (collection === 'cylinderPresets') {
-    return { volumeL: 'volume', massKg: 'mass', workingPressureBar: 'pressure' }[field] ?? null;
-  }
-  if (collection === 'booster') {
-    if (field === 'cylinderVolumeCm3') return 'volume';
-    if (field.includes('Pressure') || field.includes('Rate')) return 'pressure';
-    if (field.includes('Flow')) return 'flow';
-    if (field.includes('Temperature')) return 'temperature';
-  }
-  return null;
-}
-
-function displayValue(value, quantity, field, units) {
-  if (!quantity) return value;
-  return convertToDisplay(field === 'cylinderVolumeCm3' ? value / 1000 : value, quantity, units);
-}
-
-function displayConstraint(value, quantity, field, units) {
-  if (!quantity) return value;
-  const canonical = field === 'cylinderVolumeCm3' ? value / 1000 : value;
-  return displayStep(canonical, quantity, units);
-}
-
-function quantityDisplayLabel(quantity, units) {
-  if (normalizeUnits(units) === 'metric') {
-    return { volume: 'litres', mass: 'kilograms', pressure: 'bar', flow: 'L/min', temperature: '°C' }[quantity] ?? getUnitLabel(quantity, units);
-  }
-  return getUnitLabel(quantity, units);
-}
-
-function createPresetInput({ value, type, collection, index, field, label, min, max, step, units = activeUnits }) {
-  const quantity = fieldQuantity(collection, field);
-  const normalizedUnits = normalizeUnits(units);
+function createPresetInput({ value, type, collection, index, field, label, min, max, step }) {
   const input = document.createElement('input');
   input.type = type;
-  input.value = String(displayValue(value ?? '', quantity, field, normalizedUnits));
+  input.value = String(value ?? '');
   input.className = type === 'text'
     ? 'min-w-0 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-xs text-slate-100'
     : 'min-w-0 rounded border border-ocean-700 bg-ocean-950 px-1 py-1 text-center text-xs text-slate-100';
-  input.setAttribute('aria-label', quantity ? `${label.replace(/ in .+$/, '')} in ${quantityDisplayLabel(quantity, normalizedUnits)}` : label);
+  input.setAttribute('aria-label', label);
   input.dataset.settingsCollection = collection;
   input.dataset.settingsIndex = String(index);
   input.dataset.settingsField = field;
-  if (quantity) input.dataset.settingsQuantity = quantity;
-  if (min !== undefined) input.min = String(displayConstraint(min, quantity, field, normalizedUnits));
-  if (max !== undefined) input.max = String(displayConstraint(max, quantity, field, normalizedUnits));
-  if (step !== undefined) input.step = String(displayConstraint(step, quantity, field, normalizedUnits));
+  if (min !== undefined) input.min = String(min);
+  if (max !== undefined) input.max = String(max);
+  if (step !== undefined) input.step = String(step);
   return input;
 }
 
@@ -119,7 +83,7 @@ function createTableCell(content, className = '') {
   return cell;
 }
 
-function createCylinderNumberInput({ value, index, field, label, min, max, step, width = 'w-full' }) {
+function createCylinderNumberInput({ value, index, field, label, min, max, step, width = 'w-20' }) {
   const input = createPresetInput({
     value,
     type: 'number',
@@ -138,7 +102,7 @@ function createCylinderNumberInput({ value, index, field, label, min, max, step,
 
 function createMaterialSelect(preset, index) {
   const select = document.createElement('select');
-  select.className = 'w-full min-w-0 rounded border border-ocean-700 bg-ocean-950 px-1 py-1 text-xs text-slate-100';
+  select.className = 'w-20 min-w-0 rounded border border-ocean-700 bg-ocean-950 px-1 py-1 text-xs text-slate-100';
   select.dataset.settingsCollection = 'cylinderPresets';
   select.dataset.settingsIndex = String(index);
   select.dataset.settingsField = 'material';
@@ -181,7 +145,7 @@ function createCylinderCard(preset, index, presetCount) {
   fields.className = 'mt-3 grid grid-cols-2 gap-2';
   fields.append(
     createCylinderField('Material', createMaterialSelect(preset, index)),
-    createCylinderField(`Volume (${getUnitLabel('volume', activeUnits)})`, createCylinderNumberInput({
+    createCylinderField('Volume (L)', createCylinderNumberInput({
       value: preset.volumeL,
       index,
       field: 'volumeL',
@@ -189,7 +153,7 @@ function createCylinderCard(preset, index, presetCount) {
       min: 0.1,
       step: 0.1
     })),
-    createCylinderField(`Mass (${getUnitLabel('mass', activeUnits)})`, createCylinderNumberInput({
+    createCylinderField('Mass (kg)', createCylinderNumberInput({
       value: preset.massKg,
       index,
       field: 'massKg',
@@ -197,7 +161,7 @@ function createCylinderCard(preset, index, presetCount) {
       min: 0.1,
       step: 0.1
     })),
-    createCylinderField(`Max pressure (${getUnitLabel('pressure', activeUnits)})`, createCylinderNumberInput({
+    createCylinderField('Max pressure (bar)', createCylinderNumberInput({
       value: preset.workingPressureBar,
       index,
       field: 'workingPressureBar',
@@ -237,9 +201,9 @@ function renderCylinderRows(presets) {
   for (const [label, className, ariaLabel] of [
     ['Name', 'min-w-[8.5rem]'],
     ['Material', 'w-20'],
-    [`Volume (${getUnitLabel('volume', activeUnits)})`, 'w-14'],
-    [`Mass (${getUnitLabel('mass', activeUnits)})`, 'w-16'],
-    [`Max pressure (${getUnitLabel('pressure', activeUnits)})`, 'w-16'],
+    ['Volume (L)', 'w-14'],
+    ['Mass (kg)', 'w-16'],
+    ['Max pressure (bar)', 'w-16'],
     ['', 'w-6', 'Actions']
   ]) {
     const header = document.createElement('th');
@@ -420,11 +384,10 @@ export function renderPresetImport(settings, importState = {}) {
 }
 
 export function renderSettingsDialog(settings, importState) {
-  activeUnits = normalizeUnits(settings.units);
+  const units = document.getElementById('settings-units');
+  if (units) units.value = settings.units === 'imperial' ? 'imperial' : 'metric';
   const physicsModel = document.getElementById('settings-physics-model');
   if (physicsModel && settings.physics?.model) physicsModel.value = settings.physics.model;
-  const units = document.getElementById('settings-units');
-  if (units) units.value = activeUnits;
   renderGasRows(settings.gasPresets);
   renderCylinderRows(settings.cylinderPresets);
   renderEquipmentPresetSelector(
@@ -455,54 +418,7 @@ export function renderSettingsDialog(settings, importState) {
   };
   for (const [id, value] of Object.entries(boosterFields)) {
     const input = document.getElementById(id);
-    if (!input) continue;
-    const field = ({
-      'settings-booster-min-source-pressure': 'minimumSourcePressureBar',
-      'settings-booster-cylinder-volume': 'cylinderVolumeCm3',
-      'settings-booster-oxygen-bpm': 'oxygenBoostBpm',
-      'settings-booster-other-bpm': 'otherBoostBpm',
-      'settings-booster-oxygen-decant-rate': 'oxygenDecantRateBarPerMin',
-      'settings-booster-other-decant-rate': 'otherDecantRateBarPerMin',
-      'settings-booster-draining-rate': 'drainingRateBarPerMin',
-      'settings-compressor-inlet-flow': 'compressorInletFlowLPerMin',
-      'settings-compressor-max-pressure': 'maxCompressorPressureBar',
-      'settings-booster-max-output-pressure': 'maxBoosterOutputPressureBar',
-      'settings-booster-temperature-modifier': 'boosterTemperatureModifierC',
-      'settings-compressor-temperature-modifier': 'compressorTemperatureModifierC'
-    }[id]);
-    const quantity = fieldQuantity('booster', field);
-    const constraints = {
-      compressorInletFlowLPerMin: [0.1, 10000, 0.1],
-      maxCompressorPressureBar: [10, 350, 1],
-      compressorTemperatureModifierC: [-100, 100, 1],
-      cylinderVolumeCm3: [0.1, 1000, 0.1],
-      minimumSourcePressureBar: [0, 100, 1],
-      oxygenBoostBpm: [1, 1000, 1],
-      otherBoostBpm: [1, 1000, 1],
-      maxBoosterOutputPressureBar: [10, 350, 1],
-      boosterTemperatureModifierC: [-100, 100, 1],
-      oxygenDecantRateBarPerMin: [0.1, 100, 0.1],
-      otherDecantRateBarPerMin: [0.1, 100, 0.1],
-      drainingRateBarPerMin: [0.1, 100, 0.1]
-    }[field];
-    if (constraints) {
-      const divisor = field === 'cylinderVolumeCm3' ? 1000 : 1;
-      const values = constraints.map(item => displayConstraint(item / divisor, quantity, field, activeUnits));
-      ['min', 'max', 'step'].forEach((attribute, index) => { input[attribute] = String(values[index]); });
-    }
-    const suffix = input.parentElement?.querySelector('span');
-    if (suffix && quantity) suffix.textContent = getUnitLabel(quantity, activeUnits);
-    input.value = String(displayValue(value, quantity, field, activeUnits));
-    if (quantity) {
-      input.dataset.settingsQuantity = quantity;
-      const ariaLabels = {
-        'settings-compressor-max-pressure': 'Maximum compressor pressure',
-        'settings-booster-max-output-pressure': 'Maximum booster output pressure',
-        'settings-compressor-inlet-flow': 'Compressor inlet flow',
-        'settings-booster-cylinder-volume': 'Booster cylinder volume'
-      };
-      input.setAttribute('aria-label', ariaLabels[id] ?? `${id} in ${getUnitLabel(quantity, activeUnits)}`);
-    }
+    if (input) input.value = String(value);
   }
   renderPresetImport(settings, importState);
 }

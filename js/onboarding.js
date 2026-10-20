@@ -9,39 +9,40 @@ export const WIZARD_STEPS = Object.freeze([
   Object.freeze({
     id: 'welcome',
     title: 'Welcome to Simplex Blender',
-    body: 'This tour introduces the controls and results that turn your target mix into a practical blending recipe.',
-    targetId: null,
-    tab: null
+    body: 'Use the navigation to move between Blending, Inventory, and Settings. This tour introduces the controls and results that turn your target mix into a practical blending recipe.',
+    targetId: 'primary-navigation',
+    screen: 'blending'
   }),
   Object.freeze({
     id: 'working-tank',
     title: 'Set up your working tank',
     body: 'This is where you define your working tank: enter what you already have and the mix you want to make, choose the tank type, make, and model, and describe the environment where blending will happen. Temperature matters—set and respect the waiting times so the tank can cool and avoid thermal stress.',
     targetId: 'working-tank-section',
-    tab: null
+    screen: 'blending'
   }),
   Object.freeze({
-    id: 'supply-banks',
-    title: 'Define your supplies',
-    body: 'This is where you list the source gases available to you. Compressor air is always assumed to be available. Set a source-gas temperature if a bank has been stored somewhere warmer or cooler. Add all your gases, then disable any you want to preserve instead of using as ingredients.',
-    targetId: 'supply-banks-section',
-    tab: null
+    id: 'inventory',
+    title: 'Manage your inventory',
+    body: 'Inventory lists the source gases available to you. Compressor air is always assumed to be available. Add your gases, edit their pressures and mixes, then disable any you want to preserve instead of using as ingredients.',
+    targetId: 'inventory-section',
+    screen: 'inventory'
   }),
   Object.freeze({
     id: 'mixing-steps',
     title: 'Follow the mixing steps',
     body: 'Your mixing recipe is here, with full details for every step: how long it takes, the tank temperature at transfer end, and the temperature after the cooling wait. Check the interim mix too if you want to analyze the blend as it develops.',
     targetId: 'mixing-steps-section',
-    tab: null
+    screen: 'blending'
   }),
   Object.freeze({
     id: 'tank-summary',
     title: 'Review the tank summary',
-    body: 'Tank summary gives you a quick readout of the final mix and every supply tank, including the pressure left in each one, so you can keep track of your inventory.',
+    body: 'Tank summary gives you a quick readout of the final mix and every inventory tank, including the pressure left in each one.',
     spotlights: Object.freeze([
       Object.freeze({ targetId: 'results-navigation' }),
       Object.freeze({ targetId: 'tab-btn-summary', variant: 'control' })
     ]),
+    screen: 'blending',
     tab: 'summary'
   }),
   Object.freeze({
@@ -52,6 +53,7 @@ export const WIZARD_STEPS = Object.freeze([
       Object.freeze({ targetId: 'results-navigation' }),
       Object.freeze({ targetId: 'tab-btn-water-pressure', variant: 'control' })
     ]),
+    screen: 'blending',
     tab: 'water-pressure'
   }),
   Object.freeze({
@@ -63,6 +65,7 @@ export const WIZARD_STEPS = Object.freeze([
         title: 'Find Settings',
         body: 'This is where you can change the app settings and define your preset gear. Remember that all configuration is stored locally and is not shared. Continue to open Settings and choose Equipment.',
         targetId: 'settings-launch',
+        screen: 'blending',
         tab: null,
         settingsCategory: null
       }),
@@ -71,6 +74,7 @@ export const WIZARD_STEPS = Object.freeze([
           Object.freeze({ targetId: 'settings-pane-equipment' }),
           Object.freeze({ targetId: 'settings-category-equipment', variant: 'control' })
         ]),
+        screen: 'blending',
         tab: null,
         settingsCategory: 'equipment'
       })

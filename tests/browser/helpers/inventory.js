@@ -2,7 +2,7 @@ import { expect } from '@playwright/test';
 
 const FIELD_NAMES = {
   name: /bank name$/i,
-  volumeL: /volume in litres$/i,
+  volumeL: /volume in (?:litres|L)$/i,
   pressureBar: /pressure in bar$/i,
   oxygenPercent: /oxygen percentage$/i,
   heliumPercent: /helium percentage$/i

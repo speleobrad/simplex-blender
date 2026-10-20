@@ -4,7 +4,6 @@ import {
   validateCylinderPreset,
   validateGasPreset
 } from './preset-validation.js';
-import { normalizeUnits } from './units.js';
 const STORAGE_KEY = 'simplex-gas-remixer-settings';
 
 export function normalizePresetName(name) {
@@ -88,7 +87,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
 
 export function copySettings(settings) {
   return {
-    units: normalizeUnits(settings.units),
+    units: settings.units === 'imperial' ? 'imperial' : 'metric',
     physics: { model: settings.physics.model },
     gasPresets: settings.gasPresets.map(preset => ({ ...preset })),
     compressorPresets: settings.compressorPresets.map(preset => ({ ...preset })),
@@ -142,6 +141,13 @@ function addDefaultBooster(settings) {
     }
   };
 }
+
+function addDefaultUnits(settings) {
+  return {
+    ...settings,
+    units: settings?.units === 'imperial' ? 'imperial' : DEFAULT_SETTINGS.units
+  };
+}
 function addDefaultPhysics(settings) {
   const physics = settings?.physics && typeof settings.physics === 'object'
     ? settings.physics
@@ -154,20 +160,17 @@ function addDefaultPhysics(settings) {
     }
   };
 }
-function addDefaultUnits(settings) {
-  return { ...settings, units: settings?.units === undefined ? 'metric' : settings.units };
-}
 
 export function validateSettings(settings) {
   const errors = [];
-  if (settings?.units !== undefined && !['metric', 'imperial'].includes(settings.units)) {
-    errors.push('Units must be either metric or imperial.');
-  }
   if (!settings || !Array.isArray(settings.gasPresets) || !Array.isArray(settings.cylinderPresets)) {
     return ['Settings must contain gas and cylinder preset lists.'];
   }
   if (settings.gasPresets.length === 0) {
     errors.push('At least one gas preset is required.');
+  }
+  if (!['metric', 'imperial'].includes(settings.units)) {
+    errors.push('Units must be either metric or imperial.');
   }
   if (settings.cylinderPresets.length === 0) {
     errors.push('At least one cylinder preset is required.');
@@ -334,7 +337,7 @@ export function loadSettings(storage, onFallback = () => {}) {
     return copySettings(DEFAULT_SETTINGS);
   }
 
-  const normalized = addDefaultUnits(addDefaultEquipmentPresets(addDefaultCylinderPresets(addDefaultPhysics(addDefaultBooster(saved)))));
+  const normalized = addDefaultEquipmentPresets(addDefaultCylinderPresets(addDefaultPhysics(addDefaultUnits(addDefaultBooster(saved)))));
   const errors = validateSettings(normalized);
   if (errors.length > 0) {
     onFallback(new RangeError(errors.join(' ')));
@@ -344,7 +347,7 @@ export function loadSettings(storage, onFallback = () => {}) {
 }
 
 export function saveSettings(settings, storage) {
-  const normalized = addDefaultUnits(addDefaultEquipmentPresets(addDefaultCylinderPresets(addDefaultPhysics(addDefaultBooster(settings)))));
+  const normalized = addDefaultEquipmentPresets(addDefaultCylinderPresets(addDefaultPhysics(addDefaultUnits(addDefaultBooster(settings)))));
   const errors = validateSettings(normalized);
   if (errors.length > 0) throw new RangeError(errors.join(' '));
   storage.setItem(STORAGE_KEY, JSON.stringify(copySettings(normalized)));

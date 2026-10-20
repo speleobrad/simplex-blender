@@ -57,8 +57,10 @@ class FakeElement {
 }
 
 function findElement(root, predicate) {
+  if (!root) return null;
   if (predicate(root)) return root;
   for (const child of root.children) {
+    if (!child) continue;
     const match = findElement(child, predicate);
     if (match) return match;
   }
@@ -79,6 +81,7 @@ function createFakeDocument() {
     }
   };
   for (const id of [
+    'settings-units',
     'settings-physics-model',
     'settings-preset-import-category',
     'settings-preset-import-url',
@@ -172,6 +175,16 @@ test('renders the selected physics model into the settings control', () => {
   renderSettingsDialog(settings);
 
   assert.equal(elements.get('settings-physics-model').value, 'ideal');
+});
+test('renders the selected unit system into the General control', () => {
+  const { document, elements } = createFakeDocument();
+  globalThis.document = document;
+  const settings = settingsWithEquipmentPresets();
+  settings.units = 'imperial';
+
+  renderSettingsDialog(settings);
+
+  assert.equal(elements.get('settings-units').value, 'imperial');
 });
 
 test('provides equipment preset clone action buttons', () => {

@@ -35,7 +35,8 @@ class FakeElement {
 
 function createFakeDocument() {
   const elements = new Map([
-    ['steps-container', new FakeElement()]
+    ['steps-container', new FakeElement()],
+    ['blend-status', new FakeElement()]
   ]);
   return {
     createElement(tagName) {
@@ -160,6 +161,51 @@ test('does not offer an interim reading before the first mixing transfer', () =>
     const children = document.elements.get('steps-container').children;
     assert.equal(children.length, 2);
     assert.notEqual(children[0].tagName, 'details');
+  } finally {
+    globalThis.document = previousDocument;
+  }
+});
+
+test('announces feasibility and keeps thermal details behind an explicit disclosure', () => {
+  const previousDocument = globalThis.document;
+  const document = createFakeDocument();
+  globalThis.document = document;
+
+  try {
+    renderResults({
+      feasible: true,
+      blend: {
+        retainedPressureBar: 50,
+        retainedPercent: 100,
+        ventedPressureBar: 0,
+        ventedGasLitres: 0,
+        heliumSalvagedLitres: 0,
+        finalPressureBar: 100,
+        finalOxygenPercent: 21,
+        finalHeliumPercent: 0
+      },
+      thermal: null,
+      protocolSteps: [{
+        title: 'Step 1',
+        description: 'Transfer gas.',
+        resultingPressureBar: 100,
+        thermal: {
+          rateSource: 'booster',
+          rateBarPerMin: 5,
+          durationMinutes: 10,
+          pressureAtTransferEndBar: 100,
+          temperatureAtTransferEndC: 30,
+          waitMinutes: 7,
+          pressureAfterWaitBar: 99,
+          temperatureAfterWaitC: 25
+        }
+      }]
+    });
+
+    assert.match(document.elements.get('blend-status').textContent, /feasible/i);
+    const step = document.elements.get('steps-container').children[0];
+    assert.equal(step.children[0].children[2].tagName, 'details');
+    assert.match(step.children[0].children[2].textContent, /technical details/i);
   } finally {
     globalThis.document = previousDocument;
   }

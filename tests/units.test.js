@@ -1,63 +1,37 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  UNIT_SYSTEMS,
   convertFromDisplay,
   convertToDisplay,
-  formatPressure,
-  formatQuantity,
-  getUnitLabel,
-  normalizeUnits,
-  displayStep
+  formatUnitValue,
+  formatInputValue,
+  IMPERIAL_UNITS,
+  METRIC_UNITS
 } from '../js/units.js';
 
-test('metric display is identity for every supported quantity', () => {
-  for (const [quantity, value] of Object.entries({ pressure: 12.5, volume: 11.1, mass: 14.3, temperature: 25, flow: 100 })) {
-    assert.equal(convertToDisplay(value, quantity, 'metric'), value);
-    assert.equal(convertFromDisplay(value, quantity, 'metric'), value);
-  }
+test('imperial conversions use scuba volume and pressure units', () => {
+  assert.ok(Math.abs(convertToDisplay(10, 'volumeL', IMPERIAL_UNITS) - 0.353146667) < 1e-9);
+  assert.ok(Math.abs(convertFromDisplay(0.353146667, 'volumeL', IMPERIAL_UNITS) - 10) < 1e-6);
+  assert.ok(Math.abs(convertToDisplay(200, 'pressureBar', IMPERIAL_UNITS) - 2900.75476) < 1e-5);
+  assert.ok(Math.abs(convertFromDisplay(2900.75476, 'pressureBar', IMPERIAL_UNITS) - 200) < 1e-6);
 });
 
-test('imperial display conversions preserve canonical metric values', () => {
-  assert.ok(Math.abs(convertToDisplay(10, 'pressure', 'imperial') - 145.037738) < 1e-6);
-  assert.ok(Math.abs(convertToDisplay(10, 'volume', 'imperial') - 0.353146667) < 1e-6);
-  assert.ok(Math.abs(convertToDisplay(10, 'mass', 'imperial') - 22.0462262185) < 1e-6);
-  assert.ok(Math.abs(convertToDisplay(25, 'temperature', 'imperial') - 77) < 1e-9);
-  assert.ok(Math.abs(convertToDisplay(100, 'flow', 'imperial') - 3.53146667) < 1e-6);
-  for (const [quantity, display] of [['pressure', 145.037738], ['volume', 0.353146667], ['mass', 22.0462262185], ['temperature', 77], ['flow', 3.53146667]]) {
-    assert.ok(Math.abs(convertFromDisplay(display, quantity, 'imperial') - (quantity === 'temperature' ? 25 : quantity === 'pressure' ? 10 : quantity === 'volume' ? 10 : quantity === 'mass' ? 10 : 100)) < 1e-5);
-  }
+test('imperial conversions cover mass, temperature, flow, and small volume', () => {
+  assert.ok(Math.abs(convertToDisplay(10, 'massKg', IMPERIAL_UNITS) - 22.0462262185) < 1e-9);
+  assert.equal(convertToDisplay(25, 'temperatureC', IMPERIAL_UNITS), 77);
+  assert.ok(Math.abs(convertToDisplay(100, 'flowLPerMin', IMPERIAL_UNITS) - 3.53146667) < 1e-8);
+  assert.ok(Math.abs(convertToDisplay(9, 'volumeCm3', IMPERIAL_UNITS) - 0.5492136969) < 1e-9);
 });
 
-test('imperial volume uses cubic feet rather than gallons', () => {
-  assert.equal(UNIT_SYSTEMS.imperial.volume, 'ft³');
-  assert.equal(getUnitLabel('volume', 'imperial'), 'ft³');
-  assert.equal(formatQuantity(10, 'volume', 'imperial'), '0.35 ft³');
-  assert.ok(!formatQuantity(10, 'volume', 'imperial').includes('gal'));
+test('metric units are identity conversions and formatting includes the selected unit', () => {
+  assert.equal(convertToDisplay(12.5, 'volumeL', METRIC_UNITS), 12.5);
+  assert.equal(convertFromDisplay(12.5, 'volumeL', METRIC_UNITS), 12.5);
+  assert.equal(formatUnitValue(11.1, 'volumeL', METRIC_UNITS, 1), '11.1 L');
+  assert.equal(formatUnitValue(1, 'volumeL', IMPERIAL_UNITS, 2), '0.04 cu ft');
 });
 
-test('temperature display steps scale without Fahrenheit offset', () => {
-  assert.equal(displayStep(0.1, 'temperature', 'imperial'), 0.18);
-  assert.equal(displayStep(1, 'pressure', 'imperial'), 14.5037738);
-});
-
-test('imperial labels never expose gallons', () => {
-  assert.deepEqual(UNIT_SYSTEMS.imperial, { pressure: 'psi', volume: 'ft³', mass: 'lb', temperature: '°F', flow: 'cfm' });
-});
-
-test('pressure formatting uses stable precision at PSI boundaries', () => {
-  assert.equal(formatPressure(0, 'imperial'), '0 psi');
-  assert.equal(formatPressure(1, 'imperial'), '14.5 psi');
-  assert.equal(formatPressure(10, 'imperial'), '145.0 psi');
-  assert.equal(formatPressure(68.9475729, 'imperial'), '1000 psi');
-  assert.equal(formatPressure(10, 'metric'), '10.0 bar');
-});
-
-test('unit labels and normalization expose only supported choices', () => {
-  assert.equal(normalizeUnits(), 'metric');
-  assert.equal(normalizeUnits('imperial'), 'imperial');
-  assert.equal(normalizeUnits('US'), 'metric');
-  assert.deepEqual(UNIT_SYSTEMS.imperial, { pressure: 'psi', volume: 'ft³', mass: 'lb', temperature: '°F', flow: 'cfm' });
-  assert.equal(getUnitLabel('volume', 'imperial'), 'ft³');
-  assert.equal(formatQuantity(2.641720526, 'volume', 'imperial'), '0.09 ft³');
+test('formats pressure inputs to one decimal place in PSI', () => {
+  assert.equal(formatInputValue(200, 'pressureBar', IMPERIAL_UNITS), '2900.8');
+  assert.equal(formatInputValue(350, 'pressureBar', IMPERIAL_UNITS), '5076.3');
+  assert.equal(formatInputValue(200, 'pressureBar', METRIC_UNITS), '200');
 });

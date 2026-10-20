@@ -47,6 +47,24 @@ test.describe('layout invariants', () => {
     const cards = page.locator('main > div > section, #results-navigation');
     await assertNoUnexpectedOverlap(page, cards, { allowContainment: false });
   });
+  test('visible working-tank text and controls never overlap or clip in imperial units', async ({ appPage }) => {
+    const page = await appPage.goto('settings');
+    await page.evaluate(() => {
+      const settings = JSON.parse(localStorage.getItem('simplex-gas-remixer-settings') || '{}');
+      settings.units = 'imperial';
+      localStorage.setItem('simplex-gas-remixer-settings', JSON.stringify(settings));
+    });
+    await page.reload();
+    await page.setViewportSize({ width: 694, height: 400 });
+    await page.locator('#init-p').fill('50.00077979076461');
+    await page.locator('#target-p').fill('200.00311921936164');
+    await expect(page.locator('#summary-banner')).toBeVisible();
+    const artifactNodes = page.locator('#working-tank-section > div.grid > div:nth-child(-n+2) :is(label, span, input, select)');
+    await assertNoUnexpectedOverlap(page, artifactNodes);
+    await assertNoClippedText(page, artifactNodes, { includeNonControls: true });
+  });
+
+
 
   test('visible controls have readable labels and focus remains visible', async ({ appPage }) => {
     const page = await loadApplication(appPage, { keepTour: true });

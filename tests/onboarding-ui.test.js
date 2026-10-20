@@ -189,8 +189,8 @@ function createController(options = {}) {
   const storage = options.storage ?? memoryStorage();
   const launchButton = document.createElement('button');
   document.body.append(launchButton);
-  for (const id of ['tab-btn-summary', 'tab-btn-water-pressure']) {
-    const target = document.createElement('button');
+  for (const id of ['primary-navigation', 'settings-launch', 'inventory-section', 'tab-btn-summary', 'tab-btn-water-pressure']) {
+    const target = document.createElement(id === 'inventory-section' ? 'section' : 'button');
     target.setAttribute('id', id);
     document.body.append(target);
   }
@@ -257,7 +257,7 @@ test('uses the browser Driver.js factory when no test adapter is supplied', () =
   assert.equal(fixture.drivers[0].active, true);
 });
 
-test('opening an accepted user creates a Driver.js tour with the existing destinations', () => {
+test('opening an accepted user creates a Driver.js tour for the new layout', () => {
   const fixture = createController();
 
   fixture.controller.open();
@@ -266,13 +266,11 @@ test('opening an accepted user creates a Driver.js tour with the existing destin
   assert.equal(fixture.drivers[0].active, true);
   assert.equal(fixture.drivers[0].index, 0);
   assert.equal(fixture.drivers[0].config.animate, false);
-  assert.equal(fixture.drivers[0].config.steps[0].element, undefined);
+  assert.equal(fixture.drivers[0].config.steps[0].element, '#primary-navigation');
   assert.equal(fixture.drivers[0].config.steps[0].popover.title, 'Welcome to Simplex Blender');
-  assert.equal(fixture.drivers[0].config.steps[4].element, '#results-navigation');
-  assert.equal(fixture.drivers[0].config.steps[5].element, '#results-navigation');
+  assert.equal(fixture.drivers[0].config.steps[2].element, '#inventory-section');
   assert.equal(fixture.drivers[0].config.steps[6].element, '#settings-launch');
   assert.equal(fixture.drivers[0].config.steps[7].element, '#settings-pane-equipment');
-  assert.equal(fixture.drivers[0].config.steps[8].element, '#results-navigation');
   assert.equal(fixture.drivers[0].config.steps[7].popover.progressText, 'Step 7 of 8');
 });
 
@@ -307,7 +305,7 @@ test('equipment tour popover moves into the native Settings dialog layer', () =>
   assert.equal(popover.parentNode.tagName, 'dialog');
 });
 
-test('Driver navigation preserves tab and settings destinations before highlighting them', () => {
+test('Driver navigation selects the screen needed by each destination', () => {
   const fixture = createController();
   fixture.controller.open();
   const driver = fixture.drivers[0];
@@ -318,18 +316,18 @@ test('Driver navigation preserves tab and settings destinations before highlight
   driver.clickNext();
 
   assert.deepEqual(fixture.navigations.slice(-4), [
-    { tab: null, settingsCategory: null },
-    { tab: null, settingsCategory: null },
-    { tab: null, settingsCategory: null },
-    { tab: 'summary', settingsCategory: null }
+    { screen: 'blending', tab: null, settingsCategory: null },
+    { screen: 'inventory', tab: null, settingsCategory: null },
+    { screen: 'blending', tab: null, settingsCategory: null },
+    { screen: 'blending', tab: 'summary', settingsCategory: null }
   ]);
 
   driver.clickNext();
   driver.clickNext();
-  assert.deepEqual(fixture.navigations.at(-2), { tab: 'water-pressure', settingsCategory: null });
-  assert.deepEqual(fixture.navigations.at(-1), { tab: null, settingsCategory: null });
+  assert.deepEqual(fixture.navigations.at(-2), { screen: 'blending', tab: 'water-pressure', settingsCategory: null });
+  assert.deepEqual(fixture.navigations.at(-1), { screen: 'blending', tab: null, settingsCategory: null });
   driver.clickNext();
-  assert.deepEqual(fixture.navigations.at(-1), { tab: null, settingsCategory: 'equipment' });
+  assert.deepEqual(fixture.navigations.at(-1), { screen: 'blending', tab: null, settingsCategory: 'equipment' });
 });
 
 test('public next and back methods move the Driver.js tour', () => {
@@ -376,7 +374,7 @@ test('finishing the tour with Done returns to the recipe tab', () => {
   for (let index = 0; index < driver.config.steps.length - 1; index += 1) driver.clickNext();
   driver.clickNext();
 
-  assert.deepEqual(fixture.navigations.at(-1), { tab: 'recipe', settingsCategory: null });
+  assert.deepEqual(fixture.navigations.at(-1), { screen: 'blending', tab: 'recipe', settingsCategory: null });
 });
 
 test('unaccepted users receive the consent gate before Driver.js starts', () => {

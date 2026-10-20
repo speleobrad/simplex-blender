@@ -36,8 +36,10 @@ test('missing settings return independent copies of the built-in presets', () =>
   assert.equal(second.cylinderPresets[0].name, DEFAULT_SETTINGS.cylinderPresets[0].name);
 });
 
-test('settings default to the real-gas physics model', () => {
+test('settings default to metric units and the real-gas physics model', () => {
+  assert.equal(DEFAULT_SETTINGS.units, 'metric');
   assert.deepEqual(DEFAULT_SETTINGS.physics, { model: 'vdw' });
+  assert.equal(loadSettings(memoryStorage()).units, 'metric');
 });
 test('settings default to metric display units and persist Imperial selection', () => {
   assert.equal(DEFAULT_SETTINGS.units, 'metric');

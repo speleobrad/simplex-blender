@@ -1,10 +1,10 @@
 export function getStorageWarningMessages(state) {
   const messages = [];
   if (state.settingsLoadFailure) messages.push('Saved presets could not be loaded; built-in defaults are active.');
-  if (state.banksLoadFailure) messages.push('Saved supply banks could not be loaded; default banks are active.');
-  if (state.bankSaveFailure) messages.push('Supply bank changes could not be saved to browser storage.');
+  if (state.banksLoadFailure) messages.push('Saved Inventory could not be loaded; default inventory is active.');
+  if (state.bankSaveFailure) messages.push('Inventory changes could not be saved to browser storage.');
   if (state.onboardingLoadFailure) messages.push('Saved guided-tour preference could not be loaded; consent will be requested again.');
-  if (state.bankInputFailure) messages.push(`Supply bank edit rejected: ${state.bankInputFailure.message}`);
+  if (state.bankInputFailure) messages.push(`Inventory edit rejected: ${state.bankInputFailure.message}`);
   return messages;
 }
 

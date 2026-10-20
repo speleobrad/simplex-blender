@@ -144,6 +144,27 @@ body {
   overflow-x: hidden;
 }
 
+:where(button, input, select, textarea, summary):focus-visible {
+  outline: 3px solid rgb(var(--cyan-300));
+  outline-offset: 2px;
+}
+
+#results-tablist {
+  scrollbar-width: thin;
+  scroll-padding-inline: 1.5rem;
+}
+
+#results-tablist [role="tab"] {
+  min-height: 2.75rem;
+}
+
+@media (max-width: 639px) {
+  #results-tablist {
+    padding-right: 1.5rem;
+    mask-image: linear-gradient(to right, black calc(100% - 1.5rem), transparent);
+  }
+}
+
 /* Custom scrollbar and subtle transitions */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: rgb(var(--scrollbar-track)); }
