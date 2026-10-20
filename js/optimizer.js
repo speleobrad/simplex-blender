@@ -1754,6 +1754,17 @@ function evaluateThermalCandidate(input, optimizeStatic, targetPressureBar) {
     thermal: candidateInput.thermal,
     settings: candidateInput.settings
   });
+  if (scheduled.unsafe) {
+    return {
+      candidateInput,
+      result: {
+        ...result,
+        feasible: false,
+        error: 'Thermal protocol cannot remain below cylinder working pressure within the 1440-minute wait limit.'
+      },
+      simulation: null
+    };
+  }
   const simulation = scheduled.simulation ?? simulateThermalProtocol({
     protocolSteps: scheduled.protocolSteps ?? result.protocolSteps,
     cylinder: candidateInput.cylinder,
