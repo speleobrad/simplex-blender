@@ -312,21 +312,28 @@
                   <label for="init-p">Start pressure:</label>
                   <span class="font-mono text-slate-200">bar</span>
                 </div>
-                <input type="number" id="init-p" value="50" min="0" max="350" step="5" data-recalculate="input" class="w-28 max-w-full bg-ocean-900 border border-ocean-700 rounded px-2 py-1 font-mono text-slate-100 text-xs">
+                <input type="number" id="init-p" value="50" min="0" max="350" step="5" data-recalculate="input" class="w-full min-w-0 bg-ocean-900 border border-ocean-700 rounded px-2 py-1 font-mono text-slate-100 text-xs">
               </div>
               <div class="min-w-0">
+                <div class="flex justify-between text-[11px] text-slate-400 mb-0.5">
+                  <label for="ambient-temperature">Ambient temperature:</label>
+                  <span class="font-mono text-slate-200">°C</span>
+                </div>
+                <input type="number" id="ambient-temperature" value="25" min="5" max="40" step="0.1" data-recalculate="input" class="w-full min-w-0 bg-ocean-900 border border-ocean-700 rounded px-2 py-1 font-mono text-slate-100 text-xs">
+              </div>
+              <div class="col-span-2 min-w-0">
                 <label for="init-gas-preset" class="block text-[10px] text-slate-400 font-mono mb-0.5">Gas preset</label>
-                <select id="init-gas-preset" data-action="select-cylinder-gas" data-mix="initial" aria-label="Current gas preset" class="mt-4 w-28 max-w-full min-w-0 bg-ocean-900 border border-ocean-700 rounded px-2 py-1 text-xs text-slate-200">
+                <select id="init-gas-preset" data-action="select-cylinder-gas" data-mix="initial" aria-label="Current gas preset" class="w-full min-w-0 bg-ocean-900 border border-ocean-700 rounded px-2 py-1 text-xs text-slate-200">
                   <option value="custom">Custom</option>
                 </select>
               </div>
               <div class="min-w-0">
                 <label for="init-o2" class="block text-[10px] text-emerald-400 font-mono mb-0.5">% O₂</label>
-                <input type="text" inputmode="decimal" id="init-o2" value="21" data-gas-input="oxygen" data-gas-pair="init-he" data-mix="initial" data-recalculate="input" aria-label="Current oxygen percentage" class="w-28 max-w-full bg-ocean-900 border border-ocean-700 rounded px-2 py-1 font-mono text-slate-100 text-xs">
+                <input type="text" inputmode="decimal" id="init-o2" value="21" data-gas-input="oxygen" data-gas-pair="init-he" data-mix="initial" data-recalculate="input" aria-label="Current oxygen percentage" class="w-full min-w-0 bg-emerald-950/40 border border-emerald-900/60 rounded px-2 py-1 text-center text-emerald-400 font-bold">
               </div>
               <div class="min-w-0">
                 <label for="init-he" class="block text-[10px] text-amber-400 font-mono mb-0.5">% He</label>
-                <input type="text" inputmode="decimal" id="init-he" value="0" data-gas-input="helium" data-gas-pair="init-he" data-mix="initial" data-recalculate="input" aria-label="Current helium percentage" class="w-28 max-w-full bg-ocean-900 border border-ocean-700 rounded px-2 py-1 font-mono text-slate-100 text-xs">
+                <input type="text" inputmode="decimal" id="init-he" value="0" data-gas-input="helium" data-gas-pair="init-he" data-mix="initial" data-recalculate="input" aria-label="Current helium percentage" class="w-full min-w-0 bg-amber-950/40 border border-amber-900/60 rounded px-2 py-1 text-center text-amber-400 font-bold">
               </div>
             </div>
           </div>
@@ -341,21 +348,28 @@
                   <label for="target-p">Target pressure:</label>
                   <span class="font-mono text-slate-200">bar</span>
                 </div>
-                <input type="number" id="target-p" value="200" min="10" max="350" step="5" data-recalculate="input" class="w-28 max-w-full bg-ocean-900 border border-ocean-700 rounded px-2 py-1 font-mono text-slate-100 text-xs">
+                <input type="number" id="target-p" value="200" min="10" max="350" step="5" data-recalculate="input" class="w-full min-w-0 bg-ocean-900 border border-ocean-700 rounded px-2 py-1 font-mono text-slate-100 text-xs">
               </div>
               <div class="min-w-0">
+                <div class="flex justify-between text-[11px] text-slate-400 mb-0.5">
+                  <label for="target-temperature">Target in-water temperature:</label>
+                  <span class="font-mono text-slate-200">°C</span>
+                </div>
+                <input type="number" id="target-temperature" value="25" min="1" max="30" step="0.1" data-recalculate="input" class="w-full min-w-0 bg-ocean-900 border border-ocean-700 rounded px-2 py-1 font-mono text-slate-100 text-xs">
+              </div>
+              <div class="col-span-2 min-w-0">
                 <label for="target-gas-preset" class="block text-[10px] text-slate-400 font-mono mb-0.5">Gas preset</label>
-                <select id="target-gas-preset" data-action="select-cylinder-gas" data-mix="target" aria-label="Target gas preset" class="mt-4 w-28 max-w-full min-w-0 bg-ocean-900 border border-ocean-700 rounded px-2 py-1 text-xs text-slate-200">
+                <select id="target-gas-preset" data-action="select-cylinder-gas" data-mix="target" aria-label="Target gas preset" class="w-full min-w-0 bg-ocean-900 border border-ocean-700 rounded px-2 py-1 text-xs text-slate-200">
                   <option value="custom">Custom</option>
                 </select>
               </div>
               <div class="min-w-0">
                 <label for="target-o2" class="block text-[10px] text-emerald-400 font-mono mb-0.5">% O₂</label>
-                <input type="text" inputmode="decimal" id="target-o2" value="18" data-gas-input="oxygen" data-gas-pair="target-he" data-mix="target" data-recalculate="input" aria-label="Target oxygen percentage" class="w-28 max-w-full bg-ocean-900 border border-ocean-700 rounded px-2 py-1 font-mono text-slate-100 text-xs">
+                <input type="text" inputmode="decimal" id="target-o2" value="18" data-gas-input="oxygen" data-gas-pair="target-he" data-mix="target" data-recalculate="input" aria-label="Target oxygen percentage" class="w-full min-w-0 bg-emerald-950/40 border border-emerald-900/60 rounded px-2 py-1 text-center text-emerald-400 font-bold">
               </div>
               <div class="min-w-0">
                 <label for="target-he" class="block text-[10px] text-amber-400 font-mono mb-0.5">% He</label>
-                <input type="text" inputmode="decimal" id="target-he" value="45" data-gas-input="helium" data-mix="target" data-recalculate="input" aria-label="Target helium percentage" class="w-28 max-w-full bg-ocean-900 border border-ocean-700 rounded px-2 py-1 font-mono text-slate-100 text-xs">
+                <input type="text" inputmode="decimal" id="target-he" value="45" data-gas-input="helium" data-mix="target" data-recalculate="input" aria-label="Target helium percentage" class="w-full min-w-0 bg-amber-950/40 border border-amber-900/60 rounded px-2 py-1 text-center text-amber-400 font-bold">
               </div>
             </div>
           </div>
@@ -374,14 +388,6 @@
               </select>
             </div>
             <div>
-              <label for="ambient-temperature" class="mb-1 block text-slate-400 font-medium">Ambient / calculation temperature</label>
-              <div class="flex items-center gap-2">
-                <input type="number" id="ambient-temperature" value="25" min="0" max="50" step="0.1" data-recalculate="input" class="w-20 flex-none rounded-lg border border-ocean-700 bg-ocean-900 px-2.5 py-1.5 font-mono text-slate-100 focus:border-cyan-400 focus:outline-none">
-                <span class="font-mono text-slate-400">°C</span>
-              </div>
-              <p class="mt-1 text-[10px] text-slate-500">Used for the surrounding conditions and the starting gas calculation state.</p>
-            </div>
-            <div>
               <label for="wait-mode" class="mb-1 block text-slate-400 font-medium">Wait between fills</label>
               <select id="wait-mode" data-recalculate="change" class="w-40 rounded-lg border border-ocean-700 bg-ocean-900 px-2.5 py-1.5 text-slate-100 focus:border-cyan-400 focus:outline-none">
                 <option value="minutes">Fixed minutes</option>
@@ -396,9 +402,9 @@
               </div>
             </div>
             <div id="wait-target-temperature-field" hidden>
-              <label for="wait-target-temperature" class="mb-1 block text-slate-400 font-medium">Target temperature</label>
+              <label for="wait-target-temperature" class="mb-1 block text-slate-400 font-medium">Target medium temperature</label>
               <div class="flex items-center gap-2">
-                <input type="number" id="wait-target-temperature" value="25" min="0" max="100" step="0.1" data-recalculate="input" class="w-20 flex-none rounded-lg border border-ocean-700 bg-ocean-900 px-2.5 py-1.5 font-mono text-slate-100 focus:border-cyan-400 focus:outline-none">
+                <input type="number" id="wait-target-temperature" value="25" min="5" max="40" step="0.1" data-recalculate="input" class="w-20 flex-none rounded-lg border border-ocean-700 bg-ocean-900 px-2.5 py-1.5 font-mono text-slate-100 focus:border-cyan-400 focus:outline-none">
                 <span class="font-mono text-slate-400">°C</span>
               </div>
             </div>
@@ -649,7 +655,7 @@
           <div class="mt-2 max-w-xs text-xs">
             <label for="inlet-gas-temperature" class="mb-1 block text-slate-400 font-medium">Temperature of inventory gases</label>
             <div class="flex items-center gap-2">
-              <input type="number" id="inlet-gas-temperature" value="25" min="-20" max="100" step="0.1" data-recalculate="input" class="w-28 rounded-lg border border-ocean-700 bg-ocean-900 px-2 py-1.5 font-mono text-xs text-slate-100 focus:border-cyan-400 focus:outline-none">
+              <input type="number" id="inlet-gas-temperature" value="25" min="5" max="40" step="0.1" data-recalculate="input" class="w-28 rounded-lg border border-ocean-700 bg-ocean-900 px-2 py-1.5 font-mono text-xs text-slate-100 focus:border-cyan-400 focus:outline-none">
               <span class="font-mono text-slate-400">°C</span>
             </div>
             <p class="mt-1 text-[10px] text-slate-500">The temperature at which inventory gases are assumed to be stored; compressor and source-specific temperature modifiers still apply.</p>

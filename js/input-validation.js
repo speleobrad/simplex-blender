@@ -45,29 +45,33 @@ export function validateCalculatorInputs(cylinder, physics, thermal) {
   if (!['air', 'water'].includes(thermal.coolingMedium)) {
     errors.push('Thermal cooling medium must be air or water.');
   }
-  if (!Number.isFinite(thermal.ambientTemperatureC)
-    || thermal.ambientTemperatureC < 0 || thermal.ambientTemperatureC > 50) {
-    errors.push('Thermal ambient temperature must be between 0 and 50°C.');
+  const ambient = thermal.ambientTemperatureC;
+  if (!Number.isFinite(ambient) || ambient < 5 || ambient > 40) {
+    errors.push('Thermal ambient temperature must be between 5 and 40°C.');
   }
   if (thermal.inletTemperatureC !== undefined
     && (!Number.isFinite(thermal.inletTemperatureC)
-      || thermal.inletTemperatureC < -20 || thermal.inletTemperatureC > 100)) {
-    errors.push('Thermal inlet gas temperature must be between -20 and 100°C.');
+      || thermal.inletTemperatureC < 5 || thermal.inletTemperatureC > 40)) {
+    errors.push('Thermal inlet gas temperature must be between 5 and 40°C.');
   }
-  if (!['minutes', 'temperature'].includes(thermal.waitMode)) {
-    errors.push('Thermal wait mode must be minutes or temperature.');
+  const legacySettled = thermal.settledTemperatureC !== undefined;
+  const targetMedium = legacySettled ? undefined : (thermal.targetMediumTemperatureC ?? thermal.targetTemperatureC);
+  if (targetMedium !== undefined
+    && (!Number.isFinite(targetMedium) || targetMedium < 5 || targetMedium > 40)) {
+    errors.push('Thermal target-medium temperature must be between 5 and 40°C.');
+  } else if (Number.isFinite(targetMedium) && Number.isFinite(ambient)
+    && targetMedium < ambient) {
+    errors.push('Thermal target-medium temperature cannot be below ambient temperature.');
   }
-  if (!Number.isFinite(thermal.waitMinutes)
-    || thermal.waitMinutes < 0 || thermal.waitMinutes > 1440) {
-    errors.push('Thermal wait minutes must be between 0 and 1440.');
+  const targetInWater = thermal.targetInWaterTemperatureC ?? thermal.settledTemperatureC;
+  if (targetInWater !== undefined
+    && (!Number.isFinite(targetInWater) || targetInWater < 1 || targetInWater > 30)) {
+    errors.push('Thermal target in-water temperature must be between 1 and 30°C.');
   }
-  if (!Number.isFinite(thermal.targetTemperatureC)
-    || thermal.targetTemperatureC < 0 || thermal.targetTemperatureC > 100) {
-    errors.push('Thermal target temperature must be between 0 and 100°C.');
-  } else if (thermal.waitMode === 'temperature'
-    && Number.isFinite(thermal.ambientTemperatureC)
-    && thermal.targetTemperatureC <= thermal.ambientTemperatureC) {
-    errors.push('Thermal target temperature must be above ambient temperature.');
+  if (legacySettled && Number.isFinite(thermal.targetTemperatureC)
+    && thermal.waitMode === 'temperature'
+    && thermal.targetTemperatureC <= ambient) {
+    errors.push('Thermal wait target temperature must be above ambient temperature.');
   }
   if (thermal.interimMeasurements !== undefined) {
     if (!Array.isArray(thermal.interimMeasurements)) {

@@ -155,7 +155,7 @@ function rowFields(card, row, rowNumber, banks, errors, pressureStarts) {
     fields.append(modeField);
     if (row.waitMode === 'target') {
       const temperatureField = element('div');
-      appendLabelledControl(temperatureField, row, rowNumber, 'targetTemperatureC', 'Target temperature (°C)', input(row, 'targetTemperatureC', row.targetTemperatureC, 'number'), errors);
+      appendLabelledControl(temperatureField, row, rowNumber, 'targetTemperatureC', 'Target medium temperature (°C)', input(row, 'targetTemperatureC', row.targetTemperatureC, 'number'), errors);
       fields.append(temperatureField);
     } else {
       const waitField = element('div');

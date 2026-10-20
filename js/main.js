@@ -694,10 +694,11 @@ function readInput() {
       tankMassKg: cylinderPreset.massKg,
       coolingMedium: byId('cooling-medium').value,
       ambientTemperatureC: canonicalNumberValue('ambient-temperature', 'temperatureC'),
+      targetInWaterTemperatureC: canonicalNumberValue('target-temperature', 'temperatureC'),
+      targetMediumTemperatureC: canonicalNumberValue('wait-target-temperature', 'temperatureC'),
       inletTemperatureC: canonicalNumberValue('inlet-gas-temperature', 'temperatureC'),
       waitMode: byId('wait-mode').value,
       waitMinutes: numberValue('wait-minutes'),
-      targetTemperatureC: canonicalNumberValue('wait-target-temperature', 'temperatureC'),
       interimMeasurements: state.interimMeasurements
     },
     banks: state.banks

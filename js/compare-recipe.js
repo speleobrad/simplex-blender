@@ -247,8 +247,12 @@ export function validateCompareRecipe(rows, { cylinder, banks = [], physics, set
           error(errors, rowId, 'waitMinutes', 'Wait duration must be between 0 and 1440 minutes.');
         }
       } else {
-        if (!validTemperature(row.targetTemperatureC)) {
-          error(errors, rowId, 'targetTemperatureC', 'Target wait temperature must be between -100 and 100 °C.');
+        if (!Number.isFinite(row.targetTemperatureC)
+          || row.targetTemperatureC < 5 || row.targetTemperatureC > 40) {
+          error(errors, rowId, 'targetTemperatureC', 'Target medium temperature must be between 5 and 40 °C.');
+        } else if (Number.isFinite(physics?.temperatureC)
+          && row.targetTemperatureC < physics.temperatureC) {
+          error(errors, rowId, 'targetTemperatureC', 'Target medium temperature cannot be below ambient temperature.');
         }
       }
       const waitPressureBar = waitStates[rowId]?.pressureBar;
