@@ -672,24 +672,31 @@ export function simulateThermalProtocol({
             tauMinutes
           })
         : thermal.waitMode === 'temperature'
-          ? calculateCoolingTime({
-            transferEndTemperatureC: temperatureAtTransferEndC,
-            ambientTemperatureC: thermal.ambientTemperatureC,
-            targetTemperatureC: thermal.targetMediumTemperatureC
-              ?? thermal.targetTemperatureC,
-            tauMinutes
-          })
+          ? Math.abs((thermal.targetMediumTemperatureC ?? thermal.targetTemperatureC)
+            - thermal.ambientTemperatureC) < 1e-9
+            ? 4.6 * tauMinutes
+            : calculateCoolingTime({
+              transferEndTemperatureC: temperatureAtTransferEndC,
+              ambientTemperatureC: thermal.ambientTemperatureC,
+              targetTemperatureC: thermal.targetMediumTemperatureC
+                ?? thermal.targetTemperatureC,
+              tauMinutes
+            })
           : thermal.waitMinutes;
+    const intermediateTargetTemperatureC = thermal.targetMediumTemperatureC
+      ?? thermal.targetTemperatureC;
     const temperatureAfterWaitC = skipsConfiguredWait
       ? temperatureAtTransferEndC
       : isFinalStep
         ? settledTemperatureC
-        : calculateTemperatureAfterWait({
-          transferEndTemperatureC: temperatureAtTransferEndC,
-          ambientTemperatureC: thermal.ambientTemperatureC,
-          waitMinutes,
-          tauMinutes
-        });
+        : Math.abs(intermediateTargetTemperatureC - thermal.ambientTemperatureC) < 1e-9
+          ? thermal.ambientTemperatureC
+          : calculateTemperatureAfterWait({
+            transferEndTemperatureC: temperatureAtTransferEndC,
+            ambientTemperatureC: thermal.ambientTemperatureC,
+            waitMinutes,
+            tauMinutes
+          });
     const pressureAfterWaitBar = Math.max(0, calculatePressureAtTemperature({
       pressureBar: transferEndPressureBar,
       oxygenPercent: receiverMix.oxygenPercent,
