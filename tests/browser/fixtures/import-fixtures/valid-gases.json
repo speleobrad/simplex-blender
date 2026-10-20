@@ -1,0 +1,4 @@
+[
+  { "name": "EAN 32", "oxygenPercent": 32, "heliumPercent": 0 },
+  { "name": "Tx 18/45", "oxygenPercent": 18, "heliumPercent": 45 }
+]

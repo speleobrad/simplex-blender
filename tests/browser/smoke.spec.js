@@ -1,13 +1,14 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures/app-fixtures.js';
 
-test('application loads over HTTP', async ({ page }) => {
-  await page.addInitScript(() => {
-    localStorage.setItem('simplex-gas-remixer-onboarding', JSON.stringify({
-      consentAccepted: true,
-      wizardSeen: true
-    }));
-  });
-  await page.goto('/index.html');
+test('factory state shows consent boundary', async ({ appPage }) => {
+  const page = await appPage.goto('factory');
+  await expect(page).toHaveTitle('Simplex blender');
+  await expect(page.getByRole('button', { name: /accept/i })).toBeVisible();
+});
+
+test('tourSeen state opens the application without consent', async ({ appPage }) => {
+  const page = await appPage.goto('tourSeen');
   await expect(page).toHaveTitle('Simplex blender');
   await expect(page.getByRole('button', { name: 'Settings' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /accept/i })).toHaveCount(0);
 });
