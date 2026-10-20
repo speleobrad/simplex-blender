@@ -17,10 +17,11 @@ test.describe('global shell', () => {
     await assertNoUnexpectedOverflow(page);
   });
 
-  test('primary surfaces expose one stable boundary at a time', async ({ appPage }) => {
+  test('primary surfaces exercise available user navigation boundaries', async ({ appPage }) => {
     const page = await appPage.goto('tourSeen');
     await selectPrimaryScreen(page, 'Blending');
-    await expect(page.locator('#working-tank-section')).toBeVisible();
+    await expect(page.locator('#tab-pane-recipe')).toBeVisible();
+    await expect(page.locator('#tab-btn-recipe')).toHaveClass(/bg-cyan/);
 
     await selectPrimaryScreen(page, 'Inventory');
     await expect(page.locator('#supply-banks-section')).toBeVisible();

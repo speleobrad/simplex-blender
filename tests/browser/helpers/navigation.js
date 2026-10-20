@@ -25,9 +25,10 @@ async function closeSettings(page) {
 /**
  * Select one of the app's primary user-facing surfaces.
  *
- * The current shell keeps Blending and Inventory in the same main workspace,
- * while Settings is a modal surface. Prefer semantic tabs when a future shell
- * exposes them, and otherwise verify the existing stable panel boundaries.
+ * The current shell has no separate primary-screen route: Recipe is the
+ * Blending destination, Supply banks is an always-present inventory surface,
+ * and Settings is a modal surface. Prefer semantic tabs when a future shell
+ * exposes them, while exercising the current controls for the existing shell.
  */
 export async function selectPrimaryScreen(page, name) {
   if (!Object.hasOwn(PRIMARY_PANELS, name)) {
@@ -38,9 +39,15 @@ export async function selectPrimaryScreen(page, name) {
   if (await tab.count()) {
     await tab.click();
     await expect(tab).toHaveAttribute('aria-selected', 'true');
-    const controls = tab.getAttribute('aria-controls');
+    const controls = await tab.getAttribute('aria-controls');
     if (controls) await expect(page.locator(`#${controls}`)).toBeVisible();
     return tab;
+  }
+
+  if (name === 'Blending') {
+    const panel = await selectResultTab(page, 'Recipe');
+    await expect(page.locator('#tab-btn-recipe')).toHaveClass(/bg-cyan/);
+    return panel;
   }
 
   if (name === 'Settings') {
@@ -57,9 +64,15 @@ export async function selectPrimaryScreen(page, name) {
   await panel.scrollIntoViewIfNeeded();
   await expect(panel).toBeVisible();
   await expect(panel).toHaveCount(1);
+  const addBank = panel.getByRole('button', { name: 'Add Bank', exact: true });
+  const bankRows = panel.locator('#tanks-tbody > tr');
+  const rowCount = await bankRows.count();
+  await expect(addBank).toBeVisible();
+  await addBank.click();
+  await expect(bankRows).toHaveCount(rowCount + 1);
   return panel;
-}
 
+}
 /** Select a result surface and verify that its panel is the only visible pane. */
 export async function selectResultTab(page, name) {
   const tabId = RESULT_PANELS[name];
