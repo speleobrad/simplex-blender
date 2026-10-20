@@ -1807,6 +1807,130 @@ test('optimizeBlend returns a feasible split protocol with safe endpoints and ta
     assert.ok(pressures.every(pressure => pressure <= 100 + 1e-7), step.title);
   }
 });
+test('two scheduler-split transfers preserve stage order, inventories, and thermal safety', () => {
+  const workingPressureBar = 99.01;
+  const targetPressureBar = 99;
+  const result = optimizeBlend({
+    cylinder: {
+      volumeL: 12,
+      initialPressureBar: 95,
+      initialOxygenPercent: 0,
+      initialHeliumPercent: 0,
+      targetPressureBar,
+      targetOxygenPercent: 4,
+      targetHeliumPercent: 0.2,
+      workingPressureBar
+    },
+    physics: { model: 'ideal', temperatureC: 20 },
+    thermal: {
+      tankMaterial: 'steel',
+      coolingMedium: 'air',
+      ambientTemperatureC: 20,
+      inletTemperatureC: 40,
+      targetMediumTemperatureC: 20,
+      targetInWaterTemperatureC: 20,
+      waitMode: 'minutes',
+      waitMinutes: 0
+    },
+    settings: {
+      booster: {
+        otherBoostBpm: 50,
+        oxygenBoostBpm: 50,
+        otherDecantRateBarPerMin: 5,
+        oxygenDecantRateBarPerMin: 5,
+        cylinderVolumeCm3: 9,
+        minimumSourcePressureBar: 0
+      }
+    },
+    banks: [
+      {
+        id: 'o2',
+        name: 'Oxygen',
+        volumeL: 12,
+        pressureBar: 300,
+        minimumPressureBar: 0,
+        oxygenPercent: 100,
+        heliumPercent: 0,
+        enabled: true
+      },
+      {
+        id: 'he',
+        name: 'Helium',
+        volumeL: 12,
+        pressureBar: 300,
+        minimumPressureBar: 0,
+        oxygenPercent: 0,
+        heliumPercent: 100,
+        enabled: true
+      }
+    ]
+  });
+
+  assert.equal(result.feasible, true);
+  assert.ok(Math.abs(result.thermal.finalAmbientPressureBar - targetPressureBar) < 1e-5);
+  const transferStages = result.protocolSteps.filter(step => step._thermalSplit);
+  assert.equal(transferStages.length, 4);
+  assert.deepEqual(transferStages.map(step => step.recipeGas), [
+    'Oxygen', 'Oxygen', 'Helium', 'Helium'
+  ]);
+  assert.deepEqual(
+    transferStages.map(step => step.title.match(/safe stage [12]/)?.[0]),
+    ['safe stage 1', 'safe stage 2', 'safe stage 1', 'safe stage 2']
+  );
+
+  const transferPoints = result.trajectory.filter(point => point.bankId);
+  assert.equal(transferPoints.length, transferStages.length);
+  transferStages.forEach((stage, index) => {
+    const point = transferPoints[index];
+    assert.equal(point.pressureBar, stage.resultingPressureBar);
+    assert.equal(point.oxygenPercent, stage.resultingMix.oxygenPercent);
+    assert.equal(point.heliumPercent, stage.resultingMix.heliumPercent);
+    assert.equal(point.pressureAtTransferEndReferenceBar, stage.thermal.pressureAtTransferEndReferenceBar);
+    assert.equal(point.pressureAtTransferEndAmbientBar, stage.thermal.pressureAtTransferEndAmbientBar);
+    assert.equal(point.pressureAtTransferEndHotBar, stage.thermal.pressureAtTransferEndHotBar);
+    assert.equal(point.ambientPressureBar, stage.thermal.pressureAtTransferEndAmbientBar);
+    assert.equal(point.hotPressureBar, stage.thermal.pressureAtTransferEndHotBar);
+  });
+
+  for (const [first, second] of [[0, 1], [2, 3]]) {
+    const firstStage = transferStages[first];
+    const secondStage = transferStages[second];
+    assert.equal(secondStage.sourceStartMoles, firstStage.sourceEndMoles);
+    assert.ok(Math.abs(
+      firstStage.sourceStartMoles
+        - firstStage.sourceConsumedMoles
+        - firstStage.sourceEndMoles
+    ) < 1e-9);
+    assert.ok(Math.abs(
+      secondStage.sourceStartMoles
+        - secondStage.sourceConsumedMoles
+        - secondStage.sourceEndMoles
+    ) < 1e-9);
+    assert.equal(secondStage.receiverStartMoles, firstStage.receiverEndMoles);
+  }
+  assert.equal(transferStages[2].receiverStartMoles, transferStages[1].receiverEndMoles);
+
+  const pressures = result.protocolSteps.flatMap(step => {
+    const thermal = step.thermal;
+    if (!thermal) return [];
+    return [
+      thermal.pressureStartBar,
+      thermal.pressureAtTransferEndReferenceBar,
+      thermal.pressureAtTransferEndAmbientBar,
+      thermal.pressureAtTransferEndHotBar,
+      thermal.pressureAfterWaitBar,
+      ...(thermal.samples ?? []).flatMap(sample => [
+        sample.pressureAtTransferEndReferenceBar,
+        sample.pressureAtTransferEndAmbientBar,
+        sample.pressureAtTransferEndHotBar,
+        sample.ambientPressureBar,
+        sample.projectedPressureBar ?? sample.pressureBar
+      ])
+    ].filter(Number.isFinite);
+  });
+  assert.ok(pressures.every(pressure => pressure <= workingPressureBar + 1e-7));
+});
+
 test('thermal final settling defaults to ambient before in-water projection', () => {
   const result = optimizeBlend({
     cylinder: {
