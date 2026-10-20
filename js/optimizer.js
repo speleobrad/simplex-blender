@@ -2248,25 +2248,77 @@ function normalizeInWaterTarget(input) {
 
 function trajectoryWithThermalEndpoints(trajectory, simulation) {
   if (!Array.isArray(trajectory) || !simulation?.final) return trajectory;
-  const transferStates = (simulation.protocolSteps ?? [])
+  const transferSteps = (simulation.protocolSteps ?? [])
     .filter(step => step.type !== 'drain'
       && step.thermal?.rateSource
       && step.thermal.rateSource !== 'none')
-    .map(step => step.thermal);
+    .map(step => ({ step, state: step.thermal }));
+  const mappedTrajectory = [];
   let transferCursor = 0;
-  return trajectory.map(point => {
-    if (!point.bankId) return point;
-    const state = transferStates[transferCursor++];
-    if (!state) return point;
-    return {
-      ...point,
-      pressureAtTransferEndReferenceBar: state.pressureAtTransferEndReferenceBar,
-      pressureAtTransferEndAmbientBar: state.pressureAtTransferEndAmbientBar,
-      pressureAtTransferEndHotBar: state.pressureAtTransferEndHotBar,
-      ambientPressureBar: state.pressureAtTransferEndAmbientBar,
-      hotPressureBar: state.pressureAtTransferEndHotBar
-    };
-  });
+  let trajectoryStep = 0;
+  for (const point of trajectory) {
+    if (!point.bankId) {
+      mappedTrajectory.push(point);
+      trajectoryStep = Math.max(trajectoryStep, Number(point.step) || 0);
+      continue;
+    }
+    const firstTransfer = transferSteps[transferCursor];
+    if (!firstTransfer) {
+      mappedTrajectory.push(point);
+      trajectoryStep++;
+      continue;
+    }
+    const stages = [firstTransfer];
+    transferCursor++;
+    if (firstTransfer.step._thermalSplit) {
+      while (transferSteps[transferCursor]?.step._thermalSplit
+        && transferSteps[transferCursor].step._measurementIndex === null) {
+        stages.push(transferSteps[transferCursor]);
+        transferCursor++;
+      }
+    }
+    stages.forEach(({ step, state }, stageIndex) => {
+      const resultingMix = step.resultingMix ?? point;
+      const pressureBar = Number.isFinite(step.resultingPressureBar)
+        ? step.resultingPressureBar
+        : state.pressureAtTransferEndReferenceBar ?? point.pressureBar;
+      const receiverStartPressureBar = Number.isFinite(step.receiverStartPressureBar)
+        ? step.receiverStartPressureBar
+        : point.pressureBar - (point.pressureDeltaBar ?? 0);
+      const pressureDeltaBar = pressureBar - receiverStartPressureBar;
+      const splitLabel = firstTransfer.step._thermalSplit
+        ? ` (safe stage ${stageIndex + 1})`
+        : '';
+      trajectoryStep++;
+      mappedTrajectory.push({
+        ...point,
+        step: trajectoryStep,
+        label: `${point.label ?? step.title ?? `Step ${trajectoryStep}`}${splitLabel}`,
+        oxygenPercent: resultingMix.oxygenPercent ?? point.oxygenPercent,
+        heliumPercent: resultingMix.heliumPercent ?? point.heliumPercent,
+        nitrogenPercent: resultingMix.nitrogenPercent
+          ?? Math.max(0, 100 - (resultingMix.oxygenPercent ?? point.oxygenPercent)
+            - (resultingMix.heliumPercent ?? point.heliumPercent)),
+        pressureBar,
+        pressureDeltaBar,
+        sourceStartPressureBar: Number.isFinite(step.sourceStartPressureBar)
+          ? step.sourceStartPressureBar
+          : point.sourceStartPressureBar,
+        sourceEndPressureBar: Number.isFinite(step.sourceEndPressureBar)
+          ? step.sourceEndPressureBar
+          : point.sourceEndPressureBar,
+        addedMoles: Number.isFinite(step.sourceConsumedMoles)
+          ? step.sourceConsumedMoles
+          : point.addedMoles,
+        pressureAtTransferEndReferenceBar: state.pressureAtTransferEndReferenceBar,
+        pressureAtTransferEndAmbientBar: state.pressureAtTransferEndAmbientBar,
+        pressureAtTransferEndHotBar: state.pressureAtTransferEndHotBar,
+        ambientPressureBar: state.pressureAtTransferEndAmbientBar,
+        hotPressureBar: state.pressureAtTransferEndHotBar
+      });
+    });
+  }
+  return mappedTrajectory;
 }
 
 function thermalState(candidate, requestedInWaterPressureBar, requestedInWaterTemperatureC, ambientSettledTargetPressureBar) {

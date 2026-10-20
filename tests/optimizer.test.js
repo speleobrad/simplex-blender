@@ -1776,6 +1776,21 @@ test('optimizeBlend returns a feasible split protocol with safe endpoints and ta
   assert.ok(Math.abs(result.thermal.finalAmbientPressureBar - 96) < 1e-5);
   const transferStages = result.protocolSteps.filter(step => step.type === 'decant');
   assert.equal(transferStages.length, 2);
+  const transferPoints = result.trajectory.filter(point => point.bankId);
+  assert.equal(transferPoints.length, 2);
+  transferStages.forEach((stage, index) => {
+    const point = transferPoints[index];
+    assert.equal(point.pressureBar, stage.resultingPressureBar);
+    assert.equal(point.oxygenPercent, stage.resultingMix.oxygenPercent);
+    assert.equal(point.heliumPercent, stage.resultingMix.heliumPercent);
+    assert.equal(point.pressureAtTransferEndReferenceBar, stage.thermal.pressureAtTransferEndReferenceBar);
+    assert.equal(point.pressureAtTransferEndAmbientBar, stage.thermal.pressureAtTransferEndAmbientBar);
+    assert.equal(point.pressureAtTransferEndHotBar, stage.thermal.pressureAtTransferEndHotBar);
+  });
+  assert.equal(
+    transferPoints.at(-1).hotPressureBar,
+    result.thermal.finalTransferEndPressureBar
+  );
   const safetyWait = result.protocolSteps.find(step => step.automaticWaitMetadata);
   assert.ok(safetyWait);
   assert.equal(safetyWait.automaticWaitMetadata.warning, '!');
