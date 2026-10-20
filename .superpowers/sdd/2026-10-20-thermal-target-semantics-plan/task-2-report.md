@@ -6,4 +6,4 @@ Command: `node --test tests/optimizer.test.js tests/thermodynamics.test.js tests
 Output: 128 tests, 128 passed, 0 failed.
 
 
-Commit: `f730105` — `fix: handle thermal floor infeasibility fallback`.
+Commit: `1382f72` — `fix: handle thermal floor infeasibility fallback`.
