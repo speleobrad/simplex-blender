@@ -918,6 +918,41 @@ test('compare simulation maps drain, decant, boost, and compressor transfer rate
   assert.equal(compressor.rateSource, 'compressor');
   assert.ok(compressor.rateBarPerMin > 0);
 });
+test('compare transfer samples retain reference, ambient, and hot endpoint identities', () => {
+  const result = simulateCompareProtocol({
+    protocolSteps: [{
+      type: 'add',
+      method: 'compressor',
+      operation: 'Top-up',
+      receiverStartPressureBar: 0,
+      receiverEndPressureBar: 95,
+      resultingPressureBar: 95,
+      resultingMix: { oxygenPercent: 21, heliumPercent: 0 },
+      sourceOxygenPercent: 21,
+      sourceHeliumPercent: 0
+    }],
+    cylinder: { initialPressureBar: 0, volumeL: 12 },
+    physics: { model: 'ideal', temperatureC: 20 },
+    thermal: {
+      tankMaterial: 'steel',
+      coolingMedium: 'air',
+      ambientTemperatureC: 20,
+      inletTemperatureC: 40,
+      waitMode: 'minutes',
+      waitMinutes: 0
+    },
+    settings: { booster: { compressorInletFlowLPerMin: 100 } }
+  });
+  const thermal = result.protocolSteps[0].thermal;
+  assert.equal(thermal.pressureAtTransferEndReferenceBar, 95);
+  assert.equal(thermal.pressureAtTransferEndAmbientBar, 95);
+  assert.ok(thermal.pressureAtTransferEndHotBar > thermal.pressureAtTransferEndReferenceBar);
+  assert.equal(thermal.pressureAtTransferEndBar, thermal.pressureAtTransferEndHotBar);
+  const finalSample = thermal.samples.at(-1);
+  assert.equal(finalSample.pressureAtTransferEndReferenceBar, thermal.pressureAtTransferEndReferenceBar);
+  assert.equal(finalSample.pressureAtTransferEndAmbientBar, thermal.pressureAtTransferEndAmbientBar);
+  assert.equal(finalSample.pressureAtTransferEndHotBar, thermal.pressureAtTransferEndHotBar);
+});
 
 test('compare simulation keeps a wait at fixed transfer pressure and projects a hot final transfer', () => {
   const waitResult = simulateCompareProtocol({

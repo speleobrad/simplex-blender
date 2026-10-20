@@ -625,7 +625,10 @@ function buildThermalStepSamples({
     projectedPressureBar: pressureAfterWaitBar,
     oxygenPercent: receiverMix.oxygenPercent,
     heliumPercent: receiverMix.heliumPercent,
-    pressureReferenceTemperatureC: temperatureAfterWaitC
+    pressureReferenceTemperatureC: temperatureAfterWaitC,
+    pressureAtTransferEndReferenceBar: transferEndPressureBar,
+    pressureAtTransferEndAmbientBar: ambientTransferEndPressure,
+    pressureAtTransferEndHotBar: hotTransferEndPressure
   });
   return samples;
 }
