@@ -495,7 +495,13 @@ export function renderSettingsDialog(settings, importState) {
     input.value = String(displayValue(value, quantity, field, activeUnits));
     if (quantity) {
       input.dataset.settingsQuantity = quantity;
-      input.setAttribute('aria-label', `${id} in ${getUnitLabel(quantity, activeUnits)}`);
+      const ariaLabels = {
+        'settings-compressor-max-pressure': 'Maximum compressor pressure',
+        'settings-booster-max-output-pressure': 'Maximum booster output pressure',
+        'settings-compressor-inlet-flow': 'Compressor inlet flow',
+        'settings-booster-cylinder-volume': 'Booster cylinder volume'
+      };
+      input.setAttribute('aria-label', ariaLabels[id] ?? `${id} in ${getUnitLabel(quantity, activeUnits)}`);
     }
   }
   renderPresetImport(settings, importState);

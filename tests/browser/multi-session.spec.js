@@ -12,6 +12,7 @@ async function closeSession(session) {
   if (session?.context) await session.context.close();
 }
 
+test.use({ trace: 'off' });
 test.describe('continued browser sessions', () => {
   test('reuses consent and completed tour state after closing session A', async ({ appPage }) => {
     const pageA = await appPage.goto('factory');
