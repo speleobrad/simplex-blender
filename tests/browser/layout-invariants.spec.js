@@ -69,6 +69,23 @@ test.describe('layout invariants', () => {
     await expect(assertion).rejects.toThrow(/focusRingVisible/);
   });
 
+  test('focus diagnostics reject a transparent focus indicator', async ({ appPage }) => {
+    const page = await loadApplication(appPage);
+    await page.evaluate(() => {
+      const fixture = document.createElement('button');
+      fixture.id = 'synthetic-transparent-focus';
+      fixture.textContent = 'Transparent focus ring';
+      fixture.style.cssText = 'position:fixed;z-index:999999;left:12px;top:12px;width:120px;height:36px;outline:2px solid transparent;box-shadow:none;';
+      document.body.append(fixture);
+    });
+    const assertion = assertVisibleFocus(page, page.locator('#synthetic-transparent-focus'));
+    const error = await assertion.then(() => null, failure => failure);
+    expect(error).toBeTruthy();
+    expect(error.diagnostics.focusRing.hasVisibleOutline).toBe(false);
+    expect(error.diagnostics.focusRing.hasVisibleShadow).toBe(false);
+  });
+
+
   test('only the active result panel exposes interactive controls', async ({ appPage }) => {
     const page = await loadApplication(appPage);
     await assertOnlyActivePanelsInteractive(page, panels);

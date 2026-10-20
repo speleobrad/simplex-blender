@@ -90,3 +90,33 @@
 - The application header Settings button currently suppresses its own visible outline. The focus invariant therefore targets the onboarding Skip control, which has the application's explicit focus-visible ring; the helper still rejects controls with no computed outline/box-shadow indicator or no visible ring intersection.
 - The mobile browser project can report a layout viewport different from its configured Playwright viewport under this app's mobile emulation. The assertion deliberately uses `page.viewportSize()` for viewport bounds and keeps `window.innerWidth` in overflow diagnostics so this discrepancy remains observable.
 - Playwright emits existing `NO_COLOR`/`FORCE_COLOR` warnings during the suite; they do not fail tests and are unrelated to the new assertions.
+
+## Re-review fix
+
+The re-review identified that a non-none, positive-width transparent outline could be treated as a visible focus ring. `assertVisibleFocus` now parses computed outline and box-shadow colors, rejects zero-alpha/transparent paint, and only includes painted rings in the geometric intersection. The regression fixture uses `outline: 2px solid transparent` and asserts the failure diagnostics report both `hasVisibleOutline: false` and `hasVisibleShadow: false`; the existing onboarding Skip fixture continues to prove that a visible ring passes.
+
+### Additional commands and results
+
+1. Red regression reproduction before the paint-visibility fix:
+
+   ```sh
+   npm run test:ui -- tests/browser/layout-invariants.spec.js --grep "transparent focus"
+   ```
+
+   Result: **3 failed** (desktop, tablet, mobile). Each failed because the transparent-ring assertion received `null` instead of a rejection, confirming the regression.
+
+2. Focused focus-indicator suite after the fix:
+
+   ```sh
+   npm run test:ui -- tests/browser/layout-invariants.spec.js --grep "readable labels|without a rendered indicator|transparent focus"
+   ```
+
+   Result: **9 passed** across desktop, tablet, and mobile projects.
+
+3. Required full Task 3 suite after the fix:
+
+   ```sh
+   npm run test:ui -- tests/browser/layout-invariants.spec.js
+   ```
+
+   Result: **27 passed (15.0s)** across desktop, tablet, and mobile projects.

@@ -39,11 +39,30 @@ export async function assertVisibleFocus(page, locator, options = {}) {
   const focusRing = await locator.evaluate(element => {
     const computed = getComputedStyle(element);
     const elementRect = element.getBoundingClientRect();
+    const colorHasPaint = color => {
+      const normalized = color.trim().toLowerCase();
+      if (!normalized || normalized === 'transparent') return false;
+      if (normalized.startsWith('#')) {
+        const hex = normalized.slice(1);
+        const alpha = hex.length === 4 ? hex[3] : hex.length === 8 ? hex.slice(6) : null;
+        return alpha === null || parseInt(alpha, 16) > 0;
+      }
+      const functionMatch = normalized.match(/^(?:rgba?|hsla?)\((.*)\)$/);
+      if (!functionMatch) return true;
+      const components = functionMatch[1].split(/[,/ ]+/).filter(Boolean);
+      if (components.length < 4) return true;
+      const alpha = components[components.length - 1];
+      return alpha.endsWith('%') ? Number.parseFloat(alpha) > 0 : Number.parseFloat(alpha) > 0;
+    };
+    const shadowColors = [...computed.boxShadow.matchAll(/(?:rgba?|hsla?)\([^)]*\)|#[0-9a-f]{3,8}\b|transparent\b/gi)]
+      .map(match => match[0]);
     const outlineWidth = Number.parseFloat(computed.outlineWidth) || 0;
     const outlineOffset = Number.parseFloat(computed.outlineOffset) || 0;
-    const outlineVisible = computed.outlineStyle !== 'none' && outlineWidth > 0;
-    const shadowVisible = computed.boxShadow !== 'none' && !/(?:transparent|rgba?\\([^)]*,\\s*0\\s*\\))/i.test(computed.boxShadow);
-    const shadowLengths = [...computed.boxShadow.matchAll(/(-?\\d*\\.?\\d+)px/g)].map(match => Number(match[1]));
+    const outlineVisible = computed.outlineStyle !== 'none' && outlineWidth > 0 && colorHasPaint(computed.outlineColor);
+    const shadowVisible = computed.boxShadow !== 'none' && (
+      shadowColors.length === 0 || shadowColors.some(colorHasPaint)
+    );
+    const shadowLengths = [...computed.boxShadow.matchAll(/(-?\d*\.?\d+)px/g)].map(match => Number(match[1]));
     const shadowExtent = shadowVisible ? Math.abs(shadowLengths[2] || 0) + Math.abs(shadowLengths[3] || 0) : 0;
     const shadowOffsetX = shadowVisible ? shadowLengths[0] || 0 : 0;
     const shadowOffsetY = shadowVisible ? shadowLengths[1] || 0 : 0;
