@@ -600,6 +600,10 @@ export function simulateThermalProtocol({
     };
   }
 
+  let currentMix = {
+    oxygenPercent: cylinder.initialOxygenPercent ?? 0,
+    heliumPercent: cylinder.initialHeliumPercent ?? 0
+  };
   let previousThermal = null;
   const simulatedProtocolSteps = protocolSteps.map((step, index) => {
     const measuredStart = thermal.interimMeasurements?.[index];
@@ -723,6 +727,7 @@ export function simulateThermalProtocol({
       measuredStartTemperatureC: measuredStart?.temperatureC,
       temperatureStartC,
       temperatureAtTransferEndC,
+      receiverStartMix: step.receiverStartMix ?? currentMix,
       configuredWaitMinutes,
       automaticWaitMinutes: Number(step.automaticWaitMinutes) || 0,
       measuredWaitMinutes,
@@ -755,6 +760,7 @@ export function simulateThermalProtocol({
     currentPressureBar = Math.max(0, pressureAfterWaitBar);
     currentTemperatureC = temperatureAfterWaitC;
     previousThermal = thermalStep;
+    currentMix = receiverMix;
     return { ...step, thermal: thermalStep };
   });
 
