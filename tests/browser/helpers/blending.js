@@ -44,8 +44,15 @@ export async function assertResultPanelExclusive(page, tabName) {
   for (const other of Object.values(ids)) {
     const candidate = page.locator(`#tab-pane-${other}`);
     if (other !== id) await expect(candidate).toBeHidden();
+    const otherButton = page.locator(`#tab-btn-${other}`);
+    const selected = await otherButton.getAttribute('aria-selected');
+    if (selected !== null) await expect(otherButton).toHaveAttribute('aria-selected', other === id ? 'true' : 'false');
   }
   const button = page.locator(`#tab-btn-${id}`);
   await expect(button).toHaveClass(/bg-cyan/);
+  const ariaSelected = await button.getAttribute('aria-selected');
+  if (ariaSelected !== null) {
+    await expect(button).toHaveAttribute('aria-selected', 'true');
+  }
   return panel;
 }

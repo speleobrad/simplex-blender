@@ -24,14 +24,21 @@ test.describe('result tabs', () => {
     expect(await list.evaluate(element => element.scrollWidth >= element.clientWidth)).toBeTruthy();
   });
 
-  test('diagram zoom controls stay bounded and preserve accessible description', async ({ appPage }) => {
+  test('diagram zoom, pointer readout, and reset remain observable', async ({ appPage }) => {
     const page = await populated(appPage);
     await assertResultPanelExclusive(page, 'Diagram');
     const canvas = page.locator('#ternary-canvas');
     await expect(canvas).toHaveAttribute('aria-describedby', 'ternary-chart-description');
     const box = await canvas.boundingBox();
     expect(box?.width).toBeGreaterThan(0);
-    for (let i = 0; i < 8; i++) await page.getByRole('button', { name: 'Zoom in diagram' }).click();
+    const before = await canvas.evaluate(element => element.toDataURL());
+    for (const [x, y] of [[0.5, 0.5], [0.35, 0.5], [0.65, 0.5], [0.5, 0.3], [0.5, 0.7]]) {
+      await page.mouse.move(box.x + box.width * x, box.y + box.height * y);
+      if (await page.locator('#ternary-coords-hover').textContent() !== 'Hover for gas fractions') break;
+    }
+    await expect(page.locator('#ternary-coords-hover')).not.toHaveText('Hover for gas fractions');
+    await page.getByRole('button', { name: 'Zoom in diagram' }).click();
+    await expect.poll(() => canvas.evaluate(element => element.toDataURL())).not.toBe(before);
     for (let i = 0; i < 12; i++) await page.getByRole('button', { name: 'Zoom out diagram' }).click();
     await page.getByRole('button', { name: 'Reset diagram zoom' }).click();
     await expect(canvas).toBeVisible();
@@ -40,25 +47,31 @@ test.describe('result tabs', () => {
   test('thermal charts synchronize focusable points with the accessible table', async ({ appPage }) => {
     const page = await populated(appPage);
     await assertResultPanelExclusive(page, 'Thermal graphs');
-    const points = page.locator('[data-thermal-point-index]');
-    await expect(points.first()).toBeVisible();
-    const index = await points.first().getAttribute('data-thermal-point-index');
+    const chartPoint = page.locator('#thermal-temperature-chart [data-thermal-point-index]').first();
+    await expect(chartPoint).toBeVisible();
+    const index = await chartPoint.getAttribute('data-thermal-point-index');
     const matching = page.locator(`[data-thermal-point-index="${index}"]`);
     expect(await matching.count()).toBeGreaterThanOrEqual(3);
-    await matching.first().focus();
-    await expect(matching.first()).toBeFocused();
+    await chartPoint.focus();
+    await expect(chartPoint).toHaveClass(/thermal-point-active/);
+    await expect(page.locator(`#thermal-chart-data [data-thermal-point-index="${index}"]`)).toHaveClass(/thermal-point-active/);
+    await expect(page.locator(`#thermal-pressure-chart [data-thermal-point-index="${index}"]`)).toHaveClass(/thermal-point-active/);
     await expect(page.locator('#thermal-chart-data')).toContainText(/Step|Temperature|Pressure/i);
   });
 
-  test('empty/error result surfaces explain unavailable chart and table data', async ({ appPage }) => {
+  test('empty/error result surfaces explain unavailable data on every tab', async ({ appPage }) => {
     const page = await appPage.goto('tourSeen');
     await page.locator('#target-o2').fill('not-a-number');
     await page.locator('#target-o2').blur();
+    await assertResultPanelExclusive(page, 'Recipe');
+    await expect(page.locator('#steps-container')).toContainText(/no feasible|invalid|error|unable/i);
     await assertResultPanelExclusive(page, 'Diagram');
     await expect(page.locator('#ternary-steps-summary')).toContainText(/no|unavailable|invalid|ready/i);
     await assertResultPanelExclusive(page, 'Thermal graphs');
     await expect(page.locator('#thermal-chart-status')).toContainText(/available|appears|invalid|error/i);
     await assertResultPanelExclusive(page, 'Tank summary');
     await expect(page.locator('#ternary-data-status')).toContainText(/available|appears|invalid|error|no feasible/i);
+    await assertResultPanelExclusive(page, 'In water pressure');
+    await expect(page.locator('#water-pressure-container')).toBeEmpty();
   });
 });
