@@ -19,10 +19,19 @@ export function scheduleSafeThermalProtocol({
     const simulation = simulateThermalProtocol({
       protocolSteps: steps, cylinder, physics, thermal, settings
     });
-    const unsafeIndex = simulation.protocolSteps.findIndex(step => (
-      step.thermal
-      && step.thermal.pressureAtTransferEndBar > cylinder.workingPressureBar + 1e-7
-    ));
+    const unsafeIndex = simulation.protocolSteps.findIndex(step => {
+      if (!step.thermal) return false;
+      const hotPressureBar = calculatePressureAtTemperature({
+        pressureBar: step.thermal.pressureAtTransferEndBar,
+        oxygenPercent: step.resultingMix?.oxygenPercent ?? 21,
+        heliumPercent: step.resultingMix?.heliumPercent ?? 0,
+        fromTemperatureC: thermal.ambientTemperatureC,
+        toTemperatureC: step.thermal.temperatureAtTransferEndC,
+        volumeL: cylinder.volumeL,
+        useVdw: physics.model === 'vdw'
+      });
+      return hotPressureBar > cylinder.workingPressureBar + 1e-7;
+    });
     if (unsafeIndex < 0) {
       return {
         protocolSteps: simulation.protocolSteps,
@@ -66,7 +75,8 @@ export function scheduleSafeThermalProtocol({
       const start = Number(transferStep.receiverStartPressureBar);
       const end = Number(transferStep.receiverEndPressureBar ?? transferStep.resultingPressureBar);
       if (Number.isFinite(start) && Number.isFinite(end)
-        && end > cylinder.workingPressureBar + 1e-7
+        && (end > cylinder.workingPressureBar + 1e-7
+          || current.pressureAtTransferEndBar > cylinder.workingPressureBar + 1e-7)
         && cylinder.workingPressureBar > start + 1e-7) {
         const boundary = cylinder.workingPressureBar;
         const fraction = (boundary - start) / (end - start);
