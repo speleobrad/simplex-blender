@@ -867,7 +867,10 @@ function validateBlendInput(input) {
   const { cylinder, physics, banks } = input;
   if (!cylinder || typeof cylinder !== 'object') return ['Cylinder input is missing.'];
 
-  const errors = validateCalculatorInputs(cylinder, physics, input.thermal);
+  const validationCylinder = input._internalThermalTarget
+    ? { ...cylinder, targetPressureBar: Math.min(350, Math.max(10, cylinder.targetPressureBar)) }
+    : cylinder;
+  const errors = validateCalculatorInputs(validationCylinder, physics, input.thermal);
   if (!isValidGasComposition(cylinder.initialOxygenPercent, cylinder.initialHeliumPercent)) {
     errors.push('Initial gas composition must total at most 100% O₂ and He.');
   }
@@ -1585,6 +1588,7 @@ function thermalState(candidate, requestedInWaterPressureBar, requestedInWaterTe
 function evaluateThermalCandidate(input, optimizeStatic, targetPressureBar) {
   const candidateInput = {
     ...input,
+    _internalThermalTarget: true,
     cylinder: {
       ...input.cylinder,
       targetPressureBar
@@ -1636,11 +1640,14 @@ function thermalizedMaximumResult(candidate, requestedInWaterPressureBar = candi
 }
 
 function thermalLimitResult(input, requested, maximum) {
-  const requestedSettledTargetPressureBar = input.cylinder.targetPressureBar;
-  const thermal = {
-    ...maximum.simulation.final,
-    requestedSettledTargetPressureBar
+  const requestedInWaterPressureBar = input.cylinder.targetPressureBar;
+  const requestedInWaterTemperatureC = input.thermal.targetInWaterTemperatureC ?? input.thermal.ambientTemperatureC;
+  const ambientSettledTargetPressureBar = normalizeInWaterTarget(input);
+  const maximumCandidate = {
+    candidateInput: maximum.candidateInput,
+    simulation: maximum.simulation
   };
+  const thermal = thermalState(maximumCandidate, requestedInWaterPressureBar, requestedInWaterTemperatureC, ambientSettledTargetPressureBar);
   const maximumPressure = {
     pressureBar: maximum.result.blend.finalPressureBar,
     solution: maximum.result.solution,
@@ -1652,11 +1659,8 @@ function thermalLimitResult(input, requested, maximum) {
   };
   return {
     ...failedResult(
-      `Requested ambient-settled pressure ${requestedSettledTargetPressureBar.toFixed(1)} bar cannot be reached; maximum predicted ambient pressure is ${maximum.simulation.final.finalAmbientPressureBar.toFixed(1)} bar.`,
-      {
-        ...requested.result.gas,
-        targetPressureBar: requestedSettledTargetPressureBar
-      },
+      `Requested in-water pressure ${requestedInWaterPressureBar.toFixed(1)} bar cannot be reached; maximum predicted ambient pressure is ${maximum.simulation.final.finalAmbientPressureBar.toFixed(1)} bar.`,
+      { ...requested.result.gas, targetPressureBar: requestedInWaterPressureBar },
       maximum.result.tableauSteps,
       maximumPressure,
       requested.result.diagnostics ?? null

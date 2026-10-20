@@ -381,7 +381,7 @@ export function renderResults(result, calculation = null) {
     setText(
       'lbl-target-p',
       formatUnitValue(
-        result.thermal?.requestedSettledTargetPressureBar ?? result.gas.targetPressureBar,
+        result.thermal?.requestedInWaterPressureBar ?? result.gas.targetPressureBar,
         'pressureBar',
         units
       )
