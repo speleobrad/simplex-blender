@@ -1627,6 +1627,11 @@ test('optimizeBlend returns a feasible automatic wait extension with complete sa
   assert.equal(metadata.configuredWaitMinutes, 0);
   assert.ok(metadata.addedWaitMinutes > 0);
   assert.equal(metadata.actualWaitMinutes, wait.thermal.waitMinutes);
+  const transfer = result.protocolSteps.find(step => step.type === 'boost');
+  assert.ok(transfer);
+  assert.equal(transfer.thermal.measuredStartPressureBar, transfer.thermal.pressureStartBar);
+  assert.notEqual(transfer.thermal.measuredStartTemperatureC, 40);
+  assert.equal(transfer.thermal.measuredStartTemperatureC, transfer.thermal.temperatureStartC);
   assert.equal(metadata.warning, '!');
   for (const step of result.protocolSteps) {
     if (!step.thermal) continue;
@@ -1706,6 +1711,38 @@ test('optimizeBlend returns a feasible split protocol with safe endpoints and ta
     ];
     assert.ok(pressures.every(pressure => pressure <= 100 + 1e-7), step.title);
   }
+});
+test('thermal final settling defaults to ambient before in-water projection', () => {
+  const result = optimizeBlend({
+    cylinder: {
+      volumeL: 12,
+      initialPressureBar: 200,
+      initialOxygenPercent: 21,
+      initialHeliumPercent: 0,
+      targetPressureBar: 200,
+      targetOxygenPercent: 21,
+      targetHeliumPercent: 0,
+      workingPressureBar: 250
+    },
+    physics: { model: 'ideal', temperatureC: 20 },
+    thermal: {
+      tankMaterial: 'steel',
+      coolingMedium: 'air',
+      ambientTemperatureC: 20,
+      inletTemperatureC: 20,
+      targetMediumTemperatureC: 30,
+      targetInWaterTemperatureC: 10,
+      waitMode: 'minutes',
+      waitMinutes: 0
+    },
+    settings: {},
+    banks: []
+  });
+
+  assert.equal(result.feasible, true);
+  assert.equal(result.thermal.finalAmbientTemperatureC, 20);
+  assert.equal(result.thermal.finalInWaterTemperatureC, 10);
+  assert.ok(Math.abs(result.thermal.finalInWaterPressureBar - 200) < 1e-5);
 });
 test('settles the recipe at the requested target temperature', () => {
   const result = optimizeBlend({

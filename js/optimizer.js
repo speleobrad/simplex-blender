@@ -534,23 +534,42 @@ export function scheduleSafeThermalProtocol({
     const targetIndex = unsafeIndex < 0 ? steps.length - 1 : unsafeIndex;
     const targetState = simulation.protocolSteps[targetIndex]?.thermal;
     if (targetState && steps[targetIndex]) {
-      const hasMeasurement = steps[targetIndex]._measurementIndex !== null;
+      const measurementIndex = steps[targetIndex]._measurementIndex;
+      const measuredStart = measurementIndex === null
+        ? null
+        : options.thermal.interimMeasurements?.[measurementIndex];
+      const hasMeasurement = Number.isFinite(measuredStart?.pressureBar)
+        || Number.isFinite(measuredStart?.temperatureC);
       const receiverStartPressureBar = steps[targetIndex].receiverStartPressureBar;
       steps[targetIndex] = {
         ...steps[targetIndex],
-        _scheduledMeasuredStartPressureBar: steps[targetIndex]._scheduledMeasuredStartPressureBar
-          ?? (hasMeasurement && Number.isFinite(receiverStartPressureBar)
-            ? receiverStartPressureBar
-            : targetState.pressureStartBar),
-        _scheduledMeasuredStartTemperatureC: steps[targetIndex]._scheduledMeasuredStartTemperatureC
-          ?? (hasMeasurement && steps[targetIndex - 1]?.type === 'keep'
-            ? targetState.temperatureStartC
-            : hasMeasurement
-              ? options.thermal.ambientTemperatureC ?? targetState.temperatureStartC
-              : targetState.temperatureStartC)
+        _scheduledMeasuredStartPressureBar: hasMeasurement
+          ? steps[targetIndex]._scheduledMeasuredStartPressureBar
+            ?? (Number.isFinite(receiverStartPressureBar)
+              ? receiverStartPressureBar
+              : targetState.pressureStartBar)
+          : null,
+        _scheduledMeasuredStartTemperatureC: hasMeasurement
+          ? steps[targetIndex]._scheduledMeasuredStartTemperatureC
+            ?? (steps[targetIndex - 1]?.type === 'keep'
+              ? targetState.temperatureStartC
+              : options.thermal.ambientTemperatureC ?? targetState.temperatureStartC)
+          : null
       };
     }
+    const detachInitialMeasurement = () => {
+      const affectedStep = steps[targetIndex];
+      if (!affectedStep || affectedStep.type === 'keep'
+        || affectedStep._measurementIndex !== 0) return;
+      steps[targetIndex] = {
+        ...affectedStep,
+        _measurementIndex: null,
+        _scheduledMeasuredStartPressureBar: null,
+        _scheduledMeasuredStartTemperatureC: null
+      };
+    };
     let waitIndex = targetIndex - 1;
+    detachInitialMeasurement();
     if (waitIndex < 0 || steps[waitIndex]?.type === 'keep') {
       const state = simulation.protocolSteps[targetIndex]?.thermal;
       const pressureBar = state?.pressureStartBar

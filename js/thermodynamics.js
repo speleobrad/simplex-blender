@@ -640,9 +640,11 @@ export function simulateThermalProtocol({
 }) {
   const booster = thermalBoosterSettings(settings);
   const tauMinutes = coolingTimeConstantMinutes(thermal.tankMaterial, thermal.coolingMedium);
+  const settledAtAmbient = Number.isFinite(thermal.targetMediumTemperatureC)
+    && Number.isFinite(thermal.ambientTemperatureC)
+    && Math.abs(thermal.targetMediumTemperatureC - thermal.ambientTemperatureC) < 1e-9;
   const settledTemperatureC = thermal.settledTemperatureC
-    ?? thermal.targetMediumTemperatureC
-    ?? thermal.targetTemperatureC
+    ?? (settledAtAmbient ? thermal.targetMediumTemperatureC : thermal.targetTemperatureC)
     ?? thermal.ambientTemperatureC;
   const emptyProtocolTemperatureC = thermal.settledTemperatureC
     ?? thermal.targetMediumTemperatureC
@@ -829,17 +831,19 @@ export function simulateThermalProtocol({
       useVdw
     }));
     const thermalStep = {
+      pressureStartBar,
       rateSource: transfer.rateSource,
       rateBarPerMin: transfer.rateBarPerMin,
       durationMinutes,
       inletTemperatureC,
-      pressureStartBar,
       measuredStartPressureBar: measuredStart?.pressureBar
-        ?? step._scheduledMeasuredStartPressureBar
-        ?? pressureStartBar,
+        ?? (measurementIndex === null
+          ? pressureStartBar
+          : step._scheduledMeasuredStartPressureBar ?? pressureStartBar),
       measuredStartTemperatureC: measuredStart?.temperatureC
-        ?? step._scheduledMeasuredStartTemperatureC
-        ?? temperatureStartC,
+        ?? (measurementIndex === null
+          ? temperatureStartC
+          : step._scheduledMeasuredStartTemperatureC ?? temperatureStartC),
       temperatureStartC,
       temperatureAtTransferEndC,
       pressureReferenceTemperatureC,
