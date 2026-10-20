@@ -896,7 +896,12 @@ test('compare simulation maps drain, decant, boost, and compressor transfer rate
   assert.ok(drain.temperatureAtTransferEndC < drain.temperatureStartC);
   assert.equal(decant.rateSource, 'decant-rate');
   assert.equal(decant.rateBarPerMin, 5);
-  assert.equal(boost.rateSource, 'booster');
+  const intermediateBoostSample = boost.samples.find(sample => (
+    sample.elapsedMinutes > 0 && sample.elapsedMinutes < boost.durationMinutes
+  ));
+  assert.ok(intermediateBoostSample);
+  assert.ok(intermediateBoostSample.pressureBar > boost.pressureStartBar);
+  assert.ok(intermediateBoostSample.pressureBar < boost.pressureAtTransferEndBar);
   assert.equal(boost.rateBarPerMin, calculateBoosterFillRate({
     cylinderVolumeCm3: 9,
     bpm: 50,

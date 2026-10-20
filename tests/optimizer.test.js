@@ -1581,6 +1581,132 @@ test('optimizeBlend exposes the hot transfer endpoint separately from the physic
   assert.ok(Math.abs(result.thermal.finalTransferEndPressureBar - thermal.pressureAtTransferEndHotBar) < 1e-9);
   assert.equal(result.thermal.finalTransferEndTemperatureC, thermal.temperatureAtTransferEndC);
 });
+test('optimizeBlend returns a feasible automatic wait extension with complete safety metadata', () => {
+  const result = optimizeBlend({
+    cylinder: {
+      volumeL: 12,
+      initialPressureBar: 0,
+      initialOxygenPercent: 21,
+      initialHeliumPercent: 0,
+      targetPressureBar: 95,
+      targetOxygenPercent: 21,
+      targetHeliumPercent: 0,
+      workingPressureBar: 100
+    },
+    physics: { model: 'ideal', temperatureC: 20 },
+    thermal: {
+      tankMaterial: 'steel',
+      coolingMedium: 'air',
+      ambientTemperatureC: 20,
+      inletTemperatureC: 40,
+      targetMediumTemperatureC: 20,
+      targetInWaterTemperatureC: 20,
+      waitMode: 'minutes',
+      waitMinutes: 0,
+      interimMeasurements: [{ pressureBar: 0, temperatureC: 40 }]
+    },
+    settings: {
+      booster: {
+        compressorInletFlowLPerMin: 100,
+        otherBoostBpm: 50,
+        oxygenBoostBpm: 50,
+        otherDecantRateBarPerMin: 5,
+        oxygenDecantRateBarPerMin: 5,
+        cylinderVolumeCm3: 9,
+        minimumSourcePressureBar: 0
+      }
+    },
+    banks: []
+  });
+
+  assert.equal(result.feasible, true);
+  assert.ok(Math.abs(result.thermal.finalAmbientPressureBar - 95) < 1e-5);
+  const wait = result.protocolSteps.find(step => step.automaticWaitMetadata);
+  assert.ok(wait);
+  const metadata = wait.automaticWaitMetadata;
+  assert.equal(metadata.configuredWaitMinutes, 0);
+  assert.ok(metadata.addedWaitMinutes > 0);
+  assert.equal(metadata.actualWaitMinutes, wait.thermal.waitMinutes);
+  assert.equal(metadata.warning, '!');
+  for (const step of result.protocolSteps) {
+    if (!step.thermal) continue;
+    const pressures = [
+      step.thermal.pressureStartBar,
+      step.thermal.pressureAtTransferEndReferenceBar,
+      step.thermal.pressureAtTransferEndBar,
+      step.thermal.pressureAtTransferEndHotBar,
+      step.thermal.pressureAfterWaitBar,
+      ...(step.thermal.samples ?? []).map(sample => sample.projectedPressureBar ?? sample.pressureBar)
+    ];
+    assert.ok(pressures.every(pressure => pressure <= 100 + 1e-7), step.title);
+  }
+});
+
+test('optimizeBlend returns a feasible split protocol with safe endpoints and target pressure', () => {
+  const result = optimizeBlend({
+    cylinder: {
+      volumeL: 12,
+      initialPressureBar: 0,
+      initialOxygenPercent: 0,
+      initialHeliumPercent: 0,
+      targetPressureBar: 96,
+      targetOxygenPercent: 0,
+      targetHeliumPercent: 0,
+      workingPressureBar: 100
+    },
+    physics: { model: 'ideal', temperatureC: 20 },
+    thermal: {
+      tankMaterial: 'steel',
+      coolingMedium: 'air',
+      ambientTemperatureC: 20,
+      inletTemperatureC: 40,
+      targetMediumTemperatureC: 20,
+      targetInWaterTemperatureC: 20,
+      waitMode: 'minutes',
+      waitMinutes: 0
+    },
+    settings: {
+      booster: {
+        otherBoostBpm: 50,
+        oxygenBoostBpm: 50,
+        otherDecantRateBarPerMin: 5,
+        oxygenDecantRateBarPerMin: 5,
+        cylinderVolumeCm3: 9,
+        minimumSourcePressureBar: 0
+      }
+    },
+    banks: [{
+      id: 'nitrogen',
+      name: 'Nitrogen',
+      volumeL: 12,
+      pressureBar: 300,
+      minimumPressureBar: 0,
+      oxygenPercent: 0,
+      heliumPercent: 0,
+      enabled: true
+    }]
+  });
+
+  assert.equal(result.feasible, true);
+  assert.ok(Math.abs(result.thermal.finalAmbientPressureBar - 96) < 1e-5);
+  const transferStages = result.protocolSteps.filter(step => step.type === 'decant');
+  assert.equal(transferStages.length, 2);
+  const safetyWait = result.protocolSteps.find(step => step.automaticWaitMetadata);
+  assert.ok(safetyWait);
+  assert.equal(safetyWait.automaticWaitMetadata.warning, '!');
+  for (const step of result.protocolSteps) {
+    if (!step.thermal) continue;
+    const pressures = [
+      step.thermal.pressureStartBar,
+      step.thermal.pressureAtTransferEndReferenceBar,
+      step.thermal.pressureAtTransferEndBar,
+      step.thermal.pressureAtTransferEndHotBar,
+      step.thermal.pressureAfterWaitBar,
+      ...(step.thermal.samples ?? []).map(sample => sample.projectedPressureBar ?? sample.pressureBar)
+    ];
+    assert.ok(pressures.every(pressure => pressure <= 100 + 1e-7), step.title);
+  }
+});
 test('settles the recipe at the requested target temperature', () => {
   const result = optimizeBlend({
     cylinder: {

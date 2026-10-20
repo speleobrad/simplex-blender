@@ -982,6 +982,17 @@ export function simulateCompareProtocol({
         inletTemperatureC
       })
       : [{ elapsedMinutes: 0, temperatureC: currentTemperatureC }];
+    const pressureAtTransferEndAmbientBar = hasTransferProfile
+      ? calculatePressureAtTemperature({
+        pressureBar: transferEndPressureBar,
+        oxygenPercent: receiverMix.oxygenPercent,
+        heliumPercent: receiverMix.heliumPercent,
+        fromTemperatureC: physics.temperatureC,
+        toTemperatureC: thermal.ambientTemperatureC,
+        volumeL: cylinder.volumeL,
+        useVdw
+      })
+      : transferEndPressureBar;
     const temperatureAtTransferEndC = transferTemperatureSamples.at(-1).temperatureC;
     let waitMinutes = isWait
       ? (Number.isFinite(step.waitMinutes) ? step.waitMinutes : 0)
@@ -1038,7 +1049,9 @@ export function simulateCompareProtocol({
         currentTemperatureC,
         transfer,
         transferTemperatureSamples,
+        durationMinutes,
         transferEndPressureBar,
+        pressureAtTransferEndAmbientBar,
         pressureAtTransferEndHotBar,
         receiverMix,
         temperatureAtTransferEndC,
