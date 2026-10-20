@@ -11,25 +11,36 @@ async function checkSurface(page, surface, selectors) {
 test.describe('responsive artifact surfaces', () => {
   test('keeps equipment actions, cylinder cards, and preset controls usable', async ({ appPage }) => {
     const page = await appPage.goto('tourSeen');
+    const equipmentPane = await openSettingsCategory(page, 'equipment');
+    const equipmentActions = equipmentPane.locator('[data-settings-preset-actions]');
+    await expect(equipmentActions).toHaveCount(2);
+    for (let index = 0; index < await equipmentActions.count(); index += 1) {
+      const actionName = index === 0 ? 'compressor' : 'booster';
+      const actionSelector = `[data-settings-preset-actions="${actionName}"]`;
+      await checkSurface(page, equipmentActions.nth(index), {
+        children: `${actionSelector} select, ${actionSelector} button`,
+        focus: `${actionSelector} select`,
+        overlap: `${actionSelector} button`,
+        clip: `${actionSelector} select, ${actionSelector} button`
+      });
+    }
 
-    await checkSurface(page, '#settings-dialog > div', {
-      children: '[data-settings-preset-actions] button, [data-settings-preset-actions] select',
-      containment: false,
-      clip: '[data-settings-preset-actions] button, [data-settings-preset-actions] select',
-      overlap: '[data-settings-preset-actions] button, [data-settings-preset-actions] select'
+    const cylinderPane = await openSettingsCategory(page, 'cylinder-presets');
+    await checkSurface(page, '#settings-cylinder-presets', {
+      children: '#settings-cylinder-presets article:visible, #settings-cylinder-presets table:visible',
+      focus: '#settings-cylinder-presets input:visible, #settings-cylinder-presets select:visible, #settings-cylinder-presets button:visible',
+      overlap: '#settings-cylinder-presets article:visible',
+      clip: '#settings-cylinder-presets input:visible, #settings-cylinder-presets select:visible, #settings-cylinder-presets button:visible'
     });
+    await expect(page.locator('#settings-cylinder-presets article:visible, #settings-cylinder-presets table:visible').first()).toBeVisible();
 
-    await openSettingsCategory(page, 'cylinder-presets');
-    await checkSurface(page, '#settings-dialog > div', {
-      children: '#settings-cylinder-presets article, #settings-cylinder-presets table',
-      containment: false,
-      clip: '#settings-cylinder-presets input, #settings-cylinder-presets select, #settings-cylinder-presets button'
-    });
-
-    await openSettingsCategory(page, 'preset-management');
-    await checkSurface(page, '#settings-dialog > div', {
+    const presetPane = await openSettingsCategory(page, 'preset-management');
+    await presetPane.locator('#settings-preset-import-url').fill('https://x.test/a');
+    await checkSurface(page, presetPane, {
       children: '#settings-preset-import-category, #settings-preset-import-file, #settings-preset-import-url, #settings-preset-import-button, [data-action="load-preset-url"], [data-action="reset-factory-settings"]',
-      containment: false,
+      focus: '#settings-preset-import-category',
+      overlap: '[data-action="load-preset-url"], [data-action="reset-factory-settings"]',
+      clip: '#settings-preset-import-category, #settings-preset-import-file, #settings-preset-import-url, #settings-preset-import-button, [data-action="load-preset-url"], [data-action="reset-factory-settings"]'
     });
   });
 
@@ -37,7 +48,9 @@ test.describe('responsive artifact surfaces', () => {
     const page = await appPage.goto('populatedInventory');
     await checkSurface(page, '#supply-banks-section', {
       children: '#supply-banks-section > section',
-      clip: '#tanks-tbody select, #tanks-tbody button'
+      focus: '#tanks-tbody select:visible, #tanks-tbody button:visible',
+      overlap: '#tanks-tbody > tr:visible',
+      clip: '#tanks-tbody select:visible, #tanks-tbody button:visible'
     });
   });
 
@@ -45,19 +58,25 @@ test.describe('responsive artifact surfaces', () => {
     const page = await appPage.goto('tourSeen');
     await checkSurface(page, '#results-navigation [role="tablist"]', {
       children: '#results-navigation [role="tab"]:nth-child(-n+3)',
-      overlap: '#results-navigation [role="tab"]:nth-child(-n+3)'
+      focus: '#results-navigation [role="tab"]:nth-child(-n+3)',
+      overlap: '#results-navigation [role="tab"]:nth-child(-n+3)',
+      clip: '#results-navigation [role="tab"]:nth-child(-n+3)'
     });
 
     await assertResultPanelExclusive(page, 'Diagram');
     await checkSurface(page, '#tab-pane-ternary', {
       children: '#tab-pane-ternary > div, #ternary-canvas',
+      focus: '#results-navigation [role="tab"][aria-selected="true"]',
+      overlap: '[aria-label="Zoom in diagram"], [aria-label="Zoom out diagram"], [aria-label="Reset diagram zoom"]',
       clip: '[aria-label="Zoom in diagram"], [aria-label="Zoom out diagram"], [aria-label="Reset diagram zoom"]'
     });
 
     await assertResultPanelExclusive(page, 'Thermal graphs');
     await checkSurface(page, '#tab-pane-thermal', {
       children: '#thermal-temperature-chart, #thermal-pressure-chart, #thermal-chart-data',
-      clip: '#thermal-chart-data th, #thermal-chart-data td'
+      focus: '#results-navigation [role="tab"][aria-selected="true"]',
+      overlap: '#thermal-temperature-chart, #thermal-pressure-chart, #thermal-chart-data',
+      clip: '#thermal-chart-data th:visible, #thermal-chart-data td:visible'
     });
   });
 
@@ -67,12 +86,15 @@ test.describe('responsive artifact surfaces', () => {
     await checkSurface(page, '[role="dialog"][aria-labelledby="onboarding-consent-title"]', {
       children: '[role="dialog"][aria-labelledby="onboarding-consent-title"] button',
       focus: '[role="dialog"][aria-labelledby="onboarding-consent-title"] button',
+      overlap: '[role="dialog"][aria-labelledby="onboarding-consent-title"] button',
       clip: '[role="dialog"][aria-labelledby="onboarding-consent-title"] button'
     });
 
     await acceptConsent(page);
     await checkSurface(page, '.driver-popover', {
       children: '.driver-popover-title, .driver-popover-description, .driver-popover-footer button',
+      focus: '.onboarding-skip-button',
+      overlap: '.driver-popover-footer button',
       clip: '.driver-popover-footer button'
     });
   });

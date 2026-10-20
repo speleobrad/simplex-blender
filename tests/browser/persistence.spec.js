@@ -31,6 +31,11 @@ test.describe('persistence and failure states', () => {
 
     const warning = page.getByRole('alert').filter({ hasText: /saved presets|supply banks/i });
     await expect(warning).toBeVisible();
+    await expect(page.locator('#working-tank-section')).toBeVisible();
+    await assertResultPanelExclusive(page, 'Recipe');
+    await expect(page.locator('#steps-container')).toContainText(/step|fill|compress|decant/i);
+    await expect(page.locator('#init-p')).toHaveValue('50');
+    await expect(page.locator('#target-p')).toHaveValue('200');
   });
 
   test('reports a settings write failure and recovers after the API is restored', async ({ appPage }) => {
