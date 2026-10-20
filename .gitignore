@@ -6,6 +6,9 @@ coverage/
 dist/
 build/
 
+test-results/
+playwright-report/
+
 # Logs and local environment
 *.log
 npm-debug.log*
