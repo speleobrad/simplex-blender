@@ -1887,3 +1887,4 @@ test('thermal no-maximum result leaves final state fields null', () => {
   assert.equal(result.thermal.requestedInWaterPressureBar, 200);
   assert.equal(result.thermal.requestedInWaterTemperatureC, 10);
 });
+

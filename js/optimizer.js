@@ -30,16 +30,87 @@ export function scheduleSafeThermalProtocol({
         simulation
       };
     }
-    const waitIndex = unsafeIndex - 1;
+    let waitIndex = unsafeIndex - 1;
     if (waitIndex < 0 || steps[waitIndex].type === 'keep') {
-      return {
-        protocolSteps: simulation.protocolSteps,
-        automaticWaits,
-        simulation,
-        unsafe: true
-      };
+      const preceding = simulation.protocolSteps[waitIndex];
+      const pressureBar = preceding?.thermal?.pressureAfterWaitBar
+        ?? preceding?.resultingPressureBar
+        ?? cylinder.initialPressureBar
+        ?? 0;
+      steps.splice(unsafeIndex, 0, {
+        type: 'wait',
+        title: `Automatic wait before step ${unsafeIndex + 1}`,
+        recipeLabel: 'Automatic safety wait',
+        receiverStartPressureBar: pressureBar,
+        receiverEndPressureBar: pressureBar,
+        resultingPressureBar: pressureBar,
+        resultingMix: preceding?.resultingMix ?? {},
+        waitMinutes: 0,
+        automaticWaitMinutes: 1,
+        automaticWaitMetadata: {
+          stepIndex: unsafeIndex,
+          stepIdentifier: `automatic-wait-${unsafeIndex}`,
+          configuredWaitMinutes: 0,
+          actualWaitMinutes: 1,
+          addedWaitMinutes: 1,
+          warning: '!'
+        }
+      });
+      automaticWaits.push(steps[unsafeIndex].automaticWaitMetadata);
+      continue;
     }
+    waitIndex = unsafeIndex - 1;
     const current = simulation.protocolSteps[unsafeIndex].thermal;
+    const transferStep = steps[unsafeIndex];
+    if (transferStep.type !== 'wait' && !transferStep._thermalSplit) {
+      const start = Number(transferStep.receiverStartPressureBar);
+      const end = Number(transferStep.receiverEndPressureBar ?? transferStep.resultingPressureBar);
+      if (Number.isFinite(start) && Number.isFinite(end)
+        && end > cylinder.workingPressureBar + 1e-7
+        && cylinder.workingPressureBar > start + 1e-7) {
+        const boundary = cylinder.workingPressureBar;
+        const fraction = (boundary - start) / (end - start);
+        const first = {
+          ...transferStep,
+          _thermalSplit: true,
+          receiverEndPressureBar: boundary,
+          resultingPressureBar: boundary,
+          sourceEndPressureBar: Number.isFinite(transferStep.sourceStartPressureBar)
+            ? transferStep.sourceStartPressureBar
+              + (transferStep.sourceEndPressureBar - transferStep.sourceStartPressureBar) * fraction
+            : transferStep.sourceEndPressureBar,
+          title: `${transferStep.title} (safe stage 1)`
+        };
+        const wait = {
+          type: 'wait',
+          title: 'Automatic wait between safe transfer stages',
+          recipeLabel: 'Automatic safety wait',
+          receiverStartPressureBar: boundary,
+          receiverEndPressureBar: boundary,
+          resultingPressureBar: boundary,
+          resultingMix: transferStep.resultingMix,
+          waitMinutes: 0,
+          automaticWaitMinutes: 1,
+          automaticWaitMetadata: {
+            stepIndex: unsafeIndex + 1,
+            stepIdentifier: `automatic-wait-${unsafeIndex + 1}`,
+            configuredWaitMinutes: 0,
+            actualWaitMinutes: 1,
+            addedWaitMinutes: 1,
+            warning: '!'
+          }
+        };
+        const second = {
+          ...transferStep,
+          _thermalSplit: true,
+          receiverStartPressureBar: boundary,
+          title: `${transferStep.title} (safe stage 2)`
+        };
+        steps.splice(unsafeIndex, 1, first, wait, second);
+        automaticWaits.push(wait.automaticWaitMetadata);
+        continue;
+      }
+    }
     const waitStep = simulation.protocolSteps[waitIndex].thermal;
     const configuredWaitMinutes = Number.isFinite(waitStep?.waitMinutes)
       ? waitStep.waitMinutes
