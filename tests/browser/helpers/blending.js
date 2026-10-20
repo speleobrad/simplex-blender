@@ -4,7 +4,8 @@ import { selectResultTab } from './navigation.js';
 const FIELD_IDS = {
   initialOxygen: 'init-o2', initialHelium: 'init-he', targetOxygen: 'target-o2', targetHelium: 'target-he',
   startPressure: 'init-p', targetPressure: 'target-p', cylinder: 'cylinder-preset', medium: 'cooling-medium',
-  ambientTemperature: 'ambient-temperature', waitMode: 'wait-mode', waitMinutes: 'wait-minutes',
+  ambientTemperature: 'ambient-temperature', settledTemperature: 'target-temperature',
+  waitMode: 'wait-mode', waitMinutes: 'wait-minutes',
   targetTemperature: 'wait-target-temperature', inletTemperature: 'inlet-gas-temperature'
 };
 async function waitForResultUpdate(page) {

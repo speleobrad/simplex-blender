@@ -104,6 +104,42 @@ test('rejects a temperature wait target at or below ambient', () => {
   );
   assert.match(errors.join(' '), /target.*ambient/i);
 });
+test('allows a settled temperature below ambient for water cooling', () => {
+  const errors = validateCalculatorInputs(
+    { volumeL: 12, initialPressureBar: 50, targetPressureBar: 200 },
+    { temperatureC: 25 },
+    {
+      tankMaterial: 'steel',
+      coolingMedium: 'water',
+      ambientTemperatureC: 25,
+      settledTemperatureC: 15,
+      waitMode: 'minutes',
+      waitMinutes: 10,
+      targetTemperatureC: 15
+    }
+  );
+
+  assert.deepEqual(errors, []);
+});
+
+test('rejects a settled temperature below ambient for air cooling', () => {
+  const errors = validateCalculatorInputs(
+    { volumeL: 12, initialPressureBar: 50, targetPressureBar: 200 },
+    { temperatureC: 25 },
+    {
+      tankMaterial: 'steel',
+      coolingMedium: 'air',
+      ambientTemperatureC: 25,
+      settledTemperatureC: 15,
+      waitMode: 'minutes',
+      waitMinutes: 10,
+      targetTemperatureC: 15
+    }
+  );
+
+  assert.match(errors.join(' '), /settled target temperature cannot be below ambient/i);
+});
+
 test('fixed-minute waits do not validate the hidden target temperature against ambient', () => {
   const errors = validateCalculatorInputs(
     { volumeL: 12, initialPressureBar: 80, targetPressureBar: 210 },

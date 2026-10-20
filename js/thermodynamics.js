@@ -487,6 +487,7 @@ function buildThermalStepSamples({
   isFinalStep,
   skipsConfiguredWait,
   thermal,
+  waitAmbientTemperatureC,
   tauMinutes,
   cylinder,
   useVdw
@@ -533,7 +534,7 @@ function buildThermalStepSamples({
         ? thermal.ambientTemperatureC
         : calculateTemperatureAfterWait({
           transferEndTemperatureC: temperatureAtTransferEndC,
-          ambientTemperatureC: thermal.ambientTemperatureC,
+          ambientTemperatureC: waitAmbientTemperatureC,
           waitMinutes: elapsedMinutes,
           tauMinutes
         });
@@ -569,6 +570,7 @@ export function simulateThermalProtocol({
 }) {
   const booster = thermalBoosterSettings(settings);
   const tauMinutes = coolingTimeConstantMinutes(thermal.tankMaterial, thermal.coolingMedium);
+  const settledTemperatureC = thermal.settledTemperatureC ?? thermal.ambientTemperatureC;
   const useVdw = physics.model === 'vdw';
   let currentPressureBar = Math.max(0, cylinder.initialPressureBar
     ?? protocolSteps[0]?.receiverStartPressureBar
@@ -583,7 +585,7 @@ export function simulateThermalProtocol({
       oxygenPercent: initialOxygenPercent,
       heliumPercent: initialHeliumPercent,
       fromTemperatureC: currentTemperatureC,
-      toTemperatureC: thermal.ambientTemperatureC,
+      toTemperatureC: settledTemperatureC,
       volumeL: cylinder.volumeL,
       useVdw
     });
@@ -593,7 +595,7 @@ export function simulateThermalProtocol({
         finalTransferEndPressureBar: currentPressureBar,
         finalTransferEndTemperatureC: currentTemperatureC,
         finalAmbientPressureBar,
-        finalAmbientTemperatureC: thermal.ambientTemperatureC
+        finalAmbientTemperatureC: settledTemperatureC
       }
     };
   }
@@ -654,10 +656,21 @@ export function simulateThermalProtocol({
     const temperatureAtTransferEndC = transferTemperatureSamples.at(-1).temperatureC;
     const isFinalStep = index === protocolSteps.length - 1;
     const skipsConfiguredWait = !isFinalStep && index === 0 && step.type === 'keep';
+    const coolsBelowAmbient = isFinalStep && settledTemperatureC < thermal.ambientTemperatureC;
+    const waitAmbientTemperatureC = coolsBelowAmbient
+      ? settledTemperatureC
+      : thermal.ambientTemperatureC;
     const waitMinutes = skipsConfiguredWait
       ? 0
       : isFinalStep
-        ? 4.6 * tauMinutes
+        ? Math.abs(settledTemperatureC - thermal.ambientTemperatureC) < 1e-9 || coolsBelowAmbient
+          ? 4.6 * tauMinutes
+          : calculateCoolingTime({
+            transferEndTemperatureC: temperatureAtTransferEndC,
+            ambientTemperatureC: thermal.ambientTemperatureC,
+            targetTemperatureC: settledTemperatureC,
+            tauMinutes
+          })
         : thermal.waitMode === 'temperature'
           ? calculateCoolingTime({
             transferEndTemperatureC: temperatureAtTransferEndC,
@@ -669,7 +682,7 @@ export function simulateThermalProtocol({
     const temperatureAfterWaitC = skipsConfiguredWait
       ? temperatureAtTransferEndC
       : isFinalStep
-        ? thermal.ambientTemperatureC
+        ? settledTemperatureC
         : calculateTemperatureAfterWait({
           transferEndTemperatureC: temperatureAtTransferEndC,
           ambientTemperatureC: thermal.ambientTemperatureC,
@@ -715,6 +728,7 @@ export function simulateThermalProtocol({
         isFinalStep,
         skipsConfiguredWait,
         thermal,
+        waitAmbientTemperatureC,
         tauMinutes,
         cylinder,
         useVdw

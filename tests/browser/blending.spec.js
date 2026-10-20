@@ -27,6 +27,12 @@ test.describe('working tank blending inputs', () => {
     await page.locator('#wait-mode').selectOption('minutes');
     await expect(page.locator('#wait-minutes-field')).toBeVisible();
   });
+  test('uses the target temperature for the settled recipe result', async ({ appPage }) => {
+    const page = await load(appPage);
+    await fillWorkingTank(page, { settledTemperature: 30 });
+    await page.locator('[data-action="select-tab"][data-tab="thermal"]').click();
+    await expect(page.locator('#thermal-chart-status')).toContainText(/30\.0/);
+  });
 
   test('invalid input clears the result and recovers after correction', async ({ appPage }) => {
     const page = await load(appPage);

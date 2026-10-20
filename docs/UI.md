@@ -60,11 +60,11 @@ Gas percentage fields accept decimal text input and are paired for gas validatio
 Below the current/target panels:
 
 - **Cylinder** selector. The rating hint reports that volume, material, mass, and working pressure come from the selected cylinder preset.
-- **Surrounding medium**: Air or Water.
-- **Ambient / calculation temperature** in °C. This is used for surrounding conditions and the starting gas calculation state.
+- **Ambient temperature** in the CURRENT panel. This is used for surrounding conditions and the starting gas calculation state.
+- **Target temperature** in the TARGET panel. The optimizer calculates the hot recipe pressure required to settle at the requested target pressure at this temperature.
 - **Wait between fills**: Fixed minutes or Target temperature.
   - Fixed minutes shows **Wait time** in minutes.
-  - Target temperature shows **Target temperature** in °C.
+  - Target temperature shows **Wait target temperature** in °C.
 
 Inputs recalculate the blend as they change. Invalid or unsupported values are reported in the result area rather than silently accepted.
 

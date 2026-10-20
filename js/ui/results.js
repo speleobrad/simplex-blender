@@ -50,13 +50,13 @@ function renderInfeasible(error, maximumPressure, requestedPressureBar, oxygenPe
   const requestedPressureReason = safetyReason
     ? `The exact target mix cannot safely reach ${requestedPressureBar.toFixed(1)} bar.`
     : `The exact target mix (${oxygenPercent}/${heliumPercent}) cannot reach ${requestedPressureBar.toFixed(1)} bar with the current gas supply.`;
-  const ambientPressure = thermal?.finalAmbientPressureBar;
-  const ambientEstimate = Number.isFinite(ambientPressure)
-    ? ` Predicted ambient-settled pressure is ${ambientPressure.toFixed(1)} bar.`
+  const settledPressure = thermal?.finalAmbientPressureBar;
+  const settledEstimate = Number.isFinite(settledPressure)
+    ? ` Predicted settled pressure is ${settledPressure.toFixed(1)} bar at ${formatThermalValue(thermal.finalAmbientTemperatureC)} °C.`
     : '';
   description.textContent = maximumPressure
-    ? `${requestedPressureReason} ${diagnosticDetails} The maximum safely achievable pressure is ${maximumPressure.pressureBar.toFixed(1)} bar.${safetyReason}${ambientEstimate} The recipe below makes that exact mix.`
-    : [error || 'The available gas banks cannot satisfy both the target pressure and exact gas fractions.', diagnosticDetails, ambientEstimate.trim()].filter(Boolean).join(' ');
+    ? `${requestedPressureReason} ${diagnosticDetails} The maximum safely achievable pressure is ${maximumPressure.pressureBar.toFixed(1)} bar.${safetyReason}${settledEstimate} The recipe below makes that exact mix.`
+    : [error || 'The available gas banks cannot satisfy both the target pressure and exact gas fractions.', diagnosticDetails, settledEstimate.trim()].filter(Boolean).join(' ');
   message.append(description);
   return message;
 }
@@ -92,7 +92,7 @@ function renderThermalDetails(thermal, isFinalStep, step = {}) {
   const body = document.createElement('tbody');
   const isWaitOnly = step.type === 'wait' && thermal.rateSource === 'none' && thermal.waitMinutes > 0;
   const waitLabel = isFinalStep
-    ? `Full ambient cool-off (4.6 × tau = ${formatThermalValue(thermal.waitMinutes)} min)`
+    ? `Final cool-off to ${formatThermalValue(thermal.temperatureAfterWaitC)} °C (${formatThermalValue(thermal.waitMinutes)} min)`
     : `${formatThermalValue(thermal.waitMinutes)} min`;
   const rows = isWaitOnly
     ? [

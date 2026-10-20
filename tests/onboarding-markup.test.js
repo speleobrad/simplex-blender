@@ -54,18 +54,27 @@ test('keeps the working tank and optimized results in Blending, with What-if ste
   assert.ok(markup.indexOf('id="equipment-summary"', inventoryStart) > inventoryStart);
   assert.ok(markup.indexOf('id="inventory-section"', inventoryStart) > inventoryStart);
   assert.ok(markup.indexOf('id="tanks-tbody"', inventoryStart) > inventoryStart);
-  assert.match(markup, /data-action="save-settings"[\s\S]*?<\/div>\s*<\/div>\s*<\/div>\s*<\/div>\s*<!-- Main Application Body -->/);
-  for (const id of ['init-p', 'target-p', 'init-o2', 'init-he', 'target-o2', 'target-he', 'init-gas-preset', 'target-gas-preset']) {
-    assert.match(markup, new RegExp(`id="${id}"[^>]*class="[^"]*w-28`));
+  assert.match(markup, /id="working-tank-section"[\s\S]*?id="init-p"[\s\S]*?id="ambient-temperature"[\s\S]*?id="init-gas-preset"[\s\S]*?id="init-o2"[\s\S]*?id="init-he"/);
+  assert.match(markup, /id="working-tank-section"[\s\S]*?id="target-p"[\s\S]*?id="target-temperature"[\s\S]*?id="target-gas-preset"[\s\S]*?id="target-o2"[\s\S]*?id="target-he"/);
+  for (const id of ['init-p', 'target-p', 'ambient-temperature', 'target-temperature']) {
+    assert.match(markup, new RegExp(`id="${id}"[^>]*class="[^"]*w-full`));
   }
-  assert.match(markup, /id="init-p"[^>]*>[\s\S]*?<\/input>|id="init-p"/);
+  for (const id of ['init-gas-preset', 'target-gas-preset']) {
+    assert.match(markup, new RegExp(`id="${id}"[^>]*class="[^"]*w-full`));
+  }
+  for (const id of ['init-o2', 'target-o2']) {
+    assert.match(markup, new RegExp(`id="${id}"[^>]*class="[^"]*bg-emerald-950/40`));
+  }
+  for (const id of ['init-he', 'target-he']) {
+    assert.match(markup, new RegExp(`id="${id}"[^>]*class="[^"]*bg-amber-950/40`));
+  }
   assert.match(markup, /<span class="font-mono text-slate-200">bar<\/span>/);
   assert.match(markup, /id="inventory-volume-heading"[^>]*>Volume<\/th>/);
   assert.match(markup, /id="inventory-pressure-heading"[^>]*>Pressure<\/th>/);
   assert.match(markup, /Temperature of inventory gases/);
   assert.match(markup, /temperature at which inventory gases are assumed to be stored/i);
-});
 
+});
 test('exposes semantic result tabs and panels in the requested order', () => {
   assert.match(markup, /id="results-tablist"[\s\S]*?Recipe[\s\S]*?Thermal Graph[\s\S]*?In-water pressure[\s\S]*?Tank summary[\s\S]*?Simplex diagram/);
   assert.doesNotMatch(markup, /id="tab-btn-ternary"[^>]*>\s*Diagram\s*</);
