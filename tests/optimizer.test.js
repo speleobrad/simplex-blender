@@ -1785,7 +1785,9 @@ test('thermal infeasibility preserves the no-positive-candidate result shape', (
   assert.equal(result.gas.targetPressureBar, 210);
   assert.equal(result.maximumPressure, null);
   assert.deepEqual(result.protocolSteps, []);
-  assert.equal(result.thermal, null);
+  assert.equal(result.thermal.requestedInWaterPressureBar, 210);
+  assert.equal(result.thermal.requestedInWaterTemperatureC, 20);
+  assert.match(result.error, /requested in-water pressure/i);
 });
 test('normalizes the requested in-water target and reports all thermal states', () => {
   const result = optimizeBlend({

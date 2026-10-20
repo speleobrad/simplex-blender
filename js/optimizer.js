@@ -1617,9 +1617,25 @@ function thermalResult(candidate, requestedInWaterPressureBar = candidate.candid
   };
 }
 
-function thermalizedMaximumResult(candidate, requestedInWaterPressureBar = candidate.candidateInput._requestedInWaterPressureBar ?? candidate.candidateInput.cylinder.targetPressureBar, requestedInWaterTemperatureC = candidate.candidateInput.thermal.targetInWaterTemperatureC ?? candidate.candidateInput.thermal.ambientTemperatureC, ambientSettledTargetPressureBar = candidate.candidateInput._ambientSettledTargetPressureBar ?? candidate.candidateInput.cylinder.targetPressureBar) {
+function thermalizedMaximumResult(candidate, requestedInWaterPressureBar, requestedInWaterTemperatureC, ambientSettledTargetPressureBar) {
   const maximum = candidate.result.maximumPressure;
-  if (!maximum) return { ...candidate.result, thermal: null };
+  if (!maximum) {
+    return {
+      ...candidate.result,
+      gas: candidate.result.gas && { ...candidate.result.gas, targetPressureBar: requestedInWaterPressureBar },
+      thermal: {
+        finalTransferEndPressureBar: null,
+        finalTransferEndTemperatureC: null,
+        finalAmbientPressureBar: null,
+        finalAmbientTemperatureC: null,
+        finalInWaterPressureBar: null,
+        finalInWaterTemperatureC: requestedInWaterTemperatureC,
+        requestedInWaterPressureBar,
+        requestedInWaterTemperatureC,
+        ambientSettledTargetPressureBar
+      }
+    };
+  }
   const simulation = simulateThermalProtocol({
     protocolSteps: maximum.protocolSteps,
     cylinder: candidate.candidateInput.cylinder,
@@ -1688,7 +1704,8 @@ function optimizeThermalBlend(input, optimizeStatic) {
   const requestedPressureBar = ambientSettledTargetPressureBar;
   const requested = evaluateThermalCandidate(searchInput, optimizeStatic, requestedPressureBar);
   if (!requested.result.feasible) {
-    return thermalizedMaximumResult(requested);
+    const infeasible = thermalizedMaximumResult(requested, requestedInWaterPressureBar, requestedInWaterTemperatureC, ambientSettledTargetPressureBar);
+    return { ...infeasible, error: `Requested in-water pressure ${requestedInWaterPressureBar.toFixed(1)} bar cannot be reached. ${infeasible.error}` };
   }
 
   const requestedPressureDifference = requested.simulation.final.finalAmbientPressureBar
@@ -1703,7 +1720,7 @@ function optimizeThermalBlend(input, optimizeStatic) {
       MINIMUM_TARGET_PRESSURE_BAR
     );
     if (!floor.result.feasible) {
-      return thermalizedMaximumResult(floor, requestedPressureBar);
+      return thermalizedMaximumResult(floor, requestedInWaterPressureBar, requestedInWaterTemperatureC, ambientSettledTargetPressureBar);
     }
 
     const floorPressureDifference = floor.simulation.final.finalAmbientPressureBar
@@ -1777,12 +1794,11 @@ function optimizeThermalBlend(input, optimizeStatic) {
 
   if (ambientTargetCandidate) return thermalResult(ambientTargetCandidate);
   if (!ceiling.result.feasible) {
-    const maximum = thermalizedMaximumResult(ceiling);
+    const maximum = thermalizedMaximumResult(ceiling, requestedInWaterPressureBar, requestedInWaterTemperatureC, ambientSettledTargetPressureBar);
     if (maximum.maximumPressure) {
       return {
         ...maximum,
-        gas: requested.result.gas,
-        error: `Requested ambient-settled pressure ${requestedPressureBar.toFixed(1)} bar cannot be reached. ${maximum.error}`
+        error: `Requested in-water pressure ${requestedInWaterPressureBar.toFixed(1)} bar cannot be reached. ${maximum.error}`
       };
     }
   }
