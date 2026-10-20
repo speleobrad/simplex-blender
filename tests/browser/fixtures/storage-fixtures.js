@@ -19,15 +19,28 @@ export const storageScenarios = {
     'simplex-gas-remixer-banks': '{not-json',
     'simplex-gas-remixer-onboarding': JSON.stringify({ consentAccepted: 'yes', wizardSeen: false })
   },
-  settings: { 'simplex-gas-remixer-settings': JSON.stringify(DEFAULT_SETTINGS) },
-  lightTheme: { 'simplex-gas-remixer-theme': 'light' },
-  darkTheme: { 'simplex-gas-remixer-theme': 'dark' }
+  settings: {
+    'simplex-gas-remixer-onboarding': JSON.stringify({ consentAccepted: true, wizardSeen: true }),
+    'simplex-gas-remixer-settings': JSON.stringify(DEFAULT_SETTINGS)
+  },
+  lightTheme: {
+    'simplex-gas-remixer-onboarding': JSON.stringify({ consentAccepted: true, wizardSeen: true }),
+    'simplex-gas-remixer-theme': 'light'
+  },
+  darkTheme: {
+    'simplex-gas-remixer-onboarding': JSON.stringify({ consentAccepted: true, wizardSeen: true }),
+    'simplex-gas-remixer-theme': 'dark'
+  }
 };
 
 export async function seedStorage(page, scenarioName = 'factory') {
   const records = storageScenarios[scenarioName];
   if (!records) throw new Error(`Unknown storage scenario: ${scenarioName}`);
   await page.addInitScript(records => {
+    if (window.sessionStorage.getItem('__skipStorageSeed')) {
+      window.sessionStorage.removeItem('__skipStorageSeed');
+      return;
+    }
     for (const [key, value] of Object.entries(records)) window.localStorage.setItem(key, value);
   }, records);
 }

@@ -51,7 +51,10 @@ export const test = base.extend({
   },
   resetApp: async ({ page }, use) => {
     await use(async () => {
-      await page.evaluate(() => window.localStorage.clear());
+      await page.evaluate(() => {
+        window.sessionStorage.setItem('__skipStorageSeed', 'true');
+        window.localStorage.clear();
+      });
       await page.reload();
       await page.getByRole('button', { name: 'Settings' }).waitFor();
     });
