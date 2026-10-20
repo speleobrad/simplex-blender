@@ -151,7 +151,7 @@ export function isSafeSimulation(simulation, workingPressureBar, {
             sample.ambientPressureBar,
             sample.projectedPressureBar ?? sample.pressureBar
           ])
-        ];
+        ].filter(pressure => pressure !== undefined);
         return pressures.every(pressure => Number.isFinite(pressure) && pressure <= limit);
       });
   }
