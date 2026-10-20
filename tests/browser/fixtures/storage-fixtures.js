@@ -37,10 +37,7 @@ export async function seedStorage(page, scenarioName = 'factory') {
   const records = storageScenarios[scenarioName];
   if (!records) throw new Error(`Unknown storage scenario: ${scenarioName}`);
   await page.addInitScript(records => {
-    if (window.sessionStorage.getItem('__skipStorageSeed')) {
-      window.sessionStorage.removeItem('__skipStorageSeed');
-      return;
-    }
+    if (window.name === '__skipStorageSeed') return;
     for (const [key, value] of Object.entries(records)) window.localStorage.setItem(key, value);
   }, records);
 }

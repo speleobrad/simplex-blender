@@ -41,6 +41,7 @@ export const test = base.extend({
   appPage: async ({ page, captureRuntime, seedStorage }, use) => {
     await use({
       goto: async (scenarioName = 'factory') => {
+        await page.evaluate(() => { window.name = ''; });
         await seedStorage(scenarioName);
         await page.goto('/index.html');
         return page;
@@ -52,7 +53,7 @@ export const test = base.extend({
   resetApp: async ({ page }, use) => {
     await use(async () => {
       await page.evaluate(() => {
-        window.sessionStorage.setItem('__skipStorageSeed', 'true');
+        window.name = '__skipStorageSeed';
         window.localStorage.clear();
       });
       await page.reload();

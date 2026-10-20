@@ -1,14 +1,14 @@
 
-## Review fixes
+## Second review fixes
 
-- Fixed `resetApp` seeded-state leakage by using a one-navigation session marker consumed by the init script before clearing and reloading storage.
-- Added user-visible smoke checks for populated inventory fields, serialized settings presets, dark theme control state, invalid-data fallback warning, and reset isolation.
-- Settings/light/dark scenarios include the existing accepted-onboarding record so those UI scenarios can reach the application without consent blocking.
+- Redesigned seed suppression with a persistent `window.name` reset marker. Every registered init script skips while the marker is set; `appPage.goto()` clears it before selecting and registering a scenario. This makes consecutive resets deterministic.
+- Added visible `lightTheme` smoke coverage alongside `darkTheme`.
+- Extended reset smoke coverage to perform two resets with an intervening reseeded navigation.
 
-Fix verification command:
+Verification command:
 
 ```sh
-npm run test:ui -- tests/browser/smoke.spec.js --grep "populated|settings and theme|dark theme|invalid saved|reset clears"
+npm run test:ui -- tests/browser/smoke.spec.js --grep "dark theme|light theme|reset clears|populated|settings and theme|invalid saved"
 ```
 
-Result: **15 passed** across desktop, tablet, and mobile projects.
+Result: **18 passed** across desktop, tablet, and mobile projects.

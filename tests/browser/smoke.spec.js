@@ -34,6 +34,11 @@ test('dark theme scenario exposes the dark-theme control state', async ({ appPag
   await expect(page.getByRole('button', { name: 'Switch to light theme' })).toBeVisible();
 });
 
+test('light theme scenario exposes the light-theme control state', async ({ appPage }) => {
+  const page = await appPage.goto('lightTheme');
+  await expect(page.getByRole('button', { name: 'Switch to dark theme' })).toBeVisible();
+});
+
 test('invalid saved data displays the fallback warning', async ({ appPage }) => {
   const page = await appPage.goto('invalidSavedData');
   await expect(page.getByRole('alert')).toContainText('Saved supply banks could not be loaded');
@@ -41,6 +46,10 @@ test('invalid saved data displays the fallback warning', async ({ appPage }) => 
 
 test('reset clears a previously seeded scenario', async ({ appPage, resetApp }) => {
   const page = await appPage.goto('tourSeen');
+  await expect(page.getByRole('button', { name: /accept/i })).toHaveCount(0);
+  await resetApp();
+  await expect(page.getByRole('button', { name: /accept/i })).toBeVisible();
+  await appPage.goto('tourSeen');
   await expect(page.getByRole('button', { name: /accept/i })).toHaveCount(0);
   await resetApp();
   await expect(page.getByRole('button', { name: /accept/i })).toBeVisible();
