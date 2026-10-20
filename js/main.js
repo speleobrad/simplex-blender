@@ -26,6 +26,7 @@ import { renderSupplyBanks } from './ui/supply-banks.js';
 import { renderStorageWarning } from './ui/storage-warning.js';
 import { renderThermalCharts } from './ui/thermal-charts.js';
 import { changeTernaryZoom, clearTernaryDiagram, observeTernaryCanvas, renderTernaryDiagram } from './ui/ternary.js';
+import { convertFromDisplay } from './units.js';
 
 const settingsStorage = {
   getItem: key => window.localStorage.getItem(key),
@@ -218,7 +219,7 @@ function toggleTheme() {
 
 
 function setSettingsCategory(category) {
-  const categories = ['model', 'gas-presets', 'cylinder-presets', 'equipment', 'preset-management'];
+  const categories = ['model', 'units', 'gas-presets', 'cylinder-presets', 'equipment', 'preset-management'];
   if (!categories.includes(category)) return;
   state.settingsCategory = category;
   for (const candidate of categories) {
@@ -459,10 +460,11 @@ function updateSettingsDraft(input) {
   const collection = input.dataset.settingsCollection;
   const index = Number(input.dataset.settingsIndex);
   const field = input.dataset.settingsField;
-  const value = collection === 'physics' || field === 'name' || field === 'material'
+  const value = collection === 'physics' || collection === 'settings' || field === 'name' || field === 'material'
     ? input.value
     : Number.parseFloat(input.value);
   if (collection === 'physics') state.settingsDraft.physics[field] = value;
+  else if (collection === 'settings' && field === 'units') state.settingsDraft.units = value;
   else if (collection === 'cylinderPresets') state.settingsDraft.cylinderPresets[index][field] = value;
   else if (collection === 'booster') state.settingsDraft.booster[field] = value;
   else state.settingsDraft.gasPresets[index][field] = value;
@@ -695,9 +697,9 @@ function recalculate() {
   state.lastInput = input;
   state.lastResult = result;
 
-  renderSupplyBanks(state.banks, state.settings.gasPresets);
-  renderEquipmentSummary(state.settings);
-  renderResults(result, input);
+  renderSupplyBanks(state.banks, state.settings.gasPresets, state.settings.units);
+  renderEquipmentSummary(state.settings, state.settings.units);
+  renderResults(result, input, state.settings.units);
   renderThermalCharts(result, input);
   if (result.feasible) renderTernary();
   else clearTernaryDiagram(byId('ternary-canvas'));
@@ -828,7 +830,9 @@ function updateBankFromInput(input) {
       clearBankInputFailure(bank.id);
       return;
     }
-    updatedBank[bankField] = value;
+    updatedBank[bankField] = input.dataset.bankQuantity
+      ? convertFromDisplay(value, input.dataset.bankQuantity, state.settings.units)
+      : value;
     if (bankField === 'oxygenPercent' || bankField === 'heliumPercent') updatedBank.gasPresetName = null;
   }
 

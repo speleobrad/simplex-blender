@@ -1,4 +1,5 @@
 import { getSelectedGasPreset, sortGasPresetEntries } from '../settings.js';
+import { convertToDisplay, getUnitLabel, normalizeUnits } from '../units.js';
 
 const COLUMN_CLASSES = {
   name: 'py-2 px-2 min-w-32',
@@ -10,8 +11,8 @@ const COLUMN_CLASSES = {
 
 const BANK_FIELDS = [
   { key: 'name', label: 'bank name', type: 'text', className: 'w-24 bg-transparent border-b border-transparent hover:border-ocean-700 focus:border-cyan-400 focus:bg-ocean-900 rounded px-1 text-slate-200' },
-  { key: 'volumeL', label: 'volume in litres', type: 'number', min: 1, max: 200, step: 1, className: 'w-11 bg-ocean-950/60 border border-ocean-800 rounded px-1 py-0.5 text-center text-slate-300' },
-  { key: 'pressureBar', label: 'pressure in bar', type: 'number', min: 1, max: 350, step: 5, className: 'w-12 bg-ocean-950/60 border border-ocean-800 rounded px-1 py-0.5 text-center text-slate-300' },
+  { key: 'volumeL', quantity: 'volume', label: 'volume', type: 'number', min: 1, max: 200, step: 1, className: 'w-11 bg-ocean-950/60 border border-ocean-800 rounded px-1 py-0.5 text-center text-slate-300' },
+  { key: 'pressureBar', quantity: 'pressure', label: 'pressure', type: 'number', min: 1, max: 350, step: 5, className: 'w-12 bg-ocean-950/60 border border-ocean-800 rounded px-1 py-0.5 text-center text-slate-300' },
   { key: 'oxygenPercent', label: 'oxygen percentage', type: 'number', min: 0, max: 100, step: 1, className: 'w-10 bg-emerald-950/40 border border-emerald-900/60 rounded px-1 py-0.5 text-center text-emerald-400 font-bold' },
   { key: 'heliumPercent', label: 'helium percentage', type: 'number', min: 0, max: 100, step: 1, className: 'w-10 bg-amber-950/40 border border-amber-900/60 rounded px-1 py-0.5 text-center text-amber-400 font-bold' }
 ];
@@ -23,17 +24,21 @@ function makeCell(className, child) {
   return cell;
 }
 
-function makeBankInput(bank, field) {
+function makeBankInput(bank, field, units) {
   const input = document.createElement('input');
   input.type = field.type;
-  input.value = bank[field.key];
+  input.value = field.quantity ? convertToDisplay(bank[field.key], field.quantity, units) : bank[field.key];
   input.className = field.className;
   input.dataset.bankId = bank.id;
   input.dataset.bankField = field.key;
+  if (field.quantity) input.dataset.bankQuantity = field.quantity;
   if (field.min !== undefined) input.min = field.min;
   if (field.max !== undefined) input.max = field.max;
   if (field.step !== undefined) input.step = field.step;
-  input.setAttribute('aria-label', `${bank.name} ${field.label}`);
+  const metricLabels = { volume: 'volume in litres', pressure: 'pressure in bar' };
+  const label = field.quantity
+    ? (normalizeUnits(units) === 'metric' ? metricLabels[field.quantity] : `${field.label} in ${getUnitLabel(field.quantity, units)}`)
+    : field.label;
   return input;
 }
 
@@ -60,15 +65,15 @@ function makeGasPresetSelect(bank, gasPresets) {
   return select;
 }
 
-function makeBankNameControl(bank, gasPresets) {
+function makeBankNameControl(bank, gasPresets, units) {
   const control = document.createElement('div');
   control.className = 'flex min-w-28 flex-col gap-1';
-  control.append(makeBankInput(bank, BANK_FIELDS[0]), makeGasPresetSelect(bank, gasPresets));
+  control.append(makeBankInput(bank, BANK_FIELDS[0], units), makeGasPresetSelect(bank, gasPresets));
   return control;
 }
 
 
-export function renderSupplyBanks(banks, gasPresets) {
+export function renderSupplyBanks(banks, gasPresets, units = 'metric') {
   const tbody = document.getElementById('tanks-tbody');
   if (!tbody) return;
 
@@ -87,12 +92,10 @@ export function renderSupplyBanks(banks, gasPresets) {
 
     for (const field of BANK_FIELDS) {
       const child = field.key === 'name'
-        ? makeBankNameControl(bank, gasPresets)
-        : makeBankInput(bank, field);
+        ? makeBankNameControl(bank, gasPresets, normalizeUnits(units))
+        : makeBankInput(bank, field, normalizeUnits(units));
       row.append(makeCell(COLUMN_CLASSES[field.key], child));
     }
-
-
     const remove = document.createElement('button');
     remove.type = 'button';
     remove.className = 'text-rose-400 hover:text-rose-300 px-1 py-0.5';

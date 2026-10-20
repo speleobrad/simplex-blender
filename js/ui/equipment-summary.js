@@ -1,3 +1,4 @@
+import { convertToDisplay, formatQuantity, getUnitLabel, normalizeUnits } from '../units.js';
 function compressorPresetMatchesActiveFields(compressor, preset) {
   return preset.inletFlowLPerMin === compressor.compressorInletFlowLPerMin
     && preset.maxPressureBar === compressor.maxCompressorPressureBar
@@ -14,6 +15,14 @@ function boosterPresetMatchesActiveFields(booster, preset) {
     && preset.maxOutputPressureBar === booster.maxBoosterOutputPressureBar
     && preset.temperatureModifierC === booster.boosterTemperatureModifierC
     && preset.drainingRateBarPerMin === booster.drainingRateBarPerMin;
+}
+function equipmentQuantity(value, quantity, units) {
+  if (normalizeUnits(units) === 'metric') return `${value} ${quantity === 'flow' ? 'L/min' : 'bar'}`;
+  return formatQuantity(convertToDisplay(value, quantity, units), quantity, units);
+}
+function equipmentRate(value, units) {
+  if (normalizeUnits(units) === 'metric') return String(value);
+  return formatQuantity(convertToDisplay(value, 'pressure', units), 'pressure', units).split(' ')[0];
 }
 
 function makeRow(label, value) {
@@ -32,7 +41,7 @@ function makeRow(label, value) {
   return row;
 }
 
-export function renderEquipmentSummary(settings) {
+export function renderEquipmentSummary(settings, units = 'metric') {
   const container = document.getElementById('equipment-summary');
   if (!container) return;
 
@@ -48,11 +57,11 @@ export function renderEquipmentSummary(settings) {
   container.replaceChildren(
     makeRow(
       'Compressor',
-      `${compressorName} · ${activeEquipment.compressorInletFlowLPerMin} L/min · ${activeEquipment.maxCompressorPressureBar} bar`
+      `${compressorName} · ${equipmentQuantity(activeEquipment.compressorInletFlowLPerMin, 'flow', units)} · ${equipmentQuantity(activeEquipment.maxCompressorPressureBar, 'pressure', units)}`
     ),
     makeRow(
       'Booster',
-      `${boosterName} · boost ${activeEquipment.oxygenBoostBpm}/${activeEquipment.otherBoostBpm} BPM · decant ${activeEquipment.oxygenDecantRateBarPerMin}/${activeEquipment.otherDecantRateBarPerMin} bar/min · ${activeEquipment.maxBoosterOutputPressureBar} bar`
+      `${boosterName} · boost ${activeEquipment.oxygenBoostBpm}/${activeEquipment.otherBoostBpm} BPM · decant ${equipmentRate(activeEquipment.oxygenDecantRateBarPerMin, units)}/${equipmentRate(activeEquipment.otherDecantRateBarPerMin, units)} ${getUnitLabel('pressure', units)}/min · ${equipmentQuantity(activeEquipment.maxBoosterOutputPressureBar, 'pressure', units)}`
     ),
     note
   );

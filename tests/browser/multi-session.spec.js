@@ -68,24 +68,26 @@ test.describe('continued browser sessions', () => {
     await closeSession(sessionD);
   });
 
-  test('persists tank and equipment settings and preserves canonical saved values', async ({ appPage }) => {
+  test('persists units across sessions while preserving canonical saved values', async ({ appPage }) => {
     const pageA = await appPage.goto('tourSeen');
-    const cylinders = await openSettingsCategory(pageA, 'cylinder-presets');
-    await cylinders.locator('[data-settings-index="0"][data-settings-field="volumeL"]:visible').fill('18');
-    await cylinders.locator('[data-settings-index="0"][data-settings-field="workingPressureBar"]:visible').fill('300');
-    const equipment = await openSettingsCategory(pageA, 'equipment');
-    await equipment.getByRole('spinbutton', { name: 'Maximum compressor pressure' }).fill('240');
-    await equipment.getByRole('spinbutton', { name: 'Maximum booster output pressure' }).fill('238');
+    const unitsA = await openSettingsCategory(pageA, 'units');
+    await unitsA.getByRole('combobox', { name: 'Units' }).selectOption('imperial');
     await saveSettings(pageA);
     const sessionB = await createContinuedSession(pageA);
-    const equipmentB = await openSettingsCategory(sessionB.page, 'equipment');
-    await expect(equipmentB.getByRole('spinbutton', { name: 'Maximum compressor pressure' })).toHaveValue('240');
-    await expect(equipmentB.getByRole('spinbutton', { name: 'Maximum booster output pressure' })).toHaveValue('238');
-    await cancelSettings(sessionB.page);
+    const unitsB = await openSettingsCategory(sessionB.page, 'units');
+    await expect(unitsB.getByRole('combobox', { name: 'Units' })).toHaveValue('imperial');
+    const cylindersB = await openSettingsCategory(sessionB.page, 'cylinder-presets');
+    await expect(cylindersB.locator('[data-settings-index="0"][data-settings-field="volumeL"]:visible')).toHaveValue('3');
+    await expect(cylindersB.locator('[data-settings-index="0"][data-settings-field="workingPressureBar"]:visible')).toHaveValue('232');
+    const unitsMetric = await openSettingsCategory(sessionB.page, 'units');
+    await unitsMetric.getByRole('combobox', { name: 'Units' }).selectOption('metric');
+    await saveSettings(sessionB.page);
     const sessionC = await createContinuedSession(sessionB.page);
+    const unitsC = await openSettingsCategory(sessionC.page, 'units');
+    await expect(unitsC.getByRole('combobox', { name: 'Units' })).toHaveValue('metric');
     const cylindersC = await openSettingsCategory(sessionC.page, 'cylinder-presets');
-    await expect(cylindersC.locator('[data-settings-index="0"][data-settings-field="volumeL"]:visible')).toHaveValue('18');
-    await expect(cylindersC.locator('[data-settings-index="0"][data-settings-field="workingPressureBar"]:visible')).toHaveValue('300');
+    await expect(cylindersC.locator('[data-settings-index="0"][data-settings-field="volumeL"]:visible')).toHaveValue('3');
+    await expect(cylindersC.locator('[data-settings-index="0"][data-settings-field="workingPressureBar"]:visible')).toHaveValue('232');
     await closeSession(sessionC);
   });
 

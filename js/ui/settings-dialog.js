@@ -386,6 +386,8 @@ export function renderPresetImport(settings, importState = {}) {
 export function renderSettingsDialog(settings, importState) {
   const physicsModel = document.getElementById('settings-physics-model');
   if (physicsModel && settings.physics?.model) physicsModel.value = settings.physics.model;
+  const units = document.getElementById('settings-units');
+  if (units) units.value = settings.units ?? 'metric';
   renderGasRows(settings.gasPresets);
   renderCylinderRows(settings.cylinderPresets);
   renderEquipmentPresetSelector(

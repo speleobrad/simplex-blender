@@ -67,6 +67,7 @@
           <button type="button" data-action="select-settings-category" data-settings-category="cylinder-presets" aria-controls="settings-pane-cylinder-presets" aria-selected="false" class="settings-category-button shrink-0 rounded-lg border border-transparent px-3 py-2 text-left text-xs font-semibold text-slate-400 transition hover:border-ocean-700 hover:bg-ocean-800/70 hover:text-slate-200">Cylinder presets</button>
           <button type="button" id="settings-category-equipment" data-action="select-settings-category" data-settings-category="equipment" aria-controls="settings-pane-equipment" aria-selected="false" class="settings-category-button shrink-0 rounded-lg border border-transparent px-3 py-2 text-left text-xs font-semibold text-slate-400 transition hover:border-ocean-700 hover:bg-ocean-800/70 hover:text-slate-200">Equipment</button>
           <button type="button" data-action="select-settings-category" data-settings-category="preset-management" aria-controls="settings-pane-preset-management" aria-selected="false" class="settings-category-button shrink-0 rounded-lg border border-transparent px-3 py-2 text-left text-xs font-semibold text-slate-400 transition hover:border-ocean-700 hover:bg-ocean-800/70 hover:text-slate-200">Preset management</button>
+          <button type="button" data-action="select-settings-category" data-settings-category="units" aria-controls="settings-pane-units" aria-selected="false" class="settings-category-button shrink-0 rounded-lg border border-transparent px-3 py-2 text-left text-xs font-semibold text-slate-400 transition hover:border-ocean-700 hover:bg-ocean-800/70 hover:text-slate-200">Units</button>
         </nav>
         </div>
 
@@ -79,6 +80,14 @@
               <option value="ideal">Ideal gas</option>
             </select>
             <p class="mt-1 text-[10px] text-slate-500">Real gas uses the Van der Waals model; ideal gas uses PV = nRT.</p>
+          </section>
+          <section id="settings-pane-units" aria-labelledby="settings-pane-units-title" class="hidden">
+            <h3 id="settings-pane-units-title" class="mb-3 text-sm font-semibold text-slate-200">Units</h3>
+            <label for="settings-units" class="block text-xs text-slate-400">Display units</label>
+            <select id="settings-units" data-settings-collection="settings" data-settings-field="units" aria-label="Units" class="mt-1 w-full rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-xs text-slate-100">
+              <option value="metric">Metric (bar, L, kg, °C)</option>
+              <option value="imperial">Imperial (psi, gal, lb, °F)</option>
+            </select>
           </section>
 
           <section id="settings-pane-gas-presets" aria-labelledby="settings-pane-gas-presets-title" class="hidden">

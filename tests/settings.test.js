@@ -39,6 +39,16 @@ test('missing settings return independent copies of the built-in presets', () =>
 test('settings default to the real-gas physics model', () => {
   assert.deepEqual(DEFAULT_SETTINGS.physics, { model: 'vdw' });
 });
+test('settings default to metric display units and persist Imperial selection', () => {
+  assert.equal(DEFAULT_SETTINGS.units, 'metric');
+  const storage = memoryStorage();
+  saveSettings({ ...DEFAULT_SETTINGS, units: 'imperial' }, storage);
+  assert.equal(loadSettings(storage).units, 'imperial');
+});
+
+test('unsupported display units are rejected before storage changes', () => {
+  assert.match(validateSettings({ ...DEFAULT_SETTINGS, units: 'us' }).join(' '), /units/i);
+});
 test('built-in settings match the requested diving equipment defaults', () => {
   assert.deepEqual(DEFAULT_SETTINGS.gasPresets, [
     { name: 'Air', oxygenPercent: 21, heliumPercent: 0 },
@@ -461,6 +471,7 @@ test('unsupported gas models are rejected before storage changes', () => {
 test('saved gas and cylinder presets survive a load/save round trip', () => {
   const storage = memoryStorage();
   const settings = {
+    units: 'metric',
     physics: { model: 'vdw' },
     gasPresets: [{ name: 'Tx 16/50', oxygenPercent: 16, heliumPercent: 50 }],
     cylinderPresets: [{
@@ -481,6 +492,7 @@ test('saved gas and cylinder presets survive a load/save round trip', () => {
 test('saved settings preserve the shared booster minimum source pressure', () => {
   const storage = memoryStorage();
   const settings = {
+    units: 'metric',
     physics: { model: 'vdw' },
     gasPresets: [{ name: 'Tx 16/50', oxygenPercent: 16, heliumPercent: 50 }],
     cylinderPresets: [{

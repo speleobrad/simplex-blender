@@ -1,4 +1,5 @@
 import { renderWaterPressurePane as renderWaterPressurePaneView } from './water-pressure.js';
+import { formatPressure, formatQuantity } from '../units.js';
 
 function setText(id, value) {
   const element = document.getElementById(id);
@@ -160,7 +161,7 @@ function renderInterimMeasurementControl(stepIndex, nextStep, measurement, worki
   return details;
 }
 
-function renderProtocol(protocolSteps, alertMessage = null, calculation = null) {
+function renderProtocol(protocolSteps, alertMessage = null, calculation = null, units = 'metric') {
   const container = document.getElementById('steps-container');
   if (!container) return;
 
@@ -193,7 +194,7 @@ function renderProtocol(protocolSteps, alertMessage = null, calculation = null) 
     label.textContent = 'Result';
     const pressure = document.createElement('div');
     pressure.className = 'text-sm font-bold text-cyan-300';
-    pressure.textContent = `${step.resultingPressureBar.toFixed(1)} bar`;
+    pressure.textContent = formatPressure(step.resultingPressureBar, units);
 
     result.append(label, pressure);
     if (Number.isFinite(step.sourceEndPressureBar)) {
@@ -212,7 +213,7 @@ function renderProtocol(protocolSteps, alertMessage = null, calculation = null) 
         sourceEnd.append(warning);
       }
       const sourceEndPressure = document.createElement('span');
-      sourceEndPressure.textContent = `${step.sourceEndPressureBar.toFixed(1)} bar`;
+      sourceEndPressure.textContent = formatPressure(step.sourceEndPressureBar, units);
       sourceEnd.append(sourceEndPressure);
       result.append(sourceEnd);
     }
@@ -232,13 +233,13 @@ function renderProtocol(protocolSteps, alertMessage = null, calculation = null) 
   container.replaceChildren(...(alertMessage ? [alertMessage, ...cards] : cards));
 }
 
-function renderBlendSummary(blend) {
-  setText('res-retained-p', `${blend.retainedPressureBar.toFixed(1)} bar`);
+function renderBlendSummary(blend, units = 'metric') {
+  setText('res-retained-p', formatPressure(blend.retainedPressureBar, units));
   setText('res-retained-pct', `${blend.retainedPercent.toFixed(0)}% kept`);
-  setText('res-vented-p', `${blend.ventedPressureBar.toFixed(1)} bar`);
-  setText('res-vented-litres', `${blend.ventedGasLitres.toFixed(1)} L lost`);
-  setText('res-he-salvaged', `${Math.round(blend.heliumSalvagedLitres)} L`);
-  setText('res-final-p', `${blend.finalPressureBar.toFixed(1)} bar`);
+  setText('res-vented-p', formatPressure(blend.ventedPressureBar, units));
+  setText('res-vented-litres', `${formatQuantity(blend.ventedGasLitres, 'volume', units)} lost`);
+  setText('res-he-salvaged', formatQuantity(blend.heliumSalvagedLitres, 'volume', units));
+  setText('res-final-p', formatPressure(blend.finalPressureBar, units));
   setText('res-final-mix', `Tx ${blend.finalOxygenPercent}/${blend.finalHeliumPercent}`);
 }
 
@@ -260,7 +261,7 @@ function renderThermalSummary(thermal) {
   if (summary) summary.hidden = false;
 }
 
-export function renderResults(result, calculation = null) {
+export function renderResults(result, calculation = null, units = 'metric') {
   renderWaterPressurePane(null);
   if (result.gas) {
     setText('lbl-init-p', result.gas.initialPressureBar);
@@ -285,7 +286,7 @@ export function renderResults(result, calculation = null) {
         workingPressureBar: calculation?.cylinder?.workingPressureBar,
         useVdw: calculation?.physics?.model === 'vdw'
       });
-      renderBlendSummary(maximum.blend);
+      renderBlendSummary(maximum.blend, units);
       renderProtocol(
         maximum.protocolSteps,
         renderInfeasible(
@@ -297,7 +298,8 @@ export function renderResults(result, calculation = null) {
           result.diagnostics,
           thermal
         ),
-        calculation
+        calculation,
+        units
       );
     } else {
       for (const id of [
@@ -311,12 +313,12 @@ export function renderResults(result, calculation = null) {
       ]) {
         setText(id, '—');
       }
-      renderProtocol([], renderInfeasible(result.error, null, 0, 0, 0, result.diagnostics, thermal));
+      renderProtocol([], renderInfeasible(result.error, null, 0, 0, 0, result.diagnostics, thermal), calculation, units);
     }
     return;
   }
 
-  renderBlendSummary(result.blend);
+  renderBlendSummary(result.blend, units);
   renderThermalSummary(result.thermal);
   renderWaterPressurePane({
     thermal: result.thermal,
@@ -325,5 +327,5 @@ export function renderResults(result, calculation = null) {
     workingPressureBar: calculation?.cylinder?.workingPressureBar,
     useVdw: calculation?.physics?.model === 'vdw'
   });
-  renderProtocol(result.protocolSteps, null, calculation);
+  renderProtocol(result.protocolSteps, null, calculation, units);
 }
