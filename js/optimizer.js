@@ -158,6 +158,11 @@ export function scheduleSafeThermalProtocol({
           receiverEndPressureBar: boundary,
           resultingPressureBar: boundary,
           sourceEndPressureBar: sourcePressure(firstSourceMoles),
+          sourceConsumedMoles: boundaryMoles - receiverStartMoles,
+          receiverStartMoles,
+          receiverEndMoles: boundaryMoles,
+          sourceStartMoles,
+          sourceEndMoles: firstSourceMoles,
           resultingMix: {
             oxygenPercent: (receiverStartMoles * oxygenPercent
               + (boundaryMoles - receiverStartMoles) * sourceOxygenPercent) / boundaryMoles,
@@ -191,9 +196,15 @@ export function scheduleSafeThermalProtocol({
           _thermalSplit: true,
           receiverStartPressureBar: boundary,
           sourceStartPressureBar: first.sourceEndPressureBar,
+          sourceStartMoles: first.sourceEndMoles,
+          sourceConsumedMoles: receiverEndMoles - boundaryMoles,
+          receiverStartMoles: boundaryMoles,
+          receiverEndMoles,
+          sourceEndMoles,
           receiverStartMix: first.resultingMix,
           title: `${transferStep.title} (safe stage 2)`
         };
+        steps.splice(unsafeIndex, 1, first, wait, second);
         automaticWaits.push(wait.automaticWaitMetadata);
         continue;
       }
