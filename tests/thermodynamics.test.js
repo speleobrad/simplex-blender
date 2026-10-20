@@ -759,7 +759,7 @@ test('thermal simulation retains minute samples and exact fractional endpoints',
   );
   assert.equal(thermal.samples[1].pressureBar, 5);
   assert.equal(thermal.samples[2].pressureBar, 10);
-  assert.equal(thermal.samples[3].pressureBar, thermal.pressureAtTransferEndBar);
+  assert.equal(thermal.samples[3].pressureBar, thermal.pressureAtTransferEndReferenceBar);
   assert.equal(thermal.samples.at(-1).temperatureC, thermal.temperatureAfterWaitC);
   assert.equal(thermal.samples.at(-1).pressureBar, thermal.pressureAfterWaitBar);
   assert.ok(thermal.samples[4].temperatureC < thermal.samples[3].temperatureC);

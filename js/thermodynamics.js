@@ -331,7 +331,7 @@ const DEFAULT_BOOSTER_SETTINGS = {
   compressorTemperatureModifierC: 0
 };
 
-function coolingTimeConstantMinutes(tankMaterial, coolingMedium) {
+export function coolingTimeConstantMinutes(tankMaterial, coolingMedium) {
   if (coolingMedium === 'water') return tankMaterial === 'aluminum' ? 5 : 3.5;
   return tankMaterial === 'aluminum' ? 25 : 18;
 }
@@ -640,7 +640,13 @@ export function simulateThermalProtocol({
 }) {
   const booster = thermalBoosterSettings(settings);
   const tauMinutes = coolingTimeConstantMinutes(thermal.tankMaterial, thermal.coolingMedium);
-  const settledTemperatureC = thermal.settledTemperatureC ?? thermal.ambientTemperatureC;
+  const settledTemperatureC = thermal.settledTemperatureC
+    ?? thermal.targetMediumTemperatureC
+    ?? thermal.targetTemperatureC
+    ?? thermal.ambientTemperatureC;
+  const emptyProtocolTemperatureC = thermal.settledTemperatureC
+    ?? thermal.targetMediumTemperatureC
+    ?? thermal.ambientTemperatureC;
   const useVdw = physics.model === 'vdw';
   let currentPressureBar = Math.max(0, cylinder.initialPressureBar
     ?? protocolSteps[0]?.receiverStartPressureBar
@@ -655,7 +661,7 @@ export function simulateThermalProtocol({
       oxygenPercent: initialOxygenPercent,
       heliumPercent: initialHeliumPercent,
       fromTemperatureC: currentTemperatureC,
-      toTemperatureC: settledTemperatureC,
+      toTemperatureC: emptyProtocolTemperatureC,
       volumeL: cylinder.volumeL,
       useVdw
     });
@@ -665,7 +671,7 @@ export function simulateThermalProtocol({
         finalTransferEndPressureBar: currentPressureBar,
         finalTransferEndTemperatureC: currentTemperatureC,
         finalAmbientPressureBar,
-        finalAmbientTemperatureC: settledTemperatureC
+        finalAmbientTemperatureC: emptyProtocolTemperatureC
       }
     };
   }
@@ -736,13 +742,18 @@ export function simulateThermalProtocol({
       })
       : [{ elapsedMinutes: 0, temperatureC: currentTemperatureC }];
     const temperatureAtTransferEndC = transferTemperatureSamples.at(-1).temperatureC;
+    const pressureReferenceTemperatureC = Number.isFinite(step.pressureReferenceTemperatureC)
+      ? step.pressureReferenceTemperatureC
+      : physics.temperatureC;
+    const pressureAtTransferEndReferenceBar = step.pressureAtTransferEndReferenceBar
+      ?? transferEndPressureBar;
     const pressureAtTransferEndAmbientBar = step.pressureAtTransferEndAmbientBar
       ?? (hasTransferProfile
         ? calculatePressureAtTemperature({
-          pressureBar: transferEndPressureBar,
+          pressureBar: pressureAtTransferEndReferenceBar,
           oxygenPercent: receiverMix.oxygenPercent,
           heliumPercent: receiverMix.heliumPercent,
-          fromTemperatureC: physics.temperatureC,
+          fromTemperatureC: pressureReferenceTemperatureC,
           toTemperatureC: thermal.ambientTemperatureC,
           volumeL: cylinder.volumeL,
           useVdw
@@ -751,10 +762,10 @@ export function simulateThermalProtocol({
     const pressureAtTransferEndHotBar = step.pressureAtTransferEndHotBar
       ?? (hasTransferProfile
         ? calculatePressureAtTemperature({
-          pressureBar: transferEndPressureBar,
+          pressureBar: pressureAtTransferEndReferenceBar,
           oxygenPercent: receiverMix.oxygenPercent,
           heliumPercent: receiverMix.heliumPercent,
-          fromTemperatureC: physics.temperatureC,
+          fromTemperatureC: pressureReferenceTemperatureC,
           toTemperatureC: temperatureAtTransferEndC,
           volumeL: cylinder.volumeL,
           useVdw
@@ -789,7 +800,7 @@ export function simulateThermalProtocol({
                 ?? thermal.targetTemperatureC,
               tauMinutes
             })
-          : thermal.waitMinutes;
+          : Number.isFinite(thermal.waitMinutes) ? thermal.waitMinutes : 0;
     const waitMinutes = skipsConfiguredWait
       ? 0
       : Math.max(0, configuredWaitMinutes + (Number(step.automaticWaitMinutes) || 0));
@@ -831,14 +842,15 @@ export function simulateThermalProtocol({
         ?? temperatureStartC,
       temperatureStartC,
       temperatureAtTransferEndC,
-      pressureReferenceTemperatureC: physics.temperatureC,
+      pressureReferenceTemperatureC,
       receiverStartMix: step.receiverStartMix ?? currentMix,
       configuredWaitMinutes,
       automaticWaitMinutes: Number(step.automaticWaitMinutes) || 0,
       measuredWaitMinutes,
       waitMinutes,
       temperatureAfterWaitC,
-      pressureAtTransferEndBar: transferEndPressureBar,
+      pressureAtTransferEndReferenceBar,
+      pressureAtTransferEndBar: pressureAtTransferEndHotBar,
       pressureAtTransferEndHotBar,
       pressureAfterWaitBar,
       samples: buildThermalStepSamples({
@@ -876,7 +888,7 @@ export function simulateThermalProtocol({
   return {
     protocolSteps: simulatedProtocolSteps,
     final: {
-      finalTransferEndPressureBar: finalStep?.pressureAtTransferEndBar ?? currentPressureBar,
+      finalTransferEndPressureBar: finalStep?.pressureAtTransferEndHotBar ?? finalStep?.pressureAtTransferEndBar ?? currentPressureBar,
       finalTransferEndTemperatureC: finalStep?.temperatureAtTransferEndC ?? currentTemperatureC,
       finalAmbientPressureBar: finalStep?.pressureAfterWaitBar ?? currentPressureBar,
       finalAmbientTemperatureC: finalStep?.temperatureAfterWaitC ?? currentTemperatureC

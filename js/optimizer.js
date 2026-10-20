@@ -2,7 +2,12 @@ import { GAS_CONSTANT, calcMolarDensity, calcPressure, calcZFromDensity, getMixP
 import { solveTwoPhaseSimplex } from './simplex.js';
 import { isValidGasComposition } from './gas-input.js';
 import { validateCalculatorInputs, validateSupplyBankInput } from './input-validation.js';
-import { simulateThermalProtocol, calculatePressureAtTemperature } from './thermodynamics.js';
+import {
+  simulateThermalProtocol,
+  calculatePressureAtTemperature,
+  calculateCoolingTime,
+  coolingTimeConstantMinutes
+} from './thermodynamics.js';
 
 const MAX_AUTOMATIC_WAIT_MINUTES = 1440;
 
@@ -45,7 +50,8 @@ function hotTransferEndpointPressure(state, step, {
     return state.pressureAtTransferEndHotBar;
   }
   return calculatePressureAtTemperature({
-    pressureBar: state.pressureAtTransferEndBar,
+    pressureBar: state.pressureAtTransferEndReferenceBar
+      ?? state.pressureAtTransferEndBar,
     oxygenPercent: step.resultingMix?.oxygenPercent
       ?? state.receiverStartMix?.oxygenPercent
       ?? 21,
@@ -64,6 +70,7 @@ function unsafeThermalStep(state, step, limit, context) {
   const pressures = [
     state.pressureStartBar,
     state.measuredStartPressureBar,
+    state.pressureAtTransferEndReferenceBar,
     state.pressureAtTransferEndBar,
     state.pressureAfterWaitBar,
     hotTransferEndpointPressure(state, step, context),
@@ -109,6 +116,7 @@ export function isSafeSimulation(simulation, workingPressureBar, {
         if (!state) return true;
         const pressures = [
           state.pressureStartBar,
+          state.pressureAtTransferEndReferenceBar,
           state.pressureAtTransferEndBar,
           state.pressureAfterWaitBar,
           ...(state.samples ?? []).map(sample => sample.projectedPressureBar ?? sample.pressureBar)
@@ -223,10 +231,22 @@ function splitTransferAtSafeHotEndpoint({
     ambientTemperatureC,
     useVdw
   ) * options.cylinder.volumeL;
-  const receiverEndPressureBar = Number(
+  const receiverEndReferencePressureBar = Number(
     transferStep.receiverEndPressureBar ?? transferStep.resultingPressureBar
   );
-  if (!Number.isFinite(receiverEndPressureBar)) return null;
+  if (!Number.isFinite(receiverEndReferencePressureBar)) return null;
+  const pressureReferenceTemperatureC = Number.isFinite(transferStep.pressureReferenceTemperatureC)
+    ? transferStep.pressureReferenceTemperatureC
+    : options.physics.temperatureC;
+  const receiverEndPressureBar = calculatePressureAtTemperature({
+    pressureBar: receiverEndReferencePressureBar,
+    oxygenPercent: receiverEndMix.oxygenPercent,
+    heliumPercent: receiverEndMix.heliumPercent,
+    fromTemperatureC: pressureReferenceTemperatureC,
+    toTemperatureC: ambientTemperatureC,
+    volumeL: options.cylinder.volumeL,
+    useVdw
+  });
   const receiverEndMoles = calcMolarDensity(
     receiverEndPressureBar,
     receiverEndMix.oxygenPercent,
@@ -243,11 +263,22 @@ function splitTransferAtSafeHotEndpoint({
   const sourceOxygenPercent = transferStep.sourceOxygenPercent ?? receiverEndMix.oxygenPercent;
   const sourceHeliumPercent = transferStep.sourceHeliumPercent ?? receiverEndMix.heliumPercent;
   const sourceVolumeL = sourceUnlimited ? NaN : Number(transferStep.sourceVolumeL);
-  const sourceStartPressureBar = Number(transferStep.sourceStartPressureBar);
+  const sourceStartReferencePressureBar = Number(transferStep.sourceStartPressureBar);
+  const sourceStartInventoryPressureBar = Number.isFinite(sourceStartReferencePressureBar)
+    ? calculatePressureAtTemperature({
+      pressureBar: sourceStartReferencePressureBar,
+      oxygenPercent: sourceOxygenPercent,
+      heliumPercent: sourceHeliumPercent,
+      fromTemperatureC: pressureReferenceTemperatureC,
+      toTemperatureC: ambientTemperatureC,
+      volumeL: sourceVolumeL,
+      useVdw
+    })
+    : NaN;
   const derivedSourceStartMoles = Number.isFinite(sourceVolumeL) && sourceVolumeL > 0
-    && Number.isFinite(sourceStartPressureBar)
+    && Number.isFinite(sourceStartInventoryPressureBar)
     ? calcMolarDensity(
-      sourceStartPressureBar,
+      sourceStartInventoryPressureBar,
       sourceOxygenPercent,
       sourceHeliumPercent,
       ambientTemperatureC,
@@ -307,6 +338,8 @@ function splitTransferAtSafeHotEndpoint({
     const first = {
       ...transferStep,
       _thermalSplit: true,
+      pressureReferenceTemperatureC: ambientTemperatureC,
+      pressureAtTransferEndReferenceBar: firstReceiverPressureBar,
       receiverStartPressureBar: receiverStartAmbientPressureBar,
       receiverEndPressureBar: firstReceiverPressureBar,
       resultingPressureBar: firstReceiverPressureBar,
@@ -334,6 +367,8 @@ function splitTransferAtSafeHotEndpoint({
       ...transferStep,
       _thermalSplit: true,
       _measurementIndex: null,
+      pressureReferenceTemperatureC: ambientTemperatureC,
+      pressureAtTransferEndReferenceBar: receiverEndPressureBar,
       receiverStartPressureBar: firstReceiverPressureBar,
       receiverEndPressureBar,
       resultingPressureBar: receiverEndPressureBar,
@@ -359,6 +394,8 @@ function splitTransferAtSafeHotEndpoint({
       _safetyWaitOnly: true,
       title: 'Automatic wait between safe transfer stages',
       recipeLabel: 'Automatic safety wait',
+      pressureReferenceTemperatureC: ambientTemperatureC,
+      pressureAtTransferEndReferenceBar: firstReceiverPressureBar,
       receiverStartPressureBar: firstReceiverPressureBar,
       receiverEndPressureBar: firstReceiverPressureBar,
       resultingPressureBar: firstReceiverPressureBar,
@@ -413,7 +450,37 @@ function splitTransferAtSafeHotEndpoint({
   if (!(low > 1e-9)) {
     return null;
   }
-  return stagesAt(low);
+  const split = stagesAt(low);
+  const firstStageState = firstStageSimulationAt(low).protocolSteps.at(-1)?.thermal;
+  if (firstStageState) {
+    const hotEndpointBar = firstStageState.pressureAtTransferEndHotBar;
+    const ambientTemperatureC = options.thermal.ambientTemperatureC;
+    const targetTemperatureC = options.thermal.targetMediumTemperatureC
+      ?? options.thermal.targetTemperatureC
+      ?? ambientTemperatureC;
+    const tauMinutes = coolingTimeConstantMinutes(
+      options.thermal.tankMaterial,
+      options.thermal.coolingMedium
+    );
+    const splitWaitMinutes = Math.abs(targetTemperatureC - ambientTemperatureC) < 1e-9
+      ? 4.6 * tauMinutes
+      : calculateCoolingTime({
+        transferEndTemperatureC: firstStageState.temperatureAtTransferEndC,
+        ambientTemperatureC,
+        targetTemperatureC,
+        tauMinutes
+      });
+    split.wait.automaticWaitMinutes = Number.isFinite(splitWaitMinutes)
+      ? Math.max(0, splitWaitMinutes)
+      : 0;
+    split.wait.pressureReferenceTemperatureC = firstStageState.pressureReferenceTemperatureC;
+    split.wait.pressureAtTransferEndReferenceBar = firstStageState.pressureAtTransferEndReferenceBar;
+    split.wait.pressureAtTransferEndBar = hotEndpointBar;
+    split.wait.receiverStartPressureBar = hotEndpointBar;
+    split.wait.receiverEndPressureBar = hotEndpointBar;
+    split.wait.resultingPressureBar = hotEndpointBar;
+  }
+  return split;
 }
 
 export function scheduleSafeThermalProtocol({
@@ -467,17 +534,20 @@ export function scheduleSafeThermalProtocol({
     const targetIndex = unsafeIndex < 0 ? steps.length - 1 : unsafeIndex;
     const targetState = simulation.protocolSteps[targetIndex]?.thermal;
     if (targetState && steps[targetIndex]) {
+      const hasMeasurement = steps[targetIndex]._measurementIndex !== null;
       const receiverStartPressureBar = steps[targetIndex].receiverStartPressureBar;
       steps[targetIndex] = {
         ...steps[targetIndex],
         _scheduledMeasuredStartPressureBar: steps[targetIndex]._scheduledMeasuredStartPressureBar
-          ?? (Number.isFinite(receiverStartPressureBar)
+          ?? (hasMeasurement && Number.isFinite(receiverStartPressureBar)
             ? receiverStartPressureBar
             : targetState.pressureStartBar),
         _scheduledMeasuredStartTemperatureC: steps[targetIndex]._scheduledMeasuredStartTemperatureC
-          ?? (steps[targetIndex - 1]?.type === 'keep'
+          ?? (hasMeasurement && steps[targetIndex - 1]?.type === 'keep'
             ? targetState.temperatureStartC
-            : options.thermal.ambientTemperatureC ?? targetState.temperatureStartC)
+            : hasMeasurement
+              ? options.thermal.ambientTemperatureC ?? targetState.temperatureStartC
+              : targetState.temperatureStartC)
       };
     }
     let waitIndex = targetIndex - 1;
@@ -512,7 +582,6 @@ export function scheduleSafeThermalProtocol({
     const baselineWithoutExisting = baselineTotal - existingAdded;
     const availableAdded = Math.max(0, maxWait - baselineWithoutExisting);
     const safeThroughTarget = candidateSimulation => {
-      if (totalWaitMinutes(candidateSimulation) > maxWait + THERMAL_SAFETY_TOLERANCE_BAR) return false;
       const candidateUnsafeIndex = firstUnsafeThermalIndex(
         candidateSimulation,
         cylinder.workingPressureBar,
@@ -1933,6 +2002,7 @@ function optimizeBlendWithoutThermal(input) {
       description: `Bleed cylinder from ${initialPressureBar.toFixed(drainPrecision)} bar down to ${retainedPressure.toFixed(drainPrecision)} bar (-${drainPressure.toFixed(drainPrecision)} bar vented). Retains ${((retainedMoles / (initialMoles || 1)) * 100).toFixed(0)}% of the original mix.`,
       pressureReferenceTemperatureC: temperatureC,
       resultingPressureBar: currentPressure,
+      resultingMix: { oxygenPercent: initialOxygenPercent, heliumPercent: initialHeliumPercent },
       oxygenCompressionRatio: null,
       badgeClass: 'bg-rose-500/20 text-rose-300 border-rose-500/40'
     });
@@ -2032,7 +2102,7 @@ function optimizeBlendWithoutThermal(input) {
         description: descriptionParts.join(' '),
         pressureDeltaBar: pressureDelta,
         pressureReferenceTemperatureC: temperatureC,
-        pressureAtTransferEndHotBar: currentPressure,
+        pressureAtTransferEndReferenceBar: currentPressure,
         resultingPressureBar: currentPressure,
         resultingMix: { oxygenPercent, heliumPercent },
         sourceStartPressureBar: stage.sourceStartPressureBar,
