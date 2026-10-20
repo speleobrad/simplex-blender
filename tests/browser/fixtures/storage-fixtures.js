@@ -92,3 +92,23 @@ export async function injectStorageFailure(page, operation) {
   }, definition);
   return definition;
 }
+/**
+ * Continue a test in a fresh browser context using only the previous context's
+ * in-memory storage snapshot. The original context is closed before the new
+ * one is created so accidental reliance on a live page is caught.
+ */
+export async function createContinuedSession(page, scenario = {}) {
+  const browser = page.context().browser();
+  if (!browser) throw new Error('A browser-backed page is required for continued sessions.');
+  const storageState = await page.context().storageState();
+  await page.context().close();
+  const context = await browser.newContext({ storageState });
+  await context.route(/google-analytics\.com|googletagmanager\.com/i, route => route.fulfill({
+    status: 204,
+    contentType: 'text/plain',
+    body: ''
+  }));
+  const nextPage = await context.newPage();
+  await nextPage.goto(scenario.url ?? '/index.html');
+  return { context, page: nextPage };
+}
