@@ -38,7 +38,9 @@ Add the following structure:
 - `tests/browser/helpers/`: user-level actions for primary navigation, settings categories, result tabs, inventory rows, onboarding/tour flows, and preset management. Helpers expose product actions rather than copying implementation functions.
 - `tests/browser/screens/` (optional only where needed): focused page objects for repeated surfaces; avoid a mandatory page-object layer for one-off flows.
 
-Use a fresh browser context per test. Fixtures may seed only the records required for a scenario. Tests must not depend on execution order or a shared browser profile.
+Use a fresh browser context per test for independent scenarios. Fixtures may seed only the records required for a scenario. Tests must not depend on execution order or a shared browser profile.
+
+The fixture set also provides an explicit continued-session flow. A multi-session test creates session A, persists its browser storage state, closes that context, then creates a fresh session B from that state. Session B may persist a further mutation for session C. These handoffs are local to one test and never become shared state for other tests. This models closing and reopening the browser while preserving localStorage without introducing a globally shared profile.
 
 The suite runs against the repository over HTTP using the existing static-server model. The server must support native ES modules and local preset-file access. External CDN assets are controlled in test setup where practical; expected CDN behavior is explicitly accounted for so a third-party request failure cannot be reported as an application failure. Same-origin module errors and unexpected app requests fail the relevant test.
 
@@ -78,15 +80,23 @@ Cover add/edit/delete bank, enabled state, bank name, gas selector/custom gas, v
 
 ### Settings
 
-Cover General, Gas presets, Cylinder presets, Equipment, and Preset management category navigation. Exercise draft edits, Save, Cancel, dynamic add/remove actions, disabled removal states, field validation, equipment sections, narrow category scrolling, stacked actions, and desktop layout.
+Cover Units, Gas presets, Cylinder presets, Equipment, and Preset management category navigation. Exercise draft edits, Save, Cancel, dynamic add/remove actions, disabled removal states, field validation, equipment sections, narrow category scrolling, stacked actions, and desktop layout.
 
 ### Preset management
 
 Use local repository fixture files and controlled local import sources. Cover gas, cylinder, and equipment selection, preview, duplicate/conflict/invalid candidates, selection defaults, successful import and persistence, malformed JSON, unavailable source, visible status, and no mutation after failed import.
 
-### Persistence and failure states
+### Persistence, multi-session, and failure states
 
 Cover storage read fallback warning, storage write failure and later recovery, invalid saved data, feasible and infeasible recipes, factory reset, theme persistence, inventory persistence, settings save/cancel behavior, and onboarding persistence.
+
+Explicitly cover state reuse across separately created browser sessions:
+
+- Session A accepts consent and exits the tour; session B sees neither automatically and can reopen the tour from the header.
+- Session A adds and edits a non-Air bank; session B sees its name, gas, pressure, volume, composition, enabled state, and recipe contribution; session B removes or disables it and session C verifies that mutation.
+- Session A switches to Imperial, edits and saves tank/equipment values; session B verifies the persisted Imperial display; session B switches back to Metric and session C verifies canonical values and display-only conversion.
+- Session A changes the theme and leaves an unsaved Settings draft; session B sees the theme but not the draft.
+- Session A saves a new preset; session B finds it in selectors; session C performs factory reset; session D verifies presets, inventory, units, theme, and onboarding return to factory state.
 
 ## Deterministic state fixtures
 
@@ -99,7 +109,8 @@ Provide named scenarios for:
 - feasible, infeasible, and thermally populated recipes;
 - expanded equipment/settings state;
 - preset-management review with valid, duplicate, conflict, and invalid candidates;
-- consent-required and tour-seen onboarding states.
+- consent-required and tour-seen onboarding states;
+- saved Imperial settings and persisted custom inventory for continued-session handoffs.
 
 Fixtures use the existing storage format and local preset files. They must be explicit and reproducible. Generated/random data is out of scope for the initial suite; deterministic long values provide the layout stress cases needed for actionable failures.
 
@@ -165,13 +176,14 @@ CI runs unit tests first and browser tests second. Browser tests use isolated co
 2. Every documented primary screen, result tab, settings category, menu/action, and user-visible option has at least one executable interaction.
 3. Desktop, tablet-ish, and narrow mobile layouts are exercised.
 4. Deterministic fixtures cover factory defaults, expanded dynamic content, persisted custom data, invalid data, imports, onboarding, and failure states.
-5. Shared assertions detect unexpected overflow, overlap, clipping, containment failure, hidden interactive content, and broken focus containment.
-6. Targeted screenshots cover the approved representative states in both themes where applicable.
-7. Deliberately introduced fixture/layout mutations prove each major invariant can fail with actionable diagnostics.
-8. Browser failures retain useful traces, screenshots, console/network information, and geometry diagnostics.
-9. Existing `npm test` remains green and unchanged in purpose.
-10. The suite does not rely on test order, real user data, or unstable external services.
+5. At least one self-contained test explicitly closes one browser context and opens another with persisted state; additional mutations are verified in a third session where required.
+6. Shared assertions detect unexpected overflow, overlap, clipping, containment failure, hidden interactive content, and broken focus containment.
+7. Targeted screenshots cover the approved representative states in both themes where applicable.
+8. Deliberately introduced fixture/layout mutations prove each major invariant can fail with actionable diagnostics.
+9. Browser failures retain useful traces, screenshots, console/network information, and geometry diagnostics.
+10. Existing `npm test` remains green and unchanged in purpose.
+11. The suite does not rely on test order, real user data, or unstable external services.
 
 ## Verification
 
-During implementation, run `npm test`, then `npm run test:ui` against the local server. Exercise at least one clean flow, one populated dynamic state, one onboarding flow, one settings/import flow, one responsive flow, and one deliberately invalid/failure fixture. Review generated artifacts for a forced geometry failure and confirm screenshot baselines are stable across repeated runs.
+During implementation, run `npm test`, then `npm run test:ui` against the local server. Exercise at least one clean flow, one populated dynamic state, one onboarding flow, one settings/import flow, one responsive flow, one deliberately invalid/failure fixture, and one multi-session storage handoff. Review generated artifacts for a forced geometry failure and confirm screenshot baselines are stable across repeated runs.
