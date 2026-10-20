@@ -18,7 +18,35 @@ Node's built-in test runner covers gas physics, strict numeric parsing, calculat
 npm test
 ```
 
-No third-party test or build dependencies are required.
+Browser checks use Playwright's Chromium runner and require the local browser binary. Install it once with:
+
+```sh
+npx playwright install chromium
+```
+
+Run all three configured projects (desktop, tablet, and mobile) with:
+
+```sh
+npm run test:ui
+```
+
+Useful focused runs include:
+
+```sh
+npm run test:ui -- tests/browser/screenshots.spec.js --project=desktop
+npm run test:ui -- tests/browser/layout-invariants.spec.js --project=mobile
+```
+
+For headed or interactive debugging, append `--headed` or `--debug`:
+
+```sh
+npm run test:ui -- --headed
+npm run test:ui -- --debug
+```
+
+On failure, Playwright retains traces, screenshots, and videos in `test-results/` and writes the HTML report to `playwright-report/`. Approved screenshot baselines are checked in under `tests/browser/screenshots.spec.js-snapshots/`; do not update them unless a deliberate visual change has been reviewed.
+
+The Node and browser suites are independent: run `npm test` for the Node suite, and `npm run test:ui` for browser coverage. CI installs Chromium with its system dependencies before running both commands.
 
 ## Priority invariant
 

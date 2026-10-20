@@ -17,6 +17,17 @@ Run the test suite with:
 ```sh
 npm test
 ```
+The browser suite uses Playwright against Chromium and exercises desktop, tablet, and mobile layouts. Install its browser once with `npx playwright install chromium`, then run:
+
+```sh
+npm run test:ui
+```
+
+For a visible browser or an interactive inspector, use `npm run test:ui -- --headed` or `npm run test:ui -- --debug`. Failure traces, screenshots, and videos are written under `test-results/`; the HTML report is written under `playwright-report/`. Approved visual baselines live in `tests/browser/screenshots.spec.js-snapshots/`.
+
+See [Development and browser checks](docs/development.md) for targeted commands and the exploratory manual checklist.
+
+The browser suite is intentionally separate from the Node tests: run `npm test` for the calculator and physics tests, and `npm run test:ui` for the browser checks.
 
 The app uses browser-native ES modules and has no build step. Tailwind CSS, fonts, icons, and the Driver.js guided-tour library are loaded from pinned CDN assets by the page.
 

@@ -8,6 +8,7 @@ build/
 
 test-results/
 playwright-report/
+screenshots/
 
 # Logs and local environment
 *.log
