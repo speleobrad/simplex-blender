@@ -3,9 +3,13 @@ import { createContinuedSession } from './fixtures/storage-fixtures.js';
 import { addBank, bankRows, editBank, removeBank } from './helpers/inventory.js';
 import { openSettingsCategory, saveSettings, cancelSettings } from './helpers/settings.js';
 import { toggleTheme } from './helpers/navigation.js';
+import { assertRuntimeClean } from './assertions/runtime.js';
 
 const onboarding = page => page.evaluate(() => JSON.parse(localStorage.getItem('simplex-gas-remixer-onboarding')));
-async function closeSession(session) { if (session?.context) await session.context.close(); }
+async function closeSession(session) {
+  if (session?.runtime) assertRuntimeClean(session.runtime);
+  if (session?.context) await session.context.close();
+}
 
 test.describe('continued browser sessions', () => {
   test('reuses consent and completed tour state after closing session A', async ({ appPage }) => {
@@ -29,13 +33,24 @@ test.describe('continued browser sessions', () => {
     const sessionB = await createContinuedSession(pageA);
     const rowB = bankRows(sessionB.page).nth(index);
     await expect(rowB.getByRole('textbox', { name: /bank name$/i })).toHaveValue('Continued-session bank');
+    await expect(rowB.getByRole('spinbutton', { name: /volume in litres$/i })).toHaveValue('32');
+    await expect(rowB.getByRole('spinbutton', { name: /pressure in bar$/i })).toHaveValue('180');
+    await expect(rowB.getByRole('spinbutton', { name: /oxygen percentage$/i })).toHaveValue('36');
+    await expect(rowB.getByRole('spinbutton', { name: /helium percentage$/i })).toHaveValue('24');
+    await expect(rowB.getByRole('checkbox', { name: /Use Continued-session bank/i })).toBeChecked();
     await editBank(sessionB.page, index, { enabled: false });
     const sessionC = await createContinuedSession(sessionB.page);
     const rowC = bankRows(sessionC.page).nth(index);
+    await expect(rowC.getByRole('spinbutton', { name: /volume in litres$/i })).toHaveValue('32');
+    await expect(rowC.getByRole('spinbutton', { name: /pressure in bar$/i })).toHaveValue('180');
+    await expect(rowC.getByRole('spinbutton', { name: /oxygen percentage$/i })).toHaveValue('36');
+    await expect(rowC.getByRole('spinbutton', { name: /helium percentage$/i })).toHaveValue('24');
     await expect(rowC.getByRole('checkbox', { name: /Use Continued-session bank/i })).not.toBeChecked();
     await removeBank(sessionC.page, index);
     const sessionD = await createContinuedSession(sessionC.page);
-    await expect(bankRows(sessionD.page)).toHaveCount(index);
+    await expect.poll(() => bankRows(sessionD.page).evaluateAll(rows => rows.some(row => (
+      row.querySelector('input[aria-label$="bank name"]')?.value === 'Continued-session bank'
+    )))).toBe(false);
     await closeSession(sessionD);
   });
 
@@ -79,19 +94,44 @@ test.describe('continued browser sessions', () => {
     await gasPane.getByRole('button', { name: 'Add gas', exact: true }).click();
     const added = gasPane.locator('#settings-gas-presets > div').last();
     await added.getByRole('textbox', { name: 'Gas preset name' }).fill('Continued Session Gas');
+    await added.getByRole('textbox', { name: 'Gas preset name' }).blur();
     await added.getByRole('spinbutton', { name: /oxygen percentage$/i }).fill('30');
+    await added.getByRole('spinbutton', { name: /oxygen percentage$/i }).blur();
     await added.getByRole('spinbutton', { name: /helium percentage$/i }).fill('20');
+    await added.getByRole('spinbutton', { name: /helium percentage$/i }).blur();
     await saveSettings(pageA);
     const sessionB = await createContinuedSession(pageA);
     const gasPaneB = await openSettingsCategory(sessionB.page, 'gas-presets');
-    await expect.poll(() => sessionB.page.evaluate(() => JSON.parse(localStorage.getItem('simplex-gas-remixer-settings')).gasPresets.some(preset => preset.name === 'Continued Session Gas'))).toBe(true);
+    await expect.poll(() => gasPaneB.getByRole('textbox', { name: 'Gas preset name' }).evaluateAll(inputs => (
+      inputs.some(input => input.value === 'Continued Session Gas')
+    ))).toBe(true);
+    const bankPresetB = bankRows(sessionB.page).first().getByRole('combobox', { name: /^Gas preset for /i });
+    await expect(bankPresetB.locator('option', { hasText: 'Continued Session Gas' })).toHaveCount(1);
     const management = await openSettingsCategory(sessionB.page, 'preset-management');
     sessionB.page.once('dialog', dialog => dialog.accept());
     await management.getByRole('button', { name: 'Reset to factory settings', exact: true }).click();
     await expect(sessionB.page.getByRole('dialog', { name: 'Analytics consent', exact: true })).toBeVisible();
     const sessionC = await createContinuedSession(sessionB.page);
-    await expect(sessionC.page.getByRole('dialog', { name: 'Analytics consent', exact: true })).toBeVisible();
-    await expect(sessionC.page.locator('html')).toHaveAttribute('data-theme', 'light');
+    const consentC = sessionC.page.getByRole('dialog', { name: 'Analytics consent', exact: true });
+    await expect(consentC).toBeVisible();
+    await consentC.getByRole('button', { name: 'Accept and continue', exact: true }).click();
+    await sessionC.page.locator('.driver-popover').getByRole('button', { name: /skip/i }).click();
+    const gasPaneC = await openSettingsCategory(sessionC.page, 'gas-presets');
+    await expect(gasPaneC.getByRole('textbox', { name: 'Gas preset name' }).first()).toHaveValue('Air');
+    await expect.poll(() => gasPaneC.getByRole('textbox', { name: 'Gas preset name' }).evaluateAll(inputs => (
+      inputs.some(input => input.value === 'Continued Session Gas')
+    ))).toBe(false);
+    const cylindersC = await openSettingsCategory(sessionC.page, 'cylinder-presets');
+    await expect(cylindersC.getByRole('textbox', { name: 'Cylinder preset name' }).first()).toHaveValue('Faber 3L');
+    await expect(cylindersC.locator('[data-settings-index="0"][data-settings-field="volumeL"]:visible')).toHaveValue('3');
+    await expect(cylindersC.locator('[data-settings-index="0"][data-settings-field="workingPressureBar"]:visible')).toHaveValue('232');
+    const equipmentC = await openSettingsCategory(sessionC.page, 'equipment');
+    await expect(equipmentC.getByRole('spinbutton', { name: 'Maximum compressor pressure' })).toHaveValue('232');
+    await expect(equipmentC.getByRole('spinbutton', { name: 'Maximum booster output pressure' })).toHaveValue('230');
+    const factoryRows = bankRows(sessionC.page);
+    await expect(factoryRows).toHaveCount(3);
+    await expect(factoryRows.nth(0).getByRole('textbox', { name: /bank name$/i })).toHaveValue('Helium');
+    await expect(factoryRows.nth(0).getByRole('checkbox', { name: /Use Helium/i })).toBeChecked();
     await closeSession(sessionC);
   });
 });

@@ -1,5 +1,6 @@
 import { DEFAULT_SETTINGS } from '../../../js/settings.js';
-
+import { captureRuntime } from './app-fixtures.js';
+import { assertRuntimeClean } from '../assertions/runtime.js';
 export const storageScenarios = {
   factory: {},
   tourSeen: {
@@ -101,6 +102,7 @@ export async function createContinuedSession(page, scenario = {}) {
   const browser = page.context().browser();
   if (!browser) throw new Error('A browser-backed page is required for continued sessions.');
   const storageState = await page.context().storageState();
+  if (page.__continuedRuntime) assertRuntimeClean(page.__continuedRuntime);
   await page.context().close();
   const context = await browser.newContext({ storageState });
   await context.route(/google-analytics\.com|googletagmanager\.com/i, route => route.fulfill({
@@ -109,6 +111,7 @@ export async function createContinuedSession(page, scenario = {}) {
     body: ''
   }));
   const nextPage = await context.newPage();
+  nextPage.__continuedRuntime = await captureRuntime(nextPage);
   await nextPage.goto(scenario.url ?? '/index.html');
-  return { context, page: nextPage };
+  return { context, page: nextPage, runtime: nextPage.__continuedRuntime };
 }
