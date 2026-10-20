@@ -1,5 +1,5 @@
+import { convertToDisplay, getUnitLabel } from '../units.js';
 import { projectPressureAtTemperatures } from '../thermodynamics.js';
-
 
 export const WATER_TEMPERATURES_C = Array.from({ length: 13 }, (_, index) => 4 + index * 2);
 export const CAR_TEMPERATURES_C = Array.from({ length: 8 }, (_, index) => 25 + index * 5);
@@ -61,22 +61,22 @@ export function buildPressureProjectionData({
 }
 
 
-function appendPressureValue(cell, projection, workingPressureBar) {
+function appendPressureValue(cell, projection, workingPressureBar, units) {
+  const displayWorking = convertToDisplay(workingPressureBar, 'pressure', units);
   if (projection.exceedsWorkingPressure) {
     const warning = document.createElement('i');
     warning.className = 'fa-solid fa-triangle-exclamation mr-1 text-[10px] text-rose-400 align-middle';
     warning.setAttribute('role', 'img');
-    warning.setAttribute('aria-label', `Exceeds cylinder working pressure of ${workingPressureBar.toFixed(1)} bar`);
-    warning.title = `Exceeds cylinder working pressure of ${workingPressureBar.toFixed(1)} bar`;
+    warning.setAttribute('aria-label', `Exceeds cylinder working pressure of ${displayWorking.toFixed(1)} ${getUnitLabel('pressure', units)}`);
+    warning.title = `Exceeds cylinder working pressure of ${displayWorking.toFixed(1)} ${getUnitLabel('pressure', units)}`;
     cell.append(warning);
   }
-
   const value = document.createElement('span');
-  value.textContent = `${projection.pressureBar.toFixed(1)} bar`;
+  value.textContent = `${convertToDisplay(projection.pressureBar, 'pressure', units).toFixed(1)} ${getUnitLabel('pressure', units)}`;
   cell.append(value);
 }
 
-function renderPressureTable(title, projections, workingPressureBar) {
+function renderPressureTable(title, projections, workingPressureBar, units) {
   const table = document.createElement('table');
   table.className = 'w-full text-left text-xs font-mono';
   table.setAttribute('aria-label', `${title} pressure estimates`);
@@ -104,18 +104,18 @@ function renderPressureTable(title, projections, workingPressureBar) {
     row.className = 'border-b border-ocean-800/60 last:border-0';
     row.setAttribute(
       'aria-label',
-      `${projection.temperatureC.toFixed(0)} degrees Celsius, ${projection.pressureBar.toFixed(1)} bar`
+      `${convertToDisplay(projection.temperatureC, 'temperature', units).toFixed(0)} ${getUnitLabel('temperature', units)}, ${convertToDisplay(projection.pressureBar, 'pressure', units).toFixed(1)} ${getUnitLabel('pressure', units)}`
     );
 
     const temperature = document.createElement('th');
     temperature.scope = 'row';
     temperature.className = 'px-2 py-1.5 font-normal text-slate-300';
-    temperature.textContent = `${projection.temperatureC} °C`;
+    temperature.textContent = `${convertToDisplay(projection.temperatureC, 'temperature', units).toFixed(0)} ${getUnitLabel('temperature', units)}`;
     const pressure = document.createElement('td');
     pressure.className = projection.exceedsWorkingPressure
       ? 'px-2 py-1.5 text-right font-semibold text-rose-300'
       : 'px-2 py-1.5 text-right text-cyan-300';
-    appendPressureValue(pressure, projection, workingPressureBar);
+    appendPressureValue(pressure, projection, workingPressureBar, units);
     row.append(temperature, pressure);
     tbody.append(row);
   }
@@ -124,7 +124,7 @@ function renderPressureTable(title, projections, workingPressureBar) {
   return table;
 }
 
-function renderPressureTables(title, projections, workingPressureBar) {
+function renderPressureTables(title, projections, workingPressureBar, units) {
   const tables = document.createElement('div');
   tables.className = 'grid grid-cols-1 gap-3 sm:grid-cols-2';
   for (const [index, column] of splitPressureProjections(projections).entries()) {
@@ -132,7 +132,8 @@ function renderPressureTables(title, projections, workingPressureBar) {
       renderPressureTable(
         `${title} (${index + 1} of 2)`,
         column,
-        workingPressureBar
+        workingPressureBar,
+        units
       )
     );
   }
@@ -147,7 +148,8 @@ export function renderWaterPressurePane({
   blend,
   volumeL,
   workingPressureBar,
-  useVdw
+  useVdw,
+  units = 'metric'
 }) {
   if (!container) return;
   container.replaceChildren();
@@ -169,14 +171,14 @@ export function renderWaterPressurePane({
   const waterHeading = document.createElement('h4');
   waterHeading.className = 'mb-2 text-xs font-bold uppercase tracking-wider text-slate-300';
   waterHeading.textContent = 'Water temperatures';
-  waterTableSection.append(waterHeading, renderPressureTables('Water temperature', data.water, workingPressureBar));
+  waterTableSection.append(waterHeading, renderPressureTables('Water temperature', data.water, workingPressureBar, units));
 
   const carTableSection = document.createElement('section');
   carTableSection.className = 'rounded-xl border border-ocean-800 bg-ocean-950/60 p-3';
   const carHeading = document.createElement('h4');
   carHeading.className = 'mb-2 text-xs font-bold uppercase tracking-wider text-slate-300';
   carHeading.textContent = 'Car temperatures';
-  carTableSection.append(carHeading, renderPressureTables('Car temperatures', data.car, workingPressureBar));
+  carTableSection.append(carHeading, renderPressureTables('Car temperatures', data.car, workingPressureBar, units));
 
   container.append(waterTableSection, carTableSection);
 }

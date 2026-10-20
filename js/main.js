@@ -460,9 +460,13 @@ function updateSettingsDraft(input) {
   const collection = input.dataset.settingsCollection;
   const index = Number(input.dataset.settingsIndex);
   const field = input.dataset.settingsField;
-  const value = collection === 'physics' || collection === 'settings' || field === 'name' || field === 'material'
+  let value = collection === 'physics' || collection === 'settings' || field === 'name' || field === 'material'
     ? input.value
     : Number.parseFloat(input.value);
+  if (typeof value === 'number' && Number.isFinite(value) && input.dataset.settingsQuantity) {
+    value = convertFromDisplay(value, input.dataset.settingsQuantity, state.settings.units);
+    if (collection === 'booster' && field === 'cylinderVolumeCm3') value *= 1000;
+  }
   if (collection === 'physics') state.settingsDraft.physics[field] = value;
   else if (collection === 'settings' && field === 'units') state.settingsDraft.units = value;
   else if (collection === 'cylinderPresets') state.settingsDraft.cylinderPresets[index][field] = value;
@@ -700,7 +704,7 @@ function recalculate() {
   renderSupplyBanks(state.banks, state.settings.gasPresets, state.settings.units);
   renderEquipmentSummary(state.settings, state.settings.units);
   renderResults(result, input, state.settings.units);
-  renderThermalCharts(result, input);
+  renderThermalCharts(result, input, state.settings.units);
   if (result.feasible) renderTernary();
   else clearTernaryDiagram(byId('ternary-canvas'));
 }
@@ -933,8 +937,8 @@ function applyInterimMeasurement(actionElement) {
   const temperatureInput = form.querySelector('[name="temperatureC"]');
   const interimMeasurements = state.interimMeasurements.slice();
   interimMeasurements[index] = {
-    pressureBar: Number(pressureInput.value),
-    temperatureC: Number(temperatureInput.value)
+    pressureBar: convertFromDisplay(Number(pressureInput.value), 'pressure', state.settings.units),
+    temperatureC: convertFromDisplay(Number(temperatureInput.value), 'temperature', state.settings.units)
   };
   state.interimMeasurementSignature = calculatorInputSignature({
     ...readInput(),

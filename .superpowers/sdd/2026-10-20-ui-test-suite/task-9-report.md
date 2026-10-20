@@ -2,25 +2,27 @@
 
 ## RED
 
-- `npm test -- tests/units.test.js tests/settings.test.js tests/settings-dialog.test.js` initially failed because `js/units.js` did not exist (`ERR_MODULE_NOT_FOUND`).
+- `npm test -- tests/units.test.js` — failed as expected after regression tests were added: Imperial volume remained `gal` and used the gallon conversion factor.
+- Regression coverage added for cubic-foot labels/conversion and no-gallon output.
 
 ## GREEN / verification
 
-- `npm test -- tests/units.test.js tests/settings.test.js tests/settings-dialog.test.js` — 52 tests passed.
-- `npm run test:ui -- tests/browser/settings.spec.js --project=desktop --workers=1` — 6 tests passed.
-- `npm test` — 253 tests passed.
-- `npm run test:ui` — attempted full 213-test suite; the run was interrupted by the existing shared local-server instability (`ERR_CONNECTION_REFUSED` after the server stopped under parallel load). The focused browser settings suite passed after fixing the source import issue.
+- `npm test -- tests/units.test.js tests/settings.test.js tests/settings-dialog.test.js tests/results.test.js tests/thermodynamics.test.js tests/water-pressure.test.js` — 90 tests passed.
+- `npm test -- tests/units.test.js tests/settings-dialog.test.js tests/results.test.js tests/water-pressure.test.js tests/thermal-charts.test.js` — 40 tests passed.
+- `npm test -- tests/thermal-charts.test.js tests/units.test.js` — 22 tests passed after restoring the chart SVG namespace.
+- `npm run test:ui -- tests/browser/settings.spec.js tests/browser/multi-session.spec.js --project=desktop --workers=1` — did not complete before the 180-second command deadline. The captured attempts exposed an application runtime error (`SVG_NS is not defined`); this was fixed in the committed chart header, but the browser suite was not rerun to completion afterward.
 
 ## Files
 
-- Added `js/units.js` with metric/Imperial normalization, conversion, labels, and formatting.
-- Added `tests/units.test.js` conversion/formatting coverage.
-- Added persisted `settings.units` default/validation/copy/load/save behavior and tests.
-- Added accessible Units settings category/selector and delegated draft handling.
-- Threaded display units through supply-bank, equipment-summary, and results rendering while converting bank edits back to canonical metric values.
-- Added visible Units markup test.
-- Added continued-session Imperial → Metric persistence/canonical-value browser flow.
+- Updated `js/units.js`: Imperial volume is cubic feet (`ft³`) and quantity formatting converts canonical values exactly once.
+- Updated `js/main.js`: settings editor and interim reading edits convert selected display units back to canonical metric values; thermal charts receive selected units.
+- Updated `js/ui/settings-dialog.js`: cylinder, compressor, booster, and decant editor fields render selected units with converted constraints and accessible unit labels.
+- Updated `js/ui/results.js`: pressure/temperature result summaries, protocol thermal details, interim controls, and water-pressure pane use selected units.
+- Updated `js/ui/water-pressure.js`: table values, constraints warnings, row labels, and accessible labels use selected pressure/temperature units.
+- Updated `js/ui/thermal-charts.js`: chart axes, data tables, hover/accessibility values, reference lines, and status text use selected units.
+- Updated `tests/units.test.js` with cubic-foot regression coverage.
 
-## Concerns
+## Remaining concerns
 
-- Cylinder/equipment settings editor fields remain canonical metric controls; visible supply-bank and result/equipment displays use selected units. Full browser suite needs a stable single local HTTP server for parallel workers; the attempted run reported connection refusals unrelated to application assertions.
+- A post-fix affected browser run is still required; no browser acceptance is claimed.
+- Full `npm test`, full `npm run test:ui -- --workers=1`, and screenshot review were not run in this worker; main agent should run the requested final verification.

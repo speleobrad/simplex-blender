@@ -1,5 +1,5 @@
 import { renderWaterPressurePane as renderWaterPressurePaneView } from './water-pressure.js';
-import { formatPressure, formatQuantity } from '../units.js';
+import { convertToDisplay, formatPressure, formatQuantity, getUnitLabel } from '../units.js';
 
 function setText(id, value) {
   const element = document.getElementById(id);
@@ -66,30 +66,32 @@ function formatThermalValue(value) {
 }
 
 
-function renderWaterPressurePane(data) {
+function renderWaterPressurePane(data, units = 'metric') {
   const container = document.getElementById('water-pressure-container');
   if (!container) return;
   if (!data) {
     container.replaceChildren();
     return;
   }
-  renderWaterPressurePaneView({ container, ...data });
+  renderWaterPressurePaneView({ container, ...data, units });
 }
 
 
-function renderThermalDetails(thermal, isFinalStep) {
+function renderThermalDetails(thermal, isFinalStep, units = 'metric') {
   if (!thermal) return null;
 
   const details = document.createElement('div');
   details.className = 'mt-2 text-[11px] text-slate-400 space-y-0.5';
+  const pressure = value => formatPressure(value, units);
+  const temperature = value => `${convertToDisplay(value, 'temperature', units).toFixed(1)} ${getUnitLabel('temperature', units)}`;
   const wait = isFinalStep
     ? `Wait: Full ambient cool-off (4.6 × tau = ${formatThermalValue(thermal.waitMinutes)} min)`
     : `Wait: ${formatThermalValue(thermal.waitMinutes)} min`;
   const lines = [
-    `Rate: ${thermal.rateSource} · ${formatThermalValue(thermal.rateBarPerMin)} bar/min · ${formatThermalValue(thermal.durationMinutes)} min`,
-    `Estimated transfer end: ${formatThermalValue(thermal.pressureAtTransferEndBar)} bar at ${formatThermalValue(thermal.temperatureAtTransferEndC)} °C`,
+    `Rate: ${thermal.rateSource} · ${formatQuantity(thermal.rateBarPerMin, 'pressure', units)}/min · ${formatThermalValue(thermal.durationMinutes)} min`,
+    `Estimated transfer end: ${pressure(thermal.pressureAtTransferEndBar)} at ${temperature(thermal.temperatureAtTransferEndC)}`,
     wait,
-    `Estimated after wait: ${formatThermalValue(thermal.pressureAfterWaitBar)} bar at ${formatThermalValue(thermal.temperatureAfterWaitC)} °C`
+    `Estimated after wait: ${pressure(thermal.pressureAfterWaitBar)} at ${temperature(thermal.temperatureAfterWaitC)}`
   ];
   for (const text of lines) {
     const line = document.createElement('div');
@@ -99,22 +101,24 @@ function renderThermalDetails(thermal, isFinalStep) {
   return details;
 }
 
-function renderInterimMeasurementControl(stepIndex, nextStep, measurement, workingPressureBar) {
+function renderInterimMeasurementControl(stepIndex, nextStep, measurement, workingPressureBar, units = 'metric') {
   const details = document.createElement('details');
   details.className = 'rounded-lg border border-ocean-800/80 bg-ocean-950/50 px-3 py-2';
 
   const summary = document.createElement('summary');
   summary.className = 'cursor-pointer text-[11px] font-semibold text-cyan-300';
+  const displayPressure = measurement ? convertToDisplay(measurement.pressureBar, 'pressure', units) : null;
+  const displayTemperature = measurement ? convertToDisplay(measurement.temperatureC, 'temperature', units) : null;
   summary.textContent = measurement
-    ? `Measured start for step ${stepIndex}: ${measurement.pressureBar.toFixed(1)} bar · ${measurement.temperatureC.toFixed(1)} °C`
+    ? `Measured start for step ${stepIndex}: ${displayPressure.toFixed(1)} ${getUnitLabel('pressure', units)} · ${displayTemperature.toFixed(1)} ${getUnitLabel('temperature', units)}`
     : `Record actual readings before “${nextStep.title}”`;
 
   const form = document.createElement('form');
   form.className = 'mt-2 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end';
 
   for (const field of [
-    { name: 'pressureBar', label: 'Pressure', unit: 'bar', min: '0', max: String(workingPressureBar ?? 350) },
-    { name: 'temperatureC', label: 'Temperature', unit: '°C', min: '-20', max: '100' }
+    { name: 'pressureBar', label: 'Pressure', quantity: 'pressure', min: 0, max: workingPressureBar ?? 350 },
+    { name: 'temperatureC', label: 'Temperature', quantity: 'temperature', min: -20, max: 100 }
   ]) {
     const label = document.createElement('label');
     label.className = 'text-[10px] text-slate-400';
@@ -123,16 +127,16 @@ function renderInterimMeasurementControl(stepIndex, nextStep, measurement, worki
     input.type = 'number';
     input.name = field.name;
     input.required = true;
-    input.min = field.min;
-    input.max = field.max ?? '';
+    input.min = String(convertToDisplay(field.min, field.quantity, units));
+    input.max = String(convertToDisplay(field.max, field.quantity, units));
     input.step = '0.1';
-    input.value = measurement ? String(measurement[field.name]) : '';
+    input.value = measurement ? String(convertToDisplay(measurement[field.name], field.quantity, units)) : '';
     input.className = 'mt-1 w-full rounded border border-ocean-700 bg-ocean-900 px-2 py-1 font-mono text-xs text-slate-100';
-    input.setAttribute('aria-label', `${field.label} before “${nextStep.title}”`);
+    input.setAttribute('aria-label', `${field.label} before “${nextStep.title}” in ${getUnitLabel(field.quantity, units)}`);
     label.append(input, (() => {
       const unit = document.createElement('span');
       unit.className = 'ml-1';
-      unit.textContent = field.unit;
+      unit.textContent = getUnitLabel(field.quantity, units);
       return unit;
     })());
     form.append(label);
@@ -184,7 +188,7 @@ function renderProtocol(protocolSteps, alertMessage = null, calculation = null, 
     description.className = 'text-[11px] text-slate-400';
     description.textContent = step.description;
     details.append(heading, description);
-    const thermalDetails = renderThermalDetails(step.thermal, index === protocolSteps.length - 1);
+    const thermalDetails = renderThermalDetails(step.thermal, index === protocolSteps.length - 1, units);
     if (thermalDetails) details.append(thermalDetails);
 
     const result = document.createElement('div');
@@ -226,7 +230,8 @@ function renderProtocol(protocolSteps, alertMessage = null, calculation = null, 
         index + 1,
         protocolSteps[index + 1],
         measurement,
-        calculation?.cylinder?.workingPressureBar
+        calculation?.cylinder?.workingPressureBar,
+        units
       ));
     }
   });
@@ -243,31 +248,26 @@ function renderBlendSummary(blend, units = 'metric') {
   setText('res-final-mix', `Tx ${blend.finalOxygenPercent}/${blend.finalHeliumPercent}`);
 }
 
-function renderThermalSummary(thermal) {
+function renderThermalSummary(thermal, units = 'metric') {
   const summary = document.getElementById('res-final-thermal');
   if (!thermal) {
     if (summary) summary.hidden = true;
     return;
   }
-
-  setText(
-    'res-final-transfer-end',
-    `${formatThermalValue(thermal.finalTransferEndPressureBar)} bar at ${formatThermalValue(thermal.finalTransferEndTemperatureC)} °C`
-  );
-  setText(
-    'res-final-ambient',
-    `${formatThermalValue(thermal.finalAmbientPressureBar)} bar at ${formatThermalValue(thermal.finalAmbientTemperatureC)} °C`
-  );
+  const pressure = value => formatPressure(value, units);
+  const temperature = value => `${convertToDisplay(value, 'temperature', units).toFixed(1)} ${getUnitLabel('temperature', units)}`;
+  setText('res-final-transfer-end', `${pressure(thermal.finalTransferEndPressureBar)} at ${temperature(thermal.finalTransferEndTemperatureC)}`);
+  setText('res-final-ambient', `${pressure(thermal.finalAmbientPressureBar)} at ${temperature(thermal.finalAmbientTemperatureC)}`);
   if (summary) summary.hidden = false;
 }
 
 export function renderResults(result, calculation = null, units = 'metric') {
-  renderWaterPressurePane(null);
+  renderWaterPressurePane(null, units);
   if (result.gas) {
-    setText('lbl-init-p', result.gas.initialPressureBar);
+    setText('lbl-init-p', formatPressure(result.gas.initialPressureBar, units));
     setText(
       'lbl-target-p',
-      result.thermal?.requestedSettledTargetPressureBar ?? result.gas.targetPressureBar
+      formatPressure(result.thermal?.requestedSettledTargetPressureBar ?? result.gas.targetPressureBar, units)
     );
   } else {
     for (const id of ['lbl-init-p', 'lbl-target-p']) {
@@ -277,7 +277,7 @@ export function renderResults(result, calculation = null, units = 'metric') {
   if (!result.feasible) {
     const maximum = result.maximumPressure;
     const thermal = result.thermal ?? maximum?.thermal;
-    renderThermalSummary(thermal);
+    renderThermalSummary(thermal, units);
     if (maximum) {
       renderWaterPressurePane({
         thermal,
@@ -285,7 +285,7 @@ export function renderResults(result, calculation = null, units = 'metric') {
         volumeL: calculation?.cylinder?.volumeL,
         workingPressureBar: calculation?.cylinder?.workingPressureBar,
         useVdw: calculation?.physics?.model === 'vdw'
-      });
+      }, units);
       renderBlendSummary(maximum.blend, units);
       renderProtocol(
         maximum.protocolSteps,
@@ -319,13 +319,13 @@ export function renderResults(result, calculation = null, units = 'metric') {
   }
 
   renderBlendSummary(result.blend, units);
-  renderThermalSummary(result.thermal);
+  renderThermalSummary(result.thermal, units);
   renderWaterPressurePane({
     thermal: result.thermal,
     blend: result.blend,
     volumeL: calculation?.cylinder?.volumeL,
     workingPressureBar: calculation?.cylinder?.workingPressureBar,
     useVdw: calculation?.physics?.model === 'vdw'
-  });
+  }, units);
   renderProtocol(result.protocolSteps, null, calculation, units);
 }

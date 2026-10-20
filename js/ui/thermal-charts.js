@@ -1,3 +1,4 @@
+import { convertToDisplay, getUnitLabel } from '../units.js';
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const CHART_WIDTH = 720;
 const CHART_HEIGHT = 300;
@@ -253,7 +254,9 @@ const THERMAL_HOVER_DEFAULT = 'Hover either graph to inspect time, temperature, 
 
 
 function pointDescription(pointValue) {
-  return `${pointValue.label || pointValue.title}, ${phaseLabel(pointValue.phase)}, ${pointValue.elapsedMinutes.toFixed(1)} minutes, ${pointValue.temperatureC.toFixed(1)} degrees Celsius, ${pointValue.pressureBar.toFixed(1)} bar`;
+  const temperatureUnit = pointValue.temperatureUnit ?? '°C';
+  const pressureUnit = pointValue.pressureUnit ?? 'bar';
+  return `${pointValue.label || pointValue.title}, ${phaseLabel(pointValue.phase)}, ${pointValue.elapsedMinutes.toFixed(1)} minutes, ${pointValue.temperatureC.toFixed(1)} ${temperatureUnit}, ${pointValue.pressureBar.toFixed(1)} ${pressureUnit}`;
 }
 
 function setActiveThermalPoint(index) {
@@ -677,7 +680,7 @@ function protocolForResult(result) {
   return result?.maximumPressure?.protocolSteps ?? result?.protocolSteps;
 }
 
-export function renderThermalCharts(result, input = {}) {
+export function renderThermalCharts(result, input = {}, units = 'metric') {
   const temperatureChart = document.getElementById('thermal-temperature-chart');
   const pressureChart = document.getElementById('thermal-pressure-chart');
   const dataTable = document.getElementById('thermal-chart-data');
@@ -689,37 +692,51 @@ export function renderThermalCharts(result, input = {}) {
     initialPressureBar: input.cylinder?.initialPressureBar ?? result?.gas?.initialPressureBar,
     initialTemperatureC: input.physics?.temperatureC
   });
-  thermalHoverSamples = series.samples;
+  const displayPoint = point => ({
+    ...point,
+    pressureBar: convertToDisplay(point.pressureBar, 'pressure', units),
+    temperatureC: convertToDisplay(point.temperatureC, 'temperature', units),
+    pressureUnit: getUnitLabel('pressure', units),
+    temperatureUnit: getUnitLabel('temperature', units)
+  });
+  const displaySeries = {
+    ...series,
+    points: series.points.map(displayPoint),
+    samples: series.samples.map(displayPoint),
+    segments: series.segments.map(segment => ({ ...segment, samples: segment.samples.map(displayPoint) })),
+    final: series.final ? displayPoint(series.final) : null
+  };
+  thermalHoverSamples = displaySeries.samples;
   thermalHoverReadout = document.getElementById('thermal-chart-hover-readout');
   clearThermalHover();
   const ambientTemperatureC = input.thermal?.ambientTemperatureC ?? input.physics?.temperatureC;
   renderChart(temperatureChart, {
     title: 'Temperature',
-    unit: '°C',
+    unit: getUnitLabel('temperature', units),
     key: 'temperatureC',
     color: 'var(--chart-feasible)',
-    points: series.points,
-    samples: series.samples,
-    bands: series.bands,
-    segments: series.segments,
+    points: displaySeries.points,
+    samples: displaySeries.samples,
+    bands: displaySeries.bands,
+    segments: displaySeries.segments,
     referenceLine: finite(ambientTemperatureC)
-      ? { value: ambientTemperatureC, label: `Ambient ${ambientTemperatureC.toFixed(1)} °C` }
+      ? { value: convertToDisplay(ambientTemperatureC, 'temperature', units), label: `Ambient ${convertToDisplay(ambientTemperatureC, 'temperature', units).toFixed(1)} ${getUnitLabel('temperature', units)}` }
       : null
   });
   renderChart(pressureChart, {
     title: 'Pressure',
-    unit: 'bar',
+    unit: getUnitLabel('pressure', units),
     key: 'pressureBar',
     color: 'var(--chart-helium)',
-    points: series.points,
-    samples: series.samples,
-    bands: series.bands,
-    segments: series.segments
+    points: displaySeries.points,
+    samples: displaySeries.samples,
+    bands: displaySeries.bands,
+    segments: displaySeries.segments
   });
-  renderDataTable(dataTable, series.points);
+  renderDataTable(dataTable, displaySeries.points);
   if (status) {
-    status.textContent = series.final
-      ? `${series.final.step} blending step${series.final.step === 1 ? '' : 's'} shown over ${series.final.elapsedMinutes.toFixed(1)} minutes; final point is the ambient-settled tank state at ${series.final.pressureBar.toFixed(1)} bar and ${series.final.temperatureC.toFixed(1)} °C.`
+    status.textContent = displaySeries.final
+      ? `${displaySeries.final.step} blending step${displaySeries.final.step === 1 ? '' : 's'} shown over ${displaySeries.final.elapsedMinutes.toFixed(1)} minutes; final point is the ambient-settled tank state at ${displaySeries.final.pressureBar.toFixed(1)} ${getUnitLabel('pressure', units)} and ${displaySeries.final.temperatureC.toFixed(1)} ${getUnitLabel('temperature', units)}.`
       : 'Chart data appears when a completed blend protocol is available.';
   }
 }

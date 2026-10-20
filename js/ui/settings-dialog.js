@@ -1,22 +1,45 @@
 import { PRESET_IMPORT_DEFAULT_URLS } from '../preset-import.js';
 import { sortCylinderPresetEntries, sortGasPresetEntries } from '../settings.js';
+import { convertFromDisplay, convertToDisplay, getUnitLabel, normalizeUnits } from '../units.js';
 
 const CUSTOM_PRESET = 'custom';
+let activeUnits = 'metric';
 
-function createPresetInput({ value, type, collection, index, field, label, min, max, step }) {
+function fieldQuantity(collection, field) {
+  if (collection === 'cylinderPresets') {
+    return { volumeL: 'volume', massKg: 'mass', workingPressureBar: 'pressure' }[field] ?? null;
+  }
+  if (collection === 'booster') {
+    if (field === 'cylinderVolumeCm3') return 'volume';
+    if (field.includes('Pressure') || field.includes('Rate')) return 'pressure';
+    if (field.includes('Flow')) return 'flow';
+    if (field.includes('Temperature')) return 'temperature';
+  }
+  return null;
+}
+
+function displayValue(value, quantity, field, units) {
+  if (!quantity) return value;
+  return convertToDisplay(field === 'cylinderVolumeCm3' ? value / 1000 : value, quantity, units);
+}
+
+function createPresetInput({ value, type, collection, index, field, label, min, max, step, units = activeUnits }) {
+  const quantity = fieldQuantity(collection, field);
+  const normalizedUnits = normalizeUnits(units);
   const input = document.createElement('input');
   input.type = type;
-  input.value = String(value ?? '');
+  input.value = String(displayValue(value ?? '', quantity, field, normalizedUnits));
   input.className = type === 'text'
     ? 'min-w-0 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-xs text-slate-100'
     : 'min-w-0 rounded border border-ocean-700 bg-ocean-950 px-1 py-1 text-center text-xs text-slate-100';
-  input.setAttribute('aria-label', label);
+  input.setAttribute('aria-label', quantity ? `${label.replace(/ in .+$/, '')} in ${getUnitLabel(quantity, normalizedUnits)}` : label);
   input.dataset.settingsCollection = collection;
   input.dataset.settingsIndex = String(index);
   input.dataset.settingsField = field;
-  if (min !== undefined) input.min = String(min);
-  if (max !== undefined) input.max = String(max);
-  if (step !== undefined) input.step = String(step);
+  if (quantity) input.dataset.settingsQuantity = quantity;
+  if (min !== undefined) input.min = String(displayValue(min, quantity, field, normalizedUnits));
+  if (max !== undefined) input.max = String(displayValue(max, quantity, field, normalizedUnits));
+  if (step !== undefined) input.step = String(displayValue(step, quantity, field, normalizedUnits));
   return input;
 }
 
@@ -384,10 +407,11 @@ export function renderPresetImport(settings, importState = {}) {
 }
 
 export function renderSettingsDialog(settings, importState) {
+  activeUnits = normalizeUnits(settings.units);
   const physicsModel = document.getElementById('settings-physics-model');
   if (physicsModel && settings.physics?.model) physicsModel.value = settings.physics.model;
   const units = document.getElementById('settings-units');
-  if (units) units.value = settings.units ?? 'metric';
+  if (units) units.value = activeUnits;
   renderGasRows(settings.gasPresets);
   renderCylinderRows(settings.cylinderPresets);
   renderEquipmentPresetSelector(
@@ -418,7 +442,27 @@ export function renderSettingsDialog(settings, importState) {
   };
   for (const [id, value] of Object.entries(boosterFields)) {
     const input = document.getElementById(id);
-    if (input) input.value = String(value);
+    if (!input) continue;
+    const field = ({
+      'settings-booster-min-source-pressure': 'minimumSourcePressureBar',
+      'settings-booster-cylinder-volume': 'cylinderVolumeCm3',
+      'settings-booster-oxygen-bpm': 'oxygenBoostBpm',
+      'settings-booster-other-bpm': 'otherBoostBpm',
+      'settings-booster-oxygen-decant-rate': 'oxygenDecantRateBarPerMin',
+      'settings-booster-other-decant-rate': 'otherDecantRateBarPerMin',
+      'settings-booster-draining-rate': 'drainingRateBarPerMin',
+      'settings-compressor-inlet-flow': 'compressorInletFlowLPerMin',
+      'settings-compressor-max-pressure': 'maxCompressorPressureBar',
+      'settings-booster-max-output-pressure': 'maxBoosterOutputPressureBar',
+      'settings-booster-temperature-modifier': 'boosterTemperatureModifierC',
+      'settings-compressor-temperature-modifier': 'compressorTemperatureModifierC'
+    }[id]);
+    const quantity = fieldQuantity('booster', field);
+    input.value = String(displayValue(value, quantity, field, activeUnits));
+    if (quantity) {
+      input.dataset.settingsQuantity = quantity;
+      input.setAttribute('aria-label', `${id} in ${getUnitLabel(quantity, activeUnits)}`);
+    }
   }
   renderPresetImport(settings, importState);
 }
