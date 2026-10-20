@@ -368,7 +368,7 @@ Cover add/edit/delete, enabled state, name/gas/volume/pressure/O₂/He fields, v
 
 - [ ] **Step 2: Write settings tests**
 
-Cover General, Gas presets, Cylinder presets, Equipment, and Preset management category navigation; draft edits; Save/Cancel; dynamic add/remove; disabled removal; long labels/max values; category scrolling; stacked narrow actions; and desktop layout.
+Cover Units, Gas presets, Cylinder presets, Equipment, and Preset management category navigation; draft edits; Save/Cancel; dynamic add/remove; disabled removal; long labels/max values; category scrolling; stacked narrow actions; and desktop layout.
 
 - [ ] **Step 3: Implement focused helpers**
 
@@ -391,46 +391,58 @@ git commit -m "test: cover inventory and settings surfaces"
 
 ---
 
-### Task 7: Cover imports, persistence failures, reset, and responsive artifact states
+### Task 7: Cover imports, multi-session persistence, failures, reset, and responsive artifact states
 
 **Files:**
 - Create: `tests/browser/persistence.spec.js`
+- Create: `tests/browser/multi-session.spec.js`
 - Create: `tests/browser/responsive-artifacts.spec.js`
 - Modify: `tests/browser/fixtures/storage-fixtures.js`
+- Modify: `tests/browser/fixtures/app-fixtures.js`
 - Modify: `tests/browser/assertions/layout.js`
 
 **Interfaces:**
+- `createContinuedSession(page, scenario)` persists storage state, closes the current context, and returns a fresh context/page initialized from that state.
 - `injectStorageFailure(page, operation)` simulates only the requested existing storage operation and exposes the resulting warning/status.
 - `assertResponsiveSurface(page, surface, selectors)` runs overflow/containment/focus checks for a named surface.
 
-- [ ] **Step 1: Write failure-state tests**
+- [ ] **Step 1: Write multi-session tests**
+
+Cover consent/tour reuse, inventory add/edit/remove reuse, Imperial settings and tank/equipment edits across sessions followed by a metric conversion session, theme persistence versus an unsaved draft, and preset persistence followed by factory reset and a final factory-state session.
+
+- [ ] **Step 2: Write failure-state tests**
 
 Cover invalid saved data, storage write failure and recovery, feasible/infeasible result states, malformed import, unavailable import, duplicate/conflict candidates, no mutation after failed import, and factory reset restoring defaults and consent state.
 
-- [ ] **Step 2: Write responsive artifact tests**
+- [ ] **Step 3: Write responsive artifact tests**
 
 At mobile and tablet sizes, expand equipment actions, cylinder cards, preset-management controls, inventory rows, result tabs, charts, dialogs, and tour popovers. Run geometry, overlap, clipping, overflow, and visible-focus assertions for each.
 
-- [ ] **Step 3: Implement controlled failure injection**
+- [ ] **Step 4: Implement continued-session state handoff**
 
-Use `page.addInitScript` or narrowly scoped browser API overrides matching the existing storage implementation. Restore the original API on reload/context teardown; never mutate application source solely for test injection.
+Use Playwright storage-state serialization or an equivalent explicit state copy. Close session A’s browser context before opening session B. Keep state handoff local to the test; never use a shared file or global fixture state. Restore the original storage API after any failure injection on reload/context teardown.
 
-- [ ] **Step 4: Run focused tests**
+- [ ] **Step 5: Implement controlled failure injection**
+
+Use `page.addInitScript` or narrowly scoped browser API overrides matching the existing storage implementation. Never mutate application source solely for test injection.
+
+- [ ] **Step 6: Run focused tests**
 
 ```sh
-npm run test:ui -- tests/browser/persistence.spec.js tests/browser/responsive-artifacts.spec.js
+npm run test:ui -- tests/browser/multi-session.spec.js tests/browser/persistence.spec.js tests/browser/responsive-artifacts.spec.js
 ```
 
-Expected: failure messages are visible and layout checks produce selector/rectangle diagnostics when a deliberate fixture mutation is applied.
+Expected: state survives only the explicitly continued sessions; failure messages are visible; layout checks produce selector/rectangle diagnostics when a deliberate fixture mutation is applied.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 7: Commit**
 
 ```sh
-git add tests/browser/persistence.spec.js tests/browser/responsive-artifacts.spec.js tests/browser/fixtures/storage-fixtures.js tests/browser/assertions/layout.js
-git commit -m "test: cover failure and responsive UI states"
+git add tests/browser/multi-session.spec.js tests/browser/persistence.spec.js tests/browser/responsive-artifacts.spec.js tests/browser/fixtures tests/browser/assertions/layout.js
+git commit -m "test: cover persistence failures and responsive UI states"
 ```
 
 ---
+
 
 ### Task 8: Integrate documentation, CI, full verification, and cleanup
 
