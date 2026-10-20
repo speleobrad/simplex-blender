@@ -2246,38 +2246,25 @@ function normalizeInWaterTarget(input) {
   });
 }
 
-function trajectoryWithThermalEndpoints(trajectory, simulation, referencePressureBar) {
+function trajectoryWithThermalEndpoints(trajectory, simulation) {
   if (!Array.isArray(trajectory) || !simulation?.final) return trajectory;
   const transferStates = (simulation.protocolSteps ?? [])
-    .filter(step => step.thermal?.rateSource && step.thermal.rateSource !== 'none')
+    .filter(step => step.type !== 'drain'
+      && step.thermal?.rateSource
+      && step.thermal.rateSource !== 'none')
     .map(step => step.thermal);
-  const final = simulation.final;
-  const lastTransferIndex = trajectory.reduce(
-    (last, point, index) => point.bankId ? index : last,
-    -1
-  );
-  return trajectory.map((point, index) => {
+  let transferCursor = 0;
+  return trajectory.map(point => {
     if (!point.bankId) return point;
-    const state = index === lastTransferIndex
-      ? transferStates.at(-1)
-      : transferStates[index];
+    const state = transferStates[transferCursor++];
+    if (!state) return point;
     return {
       ...point,
-      pressureAtTransferEndReferenceBar: index === lastTransferIndex
-        ? referencePressureBar
-        : state?.pressureAtTransferEndReferenceBar,
-      pressureAtTransferEndAmbientBar: index === lastTransferIndex
-        ? final.finalAmbientPressureBar
-        : state?.pressureAtTransferEndAmbientBar,
-      pressureAtTransferEndHotBar: index === lastTransferIndex
-        ? final.finalTransferEndPressureBar
-        : state?.pressureAtTransferEndHotBar,
-      ambientPressureBar: index === lastTransferIndex
-        ? final.finalAmbientPressureBar
-        : state?.pressureAtTransferEndAmbientBar,
-      hotPressureBar: index === lastTransferIndex
-        ? final.finalTransferEndPressureBar
-        : state?.pressureAtTransferEndHotBar
+      pressureAtTransferEndReferenceBar: state.pressureAtTransferEndReferenceBar,
+      pressureAtTransferEndAmbientBar: state.pressureAtTransferEndAmbientBar,
+      pressureAtTransferEndHotBar: state.pressureAtTransferEndHotBar,
+      ambientPressureBar: state.pressureAtTransferEndAmbientBar,
+      hotPressureBar: state.pressureAtTransferEndHotBar
     };
   });
 }
@@ -2352,8 +2339,7 @@ function thermalResult(candidate, requestedInWaterPressureBar = candidate.candid
     protocolSteps: candidate.simulation.protocolSteps,
     trajectory: trajectoryWithThermalEndpoints(
       candidate.result.trajectory,
-      candidate.simulation,
-      candidate.result.blend?.finalPressureBar
+      candidate.simulation
     ),
     thermal
   };
@@ -2408,8 +2394,7 @@ function thermalizedMaximumResult(candidate, requestedInWaterPressureBar, reques
   const thermal = thermalState(maximumCandidate, requestedInWaterPressureBar, requestedInWaterTemperatureC, ambientSettledTargetPressureBar);
   const trajectory = trajectoryWithThermalEndpoints(
     maximum.trajectory,
-    simulation,
-    maximum.blend?.finalPressureBar
+    simulation
   );
   return {
     ...candidate.result,
@@ -2436,8 +2421,7 @@ function thermalLimitResult(input, requested, maximum) {
   const thermal = thermalState(maximumCandidate, requestedInWaterPressureBar, requestedInWaterTemperatureC, ambientSettledTargetPressureBar);
   const trajectory = trajectoryWithThermalEndpoints(
     maximum.result.trajectory,
-    maximum.simulation,
-    maximum.result.blend?.finalPressureBar
+    maximum.simulation
   );
   const maximumPressure = {
     pressureBar: maximum.result.blend.finalPressureBar,

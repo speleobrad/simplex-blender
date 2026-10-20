@@ -1585,6 +1585,82 @@ test('optimizeBlend exposes the hot transfer endpoint separately from the physic
   assert.equal(trajectoryPoint.ambientPressureBar, result.thermal.finalAmbientPressureBar);
   assert.equal(trajectoryPoint.hotPressureBar, result.thermal.finalTransferEndPressureBar);
 });
+
+test('thermal trajectory maps each bank point to its corresponding transfer state', () => {
+  const result = optimizeBlend({
+    cylinder: {
+      volumeL: 12,
+      initialPressureBar: 0,
+      initialOxygenPercent: 0,
+      initialHeliumPercent: 0,
+      targetPressureBar: 150,
+      targetOxygenPercent: 21,
+      targetHeliumPercent: 79,
+      workingPressureBar: 250
+    },
+    physics: { model: 'ideal', temperatureC: 20 },
+    thermal: {
+      tankMaterial: 'steel',
+      coolingMedium: 'air',
+      ambientTemperatureC: 20,
+      inletTemperatureC: 40,
+      targetMediumTemperatureC: 20,
+      targetInWaterTemperatureC: 20,
+      waitMode: 'minutes',
+      waitMinutes: 0
+    },
+    settings: {
+      booster: {
+        minimumSourcePressureBar: 0,
+        cylinderVolumeCm3: 9,
+        oxygenBoostBpm: 50,
+        otherBoostBpm: 50,
+        oxygenDecantRateBarPerMin: 5,
+        otherDecantRateBarPerMin: 5
+      }
+    },
+    banks: [
+      {
+        id: 'o2',
+        name: 'Oxygen',
+        volumeL: 12,
+        pressureBar: 300,
+        minimumPressureBar: 0,
+        oxygenPercent: 100,
+        heliumPercent: 0,
+        enabled: true
+      },
+      {
+        id: 'he',
+        name: 'Helium',
+        volumeL: 12,
+        pressureBar: 300,
+        minimumPressureBar: 0,
+        oxygenPercent: 0,
+        heliumPercent: 100,
+        enabled: true
+      }
+    ]
+  });
+
+  assert.equal(result.feasible, true);
+  const transferSteps = result.protocolSteps.filter(step => (
+    step.type !== 'drain'
+      && step.thermal?.rateSource
+      && step.thermal.rateSource !== 'none'
+  ));
+  const transferPoints = result.trajectory.filter(point => point.bankId);
+  assert.equal(transferSteps.length, 2);
+  assert.equal(transferPoints.length, 2);
+  transferPoints.forEach((point, index) => {
+    const thermal = transferSteps[index].thermal;
+    assert.equal(point.pressureAtTransferEndReferenceBar, thermal.pressureAtTransferEndReferenceBar);
+    assert.equal(point.pressureAtTransferEndAmbientBar, thermal.pressureAtTransferEndAmbientBar);
+    assert.equal(point.pressureAtTransferEndHotBar, thermal.pressureAtTransferEndHotBar);
+    assert.equal(point.ambientPressureBar, thermal.pressureAtTransferEndAmbientBar);
+    assert.equal(point.hotPressureBar, thermal.pressureAtTransferEndHotBar);
+  });
+});
 test('optimizeBlend returns a feasible automatic wait extension with complete safety metadata', () => {
   const result = optimizeBlend({
     cylinder: {
