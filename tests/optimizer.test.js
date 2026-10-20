@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { optimizeBlend } from '../js/optimizer.js';
+import { optimizeBlend, scheduleSafeThermalProtocol } from '../js/optimizer.js';
 import { DEFAULT_BANKS } from '../js/bank-storage.js';
 import { DEFAULT_SETTINGS } from '../js/settings.js';
 
@@ -1886,5 +1886,56 @@ test('thermal no-maximum result leaves final state fields null', () => {
   assert.equal(result.thermal.finalInWaterTemperatureC, null);
   assert.equal(result.thermal.requestedInWaterPressureBar, 200);
   assert.equal(result.thermal.requestedInWaterTemperatureC, 10);
+});
+
+const schedulerFixture = {
+  cylinder: { volumeL: 12, initialPressureBar: 0, workingPressureBar: 80 },
+  physics: { model: 'ideal', temperatureC: 20 },
+  thermal: {
+    tankMaterial: 'steel', coolingMedium: 'air', ambientTemperatureC: 20,
+    inletTemperatureC: 500, waitMode: 'minutes', waitMinutes: 0
+  },
+  settings: {}
+};
+
+test('scheduler rejects an unsafe transfer after the 1440-minute ceiling', () => {
+  const scheduled = scheduleSafeThermalProtocol({
+    ...schedulerFixture,
+    protocolSteps: [{
+      type: 'boost',
+      receiverStartPressureBar: 0,
+      receiverEndPressureBar: 95,
+      resultingPressureBar: 95,
+      resultingMix: { oxygenPercent: 21, heliumPercent: 0 },
+      sourceOxygenPercent: 21,
+      sourceHeliumPercent: 0,
+      sourceStartPressureBar: 200,
+      sourceEndPressureBar: 100
+    }]
+  });
+  assert.equal(scheduled.unsafe, true);
+  assert.ok(scheduled.automaticWaits.every(wait => (
+    wait.configuredWaitMinutes + wait.addedWaitMinutes <= 1440
+  )));
+});
+
+test('scheduler reports split stages and warning metadata at a hot boundary', () => {
+  const scheduled = scheduleSafeThermalProtocol({
+    ...schedulerFixture,
+    cylinder: { ...schedulerFixture.cylinder, workingPressureBar: 100 },
+    protocolSteps: [{
+      type: 'boost',
+      receiverStartPressureBar: 0,
+      receiverEndPressureBar: 95,
+      resultingPressureBar: 95,
+      resultingMix: { oxygenPercent: 21, heliumPercent: 0 },
+      sourceOxygenPercent: 21,
+      sourceHeliumPercent: 0,
+      sourceStartPressureBar: 200,
+      sourceEndPressureBar: 100
+    }]
+  });
+  assert.ok(scheduled.automaticWaits.some(wait => wait.warning === '!'));
+  assert.ok(scheduled.protocolSteps.some(step => step.type === 'wait'));
 });
 
