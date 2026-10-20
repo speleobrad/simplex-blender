@@ -81,13 +81,15 @@ export async function assertNoUnexpectedOverflow(page, options = {}) {
 
 export async function assertInsideViewport(page, locator, options = {}) {
   const tolerance = options.tolerance ?? DEFAULT_TOLERANCE;
+  const scroll = await page.evaluate(() => ({ scrollX: window.scrollX, scrollY: window.scrollY }));
   const viewportSize = page.viewportSize();
   const viewport = {
     x: 0,
     y: 0,
     width: viewportSize?.width ?? await page.evaluate(() => window.innerWidth),
     height: viewportSize?.height ?? await page.evaluate(() => window.innerHeight),
-    ...(await page.evaluate(() => ({ scrollX: window.scrollX, scrollY: window.scrollY })))
+    scrollX: scroll.scrollX,
+    scrollY: scroll.scrollY
   };
 
   const entries = await visibleBoxes(locator, options);

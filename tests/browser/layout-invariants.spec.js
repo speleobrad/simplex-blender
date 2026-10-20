@@ -56,6 +56,19 @@ test.describe('layout invariants', () => {
     await skip.click();
   });
 
+  test('focus diagnostics reject a visible control without a rendered indicator', async ({ appPage }) => {
+    const page = await loadApplication(appPage);
+    await page.evaluate(() => {
+      const fixture = document.createElement('button');
+      fixture.id = 'synthetic-focus-without-ring';
+      fixture.textContent = 'No focus ring';
+      fixture.style.cssText = 'position:fixed;left:12px;top:12px;width:120px;height:36px;outline:none;box-shadow:none;';
+      document.body.append(fixture);
+    });
+    const assertion = assertVisibleFocus(page, page.locator('#synthetic-focus-without-ring'));
+    await expect(assertion).rejects.toThrow(/focusRingVisible/);
+  });
+
   test('only the active result panel exposes interactive controls', async ({ appPage }) => {
     const page = await loadApplication(appPage);
     await assertOnlyActivePanelsInteractive(page, panels);
@@ -65,6 +78,22 @@ test.describe('layout invariants', () => {
     const page = await loadApplication(appPage);
     assertRuntimeClean(appPage.runtime);
     await expect(page.locator('#tab-pane-recipe')).toBeVisible();
+  });
+
+  test('viewport-relative boxes stay correct after scrolling', async ({ appPage }) => {
+    const page = await loadApplication(appPage);
+    const visible = page.locator('#equipment-section');
+    await visible.scrollIntoViewIfNeeded();
+    await assertInsideViewport(page, visible);
+    await page.evaluate(() => {
+      const fixture = document.createElement('div');
+      fixture.id = 'synthetic-scrolled-offscreen';
+      fixture.style.cssText = 'position:absolute;left:0;top:0;width:40px;height:20px;';
+      document.body.append(fixture);
+      window.scrollTo(0, document.body.scrollHeight);
+    });
+    const assertion = assertInsideViewport(page, page.locator('#synthetic-scrolled-offscreen'));
+    await expect(assertion).rejects.toThrow(/synthetic-scrolled-offscreen/);
   });
 
   test('off-viewport diagnostics include selector, rectangle, and viewport', async ({ appPage }) => {
