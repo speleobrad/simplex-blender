@@ -62,11 +62,8 @@ export function validateCalculatorInputs(cylinder, physics, thermal) {
   if (!Number.isFinite(targetMedium)
     || targetMedium < 5 || targetMedium > 40) {
     errors.push('Thermal target-medium temperature must be between 5 and 40°C.');
-  } else if (!legacy && Number.isFinite(ambient) && targetMedium < ambient) {
+  } else if (Number.isFinite(ambient) && targetMedium < ambient) {
     errors.push('Thermal target-medium temperature cannot be below ambient temperature.');
-  } else if (legacy && thermal.waitMode === 'temperature'
-    && Number.isFinite(ambient) && targetMedium <= ambient) {
-    errors.push('Thermal wait target temperature must be above ambient temperature.');
   }
   if (!Number.isFinite(targetInWater)
     || targetInWater < 1 || targetInWater > 30) {

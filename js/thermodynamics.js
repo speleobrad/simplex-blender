@@ -675,7 +675,8 @@ export function simulateThermalProtocol({
           ? calculateCoolingTime({
             transferEndTemperatureC: temperatureAtTransferEndC,
             ambientTemperatureC: thermal.ambientTemperatureC,
-            targetTemperatureC: thermal.targetTemperatureC,
+            targetTemperatureC: thermal.targetMediumTemperatureC
+              ?? thermal.targetTemperatureC,
             tauMinutes
           })
           : thermal.waitMinutes;
