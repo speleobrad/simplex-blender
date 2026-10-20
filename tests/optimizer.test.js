@@ -1580,6 +1580,10 @@ test('optimizeBlend exposes the hot transfer endpoint separately from the physic
   assert.ok(Math.abs(thermal.pressureAtTransferEndBar - thermal.pressureAtTransferEndHotBar) < 1e-9);
   assert.ok(Math.abs(result.thermal.finalTransferEndPressureBar - thermal.pressureAtTransferEndHotBar) < 1e-9);
   assert.equal(result.thermal.finalTransferEndTemperatureC, thermal.temperatureAtTransferEndC);
+  const trajectoryPoint = result.trajectory.find(point => point.bankId);
+  assert.ok(trajectoryPoint);
+  assert.equal(trajectoryPoint.ambientPressureBar, result.thermal.finalAmbientPressureBar);
+  assert.equal(trajectoryPoint.hotPressureBar, result.thermal.finalTransferEndPressureBar);
 });
 test('optimizeBlend returns a feasible automatic wait extension with complete safety metadata', () => {
   const result = optimizeBlend({
@@ -1744,7 +1748,7 @@ test('thermal final settling defaults to ambient before in-water projection', ()
   assert.equal(result.thermal.finalInWaterTemperatureC, 10);
   assert.ok(Math.abs(result.thermal.finalInWaterPressureBar - 200) < 1e-5);
 });
-test('settles the recipe at the requested target temperature', () => {
+test('final settling remains ambient despite legacy target-temperature aliases', () => {
   const result = optimizeBlend({
     cylinder: {
       volumeL: 12,
@@ -1781,7 +1785,7 @@ test('settles the recipe at the requested target temperature', () => {
 
   assert.equal(result.feasible, true);
   assert.equal(result.thermal.requestedSettledTargetPressureBar, 210);
-  assert.equal(result.thermal.finalAmbientTemperatureC, 30);
+  assert.equal(result.thermal.finalAmbientTemperatureC, 20);
   assert.ok(Math.abs(result.thermal.finalAmbientPressureBar - 210) < 1e-5);
 });
 test('projects a below-ambient water target after ambient settling', () => {
@@ -1969,7 +1973,7 @@ test('thermal target search lowers the hot recipe when ambient warming raises pr
   assert.ok(Math.abs(result.thermal.finalAmbientPressureBar - 80) < 1e-5);
 });
 
-test('reports an infeasible result when the requested settled target exceeds the hot ceiling', () => {
+test('reports an infeasible result when no safe settled candidate reaches the hot ceiling', () => {
   const result = optimizeBlend({
     cylinder: {
       volumeL: 12,
@@ -2008,8 +2012,8 @@ test('reports an infeasible result when the requested settled target exceeds the
   assert.equal(result.feasible, false);
   assert.equal(result.gas.targetPressureBar, 340);
   assert.ok(result.maximumPressure);
-  assert.equal(result.maximumPressure.pressureBar, 350);
-  assert.ok(result.thermal.finalAmbientPressureBar < 340);
+  assert.ok(result.maximumPressure.pressureBar < 350);
+  assert.ok(result.maximumPressure.thermal.finalAmbientPressureBar < 340);
   assert.match(result.error, /cannot be reached.*maximum predicted ambient pressure/i);
 });
 
@@ -2433,7 +2437,7 @@ test('finite-source split inventories convert reference pressure to common ambie
   assert.ok(Math.abs(stages.at(-1).receiverEndMoles - expectedReceiverEndMoles) < 1e-9);
 });
 
-test('omits an unsafe thermal maximum fallback instead of returning it as feasible', () => {
+test('optimizer returns a safe split protocol near the thermal working-pressure ceiling', () => {
   const result = optimizeBlend({
     cylinder: {
       volumeL: 12,
@@ -2459,9 +2463,26 @@ test('omits an unsafe thermal maximum fallback instead of returning it as feasib
     settings: { booster: { compressorInletFlowLPerMin: 100 } },
     banks: []
   });
-  assert.equal(result.feasible, false);
+  assert.equal(result.feasible, true);
   assert.equal(result.maximumPressure, null);
-  assert.match(result.error, /cannot remain below cylinder working pressure/i);
+  assert.ok(Math.abs(result.thermal.finalAmbientPressureBar - 99.5) < 1e-7);
+  assert.ok(result.thermal.finalTransferEndPressureBar <= 100 + 1e-7);
+  const transferSteps = result.protocolSteps.filter(step => (
+    step.type === 'boost' || step.type === 'decant'
+  ));
+  assert.ok(transferSteps.length >= 2);
+  for (const step of transferSteps) {
+    const pressures = [
+      step.thermal.pressureAtTransferEndReferenceBar,
+      step.thermal.pressureAtTransferEndAmbientBar,
+      step.thermal.pressureAtTransferEndHotBar,
+      step.thermal.pressureAfterWaitBar,
+      ...(step.thermal.samples ?? []).map(sample => (
+        sample.ambientPressureBar ?? sample.projectedPressureBar ?? sample.pressureBar
+      ))
+    ];
+    assert.ok(pressures.every(pressure => pressure <= 100 + 1e-7));
+  }
 });
 
 

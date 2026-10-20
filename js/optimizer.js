@@ -8,10 +8,9 @@ import {
   calculateCoolingTime,
   coolingTimeConstantMinutes
 } from './thermodynamics.js';
-
+const THERMAL_SAFETY_TOLERANCE_BAR = 1e-9;
 const MAX_AUTOMATIC_WAIT_MINUTES = 1440;
 
-const THERMAL_SAFETY_TOLERANCE_BAR = 1e-7;
 
 function pressureAtSample(sample, state, step, {
   thermal,
@@ -66,36 +65,62 @@ function hotTransferEndpointPressure(state, step, {
   });
 }
 
-function unsafeThermalStep(state, step, limit, context) {
-  const pressures = [
+function thermalPressureLimit(state, workingPressureBar, settings) {
+  const limits = [];
+  if (Number.isFinite(Number(workingPressureBar))) {
+    limits.push(Number(workingPressureBar));
+  }
+  const rateSource = state?.rateSource;
+  const booster = settings?.booster ?? {};
+  if (rateSource === 'compressor') {
+    limits.push(Number.isFinite(booster.maxCompressorPressureBar)
+      ? booster.maxCompressorPressureBar
+      : 232);
+  } else if (rateSource === 'booster') {
+    limits.push(Number.isFinite(booster.maxBoosterOutputPressureBar)
+      ? booster.maxBoosterOutputPressureBar
+      : 200);
+  }
+  return limits.length > 0 ? Math.min(...limits) : Infinity;
+}
+
+function pressureValuesForSafety(state, step, context) {
+  return [
     state.pressureStartBar,
-    state.measuredStartPressureBar,
+    ...(state.measurementApplied === false ? [] : [state.measuredStartPressureBar]),
     state.pressureAtTransferEndReferenceBar,
+    state.pressureAtTransferEndAmbientBar,
     state.pressureAtTransferEndBar,
     state.pressureAfterWaitBar,
     hotTransferEndpointPressure(state, step, context),
-    ...(state.samples ?? []).map(sample => pressureAtSample(sample, state, step, context))
-  ];
-  return pressures.some(pressure => !Number.isFinite(pressure)
-    || pressure > limit + THERMAL_SAFETY_TOLERANCE_BAR);
+    ...(state.samples ?? []).flatMap(sample => [
+      sample.ambientPressureBar,
+      pressureAtSample(sample, state, step, context)
+    ])
+  ].filter(pressure => pressure !== undefined);
+}
+
+function exceedsThermalLimit(pressure, limit) {
+  return !Number.isFinite(pressure)
+    || pressure > limit + THERMAL_SAFETY_TOLERANCE_BAR;
+}
+
+function unsafeThermalStep(state, step, limit, context) {
+  return pressureValuesForSafety(state, step, context)
+    .some(pressure => exceedsThermalLimit(pressure, limit));
 }
 
 function firstUnsafeThermalIndex(simulation, workingPressureBar, context) {
-  const limit = Number.isFinite(Number(workingPressureBar))
+  const initialLimit = Number.isFinite(Number(workingPressureBar))
     ? Number(workingPressureBar)
     : Infinity;
   const initialPressureBar = context.cylinder?.initialPressureBar;
-  if (Number.isFinite(initialPressureBar)
-    && initialPressureBar > limit + THERMAL_SAFETY_TOLERANCE_BAR) {
+  if (exceedsThermalLimit(initialPressureBar, initialLimit)) {
     return -2;
   }
   for (const [index, step] of (simulation?.protocolSteps ?? []).entries()) {
     const state = step.thermal;
-    if (!state) continue;
-    if (Number.isFinite(state.measuredStartPressureBar)
-      && state.measuredStartPressureBar > limit + THERMAL_SAFETY_TOLERANCE_BAR) {
-      return index;
-    }
+    const limit = thermalPressureLimit(state, workingPressureBar, context.settings);
     if (unsafeThermalStep(state, step, limit, context)) return index;
   }
   return -1;
@@ -104,7 +129,8 @@ function firstUnsafeThermalIndex(simulation, workingPressureBar, context) {
 export function isSafeSimulation(simulation, workingPressureBar, {
   thermal,
   physics,
-  cylinder
+  cylinder,
+  settings
 } = {}) {
   if (!thermal || !physics || !cylinder) {
     const limit = Number.isFinite(Number(workingPressureBar))
@@ -117,9 +143,14 @@ export function isSafeSimulation(simulation, workingPressureBar, {
         const pressures = [
           state.pressureStartBar,
           state.pressureAtTransferEndReferenceBar,
+          state.pressureAtTransferEndAmbientBar,
           state.pressureAtTransferEndBar,
+          state.pressureAtTransferEndHotBar,
           state.pressureAfterWaitBar,
-          ...(state.samples ?? []).map(sample => sample.projectedPressureBar ?? sample.pressureBar)
+          ...(state.samples ?? []).flatMap(sample => [
+            sample.ambientPressureBar,
+            sample.projectedPressureBar ?? sample.pressureBar
+          ])
         ];
         return pressures.every(pressure => Number.isFinite(pressure) && pressure <= limit);
       });
@@ -127,7 +158,8 @@ export function isSafeSimulation(simulation, workingPressureBar, {
   return firstUnsafeThermalIndex(simulation, workingPressureBar, {
     thermal,
     physics,
-    cylinder
+    cylinder,
+    settings
   }) === -1;
 }
 
@@ -507,6 +539,7 @@ export function scheduleSafeThermalProtocol({
         automaticWaitMetadata: _staleMetadata,
         _scheduledMeasuredStartPressureBar: _scheduledPressure,
         _scheduledMeasuredStartTemperatureC: _scheduledTemperature,
+        _applyInterimMeasurement: _applyMeasurement,
         ...cleanStep
       } = step;
       return metadata ? { ...cleanStep, automaticWaitMetadata: metadata } : cleanStep;
@@ -519,7 +552,6 @@ export function scheduleSafeThermalProtocol({
       unsafe
     };
   };
-
   for (let pass = 0; pass < Math.max(16, steps.length * 8 + 8); pass++) {
     const simulation = simulated(steps, options);
     const unsafeIndex = firstUnsafeThermalIndex(
@@ -563,7 +595,7 @@ export function scheduleSafeThermalProtocol({
         || affectedStep._measurementIndex !== 0) return;
       steps[targetIndex] = {
         ...affectedStep,
-        _measurementIndex: null,
+        _applyInterimMeasurement: false,
         _scheduledMeasuredStartPressureBar: null,
         _scheduledMeasuredStartTemperatureC: null
       };
@@ -571,6 +603,12 @@ export function scheduleSafeThermalProtocol({
     let waitIndex = targetIndex - 1;
     detachInitialMeasurement();
     if (waitIndex < 0 || steps[waitIndex]?.type === 'keep') {
+      if (steps[targetIndex] && steps[targetIndex].type !== 'keep') {
+        steps[targetIndex] = {
+          ...steps[targetIndex],
+          _applyInterimMeasurement: false
+        };
+      }
       const state = simulation.protocolSteps[targetIndex]?.thermal;
       const pressureBar = state?.pressureStartBar
         ?? cylinder.initialPressureBar
@@ -597,6 +635,12 @@ export function scheduleSafeThermalProtocol({
     }
 
     const existingAdded = Number(steps[waitIndex].automaticWaitMinutes) || 0;
+    if (steps[waitIndex]._safetyWaitOnly || existingAdded > 0) {
+      steps[targetIndex] = {
+        ...steps[targetIndex],
+        _applyInterimMeasurement: false
+      };
+    }
     const baselineTotal = totalWaitMinutes(simulation);
     const baselineWithoutExisting = baselineTotal - existingAdded;
     const availableAdded = Math.max(0, maxWait - baselineWithoutExisting);
@@ -2202,6 +2246,42 @@ function normalizeInWaterTarget(input) {
   });
 }
 
+function trajectoryWithThermalEndpoints(trajectory, simulation, referencePressureBar) {
+  if (!Array.isArray(trajectory) || !simulation?.final) return trajectory;
+  const transferStates = (simulation.protocolSteps ?? [])
+    .filter(step => step.thermal?.rateSource && step.thermal.rateSource !== 'none')
+    .map(step => step.thermal);
+  const final = simulation.final;
+  const lastTransferIndex = trajectory.reduce(
+    (last, point, index) => point.bankId ? index : last,
+    -1
+  );
+  return trajectory.map((point, index) => {
+    if (!point.bankId) return point;
+    const state = index === lastTransferIndex
+      ? transferStates.at(-1)
+      : transferStates[index];
+    return {
+      ...point,
+      pressureAtTransferEndReferenceBar: index === lastTransferIndex
+        ? referencePressureBar
+        : state?.pressureAtTransferEndReferenceBar,
+      pressureAtTransferEndAmbientBar: index === lastTransferIndex
+        ? final.finalAmbientPressureBar
+        : state?.pressureAtTransferEndAmbientBar,
+      pressureAtTransferEndHotBar: index === lastTransferIndex
+        ? final.finalTransferEndPressureBar
+        : state?.pressureAtTransferEndHotBar,
+      ambientPressureBar: index === lastTransferIndex
+        ? final.finalAmbientPressureBar
+        : state?.pressureAtTransferEndAmbientBar,
+      hotPressureBar: index === lastTransferIndex
+        ? final.finalTransferEndPressureBar
+        : state?.pressureAtTransferEndHotBar
+    };
+  });
+}
+
 function thermalState(candidate, requestedInWaterPressureBar, requestedInWaterTemperatureC, ambientSettledTargetPressureBar) {
   const final = candidate.simulation.final;
   const finalInWaterPressureBar = calculatePressureAtTemperature({
@@ -2265,11 +2345,17 @@ function evaluateThermalCandidate(input, optimizeStatic, targetPressureBar) {
 }
 
 function thermalResult(candidate, requestedInWaterPressureBar = candidate.candidateInput._requestedInWaterPressureBar ?? candidate.candidateInput.cylinder.targetPressureBar, requestedInWaterTemperatureC = candidate.candidateInput.thermal.targetInWaterTemperatureC ?? candidate.candidateInput.thermal.ambientTemperatureC, ambientSettledTargetPressureBar = candidate.candidateInput._ambientSettledTargetPressureBar ?? candidate.candidateInput.cylinder.targetPressureBar) {
+  const thermal = thermalState(candidate, requestedInWaterPressureBar, requestedInWaterTemperatureC, ambientSettledTargetPressureBar);
   return {
     ...candidate.result,
     gas: candidate.result.gas && { ...candidate.result.gas, targetPressureBar: requestedInWaterPressureBar },
     protocolSteps: candidate.simulation.protocolSteps,
-    thermal: thermalState(candidate, requestedInWaterPressureBar, requestedInWaterTemperatureC, ambientSettledTargetPressureBar)
+    trajectory: trajectoryWithThermalEndpoints(
+      candidate.result.trajectory,
+      candidate.simulation,
+      candidate.result.blend?.finalPressureBar
+    ),
+    thermal
   };
 }
 
@@ -2319,15 +2405,23 @@ function thermalizedMaximumResult(candidate, requestedInWaterPressureBar, reques
   }
   const simulation = scheduled.simulation;
   const maximumCandidate = { ...candidate, simulation };
+  const thermal = thermalState(maximumCandidate, requestedInWaterPressureBar, requestedInWaterTemperatureC, ambientSettledTargetPressureBar);
+  const trajectory = trajectoryWithThermalEndpoints(
+    maximum.trajectory,
+    simulation,
+    maximum.blend?.finalPressureBar
+  );
   return {
     ...candidate.result,
     gas: candidate.result.gas && { ...candidate.result.gas, targetPressureBar: requestedInWaterPressureBar },
+    trajectory,
     maximumPressure: {
       ...maximum,
       protocolSteps: simulation.protocolSteps,
-      thermal: thermalState(maximumCandidate, requestedInWaterPressureBar, requestedInWaterTemperatureC, ambientSettledTargetPressureBar)
+      trajectory,
+      thermal
     },
-    thermal: thermalState(maximumCandidate, requestedInWaterPressureBar, requestedInWaterTemperatureC, ambientSettledTargetPressureBar)
+    thermal
   };
 }
 
@@ -2340,13 +2434,18 @@ function thermalLimitResult(input, requested, maximum) {
     simulation: maximum.simulation
   };
   const thermal = thermalState(maximumCandidate, requestedInWaterPressureBar, requestedInWaterTemperatureC, ambientSettledTargetPressureBar);
+  const trajectory = trajectoryWithThermalEndpoints(
+    maximum.result.trajectory,
+    maximum.simulation,
+    maximum.result.blend?.finalPressureBar
+  );
   const maximumPressure = {
     pressureBar: maximum.result.blend.finalPressureBar,
     solution: maximum.result.solution,
     tableauSteps: maximum.result.tableauSteps,
     blend: maximum.result.blend,
     protocolSteps: maximum.simulation.protocolSteps,
-    trajectory: maximum.result.trajectory,
+    trajectory,
     thermal
   };
   return {
@@ -2418,7 +2517,7 @@ function optimizeThermalBlend(input, optimizeStatic) {
 
     let lowerPressureBar = MINIMUM_TARGET_PRESSURE_BAR;
     let upperPressureBar = requestedPressureBar;
-    let ambientTargetCandidate = requested;
+    let highestBelowTarget = floor;
     for (let iteration = 0; iteration < 40; iteration++) {
       const candidatePressureBar = (lowerPressureBar + upperPressureBar) / 2;
       const candidate = evaluateThermalCandidate(searchInput, optimizeStatic, candidatePressureBar);
@@ -2434,12 +2533,12 @@ function optimizeThermalBlend(input, optimizeStatic) {
       }
       if (pressureDifference < 0) {
         lowerPressureBar = candidatePressureBar;
+        highestBelowTarget = candidate;
       } else {
         upperPressureBar = candidatePressureBar;
-        ambientTargetCandidate = candidate;
       }
     }
-    return thermalResult(ambientTargetCandidate);
+    return thermalLimitResult(input, requested, highestBelowTarget);
   }
 
   const ceiling = evaluateThermalCandidate(searchInput, optimizeStatic, MAXIMUM_TARGET_PRESSURE_BAR);
@@ -2455,7 +2554,6 @@ function optimizeThermalBlend(input, optimizeStatic) {
   let lowerPressureBar = requestedPressureBar;
   let upperPressureBar = MAXIMUM_TARGET_PRESSURE_BAR;
   let highestFeasible = requested;
-  let ambientTargetCandidate = null;
   for (let iteration = 0; iteration < 40; iteration++) {
     const candidatePressureBar = (lowerPressureBar + upperPressureBar) / 2;
     const candidate = evaluateThermalCandidate(searchInput, optimizeStatic, candidatePressureBar);
@@ -2464,7 +2562,6 @@ function optimizeThermalBlend(input, optimizeStatic) {
       continue;
     }
 
-    highestFeasible = candidate;
     const pressureDifference = candidate.simulation.final.finalAmbientPressureBar
       - requestedPressureBar;
     if (Math.abs(pressureDifference) <= THERMAL_TARGET_TOLERANCE_BAR) {
@@ -2472,13 +2569,12 @@ function optimizeThermalBlend(input, optimizeStatic) {
     }
     if (pressureDifference < 0) {
       lowerPressureBar = candidatePressureBar;
+      highestFeasible = candidate;
     } else {
       upperPressureBar = candidatePressureBar;
-      ambientTargetCandidate = candidate;
     }
   }
 
-  if (ambientTargetCandidate) return thermalResult(ambientTargetCandidate);
   if (!ceiling.result.feasible) {
     const maximum = thermalizedMaximumResult(ceiling, requestedInWaterPressureBar, requestedInWaterTemperatureC, ambientSettledTargetPressureBar);
     if (maximum.maximumPressure) {
