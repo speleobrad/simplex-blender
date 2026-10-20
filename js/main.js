@@ -134,6 +134,7 @@ function convertDisplayedInputs(fromUnits, toUnits) {
     ['init-p', 'pressureBar'],
     ['target-p', 'pressureBar'],
     ['ambient-temperature', 'temperatureC'],
+    ['target-temperature', 'temperatureC'],
     ['inlet-gas-temperature', 'temperatureC'],
     ['wait-target-temperature', 'temperatureC']
   ]) {
@@ -699,7 +700,8 @@ function readInput() {
       inletTemperatureC: canonicalNumberValue('inlet-gas-temperature', 'temperatureC'),
       waitMode: byId('wait-mode').value,
       waitMinutes: numberValue('wait-minutes'),
-      interimMeasurements: state.interimMeasurements
+      interimMeasurements: state.interimMeasurements,
+      targetTemperatureC: canonicalNumberValue('wait-target-temperature', 'temperatureC'),
     },
     banks: state.banks
   };
