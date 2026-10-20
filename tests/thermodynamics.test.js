@@ -766,6 +766,50 @@ test('thermal simulation retains minute samples and exact fractional endpoints',
   assert.ok(thermal.samples[4].pressureBar < thermal.samples[3].pressureBar);
 });
 
+test('thermal transfer samples expose pressure projected at each sample temperature', () => {
+  const simulation = simulateThermalProtocol({
+    protocolSteps: [{
+      type: 'decant',
+      operation: 'Decant',
+      receiverStartPressureBar: 0,
+      receiverEndPressureBar: 95,
+      resultingPressureBar: 95,
+      resultingMix: { oxygenPercent: 21, heliumPercent: 0 },
+      sourceOxygenPercent: 21,
+      sourceHeliumPercent: 0
+    }],
+    cylinder: { initialPressureBar: 0, volumeL: 12 },
+    physics: { model: 'ideal', temperatureC: 20 },
+    thermal: {
+      tankMaterial: 'steel',
+      coolingMedium: 'air',
+      ambientTemperatureC: 20,
+      inletTemperatureC: 40,
+      waitMode: 'minutes',
+      waitMinutes: 0
+    },
+    settings: { booster: { otherDecantRateBarPerMin: 5 } }
+  });
+  const thermal = simulation.protocolSteps[0].thermal;
+  assert.ok(thermal.samples.every(sample => Number.isFinite(sample.projectedPressureBar)));
+  const hotSample = thermal.samples.find(sample => sample.temperatureC > 20);
+  assert.ok(hotSample);
+  assert.ok(hotSample.projectedPressureBar > hotSample.pressureBar);
+  assert.ok(
+    Math.abs(
+      hotSample.projectedPressureBar - calculatePressureAtTemperature({
+        pressureBar: hotSample.ambientPressureBar,
+        oxygenPercent: hotSample.oxygenPercent,
+        heliumPercent: hotSample.heliumPercent,
+        fromTemperatureC: 20,
+        toTemperatureC: hotSample.temperatureC,
+        volumeL: 12,
+        useVdw: false
+      })
+    ) < 1e-9
+  );
+});
+
 
 test('an empty protocol cools the initial tank state to ambient', () => {
   const simulation = simulateThermalProtocol({

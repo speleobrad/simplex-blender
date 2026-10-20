@@ -6,36 +6,392 @@ import { simulateThermalProtocol, calculatePressureAtTemperature } from './therm
 
 const MAX_AUTOMATIC_WAIT_MINUTES = 1440;
 
+const THERMAL_SAFETY_TOLERANCE_BAR = 1e-7;
+
+function pressureAtSample(sample, state, step, {
+  thermal,
+  physics,
+  cylinder
+}) {
+  if (Number.isFinite(sample.projectedPressureBar)) return sample.projectedPressureBar;
+  const oxygenPercent = sample.oxygenPercent
+    ?? step.resultingMix?.oxygenPercent
+    ?? state.receiverStartMix?.oxygenPercent
+    ?? 21;
+  const heliumPercent = sample.heliumPercent
+    ?? step.resultingMix?.heliumPercent
+    ?? state.receiverStartMix?.heliumPercent
+    ?? 0;
+  const fromTemperatureC = sample.pressureReferenceTemperatureC
+    ?? thermal.ambientTemperatureC;
+  return calculatePressureAtTemperature({
+    pressureBar: sample.ambientPressureBar ?? sample.pressureBar,
+    oxygenPercent,
+    heliumPercent,
+    fromTemperatureC,
+    toTemperatureC: sample.temperatureC,
+    volumeL: cylinder.volumeL,
+    useVdw: physics.model === 'vdw'
+  });
+}
+
+function hotTransferEndpointPressure(state, step, {
+  thermal,
+  physics,
+  cylinder
+}) {
+  return calculatePressureAtTemperature({
+    pressureBar: state.pressureAtTransferEndBar,
+    oxygenPercent: step.resultingMix?.oxygenPercent
+      ?? state.receiverStartMix?.oxygenPercent
+      ?? 21,
+    heliumPercent: step.resultingMix?.heliumPercent
+      ?? state.receiverStartMix?.heliumPercent
+      ?? 0,
+    fromTemperatureC: thermal.ambientTemperatureC,
+    toTemperatureC: state.temperatureAtTransferEndC,
+    volumeL: cylinder.volumeL,
+    useVdw: physics.model === 'vdw'
+  });
+}
+
+function unsafeThermalStep(state, step, limit, context) {
+  const pressures = [
+    state.pressureStartBar,
+    state.measuredStartPressureBar,
+    state.pressureAtTransferEndBar,
+    state.pressureAfterWaitBar,
+    hotTransferEndpointPressure(state, step, context),
+    ...(state.samples ?? []).map(sample => pressureAtSample(sample, state, step, context))
+  ];
+  return pressures.some(pressure => Number.isFinite(pressure)
+    && pressure > limit + THERMAL_SAFETY_TOLERANCE_BAR);
+}
+
+function firstUnsafeThermalIndex(simulation, workingPressureBar, context) {
+  const limit = Number.isFinite(Number(workingPressureBar))
+    ? Number(workingPressureBar)
+    : Infinity;
+  const initialPressureBar = context.cylinder?.initialPressureBar;
+  if (Number.isFinite(initialPressureBar)
+    && initialPressureBar > limit + THERMAL_SAFETY_TOLERANCE_BAR) {
+    return -2;
+  }
+  for (const [index, step] of (simulation?.protocolSteps ?? []).entries()) {
+    const state = step.thermal;
+    if (!state) continue;
+    if (Number.isFinite(state.measuredStartPressureBar)
+      && state.measuredStartPressureBar > limit + THERMAL_SAFETY_TOLERANCE_BAR) {
+      return index;
+    }
+    if (unsafeThermalStep(state, step, limit, context)) return index;
+  }
+  return -1;
+}
+
 export function isSafeSimulation(simulation, workingPressureBar, {
   thermal,
   physics,
   cylinder
 } = {}) {
-  const limit = workingPressureBar + 1e-7;
-  const pressures = [];
-  if (Number.isFinite(cylinder?.initialPressureBar)) pressures.push(cylinder.initialPressureBar);
-  for (const step of simulation?.protocolSteps ?? []) {
+  if (!thermal || !physics || !cylinder) {
+    const limit = Number.isFinite(Number(workingPressureBar))
+      ? Number(workingPressureBar) + THERMAL_SAFETY_TOLERANCE_BAR
+      : Infinity;
+    return Number(cylinder?.initialPressureBar ?? 0) <= limit
+      && (simulation?.protocolSteps ?? []).every(step => {
+        const state = step.thermal;
+        return !state || [
+          state.pressureStartBar,
+          state.pressureAtTransferEndBar,
+          state.pressureAfterWaitBar,
+          ...(state.samples ?? []).map(sample => sample.projectedPressureBar ?? sample.pressureBar)
+        ].filter(Number.isFinite).every(pressure => pressure <= limit);
+      });
+  }
+  return firstUnsafeThermalIndex(simulation, workingPressureBar, {
+    thermal,
+    physics,
+    cylinder
+  }) === -1;
+}
+
+function totalWaitMinutes(simulation) {
+  return (simulation?.protocolSteps ?? []).reduce(
+    (total, step) => total + (Number.isFinite(step.thermal?.waitMinutes)
+      ? step.thermal.waitMinutes
+      : 0),
+    0
+  );
+}
+
+function automaticWaitMetadata(simulation) {
+  return (simulation?.protocolSteps ?? []).flatMap((step, stepIndex) => {
     const state = step.thermal;
-    if (!state) continue;
-    pressures.push(
-      state.pressureStartBar,
-      state.pressureAtTransferEndBar,
-      state.pressureAfterWaitBar,
-      ...(state.samples ?? []).map(sample => sample.pressureBar)
+    if (!state || !(state.automaticWaitMinutes > THERMAL_SAFETY_TOLERANCE_BAR)) return [];
+    return [{
+      stepIndex,
+      stepIdentifier: step.id ?? step.title ?? stepIndex,
+      configuredWaitMinutes: state.configuredWaitMinutes,
+      actualWaitMinutes: state.waitMinutes,
+      addedWaitMinutes: state.automaticWaitMinutes,
+      warning: '!'
+    }];
+  });
+}
+
+function simulated(steps, options) {
+  return simulateThermalProtocol({
+    protocolSteps: steps,
+    cylinder: options.cylinder,
+    physics: options.physics,
+    thermal: options.thermal,
+    settings: options.settings
+  });
+}
+
+function mixForStep(step, state, fallback = { oxygenPercent: 21, heliumPercent: 0 }) {
+  return {
+    oxygenPercent: state?.receiverStartMix?.oxygenPercent
+      ?? step.receiverStartMix?.oxygenPercent
+      ?? fallback.oxygenPercent,
+    heliumPercent: state?.receiverStartMix?.heliumPercent
+      ?? step.receiverStartMix?.heliumPercent
+      ?? fallback.heliumPercent
+  };
+}
+
+function pressureFromMoles(moles, volumeL, oxygenPercent, heliumPercent, temperatureC, useVdw) {
+  return calcPressure(
+    moles / volumeL,
+    oxygenPercent,
+    heliumPercent,
+    temperatureC,
+    useVdw
+  );
+}
+
+function inventoryPressure(moles, volumeL, oxygenMoles, heliumMoles, temperatureC, useVdw) {
+  return pressureFromMoles(
+    moles,
+    volumeL,
+    moles > 0 ? oxygenMoles / moles * 100 : 0,
+    moles > 0 ? heliumMoles / moles * 100 : 0,
+    temperatureC,
+    useVdw
+  );
+}
+
+function splitTransferAtSafeHotEndpoint({
+  steps,
+  unsafeIndex,
+  simulation,
+  options
+}) {
+  const transferStep = steps[unsafeIndex];
+  if (!transferStep || transferStep.type === 'wait' || transferStep.type === 'keep'
+    || transferStep._thermalSplit) return null;
+  const state = simulation.protocolSteps[unsafeIndex]?.thermal;
+  if (!state) return null;
+  const useVdw = options.physics.model === 'vdw';
+  const ambientTemperatureC = options.thermal.ambientTemperatureC;
+  const receiverStartMix = mixForStep(transferStep, state);
+  const receiverEndMix = {
+    oxygenPercent: transferStep.resultingMix?.oxygenPercent ?? receiverStartMix.oxygenPercent,
+    heliumPercent: transferStep.resultingMix?.heliumPercent ?? receiverStartMix.heliumPercent
+  };
+  const receiverStartAmbientPressureBar = calculatePressureAtTemperature({
+    pressureBar: state.pressureStartBar,
+    oxygenPercent: receiverStartMix.oxygenPercent,
+    heliumPercent: receiverStartMix.heliumPercent,
+    fromTemperatureC: state.temperatureStartC,
+    toTemperatureC: ambientTemperatureC,
+    volumeL: options.cylinder.volumeL,
+    useVdw
+  });
+  const receiverStartMoles = calcMolarDensity(
+    receiverStartAmbientPressureBar,
+    receiverStartMix.oxygenPercent,
+    receiverStartMix.heliumPercent,
+    ambientTemperatureC,
+    useVdw
+  ) * options.cylinder.volumeL;
+  const receiverEndPressureBar = Number(
+    transferStep.receiverEndPressureBar ?? transferStep.resultingPressureBar
+  );
+  if (!Number.isFinite(receiverEndPressureBar)) return null;
+  const receiverEndMoles = calcMolarDensity(
+    receiverEndPressureBar,
+    receiverEndMix.oxygenPercent,
+    receiverEndMix.heliumPercent,
+    ambientTemperatureC,
+    useVdw
+  ) * options.cylinder.volumeL;
+  const totalReceiverMoles = receiverEndMoles - receiverStartMoles;
+  if (!(totalReceiverMoles > 1e-10)) return null;
+
+  const sourceOxygenPercent = transferStep.sourceOxygenPercent ?? receiverEndMix.oxygenPercent;
+  const sourceHeliumPercent = transferStep.sourceHeliumPercent ?? receiverEndMix.heliumPercent;
+  const sourceVolumeL = Number(transferStep.sourceVolumeL);
+  const sourceStartPressureBar = Number(transferStep.sourceStartPressureBar);
+  const derivedSourceStartMoles = Number.isFinite(sourceVolumeL) && sourceVolumeL > 0
+    && Number.isFinite(sourceStartPressureBar)
+    ? calcMolarDensity(
+      sourceStartPressureBar,
+      sourceOxygenPercent,
+      sourceHeliumPercent,
+      ambientTemperatureC,
+      useVdw
+    ) * sourceVolumeL
+    : null;
+  const sourceStartMoles = Number.isFinite(transferStep.sourceStartMoles)
+    ? transferStep.sourceStartMoles
+    : derivedSourceStartMoles;
+  const sourceEndMoles = Number.isFinite(sourceStartMoles)
+    ? sourceStartMoles - totalReceiverMoles
+    : null;
+  if (Number.isFinite(sourceEndMoles) && sourceEndMoles < -1e-8) return null;
+
+  const receiverMixAt = fraction => {
+    const transferredMoles = totalReceiverMoles * fraction;
+    const totalMoles = receiverStartMoles + transferredMoles;
+    const oxygenMoles = receiverStartMoles * receiverStartMix.oxygenPercent / 100
+      + transferredMoles * sourceOxygenPercent / 100;
+    const heliumMoles = receiverStartMoles * receiverStartMix.heliumPercent / 100
+      + transferredMoles * sourceHeliumPercent / 100;
+    return {
+      moles: totalMoles,
+      oxygenMoles,
+      heliumMoles,
+      oxygenPercent: oxygenMoles / totalMoles * 100,
+      heliumPercent: heliumMoles / totalMoles * 100
+    };
+  };
+  const sourcePressureAt = moles => Number.isFinite(sourceVolumeL) && Number.isFinite(moles)
+    ? inventoryPressure(
+      moles,
+      sourceVolumeL,
+      moles * sourceOxygenPercent / 100,
+      moles * sourceHeliumPercent / 100,
+      ambientTemperatureC,
+      useVdw
+    )
+    : null;
+
+  const stagesAt = fraction => {
+    const stage1 = receiverMixAt(fraction);
+    const firstConsumedMoles = totalReceiverMoles * fraction;
+    const firstSourceMoles = Number.isFinite(sourceStartMoles)
+      ? sourceStartMoles - firstConsumedMoles
+      : null;
+    const firstReceiverPressureBar = inventoryPressure(
+      stage1.moles,
+      options.cylinder.volumeL,
+      stage1.oxygenMoles,
+      stage1.heliumMoles,
+      ambientTemperatureC,
+      useVdw
     );
-    if (thermal && physics && cylinder) {
-      pressures.push(calculatePressureAtTemperature({
-        pressureBar: state.pressureAtTransferEndBar,
-        oxygenPercent: step.resultingMix?.oxygenPercent ?? 21,
-        heliumPercent: step.resultingMix?.heliumPercent ?? 0,
-        fromTemperatureC: thermal.ambientTemperatureC,
-        toTemperatureC: state.temperatureAtTransferEndC,
-        volumeL: cylinder.volumeL,
-        useVdw: physics.model === 'vdw'
-      }));
+    const first = {
+      ...transferStep,
+      _thermalSplit: true,
+      receiverStartPressureBar: receiverStartAmbientPressureBar,
+      receiverEndPressureBar: firstReceiverPressureBar,
+      resultingPressureBar: firstReceiverPressureBar,
+      resultingMix: {
+        oxygenPercent: stage1.oxygenPercent,
+        heliumPercent: stage1.heliumPercent
+      },
+      receiverStartMix,
+      receiverStartMoles,
+      receiverEndMoles: stage1.moles,
+      sourceStartMoles,
+      sourceEndMoles: firstSourceMoles,
+      sourceConsumedMoles: firstConsumedMoles,
+      sourceStartPressureBar: Number.isFinite(sourceStartMoles)
+        ? sourcePressureAt(sourceStartMoles)
+        : transferStep.sourceStartPressureBar,
+      sourceEndPressureBar: Number.isFinite(firstSourceMoles)
+        ? sourcePressureAt(firstSourceMoles)
+        : transferStep.sourceEndPressureBar,
+      title: `${transferStep.title} (safe stage 1)`
+    };
+    const second = {
+      ...transferStep,
+      _thermalSplit: true,
+      receiverStartPressureBar: firstReceiverPressureBar,
+      receiverEndPressureBar,
+      resultingPressureBar: receiverEndPressureBar,
+      receiverStartMix: first.resultingMix,
+      receiverStartMoles: stage1.moles,
+      receiverEndMoles,
+      sourceStartMoles: firstSourceMoles,
+      sourceEndMoles,
+      sourceConsumedMoles: totalReceiverMoles - firstConsumedMoles,
+      sourceStartPressureBar: Number.isFinite(firstSourceMoles)
+        ? sourcePressureAt(firstSourceMoles)
+        : transferStep.sourceStartPressureBar,
+      sourceEndPressureBar: Number.isFinite(sourceEndMoles)
+        ? sourcePressureAt(sourceEndMoles)
+        : transferStep.sourceEndPressureBar,
+      title: `${transferStep.title} (safe stage 2)`
+    };
+    const wait = {
+      type: 'wait',
+      _safetyWaitOnly: true,
+      title: 'Automatic wait between safe transfer stages',
+      recipeLabel: 'Automatic safety wait',
+      receiverStartPressureBar: firstReceiverPressureBar,
+      receiverEndPressureBar: firstReceiverPressureBar,
+      resultingPressureBar: firstReceiverPressureBar,
+      resultingMix: first.resultingMix,
+      receiverStartMix: first.resultingMix,
+      waitMinutes: 0,
+      configuredWaitMinutes: 0,
+      automaticWaitMinutes: 0
+    };
+    return { first, wait, second };
+  };
+
+  const prefix = steps.slice(0, unsafeIndex);
+  const firstStageSimulationAt = fraction => simulated(
+    prefix.concat(stagesAt(fraction).first),
+    options
+  );
+  const hotEndpointAt = fraction => {
+    const candidate = stagesAt(fraction).first;
+    const candidateSimulation = firstStageSimulationAt(fraction);
+    const candidateState = candidateSimulation.protocolSteps.at(-1)?.thermal;
+    return candidateState
+      ? hotTransferEndpointPressure(candidateState, candidate, options)
+      : NaN;
+  };
+  let previousHotEndpoint = -Infinity;
+  for (const fraction of [0, 0.25, 0.5, 0.75, 1]) {
+    const hotEndpoint = hotEndpointAt(fraction);
+    if (!Number.isFinite(hotEndpoint)
+      || hotEndpoint + THERMAL_SAFETY_TOLERANCE_BAR < previousHotEndpoint) {
+      return null;
+    }
+    previousHotEndpoint = hotEndpoint;
+  }
+  const firstStageSafeAt = fraction => {
+    const candidateSimulation = firstStageSimulationAt(fraction);
+    return firstUnsafeThermalIndex(candidateSimulation, options.cylinder.workingPressureBar, options) === -1;
+  };
+  if (!firstStageSafeAt(0)) return null;
+  let low = 0;
+  let high = 1;
+  if (firstStageSafeAt(1)) low = 1;
+  else {
+    for (let iteration = 0; iteration < 50; iteration++) {
+      const middle = (low + high) / 2;
+      if (firstStageSafeAt(middle)) low = middle;
+      else high = middle;
     }
   }
-  return pressures.filter(Number.isFinite).every(pressure => pressure <= limit);
+  if (!(low > 1e-9)) return null;
+  return stagesAt(low);
 }
 
 export function scheduleSafeThermalProtocol({
@@ -45,208 +401,108 @@ export function scheduleSafeThermalProtocol({
   physics,
   settings
 }) {
+  const options = { thermal, cylinder, physics, settings };
   const steps = protocolSteps.map(step => ({ ...step }));
-  const automaticWaits = [];
-  for (let pass = 0; pass < steps.length * 3 + 3; pass++) {
-    const simulation = simulateThermalProtocol({
-      protocolSteps: steps, cylinder, physics, thermal, settings
+  const maxWait = MAX_AUTOMATIC_WAIT_MINUTES;
+  const finish = (simulation, unsafe = false) => {
+    const automaticWaits = automaticWaitMetadata(simulation);
+    const metadataByIndex = new Map(
+      automaticWaits.map(metadata => [metadata.stepIndex, metadata])
+    );
+    const protocol = simulation.protocolSteps.map((step, index) => {
+      const metadata = metadataByIndex.get(index);
+      const { automaticWaitMetadata: _staleMetadata, ...cleanStep } = step;
+      return metadata ? { ...cleanStep, automaticWaitMetadata: metadata } : cleanStep;
     });
-    const simulationSafe = isSafeSimulation(simulation, cylinder.workingPressureBar, {
-      thermal, physics, cylinder
-    });
-    const unsafeIndex = simulationSafe ? -1 : simulation.protocolSteps.findIndex(step => {
-      const state = step.thermal;
-      if (!state) return false;
-      const hotPressureBar = calculatePressureAtTemperature({
-        pressureBar: state.pressureAtTransferEndBar,
-        oxygenPercent: step.resultingMix?.oxygenPercent ?? 21,
-        heliumPercent: step.resultingMix?.heliumPercent ?? 0,
-        fromTemperatureC: thermal.ambientTemperatureC,
-        toTemperatureC: state.temperatureAtTransferEndC,
-        volumeL: cylinder.volumeL,
-        useVdw: physics.model === 'vdw'
-      });
-      return Math.max(
-        hotPressureBar,
-        state.pressureAtTransferEndBar,
-        state.pressureAfterWaitBar,
-        ...(state.samples ?? []).map(sample => sample.pressureBar ?? 0)
-      ) > cylinder.workingPressureBar + 1e-7;
-    });
-    if (unsafeIndex < 0) {
-      return {
-        protocolSteps: simulation.protocolSteps,
-        automaticWaits,
-        simulation
-      };
-    }
-    let waitIndex = unsafeIndex - 1;
-    if (waitIndex < 0 || steps[waitIndex].type === 'keep') {
-      const preceding = simulation.protocolSteps[waitIndex];
-      const pressureBar = preceding?.thermal?.pressureAfterWaitBar
-        ?? preceding?.resultingPressureBar
+    const normalizedSimulation = { ...simulation, protocolSteps: protocol };
+    return {
+      protocolSteps: protocol,
+      automaticWaits,
+      simulation: normalizedSimulation,
+      unsafe
+    };
+  };
+
+  for (let pass = 0; pass < Math.max(16, steps.length * 8 + 8); pass++) {
+    const simulation = simulated(steps, options);
+    const unsafeIndex = firstUnsafeThermalIndex(
+      simulation,
+      cylinder.workingPressureBar,
+      options
+    );
+    const overWaitLimit = totalWaitMinutes(simulation) > maxWait + THERMAL_SAFETY_TOLERANCE_BAR;
+    if (unsafeIndex === -1 && !overWaitLimit) return finish(simulation);
+    if (unsafeIndex === -2) return finish(simulation, true);
+
+    const targetIndex = unsafeIndex < 0 ? steps.length - 1 : unsafeIndex;
+    let waitIndex = targetIndex - 1;
+    if (waitIndex < 0 || steps[waitIndex]?.type === 'keep') {
+      const state = simulation.protocolSteps[targetIndex]?.thermal;
+      const pressureBar = state?.pressureStartBar
         ?? cylinder.initialPressureBar
         ?? 0;
-      steps.splice(unsafeIndex, 0, {
+      const resultingMix = state?.receiverStartMix
+        ?? steps[targetIndex]?.receiverStartMix
+        ?? steps[targetIndex]?.resultingMix
+        ?? { oxygenPercent: cylinder.initialOxygenPercent ?? 21, heliumPercent: cylinder.initialHeliumPercent ?? 0 };
+      steps.splice(targetIndex, 0, {
         type: 'wait',
-        title: `Automatic wait before step ${unsafeIndex + 1}`,
+        _safetyWaitOnly: true,
+        title: `Automatic wait before step ${targetIndex + 1}`,
         recipeLabel: 'Automatic safety wait',
         receiverStartPressureBar: pressureBar,
         receiverEndPressureBar: pressureBar,
         resultingPressureBar: pressureBar,
-        resultingMix: preceding?.resultingMix ?? {},
+        resultingMix,
+        receiverStartMix: resultingMix,
         waitMinutes: 0,
         configuredWaitMinutes: 0,
-        automaticWaitMinutes: 0,
-        automaticWaitMetadata: {
-          stepIndex: unsafeIndex,
-          stepIdentifier: `automatic-wait-${unsafeIndex}`,
-          configuredWaitMinutes: 0,
-          actualWaitMinutes: 0,
-          addedWaitMinutes: 0,
-          warning: '!'
-        }
+        automaticWaitMinutes: 0
       });
-      automaticWaits.push(steps[unsafeIndex].automaticWaitMetadata);
       continue;
     }
-    waitIndex = unsafeIndex - 1;
-    const current = simulation.protocolSteps[unsafeIndex].thermal;
-    const transferStep = steps[unsafeIndex];
-    if (transferStep.type !== 'wait' && !transferStep._thermalSplit) {
-      const start = Number(transferStep.receiverStartPressureBar);
-      const end = Number(transferStep.receiverEndPressureBar ?? transferStep.resultingPressureBar);
-      if (Number.isFinite(start) && Number.isFinite(end)
-        && (end > cylinder.workingPressureBar + 1e-7
-          || current.pressureAtTransferEndBar > cylinder.workingPressureBar + 1e-7)
-        && cylinder.workingPressureBar > start + 1e-7) {
-        const boundary = cylinder.workingPressureBar;
-        const oxygenPercent = transferStep.resultingMix?.oxygenPercent ?? 21;
-        const heliumPercent = transferStep.resultingMix?.heliumPercent ?? 0;
-        const sourceOxygenPercent = transferStep.sourceOxygenPercent ?? oxygenPercent;
-        const sourceHeliumPercent = transferStep.sourceHeliumPercent ?? heliumPercent;
-        const receiverStartMoles = calcMolarDensity(
-          start, oxygenPercent, heliumPercent, thermal.ambientTemperatureC, physics.model === 'vdw'
-        ) * cylinder.volumeL;
-        const receiverEndMoles = calcMolarDensity(
-          end, oxygenPercent, heliumPercent, thermal.ambientTemperatureC, physics.model === 'vdw'
-        ) * cylinder.volumeL;
-        const boundaryMoles = calcMolarDensity(
-          boundary, oxygenPercent, heliumPercent, thermal.ambientTemperatureC, physics.model === 'vdw'
-        ) * cylinder.volumeL;
-        const fraction = Math.max(0, Math.min(1,
-          (boundaryMoles - receiverStartMoles) / Math.max(1e-12, receiverEndMoles - receiverStartMoles)
-        ));
-        const sourceVolumeL = transferStep.sourceVolumeL;
-        const sourceStartMoles = Number.isFinite(sourceVolumeL)
-          ? calcMolarDensity(transferStep.sourceStartPressureBar, sourceOxygenPercent, sourceHeliumPercent,
-            thermal.ambientTemperatureC, physics.model === 'vdw') * sourceVolumeL
-          : null;
-        const sourceEndMoles = Number.isFinite(sourceVolumeL)
-          ? sourceStartMoles - (receiverEndMoles - receiverStartMoles)
-          : null;
-        const firstSourceMoles = Number.isFinite(sourceStartMoles)
-          ? sourceStartMoles - (boundaryMoles - receiverStartMoles)
-          : null;
-        const sourcePressure = moles => Number.isFinite(moles)
-          ? calcPressure(moles / sourceVolumeL, sourceOxygenPercent, sourceHeliumPercent,
-            thermal.ambientTemperatureC, physics.model === 'vdw')
-          : transferStep.sourceEndPressureBar;
-        const first = {
-          ...transferStep,
-          _thermalSplit: true,
-          receiverEndPressureBar: boundary,
-          resultingPressureBar: boundary,
-          sourceEndPressureBar: sourcePressure(firstSourceMoles),
-          sourceConsumedMoles: boundaryMoles - receiverStartMoles,
-          receiverStartMoles,
-          receiverEndMoles: boundaryMoles,
-          sourceStartMoles,
-          sourceEndMoles: firstSourceMoles,
-          resultingMix: {
-            oxygenPercent: (receiverStartMoles * oxygenPercent
-              + (boundaryMoles - receiverStartMoles) * sourceOxygenPercent) / boundaryMoles,
-            heliumPercent: (receiverStartMoles * heliumPercent
-              + (boundaryMoles - receiverStartMoles) * sourceHeliumPercent) / boundaryMoles
-          },
-          title: `${transferStep.title} (safe stage 1)`
-        };
-        const wait = {
-          type: 'wait',
-          title: 'Automatic wait between safe transfer stages',
-          recipeLabel: 'Automatic safety wait',
-          receiverStartPressureBar: boundary,
-          receiverEndPressureBar: boundary,
-          resultingPressureBar: boundary,
-          resultingMix: transferStep.resultingMix,
-          waitMinutes: 0,
-          configuredWaitMinutes: 0,
-          automaticWaitMinutes: 0,
-          automaticWaitMetadata: {
-            stepIndex: unsafeIndex + 1,
-            stepIdentifier: `automatic-wait-${unsafeIndex + 1}`,
-            configuredWaitMinutes: 0,
-            actualWaitMinutes: 0,
-            addedWaitMinutes: 0,
-            warning: '!'
-          }
-        };
-        const second = {
-          ...transferStep,
-          _thermalSplit: true,
-          receiverStartPressureBar: boundary,
-          sourceStartPressureBar: first.sourceEndPressureBar,
-          sourceStartMoles: first.sourceEndMoles,
-          sourceConsumedMoles: receiverEndMoles - boundaryMoles,
-          receiverStartMoles: boundaryMoles,
-          receiverEndMoles,
-          sourceEndMoles,
-          receiverStartMix: first.resultingMix,
-          title: `${transferStep.title} (safe stage 2)`
-        };
-        steps.splice(unsafeIndex, 1, first, wait, second);
-        automaticWaits.push(wait.automaticWaitMetadata);
-        continue;
-      }
-    }
-    const waitStep = simulation.protocolSteps[waitIndex].thermal;
-    const configuredWaitMinutes = Number.isFinite(steps[waitIndex].configuredWaitMinutes)
-      ? steps[waitIndex].configuredWaitMinutes
-      : Number(thermal.waitMinutes) || 0;
+
     const existingAdded = Number(steps[waitIndex].automaticWaitMinutes) || 0;
-    const available = Math.max(0, MAX_AUTOMATIC_WAIT_MINUTES - configuredWaitMinutes - existingAdded);
+    const baselineTotal = totalWaitMinutes(simulation);
+    const baselineWithoutExisting = baselineTotal - existingAdded;
+    const availableAdded = Math.max(0, maxWait - baselineWithoutExisting);
+    const safeThroughTarget = candidateSimulation => {
+      if (totalWaitMinutes(candidateSimulation) > maxWait + THERMAL_SAFETY_TOLERANCE_BAR) return false;
+      const candidateUnsafeIndex = firstUnsafeThermalIndex(
+        candidateSimulation,
+        cylinder.workingPressureBar,
+        options
+      );
+      return candidateUnsafeIndex === -1 || candidateUnsafeIndex > targetIndex;
+    };
     const safeAt = added => {
       steps[waitIndex].automaticWaitMinutes = added;
-      const candidate = simulateThermalProtocol({ protocolSteps: steps, cylinder, physics, thermal, settings });
-      return isSafeSimulation(candidate, cylinder.workingPressureBar, {
-        thermal, physics, cylinder
-      });
+      return safeThroughTarget(simulated(steps, options));
     };
-    if (!available || !safeAt(existingAdded + available)) {
-      steps[waitIndex].automaticWaitMinutes = existingAdded;
-      return { protocolSteps: simulation.protocolSteps, automaticWaits, simulation, unsafe: true };
+    if (availableAdded > existingAdded && safeAt(availableAdded)) {
+      let low = existingAdded;
+      let high = availableAdded;
+      for (let iteration = 0; iteration < 50; iteration++) {
+        const middle = (low + high) / 2;
+        if (safeAt(middle)) high = middle;
+        else low = middle;
+      }
+      steps[waitIndex].automaticWaitMinutes = high;
+      continue;
     }
-    let low = existingAdded;
-    let high = existingAdded + available;
-    for (let iteration = 0; iteration < 40; iteration++) {
-      const middle = (low + high) / 2;
-      if (safeAt(middle)) high = middle;
-      else low = middle;
+    steps[waitIndex].automaticWaitMinutes = existingAdded;
+
+    const split = unsafeIndex >= 0
+      ? splitTransferAtSafeHotEndpoint({ steps, unsafeIndex, simulation, options })
+      : null;
+    if (split) {
+      steps.splice(unsafeIndex, 1, split.first, split.wait, split.second);
+      continue;
     }
-    const addedWaitMinutes = high - existingAdded;
-    steps[waitIndex].automaticWaitMinutes = high;
-    steps[waitIndex].configuredWaitMinutes = configuredWaitMinutes;
-    steps[waitIndex].automaticWaitMetadata = {
-      stepIndex: waitIndex,
-      stepIdentifier: steps[waitIndex].id ?? steps[waitIndex].title ?? waitIndex,
-      configuredWaitMinutes,
-      actualWaitMinutes: configuredWaitMinutes + high,
-      addedWaitMinutes: high,
-      warning: '!'
-    };
-    automaticWaits.push(steps[waitIndex].automaticWaitMetadata);
+    return finish(simulation, true);
   }
-  return { protocolSteps: steps, automaticWaits, unsafe: true };
+  const simulation = simulated(steps, options);
+  return finish(simulation, true);
 }
 
 const INTERNAL_THERMAL_TARGET = Symbol('internal thermal target');

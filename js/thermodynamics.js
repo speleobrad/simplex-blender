@@ -493,12 +493,13 @@ function buildThermalStepSamples({
   useVdw
 }) {
   const samples = [];
-  const append = (elapsedMinutes, temperatureC, pressureBar) => {
+  const append = (elapsedMinutes, temperatureC, pressureBar, details = {}) => {
     const previous = samples.at(-1);
     const sample = {
       elapsedMinutes,
       temperatureC,
-      pressureBar: Math.max(0, pressureBar)
+      pressureBar: Math.max(0, pressureBar),
+      ...details
     };
     if (previous && Math.abs(previous.elapsedMinutes - elapsedMinutes) < 1e-9) {
       samples[samples.length - 1] = sample;
@@ -507,24 +508,70 @@ function buildThermalStepSamples({
     }
   };
 
-  append(0, currentTemperatureC, currentPressureBar);
+  append(0, currentTemperatureC, currentPressureBar, {
+    projectedPressureBar: currentPressureBar,
+    pressureReferenceTemperatureC: currentTemperatureC
+  });
   const hasTransferProfile = transfer.rateSource === 'booster'
     || transfer.rateSource === 'compressor'
     || transfer.rateSource === 'decant-rate'
     || transfer.rateSource === 'draining-rate';
   if (hasTransferProfile) {
+    const startMix = receiverMix.startMix ?? receiverMix;
+    const startAmbientPressureBar = calculatePressureAtTemperature({
+      pressureBar: currentPressureBar,
+      oxygenPercent: startMix.oxygenPercent,
+      heliumPercent: startMix.heliumPercent,
+      fromTemperatureC: currentTemperatureC,
+      toTemperatureC: thermal.ambientTemperatureC,
+      volumeL: cylinder.volumeL,
+      useVdw
+    });
     for (const sample of transferTemperatureSamples) {
       const transferProgress = durationMinutes > 0
-        ? sample.elapsedMinutes / durationMinutes
+        ? clamp(sample.elapsedMinutes / durationMinutes, 0, 1)
         : 1;
+      const ambientPressureBar = startAmbientPressureBar
+        + (transferEndPressureBar - startAmbientPressureBar) * transferProgress;
+      const oxygenPercent = startMix.oxygenPercent
+        + (receiverMix.oxygenPercent - startMix.oxygenPercent) * transferProgress;
+      const heliumPercent = startMix.heliumPercent
+        + (receiverMix.heliumPercent - startMix.heliumPercent) * transferProgress;
+      const projectedPressureBar = calculatePressureAtTemperature({
+        pressureBar: ambientPressureBar,
+        oxygenPercent,
+        heliumPercent,
+        fromTemperatureC: thermal.ambientTemperatureC,
+        toTemperatureC: sample.temperatureC,
+        volumeL: cylinder.volumeL,
+        useVdw
+      });
       append(
         sample.elapsedMinutes,
         sample.temperatureC,
-        currentPressureBar + (transferEndPressureBar - currentPressureBar) * transferProgress
+        currentPressureBar + (transferEndPressureBar - currentPressureBar) * transferProgress,
+        {
+          ambientPressureBar,
+          projectedPressureBar,
+          oxygenPercent,
+          heliumPercent,
+          pressureReferenceTemperatureC: thermal.ambientTemperatureC
+        }
       );
     }
   } else {
-    append(0, temperatureAtTransferEndC, transferEndPressureBar);
+    append(0, temperatureAtTransferEndC, transferEndPressureBar, {
+      projectedPressureBar: calculatePressureAtTemperature({
+        pressureBar: transferEndPressureBar,
+        oxygenPercent: receiverMix.oxygenPercent,
+        heliumPercent: receiverMix.heliumPercent,
+        fromTemperatureC: thermal.ambientTemperatureC,
+        toTemperatureC: temperatureAtTransferEndC,
+        volumeL: cylinder.volumeL,
+        useVdw
+      }),
+      pressureReferenceTemperatureC: thermal.ambientTemperatureC
+    });
   }
 
   const appendWaitSample = elapsedMinutes => {
@@ -549,14 +596,24 @@ function buildThermalStepSamples({
         volumeL: cylinder.volumeL,
         useVdw
       });
-    append(durationMinutes + elapsedMinutes, temperatureC, pressureBar);
+    append(durationMinutes + elapsedMinutes, temperatureC, pressureBar, {
+      projectedPressureBar: pressureBar,
+      oxygenPercent: receiverMix.oxygenPercent,
+      heliumPercent: receiverMix.heliumPercent,
+      pressureReferenceTemperatureC: temperatureC
+    });
   };
 
   for (let elapsedMinutes = 1; elapsedMinutes < waitMinutes; elapsedMinutes += 1) {
     appendWaitSample(elapsedMinutes);
   }
   if (waitMinutes > 0) appendWaitSample(waitMinutes);
-  append(durationMinutes + waitMinutes, temperatureAfterWaitC, pressureAfterWaitBar);
+  append(durationMinutes + waitMinutes, temperatureAfterWaitC, pressureAfterWaitBar, {
+    projectedPressureBar: pressureAfterWaitBar,
+    oxygenPercent: receiverMix.oxygenPercent,
+    heliumPercent: receiverMix.heliumPercent,
+    pressureReferenceTemperatureC: temperatureAfterWaitC
+  });
   return samples;
 }
 
@@ -636,6 +693,7 @@ export function simulateThermalProtocol({
       ? transfer.pressureIncreaseBar / transfer.rateBarPerMin
       : 0;
     const receiverMix = stepMix(step);
+    const receiverStartMix = step.receiverStartMix ?? currentMix;
     const inletTemperatureC = inletTemperatureFor(transfer.rateSource, thermal, booster);
     const hasTransferProfile = transfer.rateSource === 'booster'
       || transfer.rateSource === 'compressor'
@@ -660,11 +718,12 @@ export function simulateThermalProtocol({
     const temperatureAtTransferEndC = transferTemperatureSamples.at(-1).temperatureC;
     const isFinalStep = index === protocolSteps.length - 1;
     const skipsConfiguredWait = !isFinalStep && index === 0 && step.type === 'keep';
+    const safetyWaitOnly = step._safetyWaitOnly === true;
     const coolsBelowAmbient = isFinalStep && settledTemperatureC < thermal.ambientTemperatureC;
     const waitAmbientTemperatureC = coolsBelowAmbient
       ? settledTemperatureC
       : thermal.ambientTemperatureC;
-    const configuredWaitMinutes = skipsConfiguredWait
+    const configuredWaitMinutes = skipsConfiguredWait || safetyWaitOnly
       ? 0
       : isFinalStep
         ? Math.abs(settledTemperatureC - thermal.ambientTemperatureC) < 1e-9 || coolsBelowAmbient
@@ -689,10 +748,7 @@ export function simulateThermalProtocol({
           : thermal.waitMinutes;
     const waitMinutes = skipsConfiguredWait
       ? 0
-      : Math.min(
-        1440,
-        Math.max(0, configuredWaitMinutes + (Number(step.automaticWaitMinutes) || 0))
-      );
+      : Math.max(0, configuredWaitMinutes + (Number(step.automaticWaitMinutes) || 0));
     const intermediateTargetTemperatureC = thermal.targetMediumTemperatureC
       ?? thermal.targetTemperatureC;
     const temperatureAfterWaitC = skipsConfiguredWait
@@ -742,7 +798,7 @@ export function simulateThermalProtocol({
         transferTemperatureSamples,
         durationMinutes,
         transferEndPressureBar,
-        receiverMix,
+        receiverMix: { ...receiverMix, startMix: receiverStartMix },
         temperatureAtTransferEndC,
         waitMinutes,
         temperatureAfterWaitC,

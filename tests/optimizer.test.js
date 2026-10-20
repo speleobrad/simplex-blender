@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { optimizeBlend, scheduleSafeThermalProtocol } from '../js/optimizer.js';
+import { optimizeBlend, isSafeSimulation, scheduleSafeThermalProtocol } from '../js/optimizer.js';
 import { DEFAULT_BANKS } from '../js/bank-storage.js';
 import { DEFAULT_SETTINGS } from '../js/settings.js';
 
@@ -1893,7 +1893,8 @@ const schedulerFixture = {
   physics: { model: 'ideal', temperatureC: 20 },
   thermal: {
     tankMaterial: 'steel', coolingMedium: 'air', ambientTemperatureC: 20,
-    inletTemperatureC: 500, waitMode: 'minutes', waitMinutes: 0
+    inletTemperatureC: 40, targetMediumTemperatureC: 20, targetInWaterTemperatureC: 20,
+    waitMode: 'minutes', waitMinutes: 0
   },
   settings: {}
 };
@@ -1937,5 +1938,175 @@ test('scheduler reports split stages and warning metadata at a hot boundary', ()
   });
   assert.ok(scheduled.protocolSteps.every(step => !step.thermal
     || step.thermal.pressureAtTransferEndBar <= 100 + 1e-7));
+});
+
+test('solves a nonzero minimum wait before the first transfer after keep', () => {
+  const scheduled = scheduleSafeThermalProtocol({
+    ...schedulerFixture,
+    cylinder: {
+      ...schedulerFixture.cylinder,
+      initialOxygenPercent: 21,
+      initialHeliumPercent: 0,
+      workingPressureBar: 100
+    },
+    physics: { model: 'ideal', temperatureC: 40 },
+    thermal: { ...schedulerFixture.thermal, inletTemperatureC: 40 },
+    protocolSteps: [
+      {
+        type: 'keep',
+        receiverStartPressureBar: 0,
+        receiverEndPressureBar: 0,
+        resultingPressureBar: 0,
+        resultingMix: { oxygenPercent: 21, heliumPercent: 0 }
+      },
+      {
+        type: 'boost',
+        operation: 'Boost',
+        receiverStartPressureBar: 0,
+        receiverEndPressureBar: 95,
+        resultingPressureBar: 95,
+        resultingMix: { oxygenPercent: 21, heliumPercent: 0 },
+        sourceOxygenPercent: 21,
+        sourceHeliumPercent: 0,
+        sourceStartPressureBar: 200,
+        sourceEndPressureBar: 100,
+        sourceVolumeL: 12
+      }
+    ]
+  });
+  assert.equal(scheduled.unsafe, false);
+  const safetyWait = scheduled.protocolSteps.find(step => step._safetyWaitOnly);
+  assert.ok(safetyWait);
+  assert.ok(safetyWait.thermal.waitMinutes > 0);
+  assert.equal(safetyWait.thermal.waitMinutes, safetyWait.thermal.automaticWaitMinutes);
+  assert.equal(scheduled.automaticWaits.length, 1);
+  assert.equal(scheduled.automaticWaits[0].actualWaitMinutes, safetyWait.thermal.waitMinutes);
+  assert.ok(isSafeSimulation(scheduled.simulation, 100, {
+    thermal: { ...schedulerFixture.thermal, inletTemperatureC: 40 },
+    physics: { model: 'ideal', temperatureC: 40 },
+    cylinder: { ...schedulerFixture.cylinder, workingPressureBar: 100 }
+  }));
+  const transfer = scheduled.protocolSteps.at(-1);
+  assert.ok(transfer.thermal.pressureAtTransferEndBar <= 100 + 1e-7);
+  assert.ok(transfer.thermal.samples.every(sample => (
+    (sample.projectedPressureBar ?? sample.pressureBar) <= 100 + 1e-7
+  )));
+});
+
+test('splits by transferred inventories and cools between safe transfer stages', () => {
+  const scheduled = scheduleSafeThermalProtocol({
+    ...schedulerFixture,
+    cylinder: {
+      ...schedulerFixture.cylinder,
+      initialOxygenPercent: 21,
+      initialHeliumPercent: 0,
+      workingPressureBar: 100
+    },
+    physics: { model: 'ideal', temperatureC: 20 },
+    thermal: { ...schedulerFixture.thermal, inletTemperatureC: 30 },
+    protocolSteps: [{
+      type: 'boost',
+      operation: 'Boost',
+      receiverStartPressureBar: 0,
+      receiverEndPressureBar: 98,
+      resultingPressureBar: 98,
+      resultingMix: { oxygenPercent: 21, heliumPercent: 0 },
+      sourceOxygenPercent: 21,
+      sourceHeliumPercent: 0,
+      sourceStartPressureBar: 300,
+      sourceEndPressureBar: 200,
+      sourceVolumeL: 12
+    }]
+  });
+  assert.equal(scheduled.unsafe, false);
+  assert.ok(isSafeSimulation(scheduled.simulation, 100, {
+    thermal: { ...schedulerFixture.thermal, inletTemperatureC: 30 },
+    physics: { model: 'ideal', temperatureC: 20 },
+    cylinder: { ...schedulerFixture.cylinder, workingPressureBar: 100 }
+  }));
+  const stages = scheduled.protocolSteps.filter(step => step.type === 'boost');
+  assert.equal(stages.length, 2);
+  assert.equal(scheduled.protocolSteps.filter(step => step._safetyWaitOnly).length, 2);
+  assert.equal(stages.at(-1).receiverEndPressureBar, 98);
+  assert.ok(stages[0].receiverEndMoles < stages[1].receiverEndMoles);
+  assert.ok(stages[0].sourceEndMoles > stages[1].sourceEndMoles);
+  assert.ok(Math.abs(
+    stages.reduce((total, stage) => total + stage.sourceConsumedMoles, 0)
+      - (stages[0].sourceStartMoles - stages.at(-1).sourceEndMoles)
+  ) < 1e-9);
+  assert.ok(Math.abs(
+    stages.reduce((total, stage) => total + stage.sourceConsumedMoles, 0)
+      - (stages.at(-1).receiverEndMoles - stages[0].receiverStartMoles)
+  ) < 1e-9);
+  const sourceOxygenMoles = stages.reduce(
+    (total, stage) => total + stage.sourceConsumedMoles * stage.sourceOxygenPercent / 100,
+    0
+  );
+  const sourceHeliumMoles = stages.reduce(
+    (total, stage) => total + stage.sourceConsumedMoles * stage.sourceHeliumPercent / 100,
+    0
+  );
+  assert.ok(Math.abs(
+    sourceOxygenMoles
+      - (stages.at(-1).receiverEndMoles * stages.at(-1).resultingMix.oxygenPercent / 100
+        - stages[0].receiverStartMoles * stages[0].receiverStartMix.oxygenPercent / 100)
+  ) < 1e-9);
+  assert.ok(Math.abs(
+    sourceHeliumMoles
+      - (stages.at(-1).receiverEndMoles * stages.at(-1).resultingMix.heliumPercent / 100
+        - stages[0].receiverStartMoles * stages[0].receiverStartMix.heliumPercent / 100)
+  ) < 1e-9);
+  for (const stage of stages) {
+    assert.ok(stage.thermal.durationMinutes > 0);
+    assert.ok(Math.abs(
+      stage.thermal.durationMinutes
+        - (stage.thermal.pressureAtTransferEndBar - stage.thermal.pressureStartBar)
+          / stage.thermal.rateBarPerMin
+    ) < 1e-9);
+    assert.ok(stage.thermal.samples.every(sample => (
+      (sample.projectedPressureBar ?? sample.pressureBar) <= 100 + 1e-7
+    )));
+  }
+  const totalWait = scheduled.simulation.protocolSteps.reduce(
+    (total, step) => total + step.thermal.waitMinutes,
+    0
+  );
+  assert.ok(totalWait <= 1440 + 1e-7);
+  assert.equal(
+    scheduled.automaticWaits[0].actualWaitMinutes,
+    scheduled.protocolSteps.find(step => step._safetyWaitOnly && step.thermal.automaticWaitMinutes > 0)
+      .thermal.waitMinutes
+  );
+});
+
+test('omits an unsafe thermal maximum fallback instead of returning it as feasible', () => {
+  const result = optimizeBlend({
+    cylinder: {
+      volumeL: 12,
+      initialPressureBar: 0,
+      initialOxygenPercent: 21,
+      initialHeliumPercent: 0,
+      targetPressureBar: 98,
+      targetOxygenPercent: 21,
+      targetHeliumPercent: 0,
+      workingPressureBar: 100
+    },
+    physics: { model: 'ideal', temperatureC: 20 },
+    thermal: {
+      tankMaterial: 'steel',
+      coolingMedium: 'air',
+      ambientTemperatureC: 20,
+      inletTemperatureC: 40,
+      targetMediumTemperatureC: 20,
+      targetInWaterTemperatureC: 20,
+      waitMode: 'minutes',
+      waitMinutes: 0
+    },
+    settings: { booster: { compressorInletFlowLPerMin: 100 } },
+    banks: []
+  });
+  assert.equal(result.feasible, false);
+  assert.equal(result.maximumPressure, null);
+  assert.match(result.error, /cannot remain below cylinder working pressure/i);
 });
 
