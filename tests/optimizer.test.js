@@ -1813,3 +1813,77 @@ test('normalizes the requested in-water target and reports all thermal states', 
   assert.equal(result.thermal.requestedInWaterPressureBar, 188.6);
   assert.equal(result.thermal.requestedInWaterTemperatureC, 10);
 });
+
+const thermalFailureFixture = {
+  tankMaterial: 'steel',
+  coolingMedium: 'air',
+  ambientTemperatureC: 25,
+  inletTemperatureC: 25,
+  targetMediumTemperatureC: 25,
+  targetInWaterTemperatureC: 10,
+  waitMode: 'minutes',
+  waitMinutes: 10,
+  targetTemperatureC: 25
+};
+
+test('thermal initial infeasibility preserves requested target and maximum fallback state', () => {
+  const result = optimizeBlend({
+    ...defaultInput,
+    cylinder: { ...defaultInput.cylinder, targetPressureBar: 200, targetOxygenPercent: 15, targetHeliumPercent: 55 },
+    thermal: thermalFailureFixture,
+    banks: [
+      { id: 'he', name: 'Pure Helium', volumeL: 1, pressureBar: 10, minimumPressureBar: 0, oxygenPercent: 0, heliumPercent: 100, enabled: true },
+      { id: 'o2', name: 'Pure Oxygen', volumeL: 10, pressureBar: 100, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true }
+    ]
+  });
+  assert.equal(result.feasible, false);
+  assert.equal(result.thermal.requestedInWaterPressureBar, 200);
+  assert.equal(result.thermal.requestedInWaterTemperatureC, 10);
+  assert.ok(result.thermal.ambientSettledTargetPressureBar > 200);
+  assert.ok(result.maximumPressure);
+});
+
+test('thermal floor infeasibility prefixes the requested in-water pressure', () => {
+  const result = optimizeBlend({
+    ...defaultInput,
+    cylinder: { ...defaultInput.cylinder, targetPressureBar: 300, targetOxygenPercent: 15, targetHeliumPercent: 55 },
+    thermal: thermalFailureFixture,
+    banks: [
+      { id: 'he', name: 'Pure Helium', volumeL: 1, pressureBar: 10, minimumPressureBar: 0, oxygenPercent: 0, heliumPercent: 100, enabled: true },
+      { id: 'o2', name: 'Pure Oxygen', volumeL: 10, pressureBar: 100, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true }
+    ]
+  });
+  assert.equal(result.feasible, false);
+  assert.match(result.error, /^Requested in-water pressure 300\.0 bar/);
+  assert.match(result.error, /ambient/i);
+});
+
+test('thermal high-ceiling infeasibility retains requested and ambient target diagnostics', () => {
+  const result = optimizeBlend({
+    ...defaultInput,
+    cylinder: { ...defaultInput.cylinder, targetPressureBar: 350 },
+    thermal: thermalFailureFixture,
+    banks: []
+  });
+  assert.equal(result.feasible, false);
+  assert.equal(result.thermal.requestedInWaterPressureBar, 350);
+  assert.equal(result.thermal.requestedInWaterTemperatureC, 10);
+  assert.ok(result.thermal.ambientSettledTargetPressureBar > 350);
+});
+
+test('thermal no-maximum result leaves final state fields null', () => {
+  const result = optimizeBlend({
+    ...defaultInput,
+    cylinder: { ...defaultInput.cylinder, targetPressureBar: 200, targetOxygenPercent: 100, targetHeliumPercent: 0 },
+    thermal: thermalFailureFixture,
+    banks: []
+  });
+  assert.equal(result.feasible, false);
+  assert.equal(result.maximumPressure, null);
+  assert.equal(result.thermal.finalAmbientPressureBar, null);
+  assert.equal(result.thermal.finalAmbientTemperatureC, null);
+  assert.equal(result.thermal.finalInWaterPressureBar, null);
+  assert.equal(result.thermal.finalInWaterTemperatureC, null);
+  assert.equal(result.thermal.requestedInWaterPressureBar, 200);
+  assert.equal(result.thermal.requestedInWaterTemperatureC, 10);
+});

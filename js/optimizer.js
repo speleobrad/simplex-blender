@@ -1629,7 +1629,7 @@ function thermalizedMaximumResult(candidate, requestedInWaterPressureBar, reques
         finalAmbientPressureBar: null,
         finalAmbientTemperatureC: null,
         finalInWaterPressureBar: null,
-        finalInWaterTemperatureC: requestedInWaterTemperatureC,
+        finalInWaterTemperatureC: null,
         requestedInWaterPressureBar,
         requestedInWaterTemperatureC,
         ambientSettledTargetPressureBar
@@ -1705,7 +1705,8 @@ function optimizeThermalBlend(input, optimizeStatic) {
   const requested = evaluateThermalCandidate(searchInput, optimizeStatic, requestedPressureBar);
   if (!requested.result.feasible) {
     const infeasible = thermalizedMaximumResult(requested, requestedInWaterPressureBar, requestedInWaterTemperatureC, ambientSettledTargetPressureBar);
-    return { ...infeasible, error: `Requested in-water pressure ${requestedInWaterPressureBar.toFixed(1)} bar cannot be reached. ${infeasible.error}` };
+    const ambientDiagnostic = `Ambient-settled target: ${ambientSettledTargetPressureBar.toFixed(1)} bar.`;
+    return { ...infeasible, error: `Requested in-water pressure ${requestedInWaterPressureBar.toFixed(1)} bar cannot be reached. ${infeasible.error ?? 'No safe thermal recipe is available.'} ${ambientDiagnostic}` };
   }
 
   const requestedPressureDifference = requested.simulation.final.finalAmbientPressureBar
@@ -1720,7 +1721,11 @@ function optimizeThermalBlend(input, optimizeStatic) {
       MINIMUM_TARGET_PRESSURE_BAR
     );
     if (!floor.result.feasible) {
-      return thermalizedMaximumResult(floor, requestedInWaterPressureBar, requestedInWaterTemperatureC, ambientSettledTargetPressureBar);
+      const ambientDiagnostic = `Ambient-settled target: ${ambientSettledTargetPressureBar.toFixed(1)} bar.`;
+      return {
+        ...fallback,
+        error: `Requested in-water pressure ${requestedInWaterPressureBar.toFixed(1)} bar cannot be reached. ${fallback.error ?? 'No safe thermal recipe is available.'} ${ambientDiagnostic}`
+      };
     }
 
     const floorPressureDifference = floor.simulation.final.finalAmbientPressureBar
