@@ -18,3 +18,6 @@
 ### Current assignment RED
 - `npm test -- tests/settings.test.js tests/settings-dialog.test.js` — passed (51 tests); no focused Node regression was red before production changes.
 - `npm run test:ui -- tests/browser/settings.spec.js tests/browser/multi-session.spec.js --workers=1` — failed in the units session test: Imperial cylinder volume/pressure were still asserted as metric `3`/`232`, while the editor displayed `0.10594400009999999` ft³.
+
+### Focused GREEN
+- `npm run test:ui -- tests/browser/multi-session.spec.js -g "persists units across sessions" --workers=1` — 2 passed, 1 flaky due Playwright trace artifact ENOENT during continued-context teardown.
