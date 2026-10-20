@@ -712,11 +712,13 @@ function setTab(tabId) {
 
     const selected = paneName === tabId;
     pane.classList.toggle('hidden', !selected);
+    button.classList.toggle('bg-cyan-500/20', selected);
+    button.setAttribute('aria-selected', String(selected));
     button.className = selected
-      ? 'px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm transition'
-      : 'px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-slate-200 transition';
-  }
+      ? 'shrink-0 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm transition'
+      : 'shrink-0 px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-slate-200 transition';
 
+  }
   if (tabId === 'ternary') requestAnimationFrame(renderTernary);
 }
 
