@@ -86,16 +86,49 @@ export function scheduleSafeThermalProtocol({
           || current.pressureAtTransferEndBar > cylinder.workingPressureBar + 1e-7)
         && cylinder.workingPressureBar > start + 1e-7) {
         const boundary = cylinder.workingPressureBar;
-        const fraction = (boundary - start) / (end - start);
+        const oxygenPercent = transferStep.resultingMix?.oxygenPercent ?? 21;
+        const heliumPercent = transferStep.resultingMix?.heliumPercent ?? 0;
+        const sourceOxygenPercent = transferStep.sourceOxygenPercent ?? oxygenPercent;
+        const sourceHeliumPercent = transferStep.sourceHeliumPercent ?? heliumPercent;
+        const receiverStartMoles = calcMolarDensity(
+          start, oxygenPercent, heliumPercent, thermal.ambientTemperatureC, physics.model === 'vdw'
+        ) * cylinder.volumeL;
+        const receiverEndMoles = calcMolarDensity(
+          end, oxygenPercent, heliumPercent, thermal.ambientTemperatureC, physics.model === 'vdw'
+        ) * cylinder.volumeL;
+        const boundaryMoles = calcMolarDensity(
+          boundary, oxygenPercent, heliumPercent, thermal.ambientTemperatureC, physics.model === 'vdw'
+        ) * cylinder.volumeL;
+        const fraction = Math.max(0, Math.min(1,
+          (boundaryMoles - receiverStartMoles) / Math.max(1e-12, receiverEndMoles - receiverStartMoles)
+        ));
+        const sourceVolumeL = transferStep.sourceVolumeL;
+        const sourceStartMoles = Number.isFinite(sourceVolumeL)
+          ? calcMolarDensity(transferStep.sourceStartPressureBar, sourceOxygenPercent, sourceHeliumPercent,
+            thermal.ambientTemperatureC, physics.model === 'vdw') * sourceVolumeL
+          : null;
+        const sourceEndMoles = Number.isFinite(sourceVolumeL)
+          ? sourceStartMoles - (receiverEndMoles - receiverStartMoles)
+          : null;
+        const firstSourceMoles = Number.isFinite(sourceStartMoles)
+          ? sourceStartMoles - (boundaryMoles - receiverStartMoles)
+          : null;
+        const sourcePressure = moles => Number.isFinite(moles)
+          ? calcPressure(moles / sourceVolumeL, sourceOxygenPercent, sourceHeliumPercent,
+            thermal.ambientTemperatureC, physics.model === 'vdw')
+          : transferStep.sourceEndPressureBar;
         const first = {
           ...transferStep,
           _thermalSplit: true,
           receiverEndPressureBar: boundary,
           resultingPressureBar: boundary,
-          sourceEndPressureBar: Number.isFinite(transferStep.sourceStartPressureBar)
-            ? transferStep.sourceStartPressureBar
-              + (transferStep.sourceEndPressureBar - transferStep.sourceStartPressureBar) * fraction
-            : transferStep.sourceEndPressureBar,
+          sourceEndPressureBar: sourcePressure(firstSourceMoles),
+          resultingMix: {
+            oxygenPercent: (receiverStartMoles * oxygenPercent
+              + (boundaryMoles - receiverStartMoles) * sourceOxygenPercent) / boundaryMoles,
+            heliumPercent: (receiverStartMoles * heliumPercent
+              + (boundaryMoles - receiverStartMoles) * sourceHeliumPercent) / boundaryMoles
+          },
           title: `${transferStep.title} (safe stage 1)`
         };
         const wait = {
@@ -1652,6 +1685,7 @@ function optimizeBlendWithoutThermal(input) {
         resultingMix: { oxygenPercent, heliumPercent },
         sourceStartPressureBar: stage.sourceStartPressureBar,
         sourceEndPressureBar: stage.sourceEndPressureBar,
+        sourceVolumeL: bank.volumeL,
         receiverStartPressureBar: stage.receiverStartPressureBar,
         receiverEndPressureBar: stage.receiverEndPressureBar,
         ...(input.thermal ? {
