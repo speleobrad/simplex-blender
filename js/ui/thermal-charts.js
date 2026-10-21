@@ -207,8 +207,30 @@ export function buildThermalSeries(protocolSteps, initial = {}, terminalProjecti
     points.push(terminalPoint);
     samples.push(terminalSample);
     lineSegments.push({ style: 'estimated', samples: [terminalStart, terminalSample] });
-  }
+    if (finite(terminalProjection.inWaterPressureBar)
+      && finite(terminalProjection.inWaterTemperatureC)) {
+      const inWaterPoint = point(
+        terminalPoint.step,
+        'in-water-target',
+        'In-water target projection',
+        'In-water target projection',
+        undefined,
+        undefined,
+        terminalProjection.inWaterPressureBar,
+        terminalProjection.inWaterTemperatureC,
+        terminalElapsedMinutes
+      );
+      points.push(inWaterPoint);
+      samples.push({
+        step: inWaterPoint.step,
+        title: inWaterPoint.title,
+        elapsedMinutes: terminalElapsedMinutes,
+        pressureBar: inWaterPoint.pressureBar,
+        temperatureC: inWaterPoint.temperatureC
+      });
+    }
 
+  }
   return {
     points,
     samples,
@@ -740,7 +762,13 @@ export function renderThermalCharts(result, input = {}, units = 'metric') {
       temperatureC: result.compare?.final?.ambientSettled?.temperatureC,
       durationMinutes: result.compare?.final?.ambientSettledDurationMinutes
     }
-    : null;
+    : {
+      pressureBar: result?.thermal?.finalAmbientPressureBar,
+      temperatureC: result?.thermal?.finalAmbientTemperatureC,
+      durationMinutes: result?.thermal?.finalAmbientCoolOffMinutes ?? 0,
+      inWaterPressureBar: result?.thermal?.finalInWaterPressureBar,
+      inWaterTemperatureC: result?.thermal?.finalInWaterTemperatureC
+    };
   const series = buildThermalSeries(protocolForResult(result), {
     initialPressureBar: input.cylinder?.initialPressureBar ?? result?.gas?.initialPressureBar,
     initialTemperatureC: input.physics?.temperatureC
