@@ -3,7 +3,7 @@ import { fillWorkingTank } from './helpers/blending.js';
 
 async function load(appPage) { return appPage.goto('tourSeen'); }
 
-test.describe('working tank blending inputs', () => {
+ test.describe('working tank blending inputs', () => {
   test('selects gas presets and edits custom oxygen/helium values', async ({ appPage }) => {
     const page = await load(appPage);
     const preset = page.locator('#target-gas-preset option').filter({ hasText: 'Tx 18/45' }).first();
@@ -27,11 +27,57 @@ test.describe('working tank blending inputs', () => {
     await page.locator('#wait-mode').selectOption('minutes');
     await expect(page.locator('#wait-minutes-field')).toBeVisible();
   });
+
   test('uses the target in-water temperature for the recipe result', async ({ appPage }) => {
     const page = await load(appPage);
     await fillWorkingTank(page, { targetInWaterTemperature: 30 });
     await page.locator('[data-action="select-tab"][data-tab="thermal"]').click();
     await expect(page.locator('#thermal-chart-status')).toContainText(/30\.0/);
+  });
+
+  test('optimizes an in-water target and reports ambient settling', async ({ appPage }) => {
+    const page = await load(appPage);
+    const targetPreset = page.locator('#target-gas-preset option').filter({ hasText: 'Tx 18/45' }).first();
+    await page.locator('#target-gas-preset').selectOption(await targetPreset.getAttribute('value'));
+    await fillWorkingTank(page, {
+      startPressure: 50, ambientTemperature: 25, targetPressure: 188.6,
+      targetInWaterTemperature: 10, medium: 'water', waitMode: 'temperature', targetTemperature: 25
+    });
+    await expect(page.locator('#blend-status')).toContainText(/feasible/i);
+    await expect(page.locator('#res-ambient-state')).toContainText(/200\.0.*25\.0/);
+    await expect(page.locator('#res-final-p')).toHaveText(/188\.6 bar/);
+    await expect(page.locator('#res-final-temperature')).toHaveText(/10\.0/);
+    await expect(page.locator('#res-hot-state')).toContainText(/204\./);
+  });
+
+  test('extends a target-medium wait with a visible working-pressure warning', async ({ appPage }) => {
+    const page = await load(appPage);
+    const targetPreset = page.locator('#target-gas-preset option').filter({ hasText: 'Tx 18/45' }).first();
+    await page.locator('#target-gas-preset').selectOption(await targetPreset.getAttribute('value'));
+    const cylinder = page.locator('#cylinder-preset option').filter({ hasText: 'Catalina S80' }).first();
+    await fillWorkingTank(page, {
+      cylinder: await cylinder.getAttribute('value'), startPressure: 50, ambientTemperature: 25,
+      inletTemperature: 40, targetPressure: 188.6, targetInWaterTemperature: 10,
+      medium: 'water', waitMode: 'temperature', targetTemperature: 25
+    });
+    await expect(page.locator('#blend-status')).toContainText(/!/);
+    await expect(page.locator('#blend-status')).toContainText(/automatic wait.*working-pressure limit.*added/i);
+    await expect(page.locator('#steps-container')).toContainText(/! Automatic wait:.*working-pressure limit.*added/i);
+  });
+
+  test('enforces thermal input boundaries and rejects target medium below ambient', async ({ appPage }) => {
+    const page = await load(appPage);
+    for (const [id, min, max] of [
+      ['#ambient-temperature', '5', '40'], ['#inlet-gas-temperature', '5', '40'],
+      ['#wait-target-temperature', '5', '40'], ['#target-temperature', '1', '30']
+    ]) {
+      await expect(page.locator(id)).toHaveAttribute('min', min);
+      await expect(page.locator(id)).toHaveAttribute('max', max);
+    }
+    await page.locator('#wait-mode').selectOption('temperature');
+    await page.locator('#wait-target-temperature').fill('20');
+    await page.locator('#wait-target-temperature').blur();
+    await expect(page.locator('#steps-container')).toContainText(/target-medium temperature cannot be below ambient/i);
   });
 
   test('invalid input clears the result and recovers after correction', async ({ appPage }) => {
