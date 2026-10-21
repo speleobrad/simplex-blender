@@ -57,16 +57,18 @@ The card has two state panels:
 
 Gas percentage fields accept decimal text input and are paired for gas validation. Selecting a gas preset fills the corresponding mix and switches it away from a custom mix.
 
-Below the current/target panels:
-
 - **Cylinder** selector. The rating hint reports that volume, material, mass, and working pressure come from the selected cylinder preset.
-- **Ambient temperature** in the CURRENT panel. This is used for surrounding conditions and the starting gas calculation state.
-- **Target temperature** in the TARGET panel. The optimizer calculates the hot recipe pressure required to settle at the requested target pressure at this temperature.
-- **Wait between fills**: Fixed minutes or Target temperature.
+- **Surrounding medium**: Air or Water. It affects transfer heating/cooling behavior and the cooling time constant; ordinary waits converge to ambient.
+- **Ambient temperature** in the CURRENT panel. This is the mixing temperature and the temperature ordinary cooling waits converge toward, for both air and water.
+- **Target pressure** is requested at the **target in-water temperature**, not at ambient. The target in-water temperature is independent and may be colder than ambient.
+- **Target in-water temperature** in the TARGET panel. The optimizer converts the requested in-water pressure to its equivalent ambient-settled target, then projects the completed result back to this temperature.
+- **Wait between fills**: Fixed minutes or Target medium temperature.
   - Fixed minutes shows **Wait time** in minutes.
-  - Target temperature shows **Wait target temperature** in °C.
+  - Target medium temperature shows **Target medium temperature** in °C. It must be equal to or above ambient and does not change the target in-water temperature.
 
 Inputs recalculate the blend as they change. Invalid or unsupported values are reported in the result area rather than silently accepted.
+
+The optimizer may automatically extend a wait when a hot transfer would otherwise exceed the cylinder's working pressure. The affected step and recipe summary show an amber `!` warning with configured, actual, and added wait durations plus the working-pressure reason. A transfer may also be split at a safe pressure boundary before continuing.
 
 ### Result tabs
 
