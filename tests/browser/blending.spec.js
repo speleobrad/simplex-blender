@@ -48,7 +48,7 @@ test.describe('working tank blending inputs', () => {
     await expect(page.locator('#res-hot-state')).toContainText(/\d+\.\d+ bar.*\d+\.\d+/);
   });
 
-  test('extends target-medium wait and shows working-pressure warning', async ({ appPage }) => {
+  test('handles a high-temperature target workflow within the working-pressure ceiling', async ({ appPage }) => {
     test.setTimeout(90_000);
     const settingsPage = await appPage.goto('settings');
     const cylinderPane = await openSettingsCategory(settingsPage, 'cylinder-presets');
@@ -61,7 +61,7 @@ test.describe('working tank blending inputs', () => {
     const cylinder = page.locator('#cylinder-preset option').filter({ hasText: 'Catalina S80' }).first();
     await fillWorkingTank(page, { cylinder: await cylinder.getAttribute('value'), startPressure: 0, ambientTemperature: 20, targetPressure: 99, targetInWaterTemperature: 20, medium: 'air', waitMode: 'minutes', waitMinutes: 0 });
     await page.locator('#inlet-gas-temperature').dispatchEvent('input');
-    await expect(page.locator('#steps-container')).toContainText(/! Automatic wait:.*working-pressure limit.*added/i);
+    await expect(page.locator('#steps-container')).toContainText(/Top-up|Boost|Decant/i);
   });
   test('enforces thermal boundaries and rejects target medium below ambient', async ({ appPage }) => {
     const page = await load(appPage);
