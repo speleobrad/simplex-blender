@@ -817,7 +817,7 @@ export function renderThermalCharts(result, input = {}, units = 'metric') {
   renderDataTable(dataTable, displaySeries.points);
   if (status) {
     status.textContent = displaySeries.final
-      ? `${displaySeries.final.step} ${result?.mode === 'compare' ? 'compare recipe' : 'blending'} step${displaySeries.final.step === 1 ? '' : 's'} shown over ${displaySeries.final.elapsedMinutes.toFixed(1)} minutes; final point is the ambient-settled tank state at ${displaySeries.final.pressureBar.toFixed(1)} ${getUnitLabel('pressure', units)} and ${displaySeries.final.temperatureC.toFixed(1)} ${getUnitLabel('temperature', units)}.`
+      ? `${displaySeries.final.step} ${result?.mode === 'compare' ? 'compare recipe' : 'blending'} step${displaySeries.final.step === 1 ? '' : 's'} shown over ${displaySeries.final.elapsedMinutes.toFixed(1)} minutes; final point is the ambient-settled tank state at ${displaySeries.final.pressureBar.toFixed(1)} ${getUnitLabel('pressure', units)} and ${displaySeries.final.temperatureC.toFixed(1)} ${getUnitLabel('temperature', units)}.${result?.automaticWaits?.[0] ? ` ! Automatic wait: working-pressure limit; ${Number(result.automaticWaits[0].configuredWaitMinutes).toFixed(1)} min configured; ${Number(result.automaticWaits[0].actualWaitMinutes).toFixed(1)} min actual; ${Number(result.automaticWaits[0].addedWaitMinutes).toFixed(1)} min added.` : ''}`
       : 'Chart data appears when a completed blend protocol is available.';
   }
 }

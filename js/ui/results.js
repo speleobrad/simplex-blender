@@ -64,6 +64,11 @@ function renderInfeasible(error, maximumPressure, requestedPressureBar, oxygenPe
 function formatThermalValue(value) {
   return Number.isFinite(value) ? value.toFixed(1) : '—';
 }
+function formatAutomaticWaitWarning(metadata) {
+  if (!metadata) return '';
+  const value = minutes => Number.isFinite(minutes) ? `${minutes.toFixed(1)} min` : '—';
+  return `! Automatic wait: working-pressure limit; ${value(metadata.configuredWaitMinutes)} configured; ${value(metadata.actualWaitMinutes)} actual; ${value(metadata.addedWaitMinutes)} added`;
+}
 
 
 function renderWaterPressurePane(data) {
@@ -239,16 +244,7 @@ function renderProtocol(protocolSteps, alertMessage = null, calculation = null, 
     if (automaticWait) {
       const warning = document.createElement('p');
       warning.className = 'mt-1 text-[11px] font-semibold text-amber-300';
-      const configured = Number.isFinite(automaticWait.configuredWaitMinutes)
-        ? `${automaticWait.configuredWaitMinutes.toFixed(1)} min configured`
-        : 'configured wait unavailable';
-      const actual = Number.isFinite(automaticWait.actualWaitMinutes)
-        ? `${automaticWait.actualWaitMinutes.toFixed(1)} min actual`
-        : 'actual wait unavailable';
-      const added = Number.isFinite(automaticWait.addedWaitMinutes)
-        ? `${automaticWait.addedWaitMinutes.toFixed(1)} min added`
-        : 'added wait unavailable';
-      warning.textContent = `! Automatic wait: ${configured}; ${actual}; ${added} (working-pressure limit)`;
+      warning.textContent = formatAutomaticWaitWarning(automaticWait);
       details.append(warning);
     }
 
@@ -318,6 +314,9 @@ function renderThermalSummary(thermal, protocolSteps = []) {
   ]).filter(Number.isFinite);
   setText('res-fill-duration', thermalSteps.length > 0 ? `${duration.toFixed(1)} min` : '—');
   setText('res-max-temperature', temperatures.length > 0 ? `${Math.max(...temperatures).toFixed(1)} °C` : '—');
+  const automaticWait = protocolSteps.map(step => step.automaticWaitMetadata).find(Boolean);
+  const status = document.getElementById('blend-status');
+  if (status && automaticWait) status.textContent = `${status.textContent} ${formatAutomaticWaitWarning(automaticWait)}`;
   if (!thermal) {
     for (const id of ['res-final-temperature', 'res-hot-state', 'res-ambient-state']) setText(id, '—');
     return;
