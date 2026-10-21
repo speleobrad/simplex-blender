@@ -6,11 +6,11 @@ function setText(id, value) {
   if (element) element.textContent = value;
 }
 
-function formatDiagnosticPressureBar(pressureBar) {
-  return pressureBar >= 1 ? pressureBar.toFixed(1) : Number(pressureBar.toPrecision(2)).toString();
+function formatDiagnosticPressureBar(pressureBar, units = 'metric') {
+  return formatUnitValue(pressureBar, 'pressureBar', units);
 }
 
-function renderDiagnosticDetails(diagnostics) {
+function renderDiagnosticDetails(diagnostics, units = 'metric') {
   if (!diagnostics) return '';
   const explainedBanks = new Set();
   const details = diagnostics.componentShortfalls.map(shortfall => {
@@ -18,21 +18,21 @@ function renderDiagnosticDetails(diagnostics) {
     if (!bank) return `No enabled source bank can add ${shortfall.component.toLowerCase()}.`;
     explainedBanks.add(bank.id);
     if (bank.pressureEstimateOutOfRange) {
-      return `${shortfall.component} shortfall: the pressure needed in ${bank.name} (${bank.volumeL} L) is outside the supported real-gas density range. It is currently at ${formatDiagnosticPressureBar(bank.currentPressureBar)} bar (${formatDiagnosticPressureBar(bank.minimumSourcePressureBar)} bar booster minimum).`;
+      return `${shortfall.component} shortfall: the pressure needed in ${bank.name} (${bank.volumeL} L) is outside the supported real-gas density range. It is currently at ${formatDiagnosticPressureBar(bank.currentPressureBar, units)} (${formatDiagnosticPressureBar(bank.minimumSourcePressureBar, units)} booster minimum).`;
     }
-    return `${shortfall.component} shortfall: ${bank.name} (${bank.volumeL} L) would need to be at ${formatDiagnosticPressureBar(bank.requiredPressureBar)} bar to supply the missing gas. It is currently at ${formatDiagnosticPressureBar(bank.currentPressureBar)} bar (${formatDiagnosticPressureBar(bank.minimumSourcePressureBar)} bar booster minimum), a ${formatDiagnosticPressureBar(bank.pressureIncreaseBar)} bar increase.`;
+    return `${shortfall.component} shortfall: ${bank.name} (${bank.volumeL} L) would need to be at ${formatDiagnosticPressureBar(bank.requiredPressureBar, units)} to supply the missing gas. It is currently at ${formatDiagnosticPressureBar(bank.currentPressureBar, units)} (${formatDiagnosticPressureBar(bank.minimumSourcePressureBar, units)} booster minimum), a ${formatDiagnosticPressureBar(bank.pressureIncreaseBar, units)} increase.`;
   });
   for (const bank of diagnostics.exhaustedBanks) {
     if (explainedBanks.has(bank.id)) continue;
     details.push(
-      `${bank.name} is fully drawn from ${formatDiagnosticPressureBar(bank.currentPressureBar)} bar to the ${formatDiagnosticPressureBar(bank.minimumSourcePressureBar)} bar booster minimum.`
+      `${bank.name} is fully drawn from ${formatDiagnosticPressureBar(bank.currentPressureBar, units)} to the ${formatDiagnosticPressureBar(bank.minimumSourcePressureBar, units)} booster minimum.`
     );
   }
   return details.join(' ');
 }
 
 
-function renderInfeasible(error, maximumPressure, requestedPressureBar, oxygenPercent, heliumPercent, diagnostics, thermal) {
+function renderInfeasible(error, maximumPressure, requestedPressureBar, oxygenPercent, heliumPercent, diagnostics, thermal, units = 'metric') {
   const message = document.createElement('div');
   message.className = 'p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs';
   message.setAttribute('role', 'alert');
@@ -326,7 +326,7 @@ function renderThermalSummary(thermal, protocolSteps = [], units = 'metric') {
     step.thermal.temperatureAfterWaitC
   ]).filter(Number.isFinite);
   setText('res-fill-duration', thermalSteps.length > 0 ? `${duration.toFixed(1)} min` : '—');
-  setText('res-max-temperature', temperatures.length > 0 ? `${Math.max(...temperatures).toFixed(1)} °C` : '—');
+  setText('res-max-temperature', temperatures.length > 0 ? `${formatUnitValue(Math.max(...temperatures), 'temperatureC', units)}` : '—');
   const warnings = automaticWaitWarnings(protocolSteps);
   const status = document.getElementById('blend-status');
   if (status && warnings.length) status.textContent = `${status.textContent} ${warnings.join(' ')}`;
@@ -341,7 +341,7 @@ function renderThermalSummary(thermal, protocolSteps = [], units = 'metric') {
   setText('res-ambient-state', `${pressure(thermal.finalAmbientPressureBar)} · ${temperature(thermal.finalAmbientTemperatureC)}`);
 }
 
-function renderBlendStatus(result) {
+function renderBlendStatus(result, units = 'metric') {
   const status = document.getElementById('blend-status');
   if (!status) return;
   if (result.feasible) {
@@ -351,7 +351,7 @@ function renderBlendStatus(result) {
   }
   if (result.maximumPressure) {
     status.className = 'rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200';
-    status.textContent = `Target pressure limited · maximum safely achievable pressure is ${result.maximumPressure.pressureBar.toFixed(1)} bar.`;
+    status.textContent = `Target pressure limited · maximum safely achievable pressure is ${formatUnitValue(result.maximumPressure.pressureBar, 'pressureBar', units)}.`;
     return;
   }
   status.className = 'rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-xs text-rose-300';
@@ -403,7 +403,7 @@ function renderCompareResults(compare, calculation) {
 
 export function renderResults(result, calculation = null) {
   const units = calculation?.settings?.units ?? 'metric';
-  renderBlendStatus(result);
+  renderBlendStatus(result, units);
   renderWaterPressurePane(null);
   const summaryBanner = document.getElementById('summary-banner');
   if (summaryBanner) summaryBanner.hidden = result?.mode === 'compare';
@@ -450,7 +450,8 @@ export function renderResults(result, calculation = null) {
           maximum.blend.finalOxygenPercent,
           maximum.blend.finalHeliumPercent,
           result.diagnostics,
-          thermal
+          thermal,
+          units
         ),
         calculation,
         { units }
