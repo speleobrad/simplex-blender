@@ -794,7 +794,8 @@ function renderCompareEditor() {
     rows: state.compareRows,
     banks: state.banks,
     errors: state.compareErrors,
-    pressureStarts: comparePressureStarts()
+    pressureStarts: comparePressureStarts(),
+    units: state.settings.units
   });
 }
 
@@ -1173,7 +1174,11 @@ function updateCompareRow(input, rerender) {
   const row = state.compareRows[index];
   const field = input.dataset.compareField;
   let value = input.value;
-  if (['pressureAddedBar', 'targetPressureBar', 'waitMinutes', 'targetTemperatureC'].includes(field)) {
+  if (['pressureAddedBar', 'targetPressureBar'].includes(field)) {
+    value = convertFromDisplay(Number.parseFloat(value), 'pressureBar', state.settings.units);
+  } else if (field === 'targetTemperatureC') {
+    value = convertFromDisplay(Number.parseFloat(value), 'temperatureC', state.settings.units);
+  } else if (field === 'waitMinutes') {
     value = Number.parseFloat(value);
   }
 

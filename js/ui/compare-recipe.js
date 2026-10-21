@@ -1,5 +1,4 @@
-import { COMPARE_ROW_TYPES, COMPRESSOR_AIR_ID } from '../compare-recipe.js';
-
+import { formatInputValue, unitLabel } from '../units.js';
 const inputClass = 'w-full rounded border border-ocean-700 bg-ocean-900 px-2 py-1 font-mono text-xs text-slate-100';
 
 function element(tagName, { className, text, attributes } = {}) {
@@ -87,7 +86,7 @@ function select(options, value) {
   return control;
 }
 
-function addGasFields(card, row, rowNumber, banks, errors, pressureStart) {
+function addGasFields(card, row, rowNumber, banks, errors, pressureStart, units = 'metric') {
   const fields = element('div', { className: 'grid grid-cols-2 gap-2' });
   const enabledBanks = banks.filter(bank => bank.enabled && typeof bank.name === 'string' && bank.name.trim().length > 0);
   const bankField = element('div', { className: 'col-span-2' });
@@ -112,23 +111,23 @@ function addGasFields(card, row, rowNumber, banks, errors, pressureStart) {
   }
 
   const addedField = element('div');
-  const added = input(row, 'pressureAddedBar', row.pressureAddedBar, 'number');
+  const added = input(row, 'pressureAddedBar', formatInputValue(row.pressureAddedBar, 'pressureBar', units), 'number');
   added.setAttribute('data-pressure-input-mode', 'added');
   added.setAttribute('data-receiver-start-pressure', pressureStart);
-  appendLabelledControl(addedField, row, rowNumber, 'pressureAddedBar', 'Pressure added (bar)', added, errors);
+  appendLabelledControl(addedField, row, rowNumber, 'pressureAddedBar', `Pressure added (${unitLabel('pressureBar', units)})`, added, errors);
   const targetField = element('div');
-  const target = input(row, 'targetPressureBar', row.targetPressureBar, 'number');
+  const target = input(row, 'targetPressureBar', formatInputValue(row.targetPressureBar, 'pressureBar', units), 'number');
   target.setAttribute('data-pressure-input-mode', 'target');
   target.setAttribute('data-receiver-start-pressure', pressureStart);
-  appendLabelledControl(targetField, row, rowNumber, 'targetPressureBar', 'Receiver target pressure (bar)', target, errors);
+  appendLabelledControl(targetField, row, rowNumber, 'targetPressureBar', `Receiver target pressure (${unitLabel('pressureBar', units)})`, target, errors);
 
   fields.append(bankField, addedField, targetField);
   card.append(fields);
 }
 
-function rowFields(card, row, rowNumber, banks, errors, pressureStarts) {
+function rowFields(card, row, rowNumber, banks, errors, pressureStarts, units = 'metric') {
   if (row.type === 'add') {
-    addGasFields(card, row, rowNumber, banks, errors, pressureStarts[row.id]);
+    addGasFields(card, row, rowNumber, banks, errors, pressureStarts[row.id], units);
     return;
   }
 
@@ -176,7 +175,7 @@ function actionButton(action, label, rowId, disabled = false) {
   return button;
 }
 
-function renderRow(row, index, rows, banks, errors, pressureStarts) {
+function renderRow(row, index, rows, banks, errors, pressureStarts, units = 'metric') {
   const rowNumber = index + 1;
   const card = element('fieldset', {
     className: 'rounded-xl border border-ocean-800 bg-ocean-950/60 p-3',
@@ -194,13 +193,13 @@ function renderRow(row, index, rows, banks, errors, pressureStarts) {
   );
   header.append(type, actions);
   card.append(legend, header);
-  rowFields(card, row, rowNumber, banks, errors, pressureStarts);
+  rowFields(card, row, rowNumber, banks, errors, pressureStarts, units);
   return card;
 }
 
-export function renderCompareRecipe(container, { rows = [], banks = [], errors = [], pressureStarts = {} } = {}) {
+export function renderCompareRecipe(container, { rows = [], banks = [], errors = [], pressureStarts = {}, units = 'metric' } = {}) {
   const content = element('div', { className: 'space-y-3' });
-  rows.forEach((row, index) => content.append(renderRow(row, index, rows, banks, errors, pressureStarts)));
+  rows.forEach((row, index) => content.append(renderRow(row, index, rows, banks, errors, pressureStarts, units)));
 
   const addButton = element('button', {
     className: 'rounded-lg border border-ocean-700 bg-ocean-800 px-3 py-1.5 text-xs font-medium text-cyan-300 hover:bg-ocean-700',
