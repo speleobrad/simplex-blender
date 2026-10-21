@@ -311,7 +311,7 @@ const THERMAL_CONTAINER_IDS = [
   'thermal-chart-data'
 ];
 
-let thermalInteractionsBound = false;
+let thermalHoverPointSamples = [];
 let thermalHoverSamples = [];
 let thermalHoverReadout = null;
 const THERMAL_HOVER_DEFAULT = 'Hover either graph to inspect time, temperature, and pressure.';
@@ -397,6 +397,8 @@ function bindThermalInteractions() {
       : null;
     if (relatedPoint === point) return;
     setActiveThermalPoint(point.dataset.thermalPointIndex);
+    const pointSample = thermalHoverPointSamples[Number(point.dataset.thermalPointIndex)];
+    if (pointSample) updateThermalHover(pointSample);
   };
 
   const handleLeave = event => {
@@ -789,6 +791,7 @@ export function renderThermalCharts(result, input = {}, units = 'metric') {
     segments: series.segments.map(segment => ({ ...segment, samples: segment.samples.map(displayPoint) })),
     final: series.final ? displayPoint(series.final) : null
   };
+  thermalHoverPointSamples = displaySeries.points;
   thermalHoverSamples = displaySeries.samples.filter(sample => sample.title !== 'In-water target projection');
   thermalHoverReadout = document.getElementById('thermal-chart-hover-readout');
   clearThermalHover();
@@ -824,7 +827,7 @@ export function renderThermalCharts(result, input = {}, units = 'metric') {
     ];
     const uniqueWaits = waits.filter((wait, index) => waits.indexOf(wait) === index);
     const warning = uniqueWaits.length
-      ? ` ! Automatic waits: ${uniqueWaits.map(wait => `${wait.stepTitle ?? `step ${wait.step ?? '?'}`} — ${Number(wait.configuredWaitMinutes).toFixed(1)} min configured; ${Number(wait.actualWaitMinutes).toFixed(1)} min actual; ${Number(wait.addedWaitMinutes).toFixed(1)} min added; ${wait.reason ?? 'working-pressure limit'}`).join(' | ')}.`
+      ? ` ! Automatic waits: ${uniqueWaits.map(wait => `${wait.stepIdentifier ?? wait.stepTitle ?? `step ${wait.step ?? '?'}`} — ${Number(wait.configuredWaitMinutes).toFixed(1)} min configured; ${Number(wait.actualWaitMinutes).toFixed(1)} min actual; ${Number(wait.addedWaitMinutes).toFixed(1)} min added; ${wait.reason ?? 'working-pressure limit'}`).join(' | ')}.`
       : '';
     const inWater = displaySeries.points.find(pointValue => pointValue.phase === 'in-water-target');
     const projection = inWater
