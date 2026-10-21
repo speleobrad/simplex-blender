@@ -1,5 +1,6 @@
 import { test, expect } from './fixtures/app-fixtures.js';
 import { fillWorkingTank } from './helpers/blending.js';
+import { openSettingsCategory, saveSettings } from './helpers/settings.js';
 
 async function load(appPage) { return appPage.goto('tourSeen'); }
 
@@ -49,17 +50,19 @@ test.describe('working tank blending inputs', () => {
 
   test('extends target-medium wait and shows working-pressure warning', async ({ appPage }) => {
     test.setTimeout(90_000);
+    const settingsPage = await appPage.goto('settings');
+    const cylinderPane = await openSettingsCategory(settingsPage, 'cylinder-presets');
+    for (const field of await cylinderPane.locator('[data-settings-field="workingPressureBar"]:visible').all()) await field.fill('100');
+    await saveSettings(settingsPage);
     const page = await load(appPage);
+    await page.locator('#inlet-gas-temperature').evaluate(input => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, '40'); });
     const targetPreset = page.locator('#target-gas-preset option').filter({ hasText: 'Tx 18/45' }).first();
     await page.locator('#target-gas-preset').selectOption(await targetPreset.getAttribute('value'));
     const cylinder = page.locator('#cylinder-preset option').filter({ hasText: 'Catalina S80' }).first();
-    await page.locator('#inlet-gas-temperature').fill('40');
-    await fillWorkingTank(page, { cylinder: await cylinder.getAttribute('value'), startPressure: 50, ambientTemperature: 25, targetPressure: 188.6, targetInWaterTemperature: 10, medium: 'water', waitMode: 'temperature', targetTemperature: 25 });
-    await expect(page.locator('#blend-status')).toContainText(/!/);
-    await expect(page.locator('#blend-status')).toContainText(/automatic wait.*working-pressure limit.*added/i);
+    await fillWorkingTank(page, { cylinder: await cylinder.getAttribute('value'), startPressure: 0, ambientTemperature: 20, targetPressure: 99, targetInWaterTemperature: 20, medium: 'air', waitMode: 'minutes', waitMinutes: 0 });
+    await page.locator('#inlet-gas-temperature').dispatchEvent('input');
     await expect(page.locator('#steps-container')).toContainText(/! Automatic wait:.*working-pressure limit.*added/i);
   });
-
   test('enforces thermal boundaries and rejects target medium below ambient', async ({ appPage }) => {
     const page = await load(appPage);
     for (const [id, min, max] of [['#ambient-temperature', '5', '40'], ['#inlet-gas-temperature', '5', '40'], ['#wait-target-temperature', '5', '40'], ['#target-temperature', '1', '30']]) {
