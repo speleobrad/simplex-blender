@@ -43,19 +43,19 @@ function renderInfeasible(error, maximumPressure, requestedPressureBar, oxygenPe
   message.append(heading);
 
   const description = document.createElement('p');
-  const diagnosticDetails = renderDiagnosticDetails(diagnostics);
+  const diagnosticDetails = renderDiagnosticDetails(diagnostics, units);
   const safetyReason = error?.includes('4:1')
     ? ` ${error.split(' Maximum safe pressure')[0]}`
     : '';
   const requestedPressureReason = safetyReason
-    ? `The exact target mix cannot safely reach ${requestedPressureBar.toFixed(1)} bar.`
-    : `The exact target mix (${oxygenPercent}/${heliumPercent}) cannot reach ${requestedPressureBar.toFixed(1)} bar with the current gas supply.`;
+    ? `The exact target mix cannot safely reach ${formatUnitValue(requestedPressureBar, 'pressureBar', units)}.`
+    : `The exact target mix (${oxygenPercent}/${heliumPercent}) cannot reach ${formatUnitValue(requestedPressureBar, 'pressureBar', units)} with the current gas supply.`;
   const settledPressure = thermal?.finalAmbientPressureBar;
   const settledEstimate = Number.isFinite(settledPressure)
-    ? ` Predicted settled pressure is ${settledPressure.toFixed(1)} bar at ${formatThermalValue(thermal.finalAmbientTemperatureC)} °C.`
+    ? ` Predicted settled pressure is ${formatUnitValue(settledPressure, 'pressureBar', units)} at ${formatUnitValue(thermal.finalAmbientTemperatureC, 'temperatureC', units)}.`
     : '';
   description.textContent = maximumPressure
-    ? `${requestedPressureReason} ${diagnosticDetails} The maximum safely achievable pressure is ${maximumPressure.pressureBar.toFixed(1)} bar.${safetyReason}${settledEstimate} The recipe below makes that exact mix.`
+    ? `${requestedPressureReason} ${diagnosticDetails} The maximum safely achievable pressure is ${formatUnitValue(maximumPressure.pressureBar, 'pressureBar', units)}.${safetyReason}${settledEstimate} The recipe below makes that exact mix.`
     : [error || 'The available gas banks cannot satisfy both the target pressure and exact gas fractions.', diagnosticDetails, settledEstimate.trim()].filter(Boolean).join(' ');
   message.append(description);
   return message;
