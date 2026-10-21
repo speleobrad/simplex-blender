@@ -49,6 +49,9 @@ function createFakeDocument() {
     ['res-he-salvaged', new FakeElement()],
     ['res-final-p', new FakeElement()],
     ['res-final-mix', new FakeElement()],
+    ['res-final-temperature', new FakeElement()],
+    ['res-hot-state', new FakeElement()],
+    ['res-ambient-state', new FakeElement()],
     ['res-fill-duration', new FakeElement()],
     ['res-max-temperature', new FakeElement()]
   ]);
@@ -318,4 +321,24 @@ test('pressure warnings trigger only above the cylinder working pressure', () =>
   assert.equal(isPressureAboveWorkingPressure(232, 232), false);
   assert.equal(isPressureAboveWorkingPressure(232.1, 232), true);
   assert.equal(isPressureAboveWorkingPressure(Number.NaN, 232), false);
+});
+
+test('renders explicit thermal states and metadata-driven automatic wait warning', () => {
+  const previousDocument = globalThis.document;
+  const document = createFakeDocument();
+  globalThis.document = document;
+  try {
+    renderResults({
+      feasible: true,
+      blend: { retainedPressureBar: 1, retainedPercent: 1, ventedPressureBar: 0, ventedGasLitres: 0, heliumSalvagedLitres: 0, finalPressureBar: 200, finalOxygenPercent: 18, finalHeliumPercent: 45 },
+      thermal: { finalInWaterPressureBar: 188.6, finalInWaterTemperatureC: 10, finalTransferEndPressureBar: 204.8, finalTransferEndTemperatureC: 40, finalAmbientPressureBar: 200, finalAmbientTemperatureC: 25 },
+      protocolSteps: [{ title: 'Transfer', description: 'Transfer gas.', resultingPressureBar: 200, automaticWaitMetadata: { configuredWaitMinutes: 4, actualWaitMinutes: 9, addedWaitMinutes: 5 }, thermal: { durationMinutes: 1, temperatureAtTransferEndC: 40, temperatureAfterWaitC: 25 } }]
+    });
+    assert.match(document.elements.get('res-hot-state').textContent, /204\.8 bar/);
+    assert.match(document.elements.get('res-ambient-state').textContent, /200\.0 bar/);
+    assert.match(document.elements.get('res-final-temperature').textContent, /10\.0 °C/);
+    assert.match(document.elements.get('steps-container').textContent, /^.*! Automatic wait:.*working-pressure limit/s);
+  } finally {
+    globalThis.document = previousDocument;
+  }
 });

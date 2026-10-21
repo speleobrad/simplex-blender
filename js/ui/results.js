@@ -235,6 +235,22 @@ function renderProtocol(protocolSteps, alertMessage = null, calculation = null, 
       step
     );
     if (thermalDetails) details.append(thermalDetails);
+    const automaticWait = step.automaticWaitMetadata;
+    if (automaticWait) {
+      const warning = document.createElement('p');
+      warning.className = 'mt-1 text-[11px] font-semibold text-amber-300';
+      const configured = Number.isFinite(automaticWait.configuredWaitMinutes)
+        ? `${automaticWait.configuredWaitMinutes.toFixed(1)} min configured`
+        : 'configured wait unavailable';
+      const actual = Number.isFinite(automaticWait.actualWaitMinutes)
+        ? `${automaticWait.actualWaitMinutes.toFixed(1)} min actual`
+        : 'actual wait unavailable';
+      const added = Number.isFinite(automaticWait.addedWaitMinutes)
+        ? `${automaticWait.addedWaitMinutes.toFixed(1)} min added`
+        : 'added wait unavailable';
+      warning.textContent = `! Automatic wait: ${configured}; ${actual}; ${added} (working-pressure limit)`;
+      details.append(warning);
+    }
 
     const result = document.createElement('div');
     result.className = 'text-right font-mono shrink-0';
@@ -302,6 +318,13 @@ function renderThermalSummary(thermal, protocolSteps = []) {
   ]).filter(Number.isFinite);
   setText('res-fill-duration', thermalSteps.length > 0 ? `${duration.toFixed(1)} min` : '—');
   setText('res-max-temperature', temperatures.length > 0 ? `${Math.max(...temperatures).toFixed(1)} °C` : '—');
+  if (!thermal) {
+    for (const id of ['res-final-temperature', 'res-hot-state', 'res-ambient-state']) setText(id, '—');
+    return;
+  }
+  setText('res-final-temperature', `${formatThermalValue(thermal.finalInWaterTemperatureC)} °C`);
+  setText('res-hot-state', `${formatThermalValue(thermal.finalTransferEndPressureBar)} bar · ${formatThermalValue(thermal.finalTransferEndTemperatureC)} °C`);
+  setText('res-ambient-state', `${formatThermalValue(thermal.finalAmbientPressureBar)} bar · ${formatThermalValue(thermal.finalAmbientTemperatureC)} °C`);
 }
 
 function renderBlendStatus(result) {
