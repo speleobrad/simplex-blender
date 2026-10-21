@@ -1,3 +1,4 @@
+import { COMPARE_ROW_TYPES, COMPRESSOR_AIR_ID } from '../compare-recipe.js';
 import { formatInputValue, unitLabel } from '../units.js';
 const inputClass = 'w-full rounded border border-ocean-700 bg-ocean-900 px-2 py-1 font-mono text-xs text-slate-100';
 
@@ -111,12 +112,12 @@ function addGasFields(card, row, rowNumber, banks, errors, pressureStart, units 
   }
 
   const addedField = element('div');
-  const added = input(row, 'pressureAddedBar', formatInputValue(row.pressureAddedBar, 'pressureBar', units), 'number');
+  const added = input(row, 'pressureAddedBar', units === 'metric' ? row.pressureAddedBar : formatInputValue(row.pressureAddedBar, 'pressureBar', units), 'number');
   added.setAttribute('data-pressure-input-mode', 'added');
   added.setAttribute('data-receiver-start-pressure', pressureStart);
   appendLabelledControl(addedField, row, rowNumber, 'pressureAddedBar', `Pressure added (${unitLabel('pressureBar', units)})`, added, errors);
   const targetField = element('div');
-  const target = input(row, 'targetPressureBar', formatInputValue(row.targetPressureBar, 'pressureBar', units), 'number');
+  const target = input(row, 'targetPressureBar', units === 'metric' ? row.targetPressureBar : formatInputValue(row.targetPressureBar, 'pressureBar', units), 'number');
   target.setAttribute('data-pressure-input-mode', 'target');
   target.setAttribute('data-receiver-start-pressure', pressureStart);
   appendLabelledControl(targetField, row, rowNumber, 'targetPressureBar', `Receiver target pressure (${unitLabel('pressureBar', units)})`, target, errors);
