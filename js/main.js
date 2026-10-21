@@ -880,7 +880,7 @@ function renderCompareResult() {
     return;
   }
   renderResults(state.lastCompareResult, state.lastCompareInput);
-  renderThermalCharts(state.lastCompareResult, state.lastCompareInput);
+  renderThermalCharts(state.lastCompareResult, state.lastCompareInput, state.settings.units);
   renderTernary();
 }
 
@@ -1011,7 +1011,7 @@ function recalculate() {
   renderSupplyBanks(state.banks, state.settings.gasPresets, state.settings.units);
   renderEquipmentSummary(state.settings, state.settings.units);
   renderResults(result, input);
-  renderThermalCharts(result, input);
+  renderThermalCharts(result, input, state.settings.units);
   if (result.feasible) renderTernary();
   else clearTernaryDiagram(byId('ternary-canvas'));
 }

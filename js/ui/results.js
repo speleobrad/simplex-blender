@@ -352,11 +352,11 @@ function renderBlendStatus(result) {
   status.textContent = 'No feasible blend · review the target and enabled gas supply.';
 }
 
-function formatCompareState(state) {
+function formatCompareState(state, units = 'metric') {
   const temperature = Number.isFinite(state.temperatureC)
-    ? ` at ${state.temperatureC.toFixed(1)} °C`
+    ? ` at ${formatUnitValue(state.temperatureC, 'temperatureC', units)}`
     : '';
-  return `${state.pressureBar.toFixed(1)} bar${temperature} · Tx ${state.oxygenPercent.toFixed(1)}/${state.heliumPercent.toFixed(1)}`;
+  return `${formatUnitValue(state.pressureBar, 'pressureBar', units)}${temperature} · Tx ${state.oxygenPercent.toFixed(1)}/${state.heliumPercent.toFixed(1)}`;
 }
 
 function renderCompareResults(compare, calculation) {
@@ -382,9 +382,9 @@ function renderCompareResults(compare, calculation) {
     temperatureC: calculation?.physics?.temperatureC,
     ...compare.initialMix
   };
-  setText('compare-start-state', formatCompareState(start));
-  setText('compare-recipe-end-state', formatCompareState(compare.final.recipeEnd));
-  setText('compare-ambient-settled-state', formatCompareState(compare.final.ambientSettled));
+  setText('compare-start-state', formatCompareState(start, calculation?.settings?.units ?? 'metric'));
+  setText('compare-recipe-end-state', formatCompareState(compare.final.recipeEnd, calculation?.settings?.units ?? 'metric'));
+  setText('compare-ambient-settled-state', formatCompareState(compare.final.ambientSettled, calculation?.settings?.units ?? 'metric'));
   renderProtocol(compare.protocolSteps.map(step => ({
     ...step,
     description: step.description ?? (step.recipeGas ? `${step.operation}: ${step.recipeGas}` : step.operation ?? step.title)
@@ -432,9 +432,9 @@ export function renderResults(result, calculation = null) {
         blend: maximum.blend,
         volumeL: calculation?.cylinder?.volumeL,
         workingPressureBar: calculation?.cylinder?.workingPressureBar,
-        useVdw: calculation?.physics?.model === 'vdw'
+        useVdw: calculation?.physics?.model === 'vdw',
+        units
       });
-      renderBlendSummary(maximum.blend, units, maximum.thermal?.requestedInWaterPressureBar);
       renderProtocol(
         maximum.protocolSteps,
         renderInfeasible(
@@ -473,7 +473,8 @@ export function renderResults(result, calculation = null) {
     blend: result.blend,
     volumeL: calculation?.cylinder?.volumeL,
     workingPressureBar: calculation?.cylinder?.workingPressureBar,
-    useVdw: calculation?.physics?.model === 'vdw'
+    useVdw: calculation?.physics?.model === 'vdw',
+    units
   });
   renderProtocol(result.protocolSteps, null, calculation, { units });
 }
