@@ -344,9 +344,8 @@ function clearThermalHover() {
 }
 
 function updateThermalHover(sample) {
-  if (!sample) return;
   if (thermalHoverReadout) {
-    thermalHoverReadout.textContent = `Time: ${sample.elapsedMinutes.toFixed(1)} min · Temperature: ${sample.temperatureC.toFixed(1)} °C · Pressure: ${sample.pressureBar.toFixed(1)} bar`;
+    thermalHoverReadout.textContent = `Time: ${sample.elapsedMinutes.toFixed(1)} min · Temperature: ${sample.temperatureC.toFixed(1)} ${sample.temperatureUnit ?? '°C'} · Pressure: ${sample.pressureBar.toFixed(1)} ${sample.pressureUnit ?? 'bar'}`;
   }
   for (const svg of document.querySelectorAll('.thermal-chart-svg')) {
     const maximumTime = Number(svg.dataset.thermalMaximumTime);
