@@ -67,7 +67,10 @@ function formatThermalValue(value) {
 function formatAutomaticWaitWarning(metadata) {
   if (!metadata) return '';
   const value = minutes => Number.isFinite(minutes) ? `${minutes.toFixed(1)} min` : '—';
-  return `! Automatic wait: working-pressure limit; ${value(metadata.configuredWaitMinutes)} configured; ${value(metadata.actualWaitMinutes)} actual; ${value(metadata.addedWaitMinutes)} added`;
+  return `! Automatic wait: working-pressure limit (${metadata.stepIdentifier ?? 'step'}); ${value(metadata.configuredWaitMinutes)} configured; ${value(metadata.actualWaitMinutes)} actual; ${value(metadata.addedWaitMinutes)} added`;
+}
+function automaticWaitWarnings(protocolSteps = []) {
+  return protocolSteps.map(step => step.automaticWaitMetadata).filter(Boolean).map(formatAutomaticWaitWarning);
 }
 
 
@@ -303,7 +306,7 @@ function renderBlendSummary(blend, units = 'metric', requestedInWaterPressureBar
   setText('res-final-mix', `Tx ${blend.finalOxygenPercent}/${blend.finalHeliumPercent}`);
 }
 
-function renderThermalSummary(thermal, protocolSteps = []) {
+function renderThermalSummary(thermal, protocolSteps = [], units = 'metric') {
   const thermalSteps = protocolSteps.filter(step => step.thermal);
   const duration = thermalSteps.reduce((total, step) => total + (step.thermal.durationMinutes || 0), 0)
     + thermalSteps.slice(0, -1).reduce((total, step) => total + (step.thermal.waitMinutes || 0), 0);
@@ -314,16 +317,18 @@ function renderThermalSummary(thermal, protocolSteps = []) {
   ]).filter(Number.isFinite);
   setText('res-fill-duration', thermalSteps.length > 0 ? `${duration.toFixed(1)} min` : '—');
   setText('res-max-temperature', temperatures.length > 0 ? `${Math.max(...temperatures).toFixed(1)} °C` : '—');
-  const automaticWait = protocolSteps.map(step => step.automaticWaitMetadata).find(Boolean);
+  const warnings = automaticWaitWarnings(protocolSteps);
   const status = document.getElementById('blend-status');
-  if (status && automaticWait) status.textContent = `${status.textContent} ${formatAutomaticWaitWarning(automaticWait)}`;
+  if (status && warnings.length) status.textContent = `${status.textContent} ${warnings.join(' ')}`;
   if (!thermal) {
     for (const id of ['res-final-temperature', 'res-hot-state', 'res-ambient-state']) setText(id, '—');
     return;
   }
-  setText('res-final-temperature', `${formatThermalValue(thermal.finalInWaterTemperatureC)} °C`);
-  setText('res-hot-state', `${formatThermalValue(thermal.finalTransferEndPressureBar)} bar · ${formatThermalValue(thermal.finalTransferEndTemperatureC)} °C`);
-  setText('res-ambient-state', `${formatThermalValue(thermal.finalAmbientPressureBar)} bar · ${formatThermalValue(thermal.finalAmbientTemperatureC)} °C`);
+  const pressure = value => Number.isFinite(value) ? formatUnitValue(value, 'pressureBar', units) : '—';
+  const temperature = value => Number.isFinite(value) ? `${formatUnitValue(value, 'temperatureC', units)} ${unitLabel('temperature', units)}` : '—';
+  setText('res-final-temperature', temperature(thermal.finalInWaterTemperatureC));
+  setText('res-hot-state', `${pressure(thermal.finalTransferEndPressureBar)} · ${temperature(thermal.finalTransferEndTemperatureC)}`);
+  setText('res-ambient-state', `${pressure(thermal.finalAmbientPressureBar)} · ${temperature(thermal.finalAmbientTemperatureC)}`);
 }
 
 function renderBlendStatus(result) {
