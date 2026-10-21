@@ -337,7 +337,9 @@ test('renders explicit thermal states and metadata-driven automatic wait warning
     assert.match(document.elements.get('res-hot-state').textContent, /204\.8 bar/);
     assert.match(document.elements.get('res-ambient-state').textContent, /200\.0 bar/);
     assert.match(document.elements.get('res-final-temperature').textContent, /10\.0 °C/);
-    assert.match(document.elements.get('steps-container').textContent, /^.*! Automatic wait:.*working-pressure limit/s);
+    const waitText = document.elements.get('steps-container').textContent;
+    assert.match(waitText, /! Automatic wait:.*working-pressure limit/);
+    assert.ok((waitText.match(/! Automatic wait:/g) ?? []).length >= 2);
   } finally {
     globalThis.document = previousDocument;
   }
