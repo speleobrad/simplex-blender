@@ -248,7 +248,7 @@ function renderProtocol(protocolSteps, alertMessage = null, calculation = null, 
       const warning = document.createElement('p');
       warning.className = 'mt-1 text-[11px] font-semibold text-amber-300';
       warning.textContent = formatAutomaticWaitWarning(automaticWait);
-      details.append(warning);
+      (thermalDetails ?? details).append(warning);
     }
 
     const result = document.createElement('div');
@@ -443,7 +443,7 @@ export function renderResults(result, calculation = null) {
           thermal
         ),
         calculation,
-        units
+        { units }
       );
     } else {
       for (const id of [
@@ -457,13 +457,13 @@ export function renderResults(result, calculation = null) {
       ]) {
         setText(id, '—');
       }
-      renderProtocol([], renderInfeasible(result.error, null, 0, 0, 0, result.diagnostics, thermal), calculation, units);
+      renderProtocol([], renderInfeasible(result.error, null, 0, 0, 0, result.diagnostics, thermal), calculation, { units });
     }
     return;
   }
 
   renderBlendSummary(result.blend, units, result.thermal?.requestedInWaterPressureBar);
-  renderThermalSummary(result.thermal, result.protocolSteps);
+  renderThermalSummary(result.thermal, result.protocolSteps, units);
   renderWaterPressurePane({
     thermal: result.thermal,
     blend: result.blend,
@@ -471,5 +471,5 @@ export function renderResults(result, calculation = null) {
     workingPressureBar: calculation?.cylinder?.workingPressureBar,
     useVdw: calculation?.physics?.model === 'vdw'
   });
-  renderProtocol(result.protocolSteps, null, calculation, units);
+  renderProtocol(result.protocolSteps, null, calculation, { units });
 }
