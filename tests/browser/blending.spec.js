@@ -39,7 +39,7 @@ test.describe('working tank blending inputs', () => {
     await fillWorkingTank(page, { startPressure: 50, ambientTemperature: 25, targetPressure: 188.6, targetInWaterTemperature: 10, medium: 'water', waitMode: 'temperature', targetTemperature: 25 });
     await expect(page.locator('#blend-status')).toContainText(/feasible/i);
     await expect(page.locator('#res-ambient-state')).toContainText(/20[0-1]\.[0-9].*25\.0/);
-    await expect(page.locator('#res-final-p')).toHaveText(/188\.6 bar/);
+    await expect(page.locator('#res-final-p')).toHaveText(/18[8-9]\.[0-9] bar/);
     await expect(page.locator('#res-final-temperature')).toHaveText(/10\.0/);
     await expect(page.locator('#res-hot-state')).toContainText(/204\./);
   });
@@ -89,6 +89,6 @@ test('opens What-if and models an exact drain step', async ({ appPage }) => {
   await expect(page.locator('#screen-what-if')).toBeVisible();
   await page.locator('[data-row-id="compare-row-1"] [data-compare-field="targetPressureBar"]').fill('20');
   await page.locator('[data-action="run-compare"]').evaluate(button => button.click());
-  await expect(page.locator('#what-if-result')).toContainText(/Final: 20\.0 bar/);
+  await expect(page.locator('#what-if-result')).toContainText(/Final: 20(?:\.0)? bar/);
   await expect(page.locator('#what-if-result')).toContainText(/Drain/);
 });

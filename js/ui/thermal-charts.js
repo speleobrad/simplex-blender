@@ -1,5 +1,4 @@
 import { convertToDisplay, getUnitLabel } from '../units.js';
-let thermalInteractionsBound = false;
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const CHART_WIDTH = 720;
 const CHART_HEIGHT = 300;
