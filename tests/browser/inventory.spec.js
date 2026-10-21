@@ -62,6 +62,17 @@ test.describe('inventory supply banks', () => {
     await expect(oxygen).toHaveValue('34');
   });
 
+  test('restores rejected imperial bank volumes in their display units', async ({ appPage }) => {
+    const page = await appPage.goto('imperialInventory');
+    await page.getByRole('tab', { name: 'Inventory', exact: true }).click();
+    const volume = bankRows(page).first().getByRole('spinbutton', { name: /volume in (?:ft³|cu ft)$/i });
+    const originalValue = await volume.inputValue();
+    await volume.fill('999');
+    await volume.blur();
+    await expect(page.getByRole('alert')).toContainText('Inventory edit rejected');
+    await expect(volume).toHaveValue(originalValue);
+  });
+
   test('exposes inventory temperature and keeps dynamic rows separated at narrow width', async ({ appPage }, testInfo) => {
     const page = await appPage.goto('tourSeen');
     await page.getByRole('tab', { name: 'Inventory', exact: true }).click();

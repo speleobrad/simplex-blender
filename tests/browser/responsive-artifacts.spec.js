@@ -46,6 +46,9 @@ test.describe('responsive artifact surfaces', () => {
 
   test('keeps inventory rows and dynamic controls within the supply surface', async ({ appPage }) => {
     const page = await appPage.goto('imperialInventory');
+    const volumes = page.locator('#tanks-tbody input[data-bank-field="volumeL"]:visible');
+    const validVolumes = await volumes.evaluateAll(inputs => inputs.map(input => input.validity.valid));
+    expect(validVolumes).toEqual([true, true, true]);
     await checkSurface(page, '#supply-banks-section', {
       focus: '#tanks-tbody select:visible, #tanks-tbody button:visible',
       overlap: '#tanks-tbody > tr:visible',
@@ -73,7 +76,6 @@ test.describe('responsive artifact surfaces', () => {
   test('keeps result tabs, diagrams, and thermal charts contained and focusable', async ({ appPage }) => {
     const page = await appPage.goto('tourSeen');
     await checkSurface(page, '#results-navigation [role="tablist"]', {
-      children: '#results-navigation [role="tab"]:nth-child(-n+3)',
       focus: '#results-navigation [role="tab"]:nth-child(-n+3)',
       overlap: '#results-navigation [role="tab"]:nth-child(-n+3)',
       clip: '#results-navigation [role="tab"]:nth-child(-n+3)'

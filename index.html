@@ -308,18 +308,18 @@
             </div>
             <div class="grid grid-cols-2 gap-2">
               <div class="min-w-0">
-                <div class="flex justify-between text-[11px] text-slate-400 mb-0.5">
+                <div class="min-h-[2rem] text-[11px] text-slate-400 mb-0.5">
                   <label for="init-p">Start pressure:</label>
-                  <span class="font-mono text-slate-200">bar</span>
                 </div>
                 <input type="number" id="init-p" value="50" min="0" max="350" step="5" data-recalculate="input" class="w-full min-w-0 bg-ocean-900 border border-ocean-700 rounded px-2 py-1 font-mono text-slate-100 text-xs">
+                <span class="block w-full text-right font-mono text-slate-200">bar</span>
               </div>
               <div class="min-w-0">
-                <div class="flex justify-between text-[11px] text-slate-400 mb-0.5">
+                <div class="min-h-[2rem] text-[11px] text-slate-400 mb-0.5">
                   <label for="ambient-temperature">Ambient temperature:</label>
-                  <span class="font-mono text-slate-200">°C</span>
                 </div>
                 <input type="number" id="ambient-temperature" value="25" min="5" max="40" step="0.1" data-recalculate="input" class="w-full min-w-0 bg-ocean-900 border border-ocean-700 rounded px-2 py-1 font-mono text-slate-100 text-xs">
+                <span class="block w-full text-right font-mono text-slate-200">°C</span>
               </div>
               <div class="col-span-2 min-w-0">
                 <label for="init-gas-preset" class="block text-[10px] text-slate-400 font-mono mb-0.5">Gas preset</label>
@@ -344,18 +344,18 @@
             </div>
             <div class="grid grid-cols-2 gap-2">
               <div class="min-w-0">
-                <div class="flex justify-between text-[11px] text-slate-400 mb-0.5">
+                <div class="min-h-[2rem] text-[11px] text-slate-400 mb-0.5">
                   <label for="target-p">Target pressure:</label>
-                  <span class="font-mono text-slate-200">bar</span>
                 </div>
                 <input type="number" id="target-p" value="200" min="10" max="350" step="5" data-recalculate="input" class="w-full min-w-0 bg-ocean-900 border border-ocean-700 rounded px-2 py-1 font-mono text-slate-100 text-xs">
+                <span class="block w-full text-right font-mono text-slate-200">bar</span>
               </div>
               <div class="min-w-0">
-                <div class="flex justify-between text-[11px] text-slate-400 mb-0.5">
+                <div class="min-h-[2rem] text-[11px] text-slate-400 mb-0.5">
                   <label for="target-temperature">Target in-water temperature:</label>
-                  <span class="font-mono text-slate-200">°C</span>
                 </div>
                 <input type="number" id="target-temperature" value="25" min="1" max="30" step="0.1" data-recalculate="input" class="w-full min-w-0 bg-ocean-900 border border-ocean-700 rounded px-2 py-1 font-mono text-slate-100 text-xs">
+                <span class="block w-full text-right font-mono text-slate-200">°C</span>
               </div>
               <div class="col-span-2 min-w-0">
                 <label for="target-gas-preset" class="block text-[10px] text-slate-400 font-mono mb-0.5">Gas preset</label>
@@ -445,45 +445,59 @@
         <div id="tab-pane-recipe" role="tabpanel" aria-labelledby="tab-btn-recipe" aria-live="polite" class="pt-4 flex flex-col gap-4">
           <div id="blend-status" role="status" aria-live="polite" class="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300"></div>
           <!-- Summary Banner -->
-          <div id="summary-banner" class="p-4 rounded-xl bg-gradient-to-r from-ocean-850 to-ocean-900 border border-ocean-700/80 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 text-center">
-            <div>
-              <div class="text-[10px] uppercase text-slate-400 font-mono">Retained Gas</div>
-              <div id="res-retained-p" class="text-base font-bold font-mono text-cyan-300 mt-0.5">80.0 bar</div>
-              <div id="res-retained-pct" class="text-[10px] text-slate-400">100% kept</div>
+          <div id="summary-banner" class="p-4 rounded-xl bg-gradient-to-r from-ocean-850 to-ocean-900 border border-ocean-700/80 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-4 lg:gap-y-3 lg:grid-rows-[auto_auto]">
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 text-center lg:row-span-2 lg:grid-rows-[subgrid]">
+              <div>
+                <div class="summary-banner-label text-[10px] uppercase text-slate-400 font-mono lg:min-h-8">Retained gas</div>
+                <div id="res-retained-p" class="text-base font-bold font-mono text-cyan-300 mt-0.5">80.0 bar</div>
+                <div id="res-retained-pct" class="text-[10px] text-slate-400">100% kept</div>
+              </div>
+              <div>
+                <div class="summary-banner-label text-[10px] uppercase text-slate-400 font-mono lg:min-h-8">Gas vented</div>
+                <div id="res-vented-p" class="text-base font-bold font-mono text-rose-400 mt-0.5">0.0 bar</div>
+                <div id="res-vented-litres" class="text-[10px] text-slate-400">0.0 L lost</div>
+              </div>
+              <div>
+                <div class="summary-banner-label text-[10px] uppercase text-slate-400 font-mono lg:min-h-8">Helium salvaged</div>
+                <div id="res-he-salvaged" class="text-base font-bold font-mono text-amber-400 mt-0.5">336 L</div>
+              </div>
+              <div>
+                <div class="summary-banner-label text-[10px] uppercase text-slate-400 font-mono lg:min-h-8">Achieved mix</div>
+                <div id="res-final-mix" class="text-base font-bold font-mono text-emerald-400 mt-0.5">Tx 18/45</div>
+              </div>
+              <div>
+                <div class="summary-banner-label text-[10px] uppercase text-slate-400 font-mono lg:min-h-8">Fill duration</div>
+                <div id="res-fill-duration" class="text-base font-bold font-mono text-cyan-300 mt-0.5">—</div>
+              </div>
+              <div>
+                <div class="summary-banner-label text-[10px] uppercase text-slate-400 font-mono lg:min-h-8">Max temperature</div>
+                <div id="res-max-temperature" class="text-base font-bold font-mono text-amber-300 mt-0.5">—</div>
+              </div>
             </div>
-            <div>
-              <div class="text-[10px] uppercase text-slate-400 font-mono">Gas Vented</div>
-              <div id="res-vented-p" class="text-base font-bold font-mono text-rose-400 mt-0.5">0.0 bar</div>
-              <div id="res-vented-litres" class="text-[10px] text-slate-400">0.0 L lost</div>
+            <div class="grid grid-cols-3 gap-x-3 text-center lg:row-span-2 lg:grid-rows-[subgrid]">
+              <div data-summary-state="hot-mix" class="grid grid-rows-[3.5rem_auto] gap-y-3 lg:row-span-2 lg:grid-rows-[subgrid]">
+                <div>
+                  <div class="summary-banner-label text-[10px] uppercase text-slate-400 font-mono lg:min-h-8">Hot mix</div>
+                  <div id="res-hot-pressure" data-summary-metric="pressure" class="mt-0.5 text-base font-bold font-mono text-cyan-300">—</div>
+                </div>
+                <div id="res-hot-temperature" data-summary-metric="temperature" class="summary-banner-temperature mt-0.5 text-base font-bold font-mono text-amber-300 lg:mt-[2.125rem]">—</div>
+              </div>
+              <div data-summary-state="ambient-settled" class="grid grid-rows-[3.5rem_auto] gap-y-3 lg:row-span-2 lg:grid-rows-[subgrid]">
+                <div>
+                  <div class="summary-banner-label text-[10px] uppercase text-slate-400 font-mono lg:min-h-8">Ambient settled</div>
+                  <div id="res-ambient-pressure" data-summary-metric="pressure" class="mt-0.5 text-base font-bold font-mono text-cyan-300">—</div>
+                </div>
+                <div id="res-ambient-temperature" data-summary-metric="temperature" class="summary-banner-temperature mt-0.5 text-base font-bold font-mono text-amber-300 lg:mt-[2.125rem]">—</div>
+              </div>
+              <div data-summary-state="in-water" class="grid grid-rows-[3.5rem_auto] gap-y-3 lg:row-span-2 lg:grid-rows-[subgrid]">
+                <div>
+                  <div class="summary-banner-label text-[10px] uppercase text-slate-400 font-mono lg:min-h-8">In-water</div>
+                  <div id="res-in-water-pressure" data-summary-metric="pressure" class="mt-0.5 text-base font-bold font-mono text-cyan-300">—</div>
+                </div>
+                <div id="res-in-water-temperature" data-summary-metric="temperature" class="summary-banner-temperature mt-0.5 text-base font-bold font-mono text-amber-300 lg:mt-[2.125rem]">—</div>
+              </div>
             </div>
-            <div>
-              <div class="text-[10px] uppercase text-slate-400 font-mono">Helium salvaged</div>
-              <div id="res-he-salvaged" class="text-base font-bold font-mono text-amber-400 mt-0.5">336 L</div>
-            </div>
-            <div>
-              <div class="text-[10px] uppercase text-slate-400 font-mono">In-water target pressure / temperature</div>
-              <div id="res-final-p" class="text-base font-bold font-mono text-emerald-400 mt-0.5">200.0 bar</div>
-              <div id="res-final-temperature" class="text-[10px] text-slate-300 font-mono">— °C</div>
-              <div id="res-final-mix" class="text-[10px] text-slate-300 font-mono">Tx 18/45</div>
-            </div>
-            <div>
-              <div class="text-[10px] uppercase text-slate-400 font-mono">Hot mix pressure / temperature</div>
-              <div id="res-hot-state" class="text-base font-bold font-mono text-amber-300 mt-0.5">—</div>
-            </div>
-            <div>
-              <div class="text-[10px] uppercase text-slate-400 font-mono">Ambient-settled pressure / temperature</div>
-              <div id="res-ambient-state" class="text-base font-bold font-mono text-cyan-300 mt-0.5">—</div>
-            </div>
-            <div>
-              <div class="text-[10px] uppercase text-slate-400 font-mono">Fill duration</div>
-              <div id="res-fill-duration" class="text-base font-bold font-mono text-cyan-300 mt-0.5">—</div>
-            </div>
-            <div>
-              <div class="text-[10px] uppercase text-slate-400 font-mono">Max temperature</div>
-              <div id="res-max-temperature" class="text-base font-bold font-mono text-amber-300 mt-0.5">—</div>
-            </div>
-
-</div>
+          </div>
           <div id="compare-summary" hidden class="rounded-xl border border-ocean-700/80 bg-gradient-to-r from-ocean-850 to-ocean-900 p-4 text-center">
             <div class="grid grid-cols-1 gap-3 text-xs sm:grid-cols-3">
               <div>

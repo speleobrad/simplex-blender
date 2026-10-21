@@ -1123,6 +1123,15 @@ function selectBankGasPreset(select) {
 }
 
 
+function restoreBankInputValue(input, bank) {
+  const { bankField } = input.dataset;
+  const quantity = bankField === 'volumeL' ? 'volumeL' : bankField === 'pressureBar' ? 'pressureBar' : null;
+  const value = quantity
+    ? convertToDisplay(bank[bankField], quantity, state.settings.units)
+    : bank[bankField];
+  input.value = String(value);
+}
+
 function updateBankFromInput(input) {
   const bank = state.banks.find(candidate => candidate.id === input.dataset.bankId);
   if (!bank) return;
@@ -1134,7 +1143,7 @@ function updateBankFromInput(input) {
   } else {
     const value = Number.parseFloat(input.value);
     if (!Number.isFinite(value)) {
-      input.value = String(bank[bankField]);
+      restoreBankInputValue(input, bank);
       clearBankInputFailure(bank.id);
       return;
     }
@@ -1146,7 +1155,7 @@ function updateBankFromInput(input) {
   }
 
   if (updatedBank.oxygenPercent === 21 && updatedBank.heliumPercent === 0) {
-    input.value = String(bank[bankField]);
+    restoreBankInputValue(input, bank);
     state.bankInputFailure = {
       bankId: bank.id,
       message: `${bank.name}: Air is supplied by the compressor and cannot be a finite supply bank.`
@@ -1157,7 +1166,7 @@ function updateBankFromInput(input) {
 
   const errors = validateSupplyBankInput(updatedBank);
   if (errors.length > 0) {
-    input.value = String(bank[bankField]);
+    restoreBankInputValue(input, bank);
     state.bankInputFailure = { bankId: bank.id, message: `${bank.name}: ${errors[0]}` };
     updateStorageWarning();
     return;

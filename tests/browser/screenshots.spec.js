@@ -27,6 +27,24 @@ test.describe('approved UI screenshots', () => {
     await assertResultPanelExclusive(page, 'Thermal Graph');
     await expect(page).toHaveScreenshot('results-thermal-light.png', { animations: 'disabled', fullPage: false });
   });
+  test('renders recipe summary at the narrow two-column breakpoint', async ({ appPage }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'Keep one representative intermediate-width baseline');
+    const page = await load(appPage, 'lightTheme');
+    await assertResultPanelExclusive(page, 'Recipe');
+    await page.setViewportSize({ width: 1024, height: 1000 });
+    await expect(page.locator('#summary-banner'))
+      .toHaveScreenshot('results-recipe-summary-narrow-two-column.png', { animations: 'disabled' });
+  });
+
+  test('expanded recipe technical details', async ({ appPage }) => {
+    const page = await load(appPage, 'lightTheme');
+    await assertResultPanelExclusive(page, 'Recipe');
+    const technicalDetails = page.locator('#steps-container details')
+      .filter({ hasText: 'Technical details' })
+      .first();
+    await technicalDetails.locator('summary').click();
+    await expect(technicalDetails).toHaveScreenshot('results-technical-details-light.png', { animations: 'disabled' });
+  });
 
   test('dark theme recipe representative', async ({ appPage }) => {
     const page = await load(appPage, 'darkTheme');
@@ -38,6 +56,14 @@ test.describe('approved UI screenshots', () => {
     const inventory = page.locator('#supply-banks-section');
     await inventory.scrollIntoViewIfNeeded();
     await expect(inventory).toHaveScreenshot('inventory-populated.png', { animations: 'disabled' });
+  });
+  test('shows the full imperial bank volume in its narrow input', async ({ appPage }, testInfo) => {
+    test.skip(testInfo.project.name !== 'mobile', 'One narrow visual baseline verifies the widest displayed value');
+    const page = await load(appPage, 'imperialInventory');
+    const volume = page.getByRole('spinbutton', { name: 'Helium reserve volume in cu ft', exact: true });
+    await volume.scrollIntoViewIfNeeded();
+    await expect(volume).toHaveValue('1.4125866688595436');
+    await expect(volume).toHaveScreenshot('imperial-inventory-volume-input.png', { animations: 'disabled' });
   });
 
   test('expanded equipment settings representative', async ({ appPage }) => {

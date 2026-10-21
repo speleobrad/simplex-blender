@@ -90,16 +90,14 @@ The tab starts with a live blend-status banner:
 - Amber: target pressure is limited; the maximum safely achievable pressure is shown.
 - Rose: no feasible blend; the user is directed to review the target and enabled supply.
 
-The summary banner shows four metrics:
+The summary banner is split into two side-by-side regions on wide screens:
 
-- Retained gas pressure and percentage kept.
-- Gas vented pressure and volume lost.
-- Helium salvaged volume.
-- Final pressure and final Tx O₂/He mix.
+- Six headline metrics: retained gas, gas vented, helium salvaged, achieved Tx O₂/He mix, fill duration, and maximum temperature.
+- Three aligned datapoint columns: `Hot mix`, `Ambient settled`, and `In-water`. Each column shows pressure in the top row and temperature in the lower row; on wide screens, temperature values align vertically with values in the lower row of headline metrics.
 
-When thermal data exists, the final metric also shows estimated transfer-end and ambient-settled pressure/temperature. The **Mixing steps** section then renders protocol cards. Each card includes the action title, operational description, resulting pressure, and—when relevant—the source end pressure. An exhausted source gets an orange warning icon and minimum-pressure label.
+When thermal data exists, the summary shows values for each of those three states. The **Mixing steps** section then renders protocol cards. Each card owns its step number, action title, and transfer-end receiver pressure. Step titles are normalized so a supplied title cannot produce duplicate numbering; titles with a transfer target are updated to the same transfer-end pressure shown in the result.
 
-Each step can expose a collapsed **Technical details** section containing transfer rate, duration, transfer-end pressure/temperature, wait duration, and after-wait pressure/temperature. Between applicable steps, a collapsed interim-reading control lets the user record actual pressure and temperature before the next step. Applied readings can be updated or cleared; they are transient and tied to the current recipe.
+The collapsed **Technical details** disclosure shows transfer metrics and their source/cooldown counterparts in two columns: rate / source leftover pressure, duration / cooloff period, pressure at transfer end / pressure after cooloff, and temperature at transfer end / temperature after cooloff. **Interim mix** appears in the last left-column row. Rows share a uniform height based on the tallest content in the block, with labels and values top-aligned; wait-only steps keep a single-column cooling layout with the same row sizing. The actual-reading control is rendered inside the step it precedes, above that step's title. When thermal settling makes an equalization source endpoint lower than the receiver endpoint, the displayed operation is `Boost`.
 
 For an unavailable requested pressure, the recipe still renders the maximum safe exact-mix protocol and an explanatory alert. Diagnostics may identify a component shortfall, the source bank involved, the required pressure, or an exhausted bank. If no solution exists, the summary is cleared and the explanatory error remains.
 

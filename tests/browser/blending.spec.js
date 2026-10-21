@@ -15,6 +15,23 @@ test.describe('working tank blending inputs', () => {
     await expect(page.locator('#target-o2')).toHaveValue('21');
     await expect(page.locator('#target-he')).toHaveValue('30');
   });
+  test('aligns current and target first-row inputs horizontally', async ({ appPage }) => {
+    const page = await load(appPage);
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    const pairs = [
+      ['#init-p', '#target-p'],
+      ['#ambient-temperature', '#target-temperature']
+    ];
+    for (const [currentSelector, targetSelector] of pairs) {
+      const current = await page.locator(currentSelector).boundingBox();
+      const target = await page.locator(targetSelector).boundingBox();
+      expect(current).toBeTruthy();
+      expect(target).toBeTruthy();
+      expect(Math.abs(current.y - target.y)).toBeLessThanOrEqual(1);
+      expect(Math.abs(current.width - target.width)).toBeLessThanOrEqual(1);
+    }
+  });
+
 
   test('changes cylinder, medium, ambient, and wait mode controls', async ({ appPage }) => {
     const page = await load(appPage);
@@ -42,10 +59,10 @@ test.describe('working tank blending inputs', () => {
     await page.locator('#target-gas-preset').selectOption(await targetPreset.getAttribute('value'));
     await fillWorkingTank(page, { startPressure: 50, ambientTemperature: 25, targetPressure: 188.6, targetInWaterTemperature: 10, medium: 'water', waitMode: 'temperature', targetTemperature: 25 });
     await expect(page.locator('#blend-status')).toContainText(/feasible/i);
-    await expect(page.locator('#res-ambient-state')).toContainText(/20[0-1]\.[0-9].*25\.0/);
-    await expect(page.locator('#res-final-p')).toHaveText(/18[8-9]\.[0-9] bar/);
-    await expect(page.locator('#res-final-temperature')).toHaveText(/10\.0/);
-    await expect(page.locator('#res-hot-state')).toContainText(/\d+\.\d+ bar.*\d+\.\d+/);
+    await expect(page.locator('#res-ambient-pressure')).toContainText(/20[0-1]\.[0-9] bar/);
+    await expect(page.locator('#res-in-water-pressure')).toHaveText(/18[8-9]\.[0-9] bar/);
+    await expect(page.locator('#res-in-water-temperature')).toHaveText(/10\.0 °C/);
+    await expect(page.locator('#res-hot-pressure')).toContainText(/\d+\.\d+ bar/);
   });
 
   test('handles a high-temperature target workflow within the working-pressure ceiling', async ({ appPage }) => {

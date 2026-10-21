@@ -76,3 +76,35 @@ test('renders inventory bank values and main-screen-sized editable controls', ()
     globalThis.document = previousDocument;
   }
 });
+
+test('converts editable imperial supply-bank values and constraints', () => {
+  const previousDocument = globalThis.document;
+  const { document, tbody } = createFixture();
+  globalThis.document = document;
+
+  try {
+    renderSupplyBanks([
+      {
+        id: 'bank-mix',
+        name: 'Tx 18/45',
+        volumeL: 12,
+        pressureBar: 150,
+        oxygenPercent: 18,
+        heliumPercent: 45,
+        enabled: true
+      }
+    ], [], 'imperial');
+
+    const volume = tbody.querySelectorAll('input').find(input => input.dataset.bankField === 'volumeL');
+    assert.ok(volume.className.includes('w-40'));
+    assert.ok(Math.abs((volume.value - volume.min) / volume.step - 11) < 1e-9);
+    assert.ok(Math.abs((volume.max - volume.min) / volume.step - 199) < 1e-9);
+    const pressure = tbody.querySelectorAll('input').find(input => input.dataset.bankField === 'pressureBar');
+    assert.ok(Math.abs(pressure.value - 2175.56607) < 1e-8);
+    assert.ok(Math.abs(pressure.min - 14.5037738) < 1e-10);
+    assert.ok(Math.abs(pressure.max - 5076.32083) < 1e-7);
+    assert.ok(Math.abs(pressure.step - 72.518869) < 1e-8);
+  } finally {
+    globalThis.document = previousDocument;
+  }
+});

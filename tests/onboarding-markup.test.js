@@ -68,7 +68,7 @@ test('keeps the working tank and optimized results in Blending, with What-if ste
   for (const id of ['init-he', 'target-he']) {
     assert.match(markup, new RegExp(`id="${id}"[^>]*class="[^"]*bg-amber-950/40`));
   }
-  assert.match(markup, /<span class="font-mono text-slate-200">bar<\/span>/);
+  assert.match(markup, /<span class="block w-full text-right font-mono text-slate-200">bar<\/span>/);
   assert.match(markup, /id="inventory-volume-heading"[^>]*>Volume<\/th>/);
   assert.match(markup, /id="inventory-pressure-heading"[^>]*>Pressure<\/th>/);
   assert.match(markup, /Temperature of inventory gases/);

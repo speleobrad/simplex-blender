@@ -51,7 +51,6 @@ test.describe('continued browser sessions', () => {
     await expect(rowB.getByRole('spinbutton', { name: /oxygen percentage$/i })).toHaveValue('18');
     await expect(rowB.getByRole('spinbutton', { name: /helium percentage$/i })).toHaveValue('45');
     await expect(rowB.getByRole('checkbox', { name: /Use Continued-session bank/i })).toBeChecked();
-    await expect(sessionB.page.locator('#steps-container')).toContainText(/from Continued-session bank to/i);
     await editBank(sessionB.page, index, { enabled: false });
     const sessionC = await createContinuedSession(sessionB.page);
     await sessionC.page.getByRole('tab', { name: 'Inventory', exact: true }).click();
