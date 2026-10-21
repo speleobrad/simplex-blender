@@ -818,10 +818,13 @@ export function renderThermalCharts(result, input = {}, units = 'metric') {
   });
   renderDataTable(dataTable, displaySeries.points);
   if (status) {
-    const protocolWait = protocolForResult(result)?.map(step => step.automaticWaitMetadata).find(Boolean);
-    const wait = result?.automaticWaits?.[0] ?? protocolWait;
-    const warning = wait
-      ? ` ! Automatic wait: working-pressure limit; ${Number(wait.configuredWaitMinutes).toFixed(1)} min configured; ${Number(wait.actualWaitMinutes).toFixed(1)} min actual; ${Number(wait.addedWaitMinutes).toFixed(1)} min added.`
+    const waits = [
+      ...(result?.automaticWaits ?? []),
+      ...(protocolForResult(result)?.map(step => step.automaticWaitMetadata).filter(Boolean) ?? [])
+    ];
+    const uniqueWaits = waits.filter((wait, index) => waits.indexOf(wait) === index);
+    const warning = uniqueWaits.length
+      ? ` ! Automatic waits: ${uniqueWaits.map(wait => `${wait.stepTitle ?? `step ${wait.step ?? '?'}`} — ${Number(wait.configuredWaitMinutes).toFixed(1)} min configured; ${Number(wait.actualWaitMinutes).toFixed(1)} min actual; ${Number(wait.addedWaitMinutes).toFixed(1)} min added; ${wait.reason ?? 'working-pressure limit'}`).join(' | ')}.`
       : '';
     const inWater = displaySeries.points.find(pointValue => pointValue.phase === 'in-water-target');
     const projection = inWater

@@ -252,7 +252,13 @@ function renderProtocol(protocolSteps, alertMessage = null, calculation = null, 
       const warning = document.createElement('p');
       warning.className = 'mt-1 text-[11px] font-semibold text-amber-300';
       warning.textContent = formatAutomaticWaitWarning(automaticWait);
-      (thermalDetails ?? details).append(warning);
+      details.append(warning);
+      if (thermalDetails) {
+        const detailWarning = document.createElement('p');
+        detailWarning.className = warning.className;
+        detailWarning.textContent = warning.textContent;
+        thermalDetails.append(detailWarning);
+      }
     }
 
     const result = document.createElement('div');
