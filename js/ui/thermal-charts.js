@@ -16,6 +16,7 @@ function phaseLabel(phase) {
   if (phase === 'transfer-end') return 'transfer end';
   if (phase === 'settled') return 'ambient settled';
   if (phase === 'ambient-settled') return 'ambient-settled projection';
+  if (phase === 'in-water-target') return 'in-water target projection';
   if (phase === 'measured-start') return 'measured start';
   return 'step start';
 }
@@ -789,7 +790,7 @@ export function renderThermalCharts(result, input = {}, units = 'metric') {
     segments: series.segments.map(segment => ({ ...segment, samples: segment.samples.map(displayPoint) })),
     final: series.final ? displayPoint(series.final) : null
   };
-  thermalHoverSamples = displaySeries.samples;
+  thermalHoverSamples = displaySeries.samples.filter(sample => sample.title !== 'In-water target projection');
   thermalHoverReadout = document.getElementById('thermal-chart-hover-readout');
   clearThermalHover();
   const ambientTemperatureC = input.thermal?.ambientTemperatureC ?? input.physics?.temperatureC;
