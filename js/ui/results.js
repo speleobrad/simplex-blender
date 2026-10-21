@@ -156,8 +156,8 @@ function renderInterimMeasurementControl(stepIndex, nextStep, measurement, worki
   form.className = 'mt-2 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end';
 
   for (const field of [
-    { name: 'pressureBar', label: 'Pressure', unit: 'bar', min: '0', max: String(workingPressureBar ?? 350) },
-    { name: 'temperatureC', label: 'Temperature', unit: '°C', min: '-20', max: '100' }
+    { name: 'pressureBar', label: 'Pressure', unit: unitLabel('pressureBar', units), min: formatUnitValue(0, 'pressureBar', units), max: formatUnitValue(workingPressureBar ?? 350, 'pressureBar', units) },
+    { name: 'temperatureC', label: 'Temperature', unit: unitLabel('temperatureC', units), min: formatUnitValue(-20, 'temperatureC', units), max: formatUnitValue(100, 'temperatureC', units) }
   ]) {
     const label = document.createElement('label');
     label.className = 'text-[10px] text-slate-400';
@@ -169,7 +169,7 @@ function renderInterimMeasurementControl(stepIndex, nextStep, measurement, worki
     input.min = field.min;
     input.max = field.max ?? '';
     input.step = '0.1';
-    input.value = measurement ? String(measurement[field.name]) : '';
+    input.value = measurement ? String(convertToDisplay(measurement[field.name], field.name, units)) : '';
     input.className = 'mt-1 w-20 max-w-full rounded border border-ocean-700 bg-ocean-900 px-2 py-1 font-mono text-xs text-slate-100';
     input.setAttribute('aria-label', `${field.label} before “${nextStep.title}”`);
     label.append(input, (() => {

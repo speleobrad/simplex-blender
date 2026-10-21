@@ -1293,8 +1293,8 @@ function applyInterimMeasurement(actionElement) {
   const temperatureInput = form.querySelector('[name="temperatureC"]');
   const interimMeasurements = state.interimMeasurements.slice();
   interimMeasurements[index] = {
-    pressureBar: Number(pressureInput.value),
-    temperatureC: Number(temperatureInput.value)
+    pressureBar: convertFromDisplay(Number(pressureInput.value), 'pressureBar', state.settings.units),
+    temperatureC: convertFromDisplay(Number(temperatureInput.value), 'temperatureC', state.settings.units)
   };
   state.interimMeasurementSignature = calculatorInputSignature({
     ...readInput(),
