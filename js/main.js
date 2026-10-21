@@ -895,8 +895,8 @@ function renderWhatIfResult() {
     return;
   }
   const stateText = value => {
-    const temperature = Number.isFinite(value.temperatureC) ? ` at ${value.temperatureC.toFixed(1)} °C` : '';
-    return `${value.pressureBar.toFixed(1)} bar${temperature} · Tx ${value.oxygenPercent.toFixed(1)}/${value.heliumPercent.toFixed(1)}`;
+    const temperature = Number.isFinite(value.temperatureC) ? ` at ${formatInputValue(value.temperatureC, 'temperatureC', state.settings.units)} ${unitLabel('temperatureC', state.settings.units)}` : '';
+    return `${formatInputValue(value.pressureBar, 'pressureBar', state.settings.units)} ${unitLabel('pressureBar', state.settings.units)}${temperature} · Tx ${value.oxygenPercent.toFixed(1)}/${value.heliumPercent.toFixed(1)}`;
   };
   const summary = document.createElement('div');
   summary.className = 'rounded-xl border border-ocean-700 bg-ocean-950/60 p-3 space-y-1';
