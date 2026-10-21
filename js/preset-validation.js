@@ -1,4 +1,12 @@
 import { isValidGasComposition } from './gas-input.js';
+export const DEFAULT_HOT_OVERFILL_PERCENT = 2;
+
+export function isValidHotOverfillPercent(value) {
+  return Number.isFinite(value)
+    && value >= 0
+    && value <= 5
+    && Number.isInteger(value * 2);
+}
 
 function hasName(preset) {
   return preset && typeof preset.name === 'string' && preset.name.trim();
@@ -31,6 +39,9 @@ export function validateCylinderPreset(preset) {
   if (!preset || !Number.isFinite(preset.workingPressureBar)
     || preset.workingPressureBar < 10 || preset.workingPressureBar > 350) {
     errors.push(`Cylinder preset “${preset?.name ?? ''}” working pressure must be between 10 and 350 bar.`);
+  }
+  if (!preset || !isValidHotOverfillPercent(preset.hotOverfillPercent)) {
+    errors.push(`Cylinder preset “${preset?.name ?? ''}” hot overfill must be between 0 and 5% in 0.5% steps.`);
   }
   return errors;
 }

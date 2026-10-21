@@ -198,7 +198,8 @@ test('selected imports survive the existing settings storage round trip', () => 
       volumeL: 12,
       material: 'steel',
       massKg: 14,
-      workingPressureBar: 232
+      workingPressureBar: 232,
+      hotOverfillPercent: 3
     }], settings),
     analyzePresetSource('equipment', {
       compressorPresets: [{
@@ -230,6 +231,17 @@ test('selected imports survive the existing settings storage round trip', () => 
   const loaded = loadSettings(storage);
   assert.equal(loaded.gasPresets.at(-1).name, 'Imported gas');
   assert.equal(loaded.cylinderPresets.at(-1).name, 'Imported cylinder');
+  assert.equal(loaded.cylinderPresets.at(-1).hotOverfillPercent, 3);
   assert.equal(loaded.compressorPresets.at(-1).name, 'Imported compressor');
   assert.equal(loaded.boosterPresets.at(-1).name, 'Imported booster');
+});
+test('cylinder imports default missing hot overfill and preserve explicit values', () => {
+  const settings = newSettings();
+  const result = analyzePresetSource('cylinders', [
+    { name: 'Legacy cylinder', volumeL: 12, material: 'steel', massKg: 14, workingPressureBar: 232 },
+    { name: 'Custom cylinder', volumeL: 12, material: 'steel', massKg: 14, workingPressureBar: 232, hotOverfillPercent: 3 }
+  ], settings);
+
+  assert.deepEqual(result.candidates.map(candidate => candidate.status), ['new', 'new']);
+  assert.deepEqual(result.candidates.map(candidate => candidate.preset.hotOverfillPercent), [2, 3]);
 });

@@ -1,6 +1,6 @@
 import { PRESET_IMPORT_DEFAULT_URLS } from '../preset-import.js';
 import { sortCylinderPresetEntries, sortGasPresetEntries } from '../settings.js';
-import { convertToDisplay } from '../units.js';
+import { convertToDisplay, unitLabel } from '../units.js';
 const CUSTOM_PRESET = 'custom';
 
 function createPresetInput({ value, type, collection, index, field, label, min, max, step }) {
@@ -133,10 +133,11 @@ function cylinderDisplayValue(value, field, units) {
 function cylinderUnitLabel(field, units) {
   const labels = {
     volumeL: 'litres',
-    massKg: 'kilograms',
-    workingPressureBar: 'bar'
+    massKg: 'kilograms'
   };
-  return labels[field] ?? '';
+  return field === 'workingPressureBar'
+    ? unitLabel('pressureBar', units)
+    : labels[field] ?? '';
 }
 
 
@@ -175,14 +176,23 @@ function createCylinderCard(preset, index, presetCount, units) {
       min: 0.1,
       step: 0.1
     })),
-    createCylinderField(`Max pressure (${cylinderUnitLabel('workingPressureBar', units)})`, createCylinderNumberInput({
+    createCylinderField(`Working pressure (${cylinderUnitLabel('workingPressureBar', units)})`, createCylinderNumberInput({
       value: cylinderDisplayValue(preset.workingPressureBar, 'workingPressureBar', units),
       index,
       field: 'workingPressureBar',
       label: `${preset.name || 'Cylinder'} working pressure in ${cylinderUnitLabel('workingPressureBar', units)}`,
-      min: 10,
-      max: 350,
+      min: cylinderDisplayValue(10, 'workingPressureBar', units),
+      max: cylinderDisplayValue(350, 'workingPressureBar', units),
       step: 1
+    })),
+    createCylinderField('Hot overfill (%)', createCylinderNumberInput({
+      value: preset.hotOverfillPercent,
+      index,
+      field: 'hotOverfillPercent',
+      label: `${preset.name || 'Cylinder'} hot overfill percentage`,
+      min: 0,
+      max: 5,
+      step: 0.5
     }))
   );
   const removeButton = createRemoveButton(
@@ -217,7 +227,8 @@ function renderCylinderRows(presets, units) {
     ['Material', 'w-20'],
     ['Volume (L)', 'w-14'],
     ['Mass (kg)', 'w-16'],
-    ['Max pressure (bar)', 'w-16'],
+    [`Working pressure (${cylinderUnitLabel('workingPressureBar', units)})`, 'w-16'],
+    ['Hot overfill (%)', 'w-16'],
     ['', 'w-6', 'Actions']
   ]) {
     const header = document.createElement('th');
@@ -267,9 +278,18 @@ function renderCylinderRows(presets, units) {
         index,
         field: 'workingPressureBar',
         label: `${preset.name || 'Cylinder'} working pressure in ${cylinderUnitLabel('workingPressureBar', units)}`,
-        min: 10,
-        max: 350,
+        min: cylinderDisplayValue(10, 'workingPressureBar', units),
+        max: cylinderDisplayValue(350, 'workingPressureBar', units),
         step: 1
+      }), 'px-1.5 py-1'),
+      createTableCell(createCylinderNumberInput({
+        value: preset.hotOverfillPercent,
+        index,
+        field: 'hotOverfillPercent',
+        label: `${preset.name || 'Cylinder'} hot overfill percentage`,
+        min: 0,
+        max: 5,
+        step: 0.5
       }), 'px-1.5 py-1'),
       createTableCell(
         createRemoveButton('remove-cylinder-preset', index, `Remove ${preset.name || 'cylinder preset'}`, presets.length <= 1),

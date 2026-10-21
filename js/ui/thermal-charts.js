@@ -828,7 +828,7 @@ export function renderThermalCharts(result, input = {}, units = 'metric') {
     ];
     const uniqueWaits = waits.filter((wait, index) => waits.indexOf(wait) === index);
     const warning = uniqueWaits.length
-      ? ` ! Automatic waits: ${uniqueWaits.map(wait => `${wait.stepIdentifier ?? wait.stepTitle ?? `step ${wait.step ?? '?'}`} — ${Number(wait.configuredWaitMinutes).toFixed(1)} min configured; ${Number(wait.actualWaitMinutes).toFixed(1)} min actual; ${Number(wait.addedWaitMinutes).toFixed(1)} min added; ${wait.reason ?? 'working-pressure limit'}`).join(' | ')}.`
+      ? ` ! Automatic waits: ${uniqueWaits.map(wait => `${wait.stepIdentifier ?? wait.stepTitle ?? `step ${wait.step ?? '?'}`} — ${Number(wait.configuredWaitMinutes).toFixed(1)} min configured; ${Number(wait.actualWaitMinutes).toFixed(1)} min actual; ${Number(wait.addedWaitMinutes).toFixed(1)} min added; ${wait.reason ?? 'cylinder pressure limit'}`).join(' | ')}.`
       : '';
     const inWater = displaySeries.points.find(pointValue => pointValue.phase === 'in-water-target');
     const projection = inWater

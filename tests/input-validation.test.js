@@ -71,13 +71,13 @@ test('validates measured interim readings against supported tank limits', () => 
     waitMode: 'minutes',
     waitMinutes: 10,
     targetTemperatureC: 25,
-    interimMeasurements: [null, { pressureBar: 232.1, temperatureC: 25 }]
+    interimMeasurements: [null, { pressureBar: 237, temperatureC: 25 }]
   };
   const ratedCylinder = { ...defaultCylinder, workingPressureBar: 232 };
 
   assert.match(
     validateCalculatorInputs(ratedCylinder, defaultPhysics, thermal).join(' '),
-    /measured.*working pressure/i
+    /measured.*hot overfill/i
   );
   assert.match(
     validateCalculatorInputs(ratedCylinder, defaultPhysics, {
@@ -207,3 +207,39 @@ test('rejects values outside every thermal temperature range', () => {
 });
 test('allows target in-water below ambient while target medium remains valid', () => assert.deepEqual(validateCalculatorInputs(defaultCylinder, defaultPhysics, { tankMaterial: 'steel', coolingMedium: 'air', ambientTemperatureC: 25, inletTemperatureC: 25, targetMediumTemperatureC: 25, targetInWaterTemperatureC: 1, waitMode: 'minutes', waitMinutes: 0 }), []));
 test('allows target medium equal to ambient in temperature mode', () => assert.deepEqual(validateCalculatorInputs(defaultCylinder, defaultPhysics, { tankMaterial: 'steel', coolingMedium: 'air', ambientTemperatureC: 25, inletTemperatureC: 25, targetMediumTemperatureC: 25, targetInWaterTemperatureC: 10, waitMode: 'temperature', waitMinutes: 0 }), []));
+test('measured interim overfill is allowed only while hotter than ambient and within the allowance', () => {
+  const cylinder = {
+    ...defaultCylinder,
+    initialPressureBar: 80,
+    targetPressureBar: 100,
+    workingPressureBar: 100,
+    hotOverfillPercent: 2
+  };
+  const thermal = {
+    tankMaterial: 'steel',
+    coolingMedium: 'air',
+    ambientTemperatureC: 20,
+    inletTemperatureC: 20,
+    targetMediumTemperatureC: 20,
+    targetInWaterTemperatureC: 10,
+    waitMode: 'minutes',
+    waitMinutes: 10,
+    interimMeasurements: [{ pressureBar: 101.5, temperatureC: 40 }]
+  };
+
+  assert.deepEqual(validateCalculatorInputs(cylinder, defaultPhysics, thermal), []);
+  assert.match(
+    validateCalculatorInputs(cylinder, defaultPhysics, {
+      ...thermal,
+      interimMeasurements: [{ pressureBar: 102.1, temperatureC: 40 }]
+    }).join(' '),
+    /measured.*(working pressure|hot overfill)/i
+  );
+  assert.match(
+    validateCalculatorInputs(cylinder, defaultPhysics, {
+      ...thermal,
+      interimMeasurements: [{ pressureBar: 101.5, temperatureC: 20 }]
+    }).join(' '),
+    /measured.*working pressure/i
+  );
+});

@@ -5,6 +5,7 @@ import {
   validateSettings
 } from './settings.js';
 import {
+  DEFAULT_HOT_OVERFILL_PERCENT,
   validateBoosterPreset,
   validateCompressorPreset,
   validateCylinderPreset,
@@ -30,7 +31,7 @@ const CATEGORY_DEFINITIONS = Object.freeze({
     collections: Object.freeze([Object.freeze({
       collection: 'cylinderPresets',
       validator: validateCylinderPreset,
-      fields: Object.freeze(['name', 'volumeL', 'material', 'massKg', 'workingPressureBar']),
+      fields: Object.freeze(['name', 'volumeL', 'material', 'massKg', 'workingPressureBar', 'hotOverfillPercent']),
       duplicateBy: 'name'
     })])
   }),
@@ -142,6 +143,10 @@ export function analyzePresetSource(category, source, settings = DEFAULT_SETTING
 
   for (const { collectionDefinition, preset: sourcePreset, index } of entries) {
     const preset = copyPreset(sourcePreset, collectionDefinition.fields);
+    if (collectionDefinition.collection === 'cylinderPresets'
+      && preset.hotOverfillPercent === undefined) {
+      preset.hotOverfillPercent = DEFAULT_HOT_OVERFILL_PERCENT;
+    }
     const validationErrors = collectionDefinition.validator(preset);
     const candidate = {
       id: `${collectionDefinition.collection}:${index}`,

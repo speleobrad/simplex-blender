@@ -1,4 +1,5 @@
 import {
+  DEFAULT_HOT_OVERFILL_PERCENT,
   validateBoosterPreset,
   validateCompressorPreset,
   validateCylinderPreset,
@@ -26,8 +27,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
     Object.freeze({ name: 'Tx 50/20', oxygenPercent: 50, heliumPercent: 20 })
   ]),
   cylinderPresets: Object.freeze([
-    Object.freeze({ name: 'Faber 3L', volumeL: 3, material: 'steel', massKg: 4.4, workingPressureBar: 232 }),
-    Object.freeze({ name: 'Catalina S80', volumeL: 11.1, material: 'aluminum', massKg: 14.3, workingPressureBar: 207 })
+    Object.freeze({ name: 'Faber 3L', volumeL: 3, material: 'steel', massKg: 4.4, workingPressureBar: 232, hotOverfillPercent: DEFAULT_HOT_OVERFILL_PERCENT }),
+    Object.freeze({ name: 'Catalina S80', volumeL: 11.1, material: 'aluminum', massKg: 14.3, workingPressureBar: 207, hotOverfillPercent: DEFAULT_HOT_OVERFILL_PERCENT })
   ]),
   compressorPresets: Object.freeze([
     Object.freeze({
@@ -116,16 +117,25 @@ function legacyVolumePresetsToCylinders(volumePresets) {
     volumeL: volume,
     material: 'steel',
     massKg: 14,
-    workingPressureBar: 232
+    workingPressureBar: 232,
+    hotOverfillPercent: DEFAULT_HOT_OVERFILL_PERCENT
   }));
 }
 
 function addDefaultCylinderPresets(settings) {
-  const cylinderPresets = Array.isArray(settings?.cylinderPresets)
+  const sourcePresets = Array.isArray(settings?.cylinderPresets)
     ? settings.cylinderPresets
     : Array.isArray(settings?.volumePresets)
       ? legacyVolumePresetsToCylinders(settings.volumePresets)
       : undefined;
+  const cylinderPresets = Array.isArray(sourcePresets)
+    ? sourcePresets.map(preset => ({
+      ...preset,
+      hotOverfillPercent: preset?.hotOverfillPercent === undefined
+        ? DEFAULT_HOT_OVERFILL_PERCENT
+        : preset.hotOverfillPercent
+    }))
+    : sourcePresets;
   return { ...settings, cylinderPresets };
 }
 

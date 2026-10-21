@@ -258,7 +258,7 @@ test('renders compact cylinder mass and pressure controls', () => {
   const table = elements.get('settings-cylinder-presets').querySelector('table');
   const massInput = findElement(table, element => element.dataset.settingsField === 'massKg');
   const pressureHeader = findElement(table, element => element.tagName === 'th'
-    && element.textContent === 'Max pressure (bar)');
+    && element.textContent === 'Working pressure (bar)');
   const massHeader = findElement(table, element => element.tagName === 'th'
     && element.textContent === 'Mass (kg)');
 
@@ -367,3 +367,65 @@ test('provides a factory reset action in preset management', () => {
   assert.match(pane, />Reset to factory settings</);
 });
 
+test('renders working pressure and an editable half-percent hot-overfill control', () => {
+  const { document, elements } = createFakeDocument();
+  globalThis.document = document;
+  const settings = settingsWithEquipmentPresets();
+  settings.cylinderPresets = [{
+    name: 'AL80',
+    material: 'aluminum',
+    volumeL: 11.1,
+    massKg: 14.3,
+    workingPressureBar: 207,
+    hotOverfillPercent: 2
+  }];
+
+  renderSettingsDialog(settings);
+
+  const container = elements.get('settings-cylinder-presets');
+  const table = container.querySelector('table');
+  const pressureHeader = findElement(table, element => element.tagName === 'th'
+    && element.textContent === 'Working pressure (bar)');
+  const hotOverfillHeader = findElement(table, element => element.tagName === 'th'
+    && element.textContent === 'Hot overfill (%)');
+  const hotOverfillInput = findElement(table, element => element.dataset.settingsField === 'hotOverfillPercent');
+
+  assert.ok(pressureHeader);
+  assert.ok(hotOverfillHeader);
+  assert.equal(hotOverfillInput.value, '2');
+  assert.equal(hotOverfillInput.min, '0');
+  assert.equal(hotOverfillInput.max, '5');
+  assert.equal(hotOverfillInput.step, '0.5');
+});
+test('renders working-pressure labels and bounds in selected imperial units', () => {
+  const { document, elements } = createFakeDocument();
+  globalThis.document = document;
+  const settings = settingsWithEquipmentPresets();
+  settings.units = 'imperial';
+  settings.cylinderPresets = [{
+    name: 'AL80',
+    material: 'aluminum',
+    volumeL: 11.1,
+    massKg: 14.3,
+    workingPressureBar: 232,
+    hotOverfillPercent: 2
+  }];
+
+  renderSettingsDialog(settings);
+
+  const container = elements.get('settings-cylinder-presets');
+  const card = container.querySelector('article');
+  const table = container.querySelector('table');
+  const header = findElement(table, element => element.tagName === 'th'
+    && element.textContent === 'Working pressure (psi)');
+  const cardPressure = findElement(card, element => element.dataset.settingsField === 'workingPressureBar');
+  const tablePressure = findElement(table, element => element.dataset.settingsField === 'workingPressureBar');
+
+  assert.ok(header);
+  assert.match(card.textContent, /Working pressure \(psi\)/);
+  for (const input of [cardPressure, tablePressure]) {
+    assert.ok(Math.abs(Number(input.min) - 145.037738) < 1e-9);
+    assert.ok(Math.abs(Number(input.max) - 5076.32083) < 1e-9);
+    assert.match(input.attributes.get('aria-label'), /working pressure in psi/i);
+  }
+});

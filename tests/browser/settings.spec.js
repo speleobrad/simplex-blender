@@ -32,6 +32,23 @@ test.describe('settings categories and drafts', () => {
     await cancelSettings(page);
   });
 
+  test('renders cylinder working pressure in imperial units with converted bounds', async ({ appPage }) => {
+    const page = await appPage.goto('tourSeen');
+    const general = await openSettingsCategory(page, 'general');
+    await general.getByRole('combobox', { name: 'Units' }).selectOption('imperial');
+    await saveSettings(page);
+
+    const pane = await openSettingsCategory(page, 'cylinder-presets');
+    const pressureInputs = pane.locator('input[aria-label*="working pressure in psi"]:visible');
+    await expect(pressureInputs).toHaveCount(2);
+    for (const input of await pressureInputs.all()) {
+      await expect(input).toHaveAttribute('min', '145.037738');
+      await expect(input).toHaveAttribute('max', '5076.32083');
+    }
+    await expect(pane.locator('table th').filter({ hasText: 'Working pressure (psi)' })).toHaveCount(1);
+    await cancelSettings(page);
+  });
+
   test('adds, edits, removes gas presets, and disables the final removal', async ({ appPage }) => {
     const page = await appPage.goto('tourSeen');
     const pane = await openSettingsCategory(page, 'gas-presets');
@@ -76,6 +93,24 @@ test.describe('settings categories and drafts', () => {
     await expect(added).toHaveValue('Cylinder with an intentionally long responsive label');
     await expect(pressure).toHaveValue('350');
     await expect(mass).toHaveValue('14.3');
+    await cancelSettings(page);
+  });
+  test('shows hot-overfill defaults and supported input steps for new cylinders', async ({ appPage }) => {
+    const page = await appPage.goto('tourSeen');
+    const pane = await openSettingsCategory(page, 'cylinder-presets');
+    const names = pane.locator('input[aria-label="Cylinder preset name"]:visible');
+    const initialCount = await names.count();
+    await pane.getByRole('button', { name: 'Add cylinder', exact: true }).click();
+    await expect(names).toHaveCount(initialCount + 1);
+
+    const overfill = pane.locator('input[aria-label*="hot overfill percentage"]:visible').last();
+    await expect(overfill).toHaveValue('2');
+    await expect(overfill).toHaveAttribute('min', '0');
+    await expect(overfill).toHaveAttribute('max', '5');
+    await expect(overfill).toHaveAttribute('step', '0.5');
+    await overfill.fill('4.5');
+    await overfill.blur();
+    await expect(overfill).toHaveValue('4.5');
     await cancelSettings(page);
   });
 

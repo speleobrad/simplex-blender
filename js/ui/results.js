@@ -1,3 +1,7 @@
+import {
+  DEFAULT_HOT_OVERFILL_PERCENT,
+  isValidHotOverfillPercent
+} from '../preset-validation.js';
 import { formatUnitValue, convertToDisplay, unitLabel } from '../units.js';
 import { renderWaterPressurePane as renderPressurePaneImplementation } from './water-pressure.js';
 
@@ -67,7 +71,7 @@ function formatThermalValue(value) {
 function formatAutomaticWaitWarning(metadata) {
   if (!metadata) return '';
   const value = minutes => Number.isFinite(minutes) ? `${minutes.toFixed(1)} min` : '—';
-  return `! Automatic wait: working-pressure limit (${metadata.stepIdentifier ?? 'step'}); ${value(metadata.configuredWaitMinutes)} configured; ${value(metadata.actualWaitMinutes)} actual; ${value(metadata.addedWaitMinutes)} added`;
+  return `! Automatic wait: cylinder pressure limit (${metadata.stepIdentifier ?? 'step'}); ${value(metadata.configuredWaitMinutes)} configured; ${value(metadata.actualWaitMinutes)} actual; ${value(metadata.addedWaitMinutes)} added`;
 }
 function automaticWaitWarnings(protocolSteps = []) {
   return protocolSteps.map(step => step.automaticWaitMetadata).filter(Boolean).map(formatAutomaticWaitWarning);
@@ -165,7 +169,7 @@ function protocolStepNumber(step, index) {
   return match ? Number(match[1]) : index + 1;
 }
 
-function renderInterimMeasurementControl(stepIndex, nextStep, measurement, workingPressureBar, units = 'metric') {
+function renderInterimMeasurementControl(stepIndex, nextStep, measurement, workingPressureBar, hotOverfillPercent, units = 'metric') {
   const details = document.createElement('details');
   details.className = 'rounded-lg border border-ocean-800/80 bg-ocean-950/50 px-3 py-2';
 
@@ -177,10 +181,28 @@ function renderInterimMeasurementControl(stepIndex, nextStep, measurement, worki
     : `Record actual readings before Step ${nextStepNumber}`;
   const form = document.createElement('form');
   form.className = 'mt-2 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end';
+  const hotOverfill = isValidHotOverfillPercent(hotOverfillPercent)
+    ? hotOverfillPercent
+    : DEFAULT_HOT_OVERFILL_PERCENT;
+  const pressureMaximumBar = Number.isFinite(workingPressureBar)
+    ? Math.min(350, workingPressureBar * (1 + hotOverfill / 100))
+    : 350;
 
   for (const field of [
-    { name: 'pressureBar', label: 'Pressure', unit: unitLabel('pressureBar', units), min: formatUnitValue(0, 'pressureBar', units), max: formatUnitValue(workingPressureBar ?? 350, 'pressureBar', units) },
-    { name: 'temperatureC', label: 'Temperature', unit: unitLabel('temperatureC', units), min: formatUnitValue(-20, 'temperatureC', units), max: formatUnitValue(100, 'temperatureC', units) }
+    {
+      name: 'pressureBar',
+      label: 'Pressure',
+      unit: unitLabel('pressureBar', units),
+      min: convertToDisplay(0, 'pressureBar', units),
+      max: convertToDisplay(pressureMaximumBar, 'pressureBar', units)
+    },
+    {
+      name: 'temperatureC',
+      label: 'Temperature',
+      unit: unitLabel('temperatureC', units),
+      min: convertToDisplay(-20, 'temperatureC', units),
+      max: convertToDisplay(100, 'temperatureC', units)
+    }
   ]) {
     const label = document.createElement('label');
     label.className = 'text-[10px] text-slate-400';
@@ -267,6 +289,7 @@ function renderProtocol(protocolSteps, alertMessage = null, calculation = null, 
         step,
         measurement,
         calculation?.cylinder?.workingPressureBar,
+        calculation?.cylinder?.hotOverfillPercent,
         units
       ));
     }

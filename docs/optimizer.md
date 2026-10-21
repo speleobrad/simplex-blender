@@ -36,6 +36,9 @@ Drain steps use the configured `drainingRateBarPerMin`, integrate the same signe
 
 The target temperature is a final settled-temperature requirement. It must not be below ambient; the separate wait target temperature remains applicable only to between-fill waits selected as `temperature`.
 
+Each cylinder preset defines a working-pressure limit and a hot-overfill percentage (default 2%; valid values are 0–5% in 0.5% steps). Only actual transient states above ambient may use `workingPressureBar × (1 + hotOverfillPercent / 100)`. Actual ambient projections, the final ambient-settled pressure, and the final pressure projected to the requested target in-water temperature remain capped at working pressure. Interim measured readings use the hot limit only when their measured temperature is above ambient. Compressor and booster operation ceilings remain independent, and Compare Recipe target inputs remain capped at working pressure.
+
+
 These are operational estimates, not a pressure guarantee: actual heating, transfer rate, and cooling depend on equipment condition, gas flow, fill technique, and the surrounding environment. The optimizer does not use the estimates to relax gas composition, supply capacity, or transfer-safety constraints.
 
 If the requested pressure is unreachable, the optimizer reports the maximum safely achievable pressure for the exact target mix and its recipe. If no positive safe amount exists, the UI explains why and shows no recipe. See [Gas Physics](gas-physics.md) for the density calculations and [Architecture](architecture.md) for module flow.

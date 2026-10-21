@@ -2,6 +2,7 @@ import { calculatorInputSignature, signatureAfterClearingMeasurement } from './i
 import { optimizeBlend } from './optimizer.js';
 import { isValidGasComposition, parseNumericInput, splitGasInput } from './gas-input.js';
 import { validateCalculatorInputs, validateSupplyBankInput } from './input-validation.js';
+import { DEFAULT_HOT_OVERFILL_PERCENT } from './preset-validation.js';
 import { buildCompareProtocol, createCompareRow, normalizeComparePressureFields, validateCompareRecipe } from './compare-recipe.js';
 import { simulateCompareProtocol } from './thermodynamics.js';
 import { calcMolarDensity } from './physics.js';
@@ -551,7 +552,8 @@ function addCylinderPreset() {
     volumeL: 12,
     material: 'steel',
     massKg: 14,
-    workingPressureBar: 232
+    workingPressureBar: 232,
+    hotOverfillPercent: DEFAULT_HOT_OVERFILL_PERCENT
   });
   renderSettingsDraft();
   setSettingsCategory(state.settingsCategory);
@@ -679,6 +681,7 @@ function readInput() {
       presetName: cylinderPreset.name,
       volumeL: cylinderPreset.volumeL,
       workingPressureBar: cylinderPreset.workingPressureBar,
+      hotOverfillPercent: cylinderPreset.hotOverfillPercent,
       initialPressureBar: canonicalNumberValue('init-p', 'pressureBar'),
       initialOxygenPercent: numberValue('init-o2'),
       initialHeliumPercent: numberValue('init-he'),

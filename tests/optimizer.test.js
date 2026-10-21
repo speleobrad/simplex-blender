@@ -1671,7 +1671,8 @@ test('optimizeBlend returns a feasible automatic wait extension with complete sa
       targetPressureBar: 95,
       targetOxygenPercent: 21,
       targetHeliumPercent: 0,
-      workingPressureBar: 100
+      workingPressureBar: 100,
+      hotOverfillPercent: 0
     },
     physics: { model: 'ideal', temperatureC: 20 },
     thermal: {
@@ -1737,7 +1738,8 @@ test('optimizeBlend returns a feasible split protocol with safe endpoints and ta
       targetPressureBar: 96,
       targetOxygenPercent: 0,
       targetHeliumPercent: 0,
-      workingPressureBar: 100
+      workingPressureBar: 100,
+      hotOverfillPercent: 0
     },
     physics: { model: 'ideal', temperatureC: 20 },
     thermal: {
@@ -1819,7 +1821,8 @@ test('two scheduler-split transfers preserve stage order, inventories, and therm
       targetPressureBar,
       targetOxygenPercent: 4,
       targetHeliumPercent: 0.2,
-      workingPressureBar
+      workingPressureBar,
+      hotOverfillPercent: 0
     },
     physics: { model: 'ideal', temperatureC: 20 },
     thermal: {
@@ -1866,7 +1869,7 @@ test('two scheduler-split transfers preserve stage order, inventories, and therm
     ]
   });
 
-  assert.equal(result.feasible, true);
+  assert.equal(result.feasible, true, result.error);
   assert.ok(Math.abs(result.thermal.finalAmbientPressureBar - targetPressureBar) < 1e-5);
   const transferStages = result.protocolSteps.filter(step => step._thermalSplit);
   assert.equal(transferStages.length, 4);
@@ -2188,7 +2191,7 @@ test('thermal target search lowers the hot recipe when ambient warming raises pr
   assert.ok(Math.abs(result.thermal.finalAmbientPressureBar - 80) < 1e-5);
 });
 
-test('reports an infeasible result when no safe settled candidate reaches the hot ceiling', () => {
+test('reaches a high settled target below the equipment pressure ceiling', () => {
   const result = optimizeBlend({
     cylinder: {
       volumeL: 12,
@@ -2224,12 +2227,10 @@ test('reports an infeasible result when no safe settled candidate reaches the ho
     banks: []
   });
 
-  assert.equal(result.feasible, false);
-  assert.equal(result.gas.targetPressureBar, 340);
-  assert.ok(result.maximumPressure);
-  assert.ok(result.maximumPressure.pressureBar < 350);
-  assert.ok(result.maximumPressure.thermal.finalAmbientPressureBar < 340);
-  assert.match(result.error, /cannot be reached.*maximum predicted ambient pressure/i);
+  assert.equal(result.feasible, true, result.error);
+  assert.equal(result.maximumPressure, null);
+  assert.ok(Math.abs(result.thermal.finalAmbientPressureBar - 340) < 1e-5);
+  assert.ok(Math.abs(result.thermal.finalInWaterPressureBar - 340) < 1e-5);
 });
 
 test('thermal infeasibility preserves the no-positive-candidate result shape', () => {
@@ -2421,7 +2422,8 @@ test('solves a nonzero minimum wait before the first transfer after keep', () =>
       ...schedulerFixture.cylinder,
       initialOxygenPercent: 21,
       initialHeliumPercent: 0,
-      workingPressureBar: 100
+      workingPressureBar: 100,
+      hotOverfillPercent: 0
     },
     physics: { model: 'ideal', temperatureC: 20 },
     thermal: {
@@ -2478,7 +2480,8 @@ test('splits by transferred inventories and cools between safe transfer stages',
       ...schedulerFixture.cylinder,
       initialOxygenPercent: 21,
       initialHeliumPercent: 0,
-      workingPressureBar: 100
+      workingPressureBar: 100,
+      hotOverfillPercent: 0
     },
     physics: { model: 'ideal', temperatureC: 20 },
     thermal: { ...schedulerFixture.thermal, inletTemperatureC: 30 },
@@ -2536,9 +2539,18 @@ test('splits by transferred inventories and cools between safe transfer stages',
   ) < 1e-9);
   for (const stage of stages) {
     assert.ok(stage.thermal.durationMinutes > 0);
+    const pressureAtTransferEndStartTemperature = calculatePressureAtTemperature({
+      pressureBar: stage.thermal.pressureAtTransferEndReferenceBar,
+      oxygenPercent: stage.resultingMix.oxygenPercent,
+      heliumPercent: stage.resultingMix.heliumPercent,
+      fromTemperatureC: stage.thermal.pressureReferenceTemperatureC,
+      toTemperatureC: stage.thermal.temperatureStartC,
+      volumeL: 12,
+      useVdw: false
+    });
     assert.ok(Math.abs(
       stage.thermal.durationMinutes
-        - (stage.thermal.pressureAtTransferEndReferenceBar - stage.thermal.pressureStartBar)
+        - (pressureAtTransferEndStartTemperature - stage.thermal.pressureStartBar)
           / stage.thermal.rateBarPerMin
     ) < 1e-9);
     assert.ok(stage.thermal.samples.every(sample => (
@@ -2662,7 +2674,8 @@ test('optimizer returns a safe split protocol near the thermal working-pressure 
       targetPressureBar: 99.5,
       targetOxygenPercent: 21,
       targetHeliumPercent: 0,
-      workingPressureBar: 100
+      workingPressureBar: 100,
+      hotOverfillPercent: 0
     },
     physics: { model: 'ideal', temperatureC: 20 },
     thermal: {
@@ -2678,7 +2691,7 @@ test('optimizer returns a safe split protocol near the thermal working-pressure 
     settings: { booster: { compressorInletFlowLPerMin: 100 } },
     banks: []
   });
-  assert.equal(result.feasible, true);
+  assert.equal(result.feasible, true, result.error);
   assert.equal(result.maximumPressure, null);
   assert.ok(Math.abs(result.thermal.finalAmbientPressureBar - 99.5) < 1e-7);
   assert.ok(result.thermal.finalTransferEndPressureBar <= 100 + 1e-7);
@@ -2716,7 +2729,8 @@ test('scheduler preserves interim measurement identity across inserted waits', (
       ...schedulerFixture.cylinder,
       initialOxygenPercent: 21,
       initialHeliumPercent: 0,
-      workingPressureBar: 100
+      workingPressureBar: 100,
+      hotOverfillPercent: 0
     },
     physics: { model: 'ideal', temperatureC: 40 },
     thermal: {
@@ -2762,7 +2776,20 @@ test('scheduler preserves interim measurement identity across inserted waits', (
       }
     ]
   });
-  assert.equal(scheduled.unsafe, false);
+  assert.equal(scheduled.unsafe, false, JSON.stringify({
+    waits: scheduled.automaticWaits,
+    steps: scheduled.protocolSteps.map(step => ({
+      id: step.id,
+      type: step.type,
+      start: step.thermal?.pressureStartBar,
+      reference: step.thermal?.pressureAtTransferEndReferenceBar,
+      ambient: step.thermal?.pressureAtTransferEndAmbientBar,
+      hot: step.thermal?.pressureAtTransferEndHotBar,
+      afterWait: step.thermal?.pressureAfterWaitBar,
+      temperatureStart: step.thermal?.temperatureStartC,
+      temperatureEnd: step.thermal?.temperatureAtTransferEndC
+    }))
+  }));
   const keep = scheduled.protocolSteps.find(step => step.id === 'keep');
   const first = scheduled.protocolSteps.find(step => step.id === 'first-transfer');
   const second = scheduled.protocolSteps.find(step => step.id === 'second-transfer');
@@ -2782,7 +2809,8 @@ test('scheduler projects endpoints from the physics pressure reference temperatu
       ...schedulerFixture.cylinder,
       initialOxygenPercent: 21,
       initialHeliumPercent: 0,
-      workingPressureBar: 100
+      workingPressureBar: 100,
+      hotOverfillPercent: 0
     },
     physics: { model: 'ideal', temperatureC: 30 },
     thermal: { ...schedulerFixture.thermal, inletTemperatureC: 40 },
@@ -2863,4 +2891,144 @@ test('compressor-air splits keep the source effectively unlimited', () => {
     assert.equal(stage.sourceStartPressureBar, 350);
     assert.equal(stage.sourceEndPressureBar, 350);
   }
+});
+test('thermal safety allows transient hot overfill but keeps settled pressure at working pressure', () => {
+  const cylinder = {
+    volumeL: 12,
+    initialPressureBar: 0,
+    targetPressureBar: 100,
+    targetOxygenPercent: 21,
+    targetHeliumPercent: 0,
+    workingPressureBar: 100,
+    hotOverfillPercent: 2
+  };
+  const thermal = { ambientTemperatureC: 20, targetInWaterTemperatureC: 10 };
+  const physics = { model: 'ideal' };
+  const state = {
+    pressureStartBar: 0,
+    temperatureStartC: 20,
+    pressureAtTransferEndReferenceBar: 100,
+    pressureAtTransferEndAmbientBar: 100,
+    pressureAtTransferEndBar: 101.5,
+    pressureAtTransferEndHotBar: 101.5,
+    temperatureAtTransferEndC: 40,
+    pressureAfterWaitBar: 100,
+    temperatureAfterWaitC: 20,
+    pressureReferenceTemperatureC: 20,
+    samples: [
+      { ambientPressureBar: 100, projectedPressureBar: 101.5, temperatureC: 40 },
+      { ambientPressureBar: 100, projectedPressureBar: 100, temperatureC: 20 }
+    ]
+  };
+  const simulation = { protocolSteps: [{ thermal: state }] };
+  const context = { thermal, physics, cylinder, settings: {} };
+
+  assert.equal(isSafeSimulation(simulation, 100, context), true);
+  assert.equal(isSafeSimulation({
+    protocolSteps: [{
+      thermal: {
+        ...state,
+        pressureAtTransferEndBar: 102,
+        pressureAtTransferEndHotBar: 102,
+        samples: [{ ambientPressureBar: 100, projectedPressureBar: 102, temperatureC: 40 }]
+      }
+    }]
+  }, 100, context), true);
+  assert.equal(isSafeSimulation({
+    protocolSteps: [{
+      thermal: {
+        ...state,
+        pressureAtTransferEndBar: 102.1,
+        pressureAtTransferEndHotBar: 102.1,
+        samples: [{ ambientPressureBar: 100, projectedPressureBar: 102.1, temperatureC: 40 }]
+      }
+    }]
+  }, 100, context), false);
+  assert.equal(isSafeSimulation({
+    protocolSteps: [{
+      thermal: { ...state, pressureAtTransferEndAmbientBar: 100.1 }
+    }]
+  }, 100, context), false);
+  assert.equal(isSafeSimulation(simulation, 100, {
+    ...context,
+    cylinder: { ...cylinder, hotOverfillPercent: 0 }
+  }), false);
+});
+test('hot overfill preserves the requested ambient and target pressure at safe endpoints', () => {
+  const workingPressureBar = 99.01;
+  const result = optimizeBlend({
+    cylinder: {
+      volumeL: 12,
+      initialPressureBar: 95,
+      initialOxygenPercent: 0,
+      initialHeliumPercent: 0,
+      targetPressureBar: 99,
+      targetOxygenPercent: 4,
+      targetHeliumPercent: 0.2,
+      workingPressureBar,
+      hotOverfillPercent: 2
+    },
+    physics: { model: 'ideal', temperatureC: 20 },
+    thermal: {
+      tankMaterial: 'steel',
+      coolingMedium: 'air',
+      ambientTemperatureC: 20,
+      inletTemperatureC: 40,
+      targetMediumTemperatureC: 20,
+      targetInWaterTemperatureC: 20,
+      waitMode: 'minutes',
+      waitMinutes: 0
+    },
+    settings: {
+      booster: {
+        otherBoostBpm: 50,
+        oxygenBoostBpm: 50,
+        otherDecantRateBarPerMin: 5,
+        oxygenDecantRateBarPerMin: 5,
+        cylinderVolumeCm3: 9,
+        minimumSourcePressureBar: 0
+      }
+    },
+    banks: [
+      { id: 'o2', name: 'Oxygen', volumeL: 12, pressureBar: 300, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true },
+      { id: 'he', name: 'Helium', volumeL: 12, pressureBar: 300, minimumPressureBar: 0, oxygenPercent: 0, heliumPercent: 100, enabled: true }
+    ]
+  });
+
+  assert.equal(result.feasible, true, result.error);
+  assert.ok(Math.abs(result.thermal.finalAmbientPressureBar - 99) < 1e-5);
+  assert.ok(result.thermal.finalAmbientPressureBar <= workingPressureBar);
+  assert.ok(result.thermal.finalInWaterPressureBar <= workingPressureBar);
+  const hotPressures = result.protocolSteps.flatMap(step => (
+    step.thermal?.temperatureAtTransferEndC > 20
+      ? [step.thermal.pressureAtTransferEndHotBar]
+      : []
+  ));
+  assert.ok(hotPressures.some(pressure => pressure > workingPressureBar));
+  assert.ok(hotPressures.every(pressure => pressure <= workingPressureBar * 1.02));
+});
+test('rejects invalid explicit hot-overfill values in safety helpers', () => {
+  const cylinder = {
+    volumeL: 12,
+    initialPressureBar: 0,
+    workingPressureBar: 100,
+    hotOverfillPercent: 2.25
+  };
+  const thermal = { ambientTemperatureC: 20 };
+  const physics = { model: 'ideal', temperatureC: 20 };
+
+  assert.throws(
+    () => isSafeSimulation({ protocolSteps: [] }, 100, { cylinder }),
+    /hot overfill/i
+  );
+  assert.throws(
+    () => scheduleSafeThermalProtocol({
+      protocolSteps: [],
+      cylinder,
+      physics,
+      thermal,
+      settings: {}
+    }),
+    /hot overfill/i
+  );
 });

@@ -71,6 +71,15 @@ function createFakeDocument() {
     elements
   };
 }
+function findElement(root, predicate) {
+  if (!root) return null;
+  if (predicate(root)) return root;
+  for (const child of root.children ?? []) {
+    const match = findElement(child, predicate);
+    if (match) return match;
+  }
+  return null;
+}
 
 test('marks an exhausted transfer source before its source-end pressure', () => {
   const previousDocument = globalThis.document;
@@ -132,13 +141,15 @@ test('renders a collapsed interim measurement control between mixing steps', () 
         { title: 'Step 2', description: 'Second transfer.', resultingPressureBar: 100 }
       ]
     }, {
-      cylinder: { workingPressureBar: 232 },
+      cylinder: { workingPressureBar: 100, hotOverfillPercent: 2 },
       thermal: { interimMeasurements: [null, null] }
     });
 
     const children = document.elements.get('steps-container').children;
     assert.equal(children.length, 2);
     assert.equal(children[1].children[0].children[0].tagName, 'details');
+    const pressureInput = findElement(children[1], element => element.tagName === 'input' && element.name === 'pressureBar');
+    assert.equal(Number(pressureInput.max), 102, `max=${String(pressureInput.max)}`);
     assert.match(children[1].textContent, /record actual readings/i);
   } finally {
     globalThis.document = previousDocument;
@@ -503,7 +514,7 @@ test('renders explicit thermal states and metadata-driven automatic wait warning
     assert.match(document.elements.get('res-ambient-pressure').textContent, /200\.0 bar/);
     assert.match(document.elements.get('res-in-water-temperature').textContent, /10\.0 °C/);
     const waitText = document.elements.get('steps-container').textContent;
-    assert.match(waitText, /! Automatic wait:.*working-pressure limit/);
+    assert.match(waitText, /! Automatic wait:.*cylinder pressure limit/);
     assert.ok((waitText.match(/! Automatic wait:/g) ?? []).length >= 2);
   } finally {
     globalThis.document = previousDocument;

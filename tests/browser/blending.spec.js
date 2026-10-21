@@ -65,20 +65,47 @@ test.describe('working tank blending inputs', () => {
     await expect(page.locator('#res-hot-pressure')).toContainText(/\d+\.\d+ bar/);
   });
 
-  test('handles a high-temperature target workflow within the working-pressure ceiling', async ({ appPage }) => {
+  test('applies hot overfill only to transient hot pressure', async ({ appPage }) => {
     test.setTimeout(90_000);
     const settingsPage = await appPage.goto('settings');
     const cylinderPane = await openSettingsCategory(settingsPage, 'cylinder-presets');
     for (const field of await cylinderPane.locator('[data-settings-field="workingPressureBar"]:visible').all()) await field.fill('100');
+    for (const field of await cylinderPane.locator('[data-settings-field="hotOverfillPercent"]:visible').all()) await field.fill('0');
     await saveSettings(settingsPage);
-    const page = await load(appPage);
-    await page.locator('#inlet-gas-temperature').evaluate(input => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, '40'); });
+
+    const page = settingsPage;
+    await page.locator('#inlet-gas-temperature').evaluate(input => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, '40');
+    });
     const targetPreset = page.locator('#target-gas-preset option').filter({ hasText: 'Tx 18/45' }).first();
     await page.locator('#target-gas-preset').selectOption(await targetPreset.getAttribute('value'));
     const cylinder = page.locator('#cylinder-preset option').filter({ hasText: 'Catalina S80' }).first();
-    await fillWorkingTank(page, { cylinder: await cylinder.getAttribute('value'), startPressure: 0, ambientTemperature: 20, targetPressure: 99, targetInWaterTemperature: 20, medium: 'air', waitMode: 'minutes', waitMinutes: 0 });
+    await fillWorkingTank(page, {
+      cylinder: await cylinder.getAttribute('value'),
+      startPressure: 0,
+      ambientTemperature: 20,
+      targetPressure: 99,
+      targetInWaterTemperature: 20,
+      medium: 'air',
+      waitMode: 'minutes',
+      waitMinutes: 0
+    });
     await page.locator('#inlet-gas-temperature').dispatchEvent('input');
-    await expect(page.locator('#steps-container')).toContainText(/Top-up|Boost|Decant/i);
+    await expect(page.locator('#blend-status')).toContainText(/feasible/i);
+    await expect(page.locator('#steps-container')).toContainText(/Automatic wait: cylinder pressure limit/);
+    expect(Number.parseFloat(await page.locator('#res-ambient-pressure').innerText())).toBeLessThanOrEqual(100);
+    expect(Number.parseFloat(await page.locator('#res-in-water-pressure').innerText())).toBeLessThanOrEqual(100);
+
+    const openPane = await openSettingsCategory(page, 'cylinder-presets');
+    for (const field of await openPane.locator('[data-settings-field="hotOverfillPercent"]:visible').all()) await field.fill('2');
+    await saveSettings(page);
+    await expect(page.locator('#blend-status')).toContainText(/feasible/i);
+    await expect(page.locator('#steps-container')).not.toContainText(/Automatic wait:/);
+    const hotPressure = Number.parseFloat(await page.locator('#res-hot-pressure').innerText());
+    expect(hotPressure).toBeGreaterThan(100);
+    expect(hotPressure).toBeLessThanOrEqual(102);
+    expect(Number.parseFloat(await page.locator('#res-ambient-pressure').innerText())).toBeLessThanOrEqual(100);
+    expect(Number.parseFloat(await page.locator('#res-in-water-pressure').innerText())).toBeLessThanOrEqual(100);
   });
   test('enforces thermal boundaries and rejects target medium below ambient', async ({ appPage }) => {
     const page = await load(appPage);

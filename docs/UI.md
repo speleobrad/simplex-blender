@@ -68,7 +68,7 @@ Gas percentage fields accept decimal text input and are paired for gas validatio
 
 Inputs recalculate the blend as they change. Invalid or unsupported values are reported in the result area rather than silently accepted.
 
-The optimizer may automatically extend a wait when a hot transfer would otherwise exceed the cylinder's working pressure. The affected step and recipe summary show an amber `!` warning with configured, actual, and added wait durations plus the working-pressure reason. A transfer may also be split at a safe pressure boundary before continuing.
+The cylinder preset's **Hot overfill** setting allows only modeled or measured transient pressures strictly above ambient to reach `working pressure × (1 + hot overfill % / 100)`. Ambient projections, the final ambient-settled pressure, and the final pressure at the requested target in-water temperature remain at or below working pressure. The optimizer may extend a wait or split a transfer when a state would exceed its applicable cylinder limit; the step and summary identify the wait reason as a cylinder pressure limit.
 
 ### Result tabs
 
@@ -181,7 +181,7 @@ Shows editable gas preset rows with name and gas composition fields, remove cont
 
 ### Cylinder presets
 
-Shows editable cylinder cards with name, volume, material, empty assembly mass, and rated working pressure. Each row has a remove control; **Add cylinder** creates another preset.
+Shows editable cylinder cards with name, volume, material, empty assembly mass, **Working pressure**, and **Hot overfill** (default 2%; 0–5% in 0.5% steps). Existing and imported presets without the new field default to 2%. Each row has a remove control; **Add cylinder** creates another preset.
 
 ### Equipment
 

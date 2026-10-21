@@ -65,8 +65,8 @@ test('built-in settings match the requested diving equipment defaults', () => {
     { name: 'Tx 50/20', oxygenPercent: 50, heliumPercent: 20 }
   ]);
   assert.deepEqual(DEFAULT_SETTINGS.cylinderPresets, [
-    { name: 'Faber 3L', volumeL: 3, material: 'steel', massKg: 4.4, workingPressureBar: 232 },
-    { name: 'Catalina S80', volumeL: 11.1, material: 'aluminum', massKg: 14.3, workingPressureBar: 207 }
+    { name: 'Faber 3L', volumeL: 3, material: 'steel', massKg: 4.4, workingPressureBar: 232, hotOverfillPercent: 2 },
+    { name: 'Catalina S80', volumeL: 11.1, material: 'aluminum', massKg: 14.3, workingPressureBar: 207, hotOverfillPercent: 2 }
   ]);
   assert.deepEqual(DEFAULT_SETTINGS.compressorPresets, [
     { name: 'Bauer Junior 2 200bar', inletFlowLPerMin: 100, maxPressureBar: 232, temperatureModifierC: 5 },
@@ -481,7 +481,8 @@ test('saved gas and cylinder presets survive a load/save round trip', () => {
       volumeL: 11,
       material: 'aluminum',
       massKg: 12.4,
-      workingPressureBar: 300
+      workingPressureBar: 300,
+      hotOverfillPercent: 2
     }],
     booster: { ...DEFAULT_SETTINGS.booster },
     compressorPresets: DEFAULT_SETTINGS.compressorPresets.map(preset => ({ ...preset })),
@@ -502,7 +503,8 @@ test('saved settings preserve the shared booster minimum source pressure', () =>
       volumeL: 11,
       material: 'steel',
       massKg: 14,
-      workingPressureBar: 232
+      workingPressureBar: 232,
+      hotOverfillPercent: 2
     }],
     booster: { ...DEFAULT_SETTINGS.booster, minimumSourcePressureBar: 27 },
     compressorPresets: DEFAULT_SETTINGS.compressorPresets.map(preset => ({ ...preset })),
@@ -761,8 +763,8 @@ test('legacy volume settings migrate to steel cylinder presets', () => {
   ]]);
 
   assert.deepEqual(loadSettings(storage).cylinderPresets, [
-    { name: '12 L Steel 232 bar', volumeL: 12, material: 'steel', massKg: 14, workingPressureBar: 232 },
-    { name: '24 L Steel 232 bar', volumeL: 24, material: 'steel', massKg: 14, workingPressureBar: 232 }
+    { name: '12 L Steel 232 bar', volumeL: 12, material: 'steel', massKg: 14, workingPressureBar: 232, hotOverfillPercent: 2 },
+    { name: '24 L Steel 232 bar', volumeL: 24, material: 'steel', massKg: 14, workingPressureBar: 232, hotOverfillPercent: 2 }
   ]);
 });
 
@@ -775,4 +777,30 @@ test('settings draft copies own independent equipment preset collections', () =>
 
   assert.equal(source.compressorPresets[0].name, 'Bauer Junior 2 200bar');
   assert.equal(source.boosterPresets[0].maxOutputPressureBar, 230);
+});
+test('saved cylinder presets without hot overfill migrate to the two-percent default', () => {
+  const saved = copySettings(DEFAULT_SETTINGS);
+  saved.cylinderPresets = saved.cylinderPresets.map(({ hotOverfillPercent, ...preset }) => preset);
+  const storage = memoryStorage([[
+    'simplex-gas-remixer-settings',
+    JSON.stringify(saved)
+  ]]);
+
+  const loaded = loadSettings(storage);
+
+  assert.deepEqual(loaded.cylinderPresets.map(preset => preset.hotOverfillPercent), [2, 2]);
+});
+
+test('cylinder hot overfill accepts only zero to five percent in half-percent steps', () => {
+  for (const value of [0, 0.5, 2, 5]) {
+    const settings = copySettings(DEFAULT_SETTINGS);
+    settings.cylinderPresets[0].hotOverfillPercent = value;
+    assert.deepEqual(validateSettings(settings), []);
+  }
+
+  for (const value of [-0.5, 2.25, 5.5]) {
+    const settings = copySettings(DEFAULT_SETTINGS);
+    settings.cylinderPresets[0].hotOverfillPercent = value;
+    assert.match(validateSettings(settings).join(' '), /hot overfill/i);
+  }
 });
