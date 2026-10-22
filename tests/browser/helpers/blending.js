@@ -83,7 +83,9 @@ export async function setWhatIfRow(page, rowId, values = {}) {
 }
 
 export async function runWhatIf(page) {
-  await page.locator('#screen-what-if').getByRole('button', { name: 'Run scenario', exact: true }).click();
+  const run = page.locator('#screen-what-if [data-action="run-what-if"]:visible');
+  await expect(run).toHaveCount(1);
+  await run.evaluate(button => button.click());
   const host = page.locator('#what-if-result-host');
   await expect(host).toBeVisible();
   await expect(host.getByRole('tab').first()).toBeVisible();
