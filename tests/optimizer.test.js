@@ -1728,6 +1728,59 @@ test('optimizeBlend returns a feasible automatic wait extension with complete sa
   }
 });
 
+const warningInput = (maxCompressorPressureBar = 232) => ({
+  cylinder: {
+    volumeL: 12,
+    initialPressureBar: 0,
+    initialOxygenPercent: 21,
+    initialHeliumPercent: 0,
+    targetPressureBar: 105,
+    targetOxygenPercent: 21,
+    targetHeliumPercent: 0,
+    workingPressureBar: 100,
+    hotOverfillPercent: 0
+  },
+  physics: { model: 'ideal', temperatureC: 20 },
+  thermal: {
+    tankMaterial: 'steel',
+    coolingMedium: 'air',
+    ambientTemperatureC: 20,
+    inletTemperatureC: 40,
+    targetMediumTemperatureC: 20,
+    targetInWaterTemperatureC: 20,
+    waitMode: 'minutes',
+    waitMinutes: 0
+  },
+  settings: {
+    pressureLimitMode: 'warning',
+    booster: {
+      compressorInletFlowLPerMin: 100,
+      maxCompressorPressureBar,
+      maxBoosterOutputPressureBar: 230,
+      otherBoostBpm: 50,
+      oxygenBoostBpm: 50,
+      otherDecantRateBarPerMin: 5,
+      oxygenDecantRateBarPerMin: 5,
+      cylinderVolumeCm3: 9,
+      minimumSourcePressureBar: 0
+    }
+  },
+  banks: []
+});
+
+test('Warning mode ignores cylinder-only thermal waits but retains equipment caps', () => {
+  const result = optimizeBlend(warningInput());
+  assert.equal(result.feasible, true, result.error);
+  assert.ok(result.thermal.finalTransferEndPressureBar > 100);
+  assert.equal(result.protocolSteps.some(step => step.automaticWaitMetadata), false);
+  assert.equal(result.protocolSteps.filter(step => step.thermal?.rateSource === 'compressor').length, 1);
+
+  const capped = optimizeBlend(warningInput(100));
+  assert.equal(capped.feasible, false);
+  assert.ok(capped.maximumPressure);
+  assert.ok(capped.maximumPressure.pressureBar <= 100 + 1e-6);
+});
+
 test('optimizeBlend returns a feasible split protocol with safe endpoints and target pressure', () => {
   const result = optimizeBlend({
     cylinder: {
