@@ -942,13 +942,10 @@ function copyWhatIfFromBlending() {
   const copied = applyWhatIfStartPatch(scenario, snapshotWhatIfFromBlending(input));
   state.whatIfScenario = {
     ...copied,
-    initialized: true,
-    result: null,
-    resultRevision: -1,
-    sharedInputSignature: null
+    initialized: true
   };
   state.whatIfErrors = [];
-  state.whatIfHasRun = false;
+  state.whatIfHasRun = Boolean(copied.result);
   renderWhatIfEditor();
   renderWhatIfErrors();
   updateWhatIfStatus('Copied current Blending starting state.');
