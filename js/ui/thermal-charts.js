@@ -413,6 +413,7 @@ function bindThermalInteractions(root = document) {
       clearThermalHover(root);
       return;
     }
+    const bounds = svg.getBoundingClientRect();
     const viewY = (event.clientY - bounds.top) / bounds.height * CHART_HEIGHT;
     const plotBottom = CHART_HEIGHT - CHART_MARGIN.bottom;
     if (viewY < CHART_MARGIN.top || viewY > plotBottom) {
