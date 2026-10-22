@@ -85,11 +85,12 @@ test.describe('working tank blending inputs', () => {
     const targetPreset = page.locator('#target-gas-preset option').filter({ hasText: 'Tx 18/45' }).first();
     await page.locator('#target-gas-preset').selectOption(await targetPreset.getAttribute('value'));
     await fillWorkingTank(page, { startPressure: 50, ambientTemperature: 25, targetPressure: 188.6, targetInWaterTemperature: 10, medium: 'water', waitMode: 'temperature', targetTemperature: 25 });
-    await expect(page.locator('#blend-status')).toContainText(/feasible/i);
-    await expect(page.locator('#res-ambient-pressure')).toContainText(/20[0-1]\.[0-9] bar/);
-    await expect(page.locator('#res-in-water-pressure')).toHaveText(/18[8-9]\.[0-9] bar/);
-    await expect(page.locator('#res-in-water-temperature')).toHaveText(/10\.0 °C/);
-    await expect(page.locator('#res-hot-pressure')).toContainText(/\d+\.\d+ bar/);
+    const results = page.locator('[data-result-host="blending"]');
+    await expect(results.locator('[data-result-key="blend-status"]')).toContainText(/feasible/i);
+    await expect(results.locator('[data-result-key="res-ambient-pressure"]')).toContainText(/20[0-1]\.[0-9] bar/);
+    await expect(results.locator('[data-result-key="res-in-water-pressure"]')).toHaveText(/18[8-9]\.[0-9] bar/);
+    await expect(results.locator('[data-result-key="res-in-water-temperature"]')).toHaveText(/10\.0 °C/);
+    await expect(results.locator('[data-result-key="res-hot-pressure"]')).toContainText(/\d+\.\d+ bar/);
   });
 
   test('applies hot overfill only to transient hot pressure', async ({ appPage }) => {
