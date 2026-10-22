@@ -1,0 +1,63 @@
+import { formatInputValue, unitLabel } from '../units.js';
+import { renderCompareRecipe } from './compare-recipe.js';
+
+const inputClass = 'w-full rounded border border-ocean-700 bg-ocean-900 px-2 py-1 font-mono text-xs text-slate-100';
+const fields = [
+  ['pressureBar', 'Starting pressure', 'number', 'pressureBar'],
+  ['oxygenPercent', 'Starting O₂ (%)', 'number'],
+  ['heliumPercent', 'Starting He (%)', 'number'],
+  ['ambientTemperatureC', 'Ambient temperature', 'number', 'temperatureC'],
+  ['coolingMedium', 'Surrounding medium', 'select'],
+  ['inWaterTemperatureC', 'In-water temperature', 'number', 'temperatureC']
+];
+function el(tag, attrs = {}, text) {
+  const node = document.createElement(tag);
+  for (const [key, value] of Object.entries(attrs)) if (value !== undefined) node.setAttribute(key, value);
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+function labelled(field, label, control, units) {
+  const wrap = el('label', { class: 'block space-y-1 text-xs text-slate-300' });
+  const suffix = units ? ` (${unitLabel(units, 'metric')})` : '';
+  wrap.append(el('span', {}, `${label}${suffix}`), control);
+  return wrap;
+}
+function valueFor(start, field, quantity, units) {
+  const value = start?.[field];
+  return quantity && Number.isFinite(value) ? formatInputValue(value, quantity, units) : (value ?? '');
+}
+
+export function renderWhatIfScenarioEditor(container, { scenario = {}, cylinderPresets = [], units = 'metric', errors = [], sharedInputChanged = false, banks = [], pressureStarts = {} } = {}) {
+  const root = el('div', { class: 'space-y-4' });
+  const status = el('div', { role: 'status', class: 'text-xs text-slate-400', 'data-what-if-status': 'copied' }, scenario.initialized ? 'Starting state copied from Blending; edits are independent.' : 'Starting state not copied yet.');
+  if (sharedInputChanged) status.append(' ', el('span', { 'data-what-if-status': 'shared-stale', class: 'text-amber-300' }, 'Out of date — shared inputs changed'));
+  root.append(status);
+  const start = scenario.start ?? {};
+  const startFieldset = el('fieldset', { class: 'space-y-3 rounded-xl border border-ocean-800 p-3' });
+  startFieldset.append(el('legend', { class: 'px-1 text-xs font-semibold text-slate-200' }, 'Starting tank'));
+  const copy = el('button', { type: 'button', 'data-action': 'copy-what-if-from-blending', class: 'rounded border border-ocean-700 px-2 py-1 text-xs text-cyan-300' }, 'Copy from Blending');
+  startFieldset.append(copy);
+  for (const [field, label, type, quantity] of fields.slice(0, 4)) {
+    const input = el('input', { class: inputClass, type, 'data-what-if-field': field, value: valueFor(start, field, quantity, units), inputmode: 'decimal' });
+    startFieldset.append(labelled(field, label, input, quantity && unitLabel(quantity, units)));
+  }
+  const cylinder = el('select', { class: inputClass, 'data-what-if-field': 'cylinderPresetName' });
+  for (const preset of cylinderPresets) cylinder.append(el('option', { value: preset.name, selected: preset.name === start.cylinderPresetName ? '' : undefined }, preset.name));
+  startFieldset.append(labelled('cylinderPresetName', 'Cylinder preset', cylinder));
+  const selected = cylinderPresets.find(item => item.name === start.cylinderPresetName);
+  if (selected) startFieldset.append(el('p', { class: 'text-[10px] text-slate-400', 'data-cylinder-hint': '' }, `${selected.volumeL ?? ''} L · ${selected.material ?? ''} · ${selected.massKg ?? ''} kg · ${selected.workingPressureBar ?? ''} bar working pressure`));
+  root.append(startFieldset);
+  const condition = el('fieldset', { class: 'space-y-3 rounded-xl border border-ocean-800 p-3' });
+  condition.append(el('legend', { class: 'px-1 text-xs font-semibold text-slate-200' }, 'Scenario conditions'));
+  for (const [field, label, type, quantity] of fields.slice(4)) {
+    let control;
+    if (type === 'select') { control = el('select', { class: inputClass, 'data-what-if-field': field }); for (const value of ['air', 'water']) control.append(el('option', { value, selected: value === start[field] ? '' : undefined }, value)); }
+    else control = el('input', { class: inputClass, type, 'data-what-if-field': field, value: valueFor(start, field, quantity, units), inputmode: 'decimal' });
+    condition.append(labelled(field, label, control, quantity && unitLabel(quantity, units)));
+  }
+  root.append(condition);
+  const rows = el('div', { 'data-what-if-rows': '' });
+  root.append(rows);
+  container.replaceChildren(root);
+  renderCompareRecipe(rows, { rows: scenario.rows ?? [], banks, errors, pressureStarts, units, whatIf: true });
+}

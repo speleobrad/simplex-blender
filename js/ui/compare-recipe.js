@@ -198,7 +198,7 @@ function renderRow(row, index, rows, banks, errors, pressureStarts, units = 'met
   return card;
 }
 
-export function renderCompareRecipe(container, { rows = [], banks = [], errors = [], pressureStarts = {}, units = 'metric' } = {}) {
+export function renderCompareRecipe(container, { rows = [], banks = [], errors = [], pressureStarts = {}, units = 'metric', whatIf = false } = {}) {
   const content = element('div', { className: 'space-y-3' });
   rows.forEach((row, index) => content.append(renderRow(row, index, rows, banks, errors, pressureStarts, units)));
 
@@ -209,8 +209,8 @@ export function renderCompareRecipe(container, { rows = [], banks = [], errors =
   });
   const runButton = element('button', {
     className: 'rounded-lg border border-cyan-500/50 bg-cyan-500/20 px-3 py-1.5 text-xs font-semibold text-cyan-200 hover:bg-cyan-500/30',
-    text: 'Run comparison',
-    attributes: { type: 'button', 'data-action': 'run-compare' }
+    text: whatIf ? 'Run scenario' : 'Run comparison',
+    attributes: { type: 'button', 'data-action': whatIf ? 'run-what-if' : 'run-compare' }
   });
   const controls = element('div', { className: 'flex flex-wrap justify-between gap-2' });
   controls.append(addButton, runButton);
