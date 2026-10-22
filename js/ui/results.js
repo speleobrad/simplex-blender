@@ -7,7 +7,9 @@ import { renderWaterPressurePane as renderPressurePaneImplementation } from './w
 import { getCylinderPressureLimit } from '../pressure-limits.js';
 
 let activeRoot = globalThis.document;
-const resultElement = id => activeRoot?.querySelector?.(`[data-result-key="${id}"]`) ?? activeRoot?.getElementById?.(id) ?? globalThis.document?.getElementById?.(id);
+const resultElement = id => activeRoot?.querySelector?.(`[data-result-key="${id}"]`)
+  ?? activeRoot?.querySelector?.(`#${id}`)
+  ?? (activeRoot === globalThis.document ? globalThis.document?.getElementById?.(id) : null);
 function setText(id, value) {
   const element = resultElement(id);
   if (element) element.textContent = value;

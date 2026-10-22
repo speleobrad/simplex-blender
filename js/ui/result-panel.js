@@ -8,7 +8,9 @@ export function getResultTabs(mode = 'optimize') {
 export function getResultElement(root, key) {
   if (!root) return null;
   const selector = `[data-result-key="${String(key).replaceAll('"', '\\"')}"]`;
-  return root.querySelector?.(selector) ?? root.getElementById?.(key) ?? null;
+  return root.querySelector?.(selector)
+    ?? root.querySelector?.(`#${String(key).replaceAll('"', '\\"')}`)
+    ?? (root === document ? root.getElementById(key) : null);
 }
 
 export function createResultPanel(document, host, { mode = 'optimize', instancePrefix = '' } = {}) {
@@ -21,4 +23,18 @@ export function createResultPanel(document, host, { mode = 'optimize', instanceP
   root.dataset.instancePrefix = instancePrefix;
   host.replaceChildren(root);
   return root;
+}
+
+if (typeof document !== 'undefined') {
+  const mount = () => {
+    const template = document.getElementById('result-panel-template');
+    const blending = document.getElementById('blending-result-host');
+    const whatIf = document.getElementById('what-if-result-host');
+    if (template && blending && whatIf) {
+      createResultPanel(document, blending, { mode: 'optimize', instancePrefix: 'blend-' });
+      createResultPanel(document, whatIf, { mode: 'what-if', instancePrefix: 'what-if-' });
+    }
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount, { once: true });
+  else mount();
 }

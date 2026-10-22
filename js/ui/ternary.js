@@ -153,10 +153,11 @@ function getChartPalette() {
   };
 }
 
-function attachPointerReadout(canvas) {
+function attachPointerReadout(canvas, root = document) {
   if (canvasesWithPointerReadout.has(canvas)) return;
-  const output = document.getElementById('ternary-coords-hover');
-  if (!output) return;
+  const output = root?.querySelector?.('[data-result-key="ternary-coords-hover"]')
+    ?? root?.querySelector?.('#ternary-coords-hover')
+    ?? (root === document ? document.getElementById('ternary-coords-hover') : null);
 
   const updateReadout = event => {
     if (!verticesByCanvas.has(canvas) && !canvas.getBoundingClientRect().width) return;
@@ -483,7 +484,7 @@ export function renderTernaryDiagram(canvas, { banks, initialMix, targetMix, tra
   if (!canvas) return;
   canvas.setAttribute('aria-label', 'Gas composition ternary diagram');
   renderAccessibleChartData({ banks, initialMix, targetMix, trajectory, mode }, root);
-  attachPointerReadout(canvas);
+  attachPointerReadout(canvas, root);
   activeCanvases.add(canvas);
   const rect = canvas.getBoundingClientRect();
   if (rect.width === 0 || rect.height === 0) return;

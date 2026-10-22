@@ -384,11 +384,12 @@ function eventThermalPoint(event) {
     : null;
 }
 
-function bindThermalInteractions() {
-  if (thermalInteractionsBound) return;
-  const containers = THERMAL_CONTAINER_IDS
-    .map(id => document.getElementById(id));
+function bindThermalInteractions(root = document) {
+  if (root.__thermalInteractionsBound) return;
+  const scoped = id => root?.querySelector?.(`[data-result-key="${id}"]`) ?? root?.querySelector?.(`#${id}`) ?? (root === document ? document.getElementById(id) : null);
+  const containers = THERMAL_CONTAINER_IDS.map(id => scoped(id));
   if (containers.some(container => !container)) return;
+  root.__thermalInteractionsBound = true;
 
   const handleEnter = event => {
     const point = eventThermalPoint(event);
@@ -759,7 +760,7 @@ export function renderThermalCharts(result, input = {}, units = 'metric', { root
   const pressureChart = scoped('thermal-pressure-chart');
   const dataTable = scoped('thermal-chart-data');
   const status = scoped('thermal-chart-status');
-  bindThermalInteractions();
+  bindThermalInteractions(root);
 
   const terminalProjection = result?.mode === 'compare'
     ? {
