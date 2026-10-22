@@ -53,3 +53,48 @@ export async function assertResultPanelExclusive(page, tabName) {
   await expect(button).toHaveAttribute('aria-selected', 'true');
   return panel;
 }
+ 
+export async function openWhatIf(page) {
+  await page.locator('[data-action="select-screen"][data-screen="what-if"]').click();
+  await expect(page.locator('#screen-what-if')).toBeVisible();
+  return page.locator('#screen-what-if');
+}
+
+export async function fillWhatIfStart(page, values = {}) {
+  for (const [field, value] of Object.entries(values)) {
+    const control = page.locator(`[data-what-if-field="${field}"]`);
+    await expect(control).toHaveCount(1);
+    if ((await control.evaluate(element => element.tagName)) === 'SELECT') await control.selectOption(String(value));
+    else await control.fill(String(value));
+  }
+  return page.locator('#screen-what-if');
+}
+
+export async function setWhatIfRow(page, rowId, values = {}) {
+  const row = page.locator(`[data-row-id="${rowId}"]`);
+  await expect(row).toHaveCount(1);
+  for (const [field, value] of Object.entries(values)) {
+    const control = row.locator(`[data-compare-field="${field}"]`);
+    await expect(control).toHaveCount(1);
+    if ((await control.evaluate(element => element.tagName)) === 'SELECT') await control.selectOption(String(value));
+    else await control.fill(String(value));
+  }
+  return row;
+}
+
+export async function runWhatIf(page) {
+  await page.getByRole('button', { name: 'Run scenario', exact: true }).click();
+  await expect(page.locator('#compare-run-status')).toContainText(/run|error|invalid/i);
+}
+
+export async function assertWhatIfResultPanelExclusive(page, tabName) {
+  const ids = { 'Scenario summary': 'scenario-summary', Recipe: 'recipe', 'Simplex diagram': 'ternary', 'Thermal Graph': 'thermal', 'Tank summary': 'summary', 'In-water pressure': 'water-pressure' };
+  const id = ids[tabName] ?? tabName;
+  await selectResultTab(page, tabName);
+  await expect(page.locator(`#tab-pane-${id}`)).toBeVisible();
+  for (const other of Object.values(ids)) {
+    const pane = page.locator(`#tab-pane-${other}`);
+    if (other !== id) await expect(pane).toBeHidden();
+  }
+  return page.locator(`#tab-pane-${id}`);
+}

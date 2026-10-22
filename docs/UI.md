@@ -230,3 +230,7 @@ Settings, Inventory, theme, and onboarding state use separate browser-storage re
 - Composition diagram and Tank summary data: `js/ui/ternary.js`
 - Consent and guided tour: `js/ui/onboarding.js`
 - Storage fallback alert: `js/ui/storage-warning.js`
+
+## What-if scenario
+
+What-if is an independent in-memory snapshot of the current Blending pressure, composition, ambient, cylinder, medium, and explicit in-water temperature. Editing the snapshot never edits Blending; **Copy from Blending** is the explicit replacement action. Manual scenarios use drain, add-gas, and explicit fixed-minute or target-temperature waits. The full right-side result navigation includes Scenario summary, Recipe, Thermal Graph, In-water pressure, Tank summary, and Simplex diagram. Recipe technical details are informational and What-if never exposes Record actual controls.
