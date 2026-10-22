@@ -429,7 +429,7 @@ export function renderSettingsDialog(settings, importState) {
     if (warningOption) warningOption.disabled = !warningUnlocked;
   }
   const confirmation = document.getElementById('settings-pressure-limit-confirmation');
-  const unlock = document.querySelector('[data-action="unlock-pressure-warning"]');
+  const unlock = document.getElementById('settings-pressure-warning-unlock-button');
   if (unlock) unlock.disabled = warningUnlocked || confirmation?.value !== `I KNOW WHAT I'M DOING`;
   const notice = document.getElementById('settings-pressure-warning-notice');
   if (notice) notice.classList.toggle('hidden', pressureMode?.value !== 'warning');
