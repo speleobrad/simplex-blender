@@ -16,10 +16,24 @@ function el(tag, attrs = {}, text) {
   if (text !== undefined) node.textContent = text;
   return node;
 }
-function labelled(field, label, control, quantity, units) {
-  const wrap = el('label', { class: 'block space-y-1 text-xs text-slate-300' });
+function addFieldError(wrapper, control, errors, field) {
+  const messages = errors.filter(error => error.rowId === null && error.field === field);
+  if (!messages.length) return;
+  const errorId = `what-if-${field}-error`;
+  control.setAttribute('aria-invalid', 'true');
+  control.setAttribute('aria-describedby', errorId);
+  wrapper.append(el('p', {
+    id: errorId,
+    class: 'text-[10px] text-rose-300'
+  }, messages.map(error => error.message).join(' ')));
+}
+function labelled(field, label, control, quantity, units, errors = []) {
+  const wrap = el('div', { class: 'block space-y-1 text-xs text-slate-300' });
   const suffix = quantity ? ` (${unitLabel(quantity, units)})` : '';
-  wrap.append(el('span', {}, `${label}${suffix}`), control);
+  const labelNode = el('label', { for: `what-if-${field}` }, `${label}${suffix}`);
+  control.id = `what-if-${field}`;
+  wrap.append(labelNode, control);
+  addFieldError(wrap, control, errors, field);
   return wrap;
 }
 function valueFor(start, field, quantity, units) {
@@ -39,11 +53,11 @@ export function renderWhatIfScenarioEditor(container, { scenario = {}, cylinderP
   startFieldset.append(copy);
   for (const [field, label, type, quantity] of fields.slice(0, 3)) {
     const input = el('input', { class: inputClass, type, 'data-what-if-field': field, value: valueFor(start, field, quantity, units), inputmode: 'decimal' });
-    startFieldset.append(labelled(field, label, input, quantity, units));
+    startFieldset.append(labelled(field, label, input, quantity, units, errors));
   }
   const cylinder = el('select', { class: inputClass, 'data-what-if-field': 'cylinderPresetName' });
   for (const preset of cylinderPresets) cylinder.append(el('option', { value: preset.name, selected: preset.name === start.cylinderPresetName ? '' : undefined }, preset.name));
-  startFieldset.append(labelled('cylinderPresetName', 'Cylinder preset', cylinder));
+  startFieldset.append(labelled('cylinderPresetName', 'Cylinder preset', cylinder, null, units, errors));
   const selected = cylinderPresets.find(item => item.name === start.cylinderPresetName);
   if (selected) {
     const hint = `${convertToDisplay(selected.volumeL, 'volumeL', units)} ${unitLabel('volumeL', units)} · ${selected.material ?? ''} · ${convertToDisplay(selected.massKg, 'massKg', units)} ${unitLabel('massKg', units)} · ${convertToDisplay(selected.workingPressureBar, 'pressureBar', units)} ${unitLabel('pressureBar', units)} working pressure`;
@@ -56,7 +70,7 @@ export function renderWhatIfScenarioEditor(container, { scenario = {}, cylinderP
     let control;
     if (type === 'select') { control = el('select', { class: inputClass, 'data-what-if-field': field }); for (const value of ['air', 'water']) control.append(el('option', { value, selected: value === start[field] ? '' : undefined }, value)); }
     else control = el('input', { class: inputClass, type, 'data-what-if-field': field, value: valueFor(start, field, quantity, units), inputmode: 'decimal' });
-    condition.append(labelled(field, label, control, quantity, units));
+    condition.append(labelled(field, label, control, quantity, units, errors));
   }
   root.append(condition);
   const rows = el('div', { 'data-what-if-rows': '' });

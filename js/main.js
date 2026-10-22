@@ -1202,54 +1202,116 @@ function renderWhatIfResult() {
     ?? byId('what-if-result-host');
   const result = state.whatIfScenario.result;
   if (!root) return;
+  const staleStatus = root.querySelector?.('[data-result-key="what-if-stale-status"]');
   if (!result) {
+    if (staleStatus) staleStatus.hidden = true;
+    const summaryBanner = root.querySelector?.('[data-result-key="summary-banner"]');
+    if (summaryBanner) summaryBanner.hidden = true;
+    const compareSummary = root.querySelector?.('[data-result-key="compare-summary"]');
+    if (compareSummary) compareSummary.hidden = true;
     const status = root.querySelector?.('[data-result-key="blend-status"]');
-    if (status) status.textContent = 'Run the sequence to see the modeled result.';
+    if (status) {
+      status.className = 'rounded-lg border border-ocean-700/50 bg-ocean-950/40 px-3 py-2 text-xs text-slate-400';
+      status.textContent = 'Run the sequence to see the modeled result.';
+    }
+    for (const id of [
+      'res-retained-p', 'res-retained-pct', 'res-vented-p', 'res-vented-litres',
+      'res-he-salvaged', 'res-final-p', 'res-final-mix', 'res-fill-duration',
+      'res-max-temperature', 'res-hot-pressure', 'res-hot-temperature',
+      'res-ambient-pressure', 'res-ambient-temperature', 'res-in-water-pressure',
+      'res-in-water-temperature'
+    ]) {
+      const element = root.querySelector?.(`[data-result-key="${id}"]`);
+      if (element) element.textContent = '—';
+    }
     const canvas = root.querySelector?.('[data-result-key="ternary-canvas"]')
       ?? root.querySelector?.('#ternary-canvas');
     clearTernaryDiagram(canvas, root);
     renderThermalCharts(null, {}, state.settings.units, { root });
     root.querySelector?.('[data-result-key="steps-container"]')?.replaceChildren();
+    root.querySelector?.('[data-result-key="water-pressure-container"]')?.replaceChildren();
     root.querySelector?.('[data-result-key="scenario-summary-content"]')?.replaceChildren();
     return;
   }
   renderResults(result, result.input, { root, mode: 'what-if' });
   renderThermalCharts(result, result.input, state.settings.units, { root });
   renderTernary();
-  if (whatIfResultIsStale()) {
+  const stale = whatIfResultIsStale();
+  if (staleStatus) {
+    staleStatus.hidden = !stale;
+    staleStatus.textContent = stale
+      ? (state.whatIfScenario.sharedInputSignature !== whatIfCurrentSharedSignature()
+        ? 'Out of date — shared inputs changed. Run scenario again.'
+        : 'Out of date — scenario draft changed. Run scenario again.')
+      : '';
+  }
+  if (stale) {
     const status = root.querySelector?.('[data-result-key="blend-status"]');
     if (status) {
       status.className = 'rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200';
-      status.textContent = state.whatIfScenario.sharedInputSignature !== whatIfCurrentSharedSignature()
-        ? 'Out of date — shared inputs changed. Run scenario again.'
-        : 'Out of date — scenario draft changed. Run scenario again.';
+      status.textContent = 'Scenario result is out of date. Run scenario again.';
     }
   }
+}
+
+function scenarioError(field, message, rowId = null) {
+  return { rowId, field, message };
 }
 
 function scenarioSharedInputErrors(input) {
   const errors = [];
   const selectedPreset = state.settings.cylinderPresets
     ?.find(preset => preset.name === state.whatIfScenario.start?.cylinderPresetName);
-  if (!selectedPreset) errors.push('Select an available cylinder preset.');
+  if (!selectedPreset) errors.push(scenarioError('cylinderPresetName', 'Select an available cylinder preset.'));
   const thermal = {
     ...input.thermal,
     targetMediumTemperatureC: input.thermal.ambientTemperatureC,
     targetInWaterTemperatureC: input.thermal.inWaterTemperatureC
   };
   const targetPressureBar = Math.max(10, input.cylinder.initialPressureBar);
-  errors.push(...validateCalculatorInputs(
+  const validationMessages = validateCalculatorInputs(
     { ...input.cylinder, targetPressureBar },
     input.physics,
     thermal,
     { pressureLimitMode: state.settings.pressureLimitMode }
-  ));
-  if (!isValidGasComposition(input.cylinder.initialOxygenPercent, input.cylinder.initialHeliumPercent)) {
-    errors.push('Initial oxygen and helium percentages must total no more than 100%.');
+  );
+  for (const message of validationMessages) {
+    const field = message.startsWith('Initial pressure')
+      || message.startsWith('Target pressure')
+      || message.startsWith('Cylinder working pressure')
+      ? 'pressureBar'
+      : message.startsWith('Thermal ambient temperature')
+        || message.startsWith('Thermal target-medium temperature')
+        ? 'ambientTemperatureC'
+        : message.startsWith('Thermal target in-water temperature')
+          ? 'inWaterTemperatureC'
+          : message.startsWith('Thermal cooling medium')
+            ? 'coolingMedium'
+            : null;
+    if (field) errors.push(scenarioError(field, message));
+    else errors.push(scenarioError('scenario', message));
   }
-  if (!['ideal', 'vdw'].includes(input.physics.model)) errors.push('Physics model must be ideal or vdw.');
+  if (!isValidGasComposition(input.cylinder.initialOxygenPercent, input.cylinder.initialHeliumPercent)) {
+    const message = 'Initial oxygen and helium percentages must total no more than 100%.';
+    errors.push(scenarioError('oxygenPercent', message), scenarioError('heliumPercent', message));
+  }
+  if (!['ideal', 'vdw'].includes(input.physics.model)) {
+    errors.push(scenarioError('scenario', 'Physics model must be ideal or vdw.'));
+  }
   return errors;
 }
+
+function scenarioSimulationError(error, rows) {
+  if (error?.code === 'COMPARE_TARGET_STATE_UNREACHABLE') {
+    const target = error.details?.targetTemperatureC;
+    const row = rows.find(candidate => candidate.type === 'wait'
+      && candidate.waitMode === 'target'
+      && (!Number.isFinite(target) || candidate.targetTemperatureC === target));
+    if (row) return scenarioError('targetTemperatureC', error.message, row.id);
+  }
+  return scenarioError('scenario', error?.message ?? 'Scenario simulation failed.');
+}
+
 
 function runWhatIf() {
   const scenario = state.whatIfScenario;
@@ -1264,7 +1326,7 @@ function runWhatIf() {
     waitStates
   });
   state.whatIfErrors = [
-    ...sharedErrors.map(message => ({ rowId: null, field: 'scenario', message })),
+    ...sharedErrors,
     ...validation.errors
   ];
   renderWhatIfErrors();
@@ -1319,7 +1381,7 @@ function runWhatIf() {
     updateWhatIfStatus('Scenario run complete.');
     renderWhatIfResult();
   } catch (error) {
-    state.whatIfErrors = [{ rowId: null, field: 'scenario', message: error.message }];
+    state.whatIfErrors = [scenarioSimulationError(error, scenario.rows)];
     state.whatIfHasRun = true;
     renderWhatIfErrors();
     renderWhatIfEditor();
