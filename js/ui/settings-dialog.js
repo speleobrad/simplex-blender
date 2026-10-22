@@ -1,5 +1,5 @@
 import { PRESET_IMPORT_DEFAULT_URLS } from '../preset-import.js';
-import { sortCylinderPresetEntries, sortGasPresetEntries } from '../settings.js';
+import { matchesPressureWarningUnlockPhrase, sortCylinderPresetEntries, sortGasPresetEntries } from '../settings.js';
 import { convertToDisplay, unitLabel } from '../units.js';
 const CUSTOM_PRESET = 'custom';
 
@@ -430,7 +430,8 @@ export function renderSettingsDialog(settings, importState) {
   }
   const confirmation = document.getElementById('settings-pressure-limit-confirmation');
   const unlock = document.getElementById('settings-pressure-warning-unlock-button');
-  if (unlock) unlock.disabled = warningUnlocked || confirmation?.value !== `I KNOW WHAT I'M DOING`;
+  if (unlock) unlock.disabled = warningUnlocked
+    || !matchesPressureWarningUnlockPhrase(confirmation?.value);
   const notice = document.getElementById('settings-pressure-warning-notice');
   if (notice) notice.classList.toggle('hidden', pressureMode?.value !== 'warning');
   renderGasRows(settings.gasPresets);

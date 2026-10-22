@@ -11,6 +11,14 @@ export function normalizePresetName(name) {
   return typeof name === 'string' ? name.trim().toLowerCase() : '';
 }
 
+const PRESSURE_WARNING_UNLOCK_PHRASE = "I KNOW WHAT I'M DOING";
+
+export function matchesPressureWarningUnlockPhrase(value) {
+  return typeof value === 'string'
+    && value.replace(/[a-z]/g, letter => letter.toUpperCase())
+      .replace(/[`"]/g, "'") === PRESSURE_WARNING_UNLOCK_PHRASE;
+}
+
 export const DEFAULT_SETTINGS = Object.freeze({
   units: 'metric',
   pressureLimitMode: 'hard-stop',

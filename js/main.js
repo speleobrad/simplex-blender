@@ -16,6 +16,7 @@ import {
   applyGasPresetToBank,
   copySettings,
   loadSettings,
+  matchesPressureWarningUnlockPhrase,
   normalizePresetName,
   saveSettings,
   selectEquipmentPreset,
@@ -552,7 +553,7 @@ function updateSettingsDraft(input) {
 function unlockPressureWarning() {
   if (!state.settingsDraft || state.settingsDraft.pressureWarningUnlocked === true) return;
   const confirmation = byId('settings-pressure-limit-confirmation');
-  if (confirmation?.value !== `I KNOW WHAT I'M DOING`) return;
+  if (!matchesPressureWarningUnlockPhrase(confirmation?.value)) return;
   state.settingsDraft.pressureWarningUnlocked = true;
   clearPressureWarningConfirmation();
   renderSettingsDraft();
@@ -1384,7 +1385,7 @@ function handleInputOrChange(event) {
   }
   if (event.type === 'input' && target.id === 'settings-pressure-limit-confirmation') {
     const unlock = document.querySelector('[data-action="unlock-pressure-warning"]');
-    if (unlock) unlock.disabled = target.value !== `I KNOW WHAT I'M DOING`
+    if (unlock) unlock.disabled = !matchesPressureWarningUnlockPhrase(target.value)
       || state.settingsDraft?.pressureWarningUnlocked === true;
     return;
   }

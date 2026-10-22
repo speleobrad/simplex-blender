@@ -246,13 +246,21 @@ test.describe('settings categories and drafts', () => {
     const unlock = general.getByRole('button', { name: 'Unlock warning mode', exact: true });
 
     await expect(general.getByText("I KNOW WHAT I'M DOING", { exact: true })).toBeVisible();
+    const confirmationInstructions = general.locator('#settings-pressure-warning-instructions');
+    await expect(confirmationInstructions).toContainText(/case-insensitive/i);
+    await expect(confirmationInstructions).toContainText(/backtick/i);
+    await expect(confirmationInstructions).toContainText(/double quote/i);
     await expect(policy).toHaveValue('hard-stop');
     await expect(policy.locator('option[value="warning"]')).toBeDisabled();
     await phrase.fill("i know what i'm doing");
-    await expect(unlock).toBeDisabled();
+    await expect(unlock).toBeEnabled();
+    await phrase.fill('I KNOW WHAT I`M DOING');
+    await expect(unlock).toBeEnabled();
+    await phrase.fill('i know what i"m doing');
+    await expect(unlock).toBeEnabled();
     await phrase.fill('I KNOW WHAT I AM DOING');
     await expect(unlock).toBeDisabled();
-    await phrase.fill("I KNOW WHAT I'M DOING");
+    await phrase.fill('i know what i"m doing');
     await expect(unlock).toBeEnabled();
     await unlock.click();
     await expect(phrase).toHaveValue('');

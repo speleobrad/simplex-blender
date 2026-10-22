@@ -854,3 +854,25 @@ test('cylinder hot overfill accepts only zero to five percent in half-percent st
     assert.match(validateSettings(settings).join(' '), /hot overfill/i);
   }
 });
+
+test('matches the Warning unlock phrase case-insensitively and accepts quote variants', async () => {
+  const { matchesPressureWarningUnlockPhrase } = await import('../js/settings.js');
+
+  assert.equal(typeof matchesPressureWarningUnlockPhrase, 'function');
+  for (const value of [
+    "i know what i'm doing",
+    'I kNoW wHaT I`M dOiNg',
+    'i know what i"m doing'
+  ]) {
+    assert.equal(matchesPressureWarningUnlockPhrase(value), true, value);
+  }
+  for (const value of [
+    'I KNOW WHAT I AM DOING',
+    'I  KNOW WHAT I\'M DOING',
+    'I KNOW WHAT I’M DOING',
+    "I KNOW WHAT ı'M DOING",
+    null
+  ]) {
+    assert.equal(matchesPressureWarningUnlockPhrase(value), false, String(value));
+  }
+});
