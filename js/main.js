@@ -6,6 +6,7 @@ import { DEFAULT_HOT_OVERFILL_PERCENT } from './preset-validation.js';
 import { buildCompareProtocol, createCompareRow, normalizeComparePressureFields, validateCompareRecipe } from './compare-recipe.js';
 import { simulateCompareProtocol } from './thermodynamics.js';
 import { calcMolarDensity } from './physics.js';
+import { collectCylinderPressureWarnings } from './pressure-limits.js';
 import {
   addEquipmentPresetToDraft,
   applyGasPresetToBank,
@@ -27,7 +28,7 @@ import { loadOnboardingState } from './onboarding.js';
 import { loadAnalytics } from './analytics.js';
 import { createOnboardingController } from './ui/onboarding.js';
 import { renderCompareRecipe } from './ui/compare-recipe.js';
-import { renderResults } from './ui/results.js';
+import { renderPressureLimitWarnings, renderResults } from './ui/results.js';
 import { renderSettingsDialog, renderPresetOptions } from './ui/settings-dialog.js';
 import { renderEquipmentSummary } from './ui/equipment-summary.js';
 import { renderSupplyBanks } from './ui/supply-banks.js';
@@ -895,6 +896,176 @@ function invalidInputResult(errors) {
   };
 }
 
+function pressureWarningStepIdentifier(step, index) {
+  const title = String(step?.title ?? step?.operation ?? '').replace(/^Step[ ]+[0-9]+[ ]*:[ ]*/i, '').trim();
+  return title || `Step ${index + 1}`;
+}
+
+function addPressureWarningObservation(observations, pressureBar, {
+  source,
+  stepIdentifier = null,
+  isTransientHot = false
+} = {}) {
+  if (!Number.isFinite(pressureBar)) return;
+  observations.push({ pressureBar, source, stepIdentifier, isTransientHot });
+}
+
+function addTemperaturePressureWarningObservation(observations, pressureBar, temperatureC, ambientTemperatureC, {
+  source,
+  stepIdentifier = null,
+  settled = false,
+  targetTemperature = false
+} = {}) {
+  addPressureWarningObservation(observations, pressureBar, {
+    source,
+    stepIdentifier,
+    isTransientHot: !settled
+      && !targetTemperature
+      && Number.isFinite(temperatureC)
+      && Number.isFinite(ambientTemperatureC)
+      && temperatureC > ambientTemperatureC
+  });
+}
+
+function matchesTargetTemperature(temperatureC, targetTemperatureC) {
+  return Number.isFinite(temperatureC)
+    && Number.isFinite(targetTemperatureC)
+    && Math.abs(temperatureC - targetTemperatureC) <= 1e-9;
+}
+
+function matchesAnyTargetTemperature(temperatureC, targetTemperatures) {
+  for (const targetTemperatureC of targetTemperatures) {
+    if (matchesTargetTemperature(temperatureC, targetTemperatureC)) return true;
+  }
+  return false;
+}
+
+function appendThermalPressureWarningObservations(observations, protocolSteps, ambientTemperatureC, {
+  targetTemperatureC = null,
+  waitMode = null
+} = {}) {
+  const priorTargetTemperatures = new Set();
+  for (const [index, step] of (protocolSteps ?? []).entries()) {
+    const thermal = step?.thermal;
+    if (!thermal) continue;
+    const stepTargetTemperatureC = step?.waitMode === 'target'
+      ? step.targetTemperatureC
+      : waitMode === 'temperature'
+        ? targetTemperatureC
+        : null;
+    const isTargetTemperature = temperatureC => matchesTargetTemperature(
+      temperatureC,
+      stepTargetTemperatureC
+    ) || matchesAnyTargetTemperature(temperatureC, priorTargetTemperatures);
+    const stepIdentifier = pressureWarningStepIdentifier(step, index);
+    addTemperaturePressureWarningObservation(
+      observations,
+      thermal.pressureStartBar,
+      thermal.temperatureStartC,
+      ambientTemperatureC,
+      {
+        source: 'start',
+        stepIdentifier,
+        targetTemperature: isTargetTemperature(thermal.temperatureStartC)
+      }
+    );
+    addPressureWarningObservation(observations, thermal.pressureAtTransferEndAmbientBar, {
+      source: 'ambient',
+      stepIdentifier
+    });
+    addTemperaturePressureWarningObservation(
+      observations,
+      thermal.pressureAtTransferEndHotBar ?? thermal.pressureAtTransferEndBar,
+      thermal.temperatureAtTransferEndC,
+      ambientTemperatureC,
+      { source: 'transfer', stepIdentifier }
+    );
+    const settledTemperatureIsTarget = isTargetTemperature(thermal.temperatureAfterWaitC);
+    const settledTemperatureIsHot = Number.isFinite(thermal.temperatureAfterWaitC)
+      && Number.isFinite(ambientTemperatureC)
+      && thermal.temperatureAfterWaitC > ambientTemperatureC;
+    addPressureWarningObservation(observations, thermal.pressureAfterWaitBar, {
+      source: settledTemperatureIsHot && !settledTemperatureIsTarget ? 'cooling' : 'settled',
+      stepIdentifier,
+      isTransientHot: settledTemperatureIsHot && !settledTemperatureIsTarget
+    });
+    for (const sample of thermal.samples ?? []) {
+      const samplePressureBar = sample.projectedPressureBar ?? sample.pressureBar;
+      const sampleIsTarget = isTargetTemperature(sample.temperatureC);
+      const sampleIsHot = !sampleIsTarget
+        && Number.isFinite(sample.temperatureC)
+        && Number.isFinite(ambientTemperatureC)
+        && sample.temperatureC > ambientTemperatureC;
+      addPressureWarningObservation(observations, samplePressureBar, {
+        source: sampleIsHot ? 'cooling' : 'settled',
+        stepIdentifier,
+        isTransientHot: sampleIsHot
+      });
+    }
+    if (stepTargetTemperatureC !== null) priorTargetTemperatures.add(stepTargetTemperatureC);
+  }
+}
+
+function pressureWarningObservationsForOptimize(input, result) {
+  const observations = [];
+  const protocolSteps = result?.protocolSteps?.length
+    ? result.protocolSteps
+    : result?.maximumPressure?.protocolSteps ?? [];
+  const ambientTemperatureC = input?.thermal?.ambientTemperatureC;
+  addPressureWarningObservation(observations, input?.cylinder?.initialPressureBar, {
+    source: 'initial'
+  });
+  addPressureWarningObservation(observations, input?.cylinder?.targetPressureBar, {
+    source: 'target'
+  });
+  for (const [index, measurement] of (input?.thermal?.interimMeasurements ?? []).entries()) {
+    if (!measurement) continue;
+    addTemperaturePressureWarningObservation(
+      observations,
+      measurement.pressureBar,
+      measurement.temperatureC,
+      ambientTemperatureC,
+      {
+        source: 'interim',
+        stepIdentifier: pressureWarningStepIdentifier(protocolSteps[index], index)
+      }
+    );
+  }
+  appendThermalPressureWarningObservations(observations, protocolSteps, ambientTemperatureC, {
+    targetTemperatureC: input?.thermal?.targetMediumTemperatureC
+      ?? input?.thermal?.targetTemperatureC,
+    waitMode: input?.thermal?.waitMode
+  });
+  const thermal = result?.thermal ?? result?.maximumPressure?.thermal;
+  addPressureWarningObservation(observations, thermal?.finalInWaterPressureBar, {
+    source: 'target',
+    stepIdentifier: 'Target temperature'
+  });
+  return observations;
+}
+
+function pressureWarningObservationsForCompare(input, compare) {
+  const observations = [];
+  const ambientTemperatureC = input?.thermal?.ambientTemperatureC;
+  addPressureWarningObservation(observations, input?.cylinder?.initialPressureBar, {
+    source: 'initial'
+  });
+  appendThermalPressureWarningObservations(observations, compare?.protocolSteps, ambientTemperatureC);
+  addPressureWarningObservation(observations, compare?.final?.ambientSettled?.pressureBar, {
+    source: 'settled',
+    stepIdentifier: 'Settled result'
+  });
+  return observations;
+}
+
+function collectPressureWarnings(input, observations) {
+  if (input?.settings?.pressureLimitMode !== 'warning') return [];
+  return collectCylinderPressureWarnings({
+    cylinder: input.cylinder,
+    observations
+  });
+}
+
 function renderCompareResult() {
   const compare = state.lastCompareResult?.compare;
   if (!compare) {
@@ -947,7 +1118,16 @@ function renderWhatIfResult() {
     item.textContent = `${index + 1}. ${step.operation ?? step.title}${step.recipeGas ? ` · ${step.recipeGas}` : ''}${result}`;
     steps.append(item);
   }
-  container.replaceChildren(summary, heading, steps);
+  container.replaceChildren(
+    summary,
+    ...renderPressureLimitWarnings(
+      state.lastCompareResult?.pressureLimitWarnings ?? [],
+      state.lastCompareInput?.settings?.pressureLimitMode,
+      state.settings.units
+    ),
+    heading,
+    steps
+  );
 }
 
 function runCompare() {
@@ -990,6 +1170,10 @@ function runCompare() {
     state.lastCompareInput = input;
     state.lastCompareResult = {
       mode: 'compare',
+      pressureLimitWarnings: collectPressureWarnings(
+        input,
+        pressureWarningObservationsForCompare(input, { ...protocol, ...simulation })
+      ),
       compare: { ...protocol, ...simulation }
     };
     state.compareHasRun = true;
@@ -1032,14 +1216,22 @@ function recalculate() {
     { pressureLimitMode: state.settings.pressureLimitMode }
   );
   const result = inputErrors.length > 0 ? invalidInputResult(inputErrors) : optimizeBlend(input);
+  const resultWithWarnings = {
+    ...result,
+    pressureLimitWarnings: collectPressureWarnings(
+      input,
+      pressureWarningObservationsForOptimize(input, result)
+    )
+  };
   state.lastInput = input;
-  state.lastResult = result;
+  state.lastResult = resultWithWarnings;
 
   renderSupplyBanks(state.banks, state.settings.gasPresets, state.settings.units);
   renderEquipmentSummary(state.settings, state.settings.units);
-  renderResults(result, input);
-  renderThermalCharts(result, input, state.settings.units);
-  if (result.feasible) renderTernary();
+  renderResults(resultWithWarnings, input);
+
+  renderThermalCharts(resultWithWarnings, input, state.settings.units);
+  if (resultWithWarnings.feasible) renderTernary();
   else clearTernaryDiagram(byId('ternary-canvas'));
 }
 
