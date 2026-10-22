@@ -107,7 +107,8 @@ function validPressure(value) {
   return Number.isFinite(value) && value >= 0 && value <= MAX_PRESSURE_BAR;
 }
 
-function receiverPressureCeiling(cylinder) {
+function receiverPressureCeiling(cylinder, settings) {
+  if (settings?.pressureLimitMode === 'warning') return MAX_PRESSURE_BAR;
   return Number.isFinite(cylinder?.workingPressureBar) && cylinder.workingPressureBar >= 0
     ? Math.min(MAX_PRESSURE_BAR, cylinder.workingPressureBar)
     : MAX_PRESSURE_BAR;
@@ -215,7 +216,7 @@ export function validateCompareRecipe(rows, { cylinder, banks = [], physics, set
 
   const normalizedRows = rows.map(cloneRow);
   const bankIndex = indexedBanks(banks);
-  const pressureCeilingBar = receiverPressureCeiling(cylinder);
+  const pressureCeilingBar = receiverPressureCeiling(cylinder, settings);
   let currentPressure = cylinder?.initialPressureBar;
   if (!validPressure(currentPressure)) currentPressure = null;
 
@@ -612,7 +613,7 @@ export function buildCompareProtocol(rows, { cylinder, physics, banks = [], sett
   const { volumeL, initialPressureBar, initialOxygenPercent, initialHeliumPercent } = cylinder;
   const { temperatureC, model } = physics;
   const useVdw = model !== 'ideal';
-  const receiverPressureCeilingBar = receiverPressureCeiling(cylinder);
+  const receiverPressureCeilingBar = receiverPressureCeiling(cylinder, settings);
   if (initialPressureBar > receiverPressureCeilingBar + PRESSURE_TOLERANCE_BAR) {
     throw new RangeError(`Compare protocol initial pressure cannot exceed the cylinder working pressure of ${receiverPressureCeilingBar} bar.`);
   }
