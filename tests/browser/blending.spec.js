@@ -2,6 +2,7 @@ import { test, expect } from './fixtures/app-fixtures.js';
 import { fillWorkingTank } from './helpers/blending.js';
 import { openSettingsCategory, saveSettings } from './helpers/settings.js';
 
+import { acceptConsent, completeOrExitTour } from './helpers/onboarding.js';
 async function load(appPage) { return appPage.goto('tourSeen'); }
 
 async function configureWarningMode(page, { workingPressure = 100, hotOverfill = 5 } = {}) {
@@ -150,6 +151,27 @@ test.describe('working tank blending inputs', () => {
     await expect(page.locator('#steps-container')).not.toContainText(/automatic wait: cylinder pressure limit/i);
     await expect(page.locator('#steps-container')).not.toContainText(/recorded input/i);
   });
+  test('Warning mode accepts interim readings above hot overfill within the supported range', async ({ appPage }) => {
+    test.setTimeout(90_000);
+    const page = await appPage.goto('settings');
+    await configureWarningMode(page, { workingPressure: 100, hotOverfill: 0 });
+    await fillWorkingTank(page, {
+      startPressure: 50, targetPressure: 200, ambientTemperature: 20
+    });
+
+    const form = page.locator('#steps-container form').first();
+    await form.locator('xpath=..').locator('summary').click();
+    await expect(form).toBeVisible();
+    const pressure = form.locator('[name="pressureBar"]');
+    await expect(pressure).toHaveAttribute('max', '350');
+    await pressure.fill('103');
+    await form.locator('[name="temperatureC"]').fill('40');
+    await form.locator('[data-action="apply-interim-measurement"]').click();
+
+    await expect(page.locator('#blend-status')).toContainText(/Transient hot-overfill limit exceeded/i);
+    await expect(page.locator('#blend-status')).toContainText(/103\.0 bar > 100\.0 bar/i);
+  });
+
 
   test('enforces thermal boundaries and rejects target medium below ambient', async ({ appPage }) => {
     const page = await load(appPage);
@@ -213,6 +235,39 @@ test('reports a working-pressure exceedance in Warning-mode What-if results', as
   await page.locator('[data-action="run-compare"]').evaluate(button => button.click());
   await expect(page.locator('#what-if-result')).toContainText(/Final: 20(?:\.0)? bar/);
   await expect(page.locator('#what-if-result')).toContainText(/working pressure/i);
+  const updatedGeneral = await openSettingsCategory(page, 'general');
+  await updatedGeneral.getByRole('combobox', { name: 'Cylinder pressure limit behavior' })
+    .selectOption('hard-stop');
+  await saveSettings(page);
+  await expect(page.locator('#what-if-result'))
+    .toContainText('Run the sequence to see the modeled result.');
+  await expect(page.locator('#what-if-result')).not.toContainText(/Warning mode|Final:/i);
+});
+
+test('clears cached Warning-mode What-if results on factory reset', async ({ appPage }) => {
+  test.setTimeout(90_000);
+  const page = await appPage.goto('settings');
+  await configureWarningMode(page, { workingPressure: 100, hotOverfill: 5 });
+  await fillWorkingTank(page, { startPressure: 110 });
+  await page.locator('[data-action="select-screen"][data-screen="what-if"]').click();
+  await expect(page.locator('#screen-what-if')).toBeVisible();
+  await page.locator('[data-row-id="compare-row-1"] [data-compare-field="targetPressureBar"]').fill('20');
+  await page.locator('[data-action="run-compare"]').evaluate(button => button.click());
+  await expect(page.locator('#what-if-result')).toContainText(/Warning mode: cylinder limits are not enforced/i);
+  await expect(page.locator('#what-if-result')).toContainText(/Final: 20(?:\.0)? bar/);
+
+  const management = await openSettingsCategory(page, 'preset-management');
+  page.once('dialog', dialog => dialog.accept());
+  await management.getByRole('button', { name: 'Reset to factory settings', exact: true }).click();
+  await page.waitForLoadState('domcontentloaded');
+  await acceptConsent(page);
+  await completeOrExitTour(page, 'Skip');
+
+  await page.locator('[data-action="select-screen"][data-screen="what-if"]').click();
+  await expect(page.locator('#screen-what-if')).toBeVisible();
+  await expect(page.locator('#what-if-result'))
+    .toContainText('Run the sequence to see the modeled result.');
+  await expect(page.locator('#what-if-result')).not.toContainText(/Warning mode|Final:/i);
 });
 
 test('keeps a Compressor Air What-if transfer inside the hot ceiling in Warning mode', async ({ appPage }) => {

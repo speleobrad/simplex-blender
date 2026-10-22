@@ -68,3 +68,13 @@ Existing Hard stop coverage was preserved. No tests, build, lint, or formatting 
 ## Fix-round 3 rendering regression
 
 - Added a results regression combining Warning-mode policy/exceedance notices with automatic-wait metadata. The fake DOM now clears child nodes when `textContent` is assigned, matching browser semantics; the test verifies amber `role=status` notices and automatic-wait text survive thermal-summary rendering.
+
+## Controller RED for fix round 3
+
+- Command: `node --test tests/results.test.js`
+- Result: 13 passed, 1 failed. The new automatic-wait coexistence case expected two amber `role=status` notice children but found zero after `renderThermalSummary` replaced `blend-status.textContent`.
+
+## Controller GREEN after fix round 4
+
+- `node --test tests/results.test.js tests/optimizer.test.js tests/compare-recipe.test.js tests/pressure-limits.test.js`: 128 passed, 0 failed.
+- `env -u NO_COLOR npm run test:ui -- --config .superpowers/sdd/2026-10-22-pressure-limit-warning-mode/playwright-alt-port.config.mjs --reporter=dot --workers=4 tests/browser/settings.spec.js tests/browser/blending.spec.js`: 72 passed, 0 failed across desktop/tablet/mobile.

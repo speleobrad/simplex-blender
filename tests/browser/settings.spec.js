@@ -245,6 +245,7 @@ test.describe('settings categories and drafts', () => {
     const phrase = general.getByRole('textbox', { name: 'Type I KNOW WHAT I\'M DOING' });
     const unlock = general.getByRole('button', { name: 'Unlock warning mode', exact: true });
 
+    await expect(general.getByText("I KNOW WHAT I'M DOING", { exact: true })).toBeVisible();
     await expect(policy).toHaveValue('hard-stop');
     await expect(policy.locator('option[value="warning"]')).toBeDisabled();
     await phrase.fill("i know what i'm doing");
@@ -254,6 +255,8 @@ test.describe('settings categories and drafts', () => {
     await phrase.fill("I KNOW WHAT I'M DOING");
     await expect(unlock).toBeEnabled();
     await unlock.click();
+    await expect(phrase).toHaveValue('');
+    await expect(unlock).toBeDisabled();
     await expect(policy.locator('option[value="warning"]')).toBeEnabled();
     await policy.selectOption('warning');
     await expect(general.getByText(/cylinder limits are not enforced/i)).toBeVisible();
@@ -307,5 +310,46 @@ test.describe('settings categories and drafts', () => {
     await expect(lockedGeneral.getByRole('combobox', { name: 'Cylinder pressure limit behavior' })
       .locator('option[value="warning"]')).toBeDisabled();
 
+
   });
+  test('clears an unused unlock phrase when settings are canceled', async ({ appPage }) => {
+    const page = await appPage.goto('tourSeen');
+    const general = await openSettingsCategory(page, 'general');
+    const phrase = general.getByRole('textbox', { name: 'Type I KNOW WHAT I\'M DOING' });
+    const unlock = general.getByRole('button', { name: 'Unlock warning mode', exact: true });
+
+    await phrase.fill("I KNOW WHAT I'M DOING");
+    await expect(unlock).toBeEnabled();
+    await cancelSettings(page);
+
+    const reopenedGeneral = await openSettingsCategory(page, 'general');
+    await expect(reopenedGeneral.getByRole('textbox', { name: 'Type I KNOW WHAT I\'M DOING' }))
+      .toHaveValue('');
+    await expect(reopenedGeneral.getByRole('button', { name: 'Unlock warning mode', exact: true }))
+      .toBeDisabled();
+  });
+  test('clears an unused unlock phrase on factory reset', async ({ appPage }) => {
+    const page = await appPage.goto('tourSeen');
+    const general = await openSettingsCategory(page, 'general');
+    const phrase = general.getByRole('textbox', { name: 'Type I KNOW WHAT I\'M DOING' });
+    const unlock = general.getByRole('button', { name: 'Unlock warning mode', exact: true });
+    await phrase.fill("I KNOW WHAT I'M DOING");
+    await expect(unlock).toBeEnabled();
+
+    const management = await openSettingsCategory(page, 'preset-management');
+    page.once('dialog', dialog => dialog.accept());
+    await management.getByRole('button', { name: 'Reset to factory settings', exact: true }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await acceptConsent(page);
+    await completeOrExitTour(page, 'Skip');
+
+    const resetGeneral = await openSettingsCategory(page, 'general');
+    await expect(resetGeneral.getByRole('textbox', { name: 'Type I KNOW WHAT I\'M DOING' }))
+      .toHaveValue('');
+    await expect(resetGeneral.getByRole('button', { name: 'Unlock warning mode', exact: true }))
+      .toBeDisabled();
+    await expect(resetGeneral.getByRole('combobox', { name: 'Cylinder pressure limit behavior' })
+      .locator('option[value="warning"]')).toBeDisabled();
+  });
+
 });

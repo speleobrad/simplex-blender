@@ -2427,6 +2427,66 @@ const schedulerFixture = {
   settings: {}
 };
 
+test('scheduler enforces working pressure at above-ambient target-temperature waits', () => {
+  const workingPressureBar = 100;
+  const mix = { oxygenPercent: 21, heliumPercent: 0 };
+  const scheduled = scheduleSafeThermalProtocol({
+    ...schedulerFixture,
+    cylinder: {
+      ...schedulerFixture.cylinder,
+      workingPressureBar,
+      hotOverfillPercent: 5
+    },
+    thermal: {
+      ...schedulerFixture.thermal,
+      waitMode: 'temperature',
+      targetMediumTemperatureC: 30,
+      targetTemperatureC: 30,
+      targetInWaterTemperatureC: 20
+    },
+    protocolSteps: [
+      {
+        type: 'boost',
+        operation: 'Boost',
+        receiverStartPressureBar: 0,
+        receiverEndPressureBar: 99.5,
+        resultingPressureBar: 99.5,
+        resultingMix: mix,
+        sourceOxygenPercent: 21,
+        sourceHeliumPercent: 0,
+        sourceStartPressureBar: 300,
+        sourceEndPressureBar: 200,
+        sourceVolumeL: 12
+      },
+      {
+        type: 'keep',
+        receiverStartPressureBar: 99.5,
+        receiverEndPressureBar: 99.5,
+        resultingPressureBar: 99.5,
+        resultingMix: mix
+      }
+    ]
+  });
+
+  const targetWaitSteps = scheduled.protocolSteps.slice(0, -1).filter(step => (
+    step.thermal?.temperatureAfterWaitC > schedulerFixture.thermal.ambientTemperatureC
+  ));
+  assert.ok(targetWaitSteps.length > 0);
+  const exceedsWorkingPressure = targetWaitSteps.some(step => (
+    step.thermal.pressureAfterWaitBar > workingPressureBar + 1e-7
+  ));
+  assert.ok(scheduled.unsafe || !exceedsWorkingPressure, JSON.stringify({
+    unsafe: scheduled.unsafe,
+    exceedsWorkingPressure,
+    targetWaitSteps: targetWaitSteps.map(step => ({
+      title: step.title,
+      pressureAfterWaitBar: step.thermal.pressureAfterWaitBar,
+      temperatureAfterWaitC: step.thermal.temperatureAfterWaitC,
+      waitMinutes: step.thermal.waitMinutes
+    }))
+  }));
+});
+
 test('scheduler rejects an unsafe transfer after the 1440-minute ceiling', () => {
   const scheduled = scheduleSafeThermalProtocol({
     ...schedulerFixture,
@@ -3007,6 +3067,80 @@ test('thermal safety allows transient hot overfill but keeps settled pressure at
     cylinder: { ...cylinder, hotOverfillPercent: 0 }
   }), false);
 });
+
+test('Hard stop retains hot overfill for measured warm interim starts', () => {
+  const cylinder = {
+    volumeL: 12,
+    initialPressureBar: 0,
+    workingPressureBar: 100,
+    hotOverfillPercent: 5
+  };
+  const thermal = {
+    ambientTemperatureC: 20,
+    waitMode: 'temperature',
+    targetMediumTemperatureC: 30
+  };
+  const state = {
+    pressureStartBar: 101.5,
+    temperatureStartC: 30,
+    measurementApplied: true,
+    measuredStartPressureBar: 101.5,
+    measuredStartTemperatureC: 30,
+    pressureAtTransferEndAmbientBar: 100,
+    pressureAtTransferEndHotBar: 101.5,
+    temperatureAtTransferEndC: 40,
+    pressureAfterWaitBar: 100,
+    temperatureAfterWaitC: 20,
+    samples: []
+  };
+
+  assert.equal(isSafeSimulation({ protocolSteps: [{ thermal: state }] }, 100, {
+    thermal,
+    physics: { model: 'ideal' },
+    cylinder,
+    settings: {}
+  }), true);
+});
+
+test('Hard stop applies working pressure at an above-ambient target-temperature wait', () => {
+  const cylinder = {
+    volumeL: 12,
+    initialPressureBar: 0,
+    workingPressureBar: 100,
+    hotOverfillPercent: 5
+  };
+  const thermal = {
+    ambientTemperatureC: 20,
+    waitMode: 'temperature',
+    targetMediumTemperatureC: 30,
+    targetTemperatureC: 30
+  };
+  const state = {
+    pressureStartBar: 0,
+    temperatureStartC: 20,
+    pressureAtTransferEndAmbientBar: 100,
+    pressureAtTransferEndHotBar: 101.5,
+    temperatureAtTransferEndC: 40,
+    pressureAfterWaitBar: 101.5,
+    temperatureAfterWaitC: 30,
+    durationMinutes: 1,
+    waitMinutes: 1,
+    samples: [{
+      elapsedMinutes: 2,
+      ambientPressureBar: 100,
+      projectedPressureBar: 101.5,
+      temperatureC: 30
+    }]
+  };
+
+  assert.equal(isSafeSimulation({ protocolSteps: [{ thermal: state }] }, 100, {
+    thermal,
+    physics: { model: 'ideal' },
+    cylinder,
+    settings: {}
+  }), false);
+});
+
 test('hot overfill preserves the requested ambient and target pressure at safe endpoints', () => {
   const workingPressureBar = 99.01;
   const result = optimizeBlend({

@@ -6,7 +6,11 @@ import { DEFAULT_HOT_OVERFILL_PERCENT } from './preset-validation.js';
 import { buildCompareProtocol, createCompareRow, normalizeComparePressureFields, validateCompareRecipe } from './compare-recipe.js';
 import { simulateCompareProtocol } from './thermodynamics.js';
 import { calcMolarDensity } from './physics.js';
-import { collectCylinderPressureWarnings } from './pressure-limits.js';
+import {
+  collectCylinderPressureWarnings,
+  collectThermalPressureWarningObservations,
+  pressureWarningStepIdentifier
+} from './pressure-limits.js';
 import {
   addEquipmentPresetToDraft,
   applyGasPresetToBank,
@@ -279,10 +283,16 @@ function setSettingsCategory(category) {
     ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
 
+function clearPressureWarningConfirmation() {
+  const confirmation = byId('settings-pressure-limit-confirmation');
+  if (confirmation) confirmation.value = '';
+}
+
 function openSettings() {
   if (state.activeScreen !== 'settings') state.settingsReturnScreen = state.activeScreen;
   state.settingsSession += 1;
   state.settingsDraft = copySettings(state.settings);
+  clearPressureWarningConfirmation();
   resetPresetImportState();
   renderSettingsDraft();
   setSettingsCategory(state.settingsCategory);
@@ -461,6 +471,8 @@ function resetFactorySettings() {
     return;
   }
   if (!didReset) return;
+  clearPressureWarningConfirmation();
+  invalidateCompareResult();
 
   state.settingsSession += 1;
   state.onboardingController.reset(state.onboarding);
@@ -542,6 +554,7 @@ function unlockPressureWarning() {
   const confirmation = byId('settings-pressure-limit-confirmation');
   if (confirmation?.value !== `I KNOW WHAT I'M DOING`) return;
   state.settingsDraft.pressureWarningUnlocked = true;
+  clearPressureWarningConfirmation();
   renderSettingsDraft();
   setSettingsCategory('general');
 }
@@ -615,9 +628,12 @@ function saveSettingsDraft() {
     displaySettingsErrors(['Settings were not saved. Check that browser storage is enabled and has space, then try again.']);
     return;
   }
+  clearPressureWarningConfirmation();
+  const pressureLimitModeChanged = state.settings.pressureLimitMode !== state.settingsDraft.pressureLimitMode;
 
   const previousUnits = state.settings.units;
   state.settings = copySettings(state.settingsDraft);
+  if (pressureLimitModeChanged) invalidateCompareResult();
   convertDisplayedInputs(previousUnits, state.settings.units);
   updateStorageWarning();
   state.settingsDraft = null;
@@ -675,6 +691,7 @@ function markGasPresetCustom(input) {
 
 function cancelSettings() {
   state.settingsSession += 1;
+  clearPressureWarningConfirmation();
   state.settingsDraft = null;
   clearSettingsErrors();
   selectScreen(state.settingsReturnScreen);
@@ -837,6 +854,14 @@ function updateCompareStatus(message = '') {
   byId('compare-run-status').textContent = message;
 }
 
+function invalidateCompareResult() {
+  state.lastCompareInput = null;
+  state.lastCompareResult = null;
+  state.compareErrors = [];
+  state.compareHasRun = false;
+  updateCompareStatus();
+}
+
 function ternaryData() {
   if (state.activeScreen === 'what-if' || state.mode === 'compare') {
     const compare = state.lastCompareResult?.compare;
@@ -896,11 +921,6 @@ function invalidInputResult(errors) {
   };
 }
 
-function pressureWarningStepIdentifier(step, index) {
-  const title = String(step?.title ?? step?.operation ?? '').replace(/^Step[ ]+[0-9]+[ ]*:[ ]*/i, '').trim();
-  return title || `Step ${index + 1}`;
-}
-
 function addPressureWarningObservation(observations, pressureBar, {
   source,
   stepIdentifier = null,
@@ -912,100 +932,15 @@ function addPressureWarningObservation(observations, pressureBar, {
 
 function addTemperaturePressureWarningObservation(observations, pressureBar, temperatureC, ambientTemperatureC, {
   source,
-  stepIdentifier = null,
-  settled = false,
-  targetTemperature = false
+  stepIdentifier = null
 } = {}) {
   addPressureWarningObservation(observations, pressureBar, {
     source,
     stepIdentifier,
-    isTransientHot: !settled
-      && !targetTemperature
-      && Number.isFinite(temperatureC)
+    isTransientHot: Number.isFinite(temperatureC)
       && Number.isFinite(ambientTemperatureC)
       && temperatureC > ambientTemperatureC
   });
-}
-
-function matchesTargetTemperature(temperatureC, targetTemperatureC) {
-  return Number.isFinite(temperatureC)
-    && Number.isFinite(targetTemperatureC)
-    && Math.abs(temperatureC - targetTemperatureC) <= 1e-9;
-}
-
-function matchesAnyTargetTemperature(temperatureC, targetTemperatures) {
-  for (const targetTemperatureC of targetTemperatures) {
-    if (matchesTargetTemperature(temperatureC, targetTemperatureC)) return true;
-  }
-  return false;
-}
-
-function appendThermalPressureWarningObservations(observations, protocolSteps, ambientTemperatureC, {
-  targetTemperatureC = null,
-  waitMode = null
-} = {}) {
-  const priorTargetTemperatures = new Set();
-  for (const [index, step] of (protocolSteps ?? []).entries()) {
-    const thermal = step?.thermal;
-    if (!thermal) continue;
-    const stepTargetTemperatureC = step?.waitMode === 'target'
-      ? step.targetTemperatureC
-      : waitMode === 'temperature'
-        ? targetTemperatureC
-        : null;
-    const isTargetTemperature = temperatureC => matchesTargetTemperature(
-      temperatureC,
-      stepTargetTemperatureC
-    ) || matchesAnyTargetTemperature(temperatureC, priorTargetTemperatures);
-    const stepIdentifier = pressureWarningStepIdentifier(step, index);
-    addTemperaturePressureWarningObservation(
-      observations,
-      thermal.pressureStartBar,
-      thermal.temperatureStartC,
-      ambientTemperatureC,
-      {
-        source: 'start',
-        stepIdentifier,
-        targetTemperature: isTargetTemperature(thermal.temperatureStartC)
-      }
-    );
-    if (thermal.rateSource !== 'none') {
-      addPressureWarningObservation(observations, thermal.pressureAtTransferEndAmbientBar, {
-        source: 'ambient',
-        stepIdentifier
-      });
-    }
-    addTemperaturePressureWarningObservation(
-      observations,
-      thermal.pressureAtTransferEndHotBar ?? thermal.pressureAtTransferEndBar,
-      thermal.temperatureAtTransferEndC,
-      ambientTemperatureC,
-      { source: 'transfer', stepIdentifier }
-    );
-    const settledTemperatureIsTarget = isTargetTemperature(thermal.temperatureAfterWaitC);
-    const settledTemperatureIsHot = Number.isFinite(thermal.temperatureAfterWaitC)
-      && Number.isFinite(ambientTemperatureC)
-      && thermal.temperatureAfterWaitC > ambientTemperatureC;
-    addPressureWarningObservation(observations, thermal.pressureAfterWaitBar, {
-      source: settledTemperatureIsHot && !settledTemperatureIsTarget ? 'cooling' : 'settled',
-      stepIdentifier,
-      isTransientHot: settledTemperatureIsHot && !settledTemperatureIsTarget
-    });
-    for (const sample of thermal.samples ?? []) {
-      const samplePressureBar = sample.projectedPressureBar ?? sample.pressureBar;
-      const sampleIsTarget = isTargetTemperature(sample.temperatureC);
-      const sampleIsHot = !sampleIsTarget
-        && Number.isFinite(sample.temperatureC)
-        && Number.isFinite(ambientTemperatureC)
-        && sample.temperatureC > ambientTemperatureC;
-      addPressureWarningObservation(observations, samplePressureBar, {
-        source: sampleIsHot ? 'cooling' : 'settled',
-        stepIdentifier,
-        isTransientHot: sampleIsHot
-      });
-    }
-    if (stepTargetTemperatureC !== null) priorTargetTemperatures.add(stepTargetTemperatureC);
-  }
 }
 
 function pressureWarningObservationsForOptimize(input, result) {
@@ -1033,11 +968,11 @@ function pressureWarningObservationsForOptimize(input, result) {
       }
     );
   }
-  appendThermalPressureWarningObservations(observations, protocolSteps, ambientTemperatureC, {
-    targetTemperatureC: input?.thermal?.targetMediumTemperatureC
-      ?? input?.thermal?.targetTemperatureC,
+  observations.push(...collectThermalPressureWarningObservations({
+    protocolSteps,
+    ambientTemperatureC,
     waitMode: input?.thermal?.waitMode
-  });
+  }));
   const thermal = result?.thermal ?? result?.maximumPressure?.thermal;
   addPressureWarningObservation(observations, thermal?.finalInWaterPressureBar, {
     source: 'target',
@@ -1052,7 +987,10 @@ function pressureWarningObservationsForCompare(input, compare) {
   addPressureWarningObservation(observations, input?.cylinder?.initialPressureBar, {
     source: 'initial'
   });
-  appendThermalPressureWarningObservations(observations, compare?.protocolSteps, ambientTemperatureC);
+  observations.push(...collectThermalPressureWarningObservations({
+    protocolSteps: compare?.protocolSteps,
+    ambientTemperatureC
+  }));
   addPressureWarningObservation(observations, compare?.final?.ambientSettled?.pressureBar, {
     source: 'settled',
     stepIdentifier: 'Settled result'

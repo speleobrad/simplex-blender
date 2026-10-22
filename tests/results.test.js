@@ -635,3 +635,87 @@ test('preserves Warning notices and automatic-wait text during thermal rendering
     globalThis.document = previousDocument;
   }
 });
+
+test('qualifies Warning-mode maximum pressure by the active non-cylinder constraints', () => {
+  const previousDocument = globalThis.document;
+  const document = createFakeDocument();
+  globalThis.document = document;
+  try {
+    renderResults({
+      feasible: false,
+      error: 'Requested pressure is unavailable.',
+      gas: { initialPressureBar: 50, targetPressureBar: 200 },
+      maximumPressure: {
+        pressureBar: 150,
+        blend: { finalOxygenPercent: 21, finalHeliumPercent: 0 },
+        protocolSteps: []
+      }
+    }, {
+      settings: { pressureLimitMode: 'warning', units: 'metric' },
+      cylinder: { volumeL: 12, workingPressureBar: 100 },
+      physics: { model: 'ideal' }
+    });
+
+    const status = document.elements.get('blend-status').textContent;
+    const details = document.elements.get('steps-container').textContent;
+    assert.match(status, /maximum under active non-cylinder constraints/i);
+    assert.match(details, /maximum pressure under active non-cylinder constraints/i);
+    assert.doesNotMatch(status, /\bsafe(?:ly)?\b/i);
+    assert.doesNotMatch(details, /\bsafe(?:ly)?\b/i);
+  } finally {
+    globalThis.document = previousDocument;
+  }
+});
+
+test('renders infeasible results without a maximum pressure fallback', () => {
+  const previousDocument = globalThis.document;
+  const document = createFakeDocument();
+  globalThis.document = document;
+  try {
+    renderResults({
+      feasible: false,
+      error: 'Invalid input: Initial pressure must be between 0 and 350 bar.',
+      maximumPressure: null
+    }, { settings: { pressureLimitMode: 'warning' } });
+
+    assert.match(
+      document.elements.get('steps-container').textContent,
+      /Initial pressure must be between 0 and 350 bar/
+    );
+    assert.match(document.elements.get('blend-status').textContent, /warning mode/i);
+  } finally {
+    globalThis.document = previousDocument;
+  }
+});
+
+test('Warning mode keeps interim pressure input within the supported range', () => {
+  const previousDocument = globalThis.document;
+  const document = createFakeDocument();
+  globalThis.document = document;
+  try {
+    renderResults({
+      feasible: true,
+      blend: {
+        retainedPressureBar: 50, retainedPercent: 100, ventedPressureBar: 0,
+        ventedGasLitres: 0, heliumSalvagedLitres: 0, finalPressureBar: 150,
+        finalOxygenPercent: 21, finalHeliumPercent: 0
+      },
+      protocolSteps: [
+        { type: 'keep', title: 'Step 1', resultingPressureBar: 50 },
+        { type: 'boost', title: 'Step 2', resultingPressureBar: 150 }
+      ]
+    }, {
+      cylinder: { volumeL: 12, workingPressureBar: 100, hotOverfillPercent: 0 },
+      thermal: { interimMeasurements: [null, null] },
+      settings: { pressureLimitMode: 'warning', units: 'metric' }
+    });
+
+    const pressureInput = findElement(
+      document.elements.get('steps-container').children[1],
+      element => element.tagName === 'input' && element.name === 'pressureBar'
+    );
+    assert.equal(Number(pressureInput.max), 350);
+  } finally {
+    globalThis.document = previousDocument;
+  }
+});

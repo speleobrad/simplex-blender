@@ -103,14 +103,18 @@ function configuredCylinderPressureLimit(workingPressureBar, isTransientHot, con
   return getCylinderPressureLimit({ cylinder, isTransientHot })?.limitBar ?? Infinity;
 }
 
-function cylinderPressureLimitAtTemperature(temperatureC, workingPressureBar, context) {
-  const ambientTemperatureC = context.thermal?.ambientTemperatureC;
-  const isTransientHot = Number.isFinite(temperatureC)
+function isAboveAmbientTemperature(temperatureC, ambientTemperatureC) {
+  return Number.isFinite(temperatureC)
     && Number.isFinite(ambientTemperatureC)
     && temperatureC > ambientTemperatureC;
+}
+
+function cylinderPressureLimitAtTemperature(temperatureC, workingPressureBar, context, isTransientHot) {
+  const transientHot = isTransientHot
+    ?? isAboveAmbientTemperature(temperatureC, context.thermal?.ambientTemperatureC);
   const configuredLimit = configuredCylinderPressureLimit(
     workingPressureBar,
-    isTransientHot,
+    transientHot,
     context
   );
   return context.settings?.pressureLimitMode === 'warning'
@@ -120,23 +124,60 @@ function cylinderPressureLimitAtTemperature(temperatureC, workingPressureBar, co
 
 function pressureValuesForSafety(state, step, context) {
   const ambientTemperatureC = context.thermal?.ambientTemperatureC;
+  const targetTemperatureWait = context.thermal?.waitMode === 'temperature';
+  const waitEndMinutes = state.durationMinutes + state.waitMinutes;
+  const isTargetWaitEndpoint = sample => targetTemperatureWait
+    && Number.isFinite(sample.elapsedMinutes)
+    && Number.isFinite(waitEndMinutes)
+    && sample.elapsedMinutes >= waitEndMinutes - 1e-9;
   return [
-    { pressureBar: state.pressureStartBar, temperatureC: state.temperatureStartC },
+    {
+      pressureBar: state.pressureStartBar,
+      temperatureC: state.temperatureStartC,
+      isTransientHot: (!targetTemperatureWait || state.measurementApplied === true)
+        && isAboveAmbientTemperature(state.temperatureStartC, ambientTemperatureC)
+    },
     ...(state.measurementApplied === false ? [] : [{
       pressureBar: state.measuredStartPressureBar,
-      temperatureC: state.measuredStartTemperatureC
+      temperatureC: state.measuredStartTemperatureC,
+      isTransientHot: isAboveAmbientTemperature(
+        state.measuredStartTemperatureC,
+        ambientTemperatureC
+      )
     }]),
-    { pressureBar: state.pressureAtTransferEndAmbientBar, temperatureC: ambientTemperatureC },
-    { pressureBar: state.pressureAfterWaitBar, temperatureC: state.temperatureAfterWaitC },
+    {
+      pressureBar: state.pressureAtTransferEndAmbientBar,
+      temperatureC: ambientTemperatureC,
+      isTransientHot: false
+    },
+    {
+      pressureBar: state.pressureAfterWaitBar,
+      temperatureC: state.temperatureAfterWaitC,
+      isTransientHot: !targetTemperatureWait
+        && isAboveAmbientTemperature(state.temperatureAfterWaitC, ambientTemperatureC)
+    },
     {
       pressureBar: hotTransferEndpointPressure(state, step, context),
-      temperatureC: state.temperatureAtTransferEndC
+      temperatureC: state.temperatureAtTransferEndC,
+      isTransientHot: isAboveAmbientTemperature(
+        state.temperatureAtTransferEndC,
+        ambientTemperatureC
+      )
     },
     ...(state.samples ?? []).flatMap(sample => [
-      { pressureBar: sample.ambientPressureBar, temperatureC: ambientTemperatureC },
+      {
+        pressureBar: sample.ambientPressureBar,
+        temperatureC: ambientTemperatureC,
+        isTransientHot: false
+      },
       {
         pressureBar: pressureAtSample(sample, state, step, context),
-        temperatureC: sample.temperatureC ?? sample.pressureReferenceTemperatureC
+        temperatureC: sample.temperatureC ?? sample.pressureReferenceTemperatureC,
+        isTransientHot: !isTargetWaitEndpoint(sample)
+          && isAboveAmbientTemperature(
+            sample.temperatureC ?? sample.pressureReferenceTemperatureC,
+            ambientTemperatureC
+          )
       }
     ])
   ].filter(({ pressureBar }) => pressureBar !== undefined);
@@ -149,15 +190,17 @@ function exceedsThermalLimit(pressure, limit) {
 
 function unsafeThermalStep(state, step, workingPressureBar, equipmentLimit, context) {
   return pressureValuesForSafety(state, step, context)
-    .some(({ pressureBar, temperatureC }) => {
+    .some(({ pressureBar, temperatureC, isTransientHot }) => {
       const cylinderLimit = cylinderPressureLimitAtTemperature(
         temperatureC,
         workingPressureBar,
-        context
+        context,
+        isTransientHot
       );
       return exceedsThermalLimit(pressureBar, Math.min(cylinderLimit, equipmentLimit));
     });
 }
+
 
 function firstUnsafeThermalIndex(simulation, workingPressureBar, context) {
   cylinderHotOverfillPercent(context.cylinder);
