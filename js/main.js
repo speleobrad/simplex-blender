@@ -996,8 +996,8 @@ function invalidateCompareResult() {
   updateCompareStatus();
 }
 
-function ternaryData() {
-  if (state.activeScreen === 'what-if') {
+function ternaryData(screen = state.activeScreen) {
+  if (screen === 'what-if') {
     const result = state.whatIfScenario.result;
     const compare = result?.compare;
     if (!compare || !result.input) return null;
@@ -1064,9 +1064,9 @@ function ternaryData() {
 
 
 
-function renderTernary() {
-  const data = ternaryData();
-  const root = state.activeScreen === 'what-if'
+function renderTernary(screen = state.activeScreen) {
+  const data = ternaryData(screen);
+  const root = screen === 'what-if'
     ? byId('what-if-result-host')?.querySelector?.('[data-result-panel]')
     : document;
   const canvas = root?.querySelector?.('[data-result-key="ternary-canvas"]')
@@ -2065,6 +2065,10 @@ function initialize() {
   refreshPresetOptions();
   updateWaitModeFields();
   observeTernaryCanvas(document.querySelector('[data-result-host="blending"] [data-result-key="ternary-canvas"]'), renderTernary);
+  observeTernaryCanvas(
+    document.querySelector('[data-result-host="what-if"] [data-result-key="ternary-canvas"]'),
+    () => renderTernary('what-if')
+  );
   recalculate();
   if (!state.onboarding.consentAccepted) {
     state.onboardingController.open({ requireConsent: true });
