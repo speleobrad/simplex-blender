@@ -1187,7 +1187,7 @@ function collectPressureWarnings(input, observations) {
 function renderCompareResult() {
   const compare = state.lastCompareResult?.compare;
   if (!compare) {
-    clearTernaryDiagram(byId('ternary-canvas'));
+    clearTernaryDiagram(document.querySelector('[data-result-host="blending"] [data-result-key="ternary-canvas"]'));
     return;
   }
   renderResults(state.lastCompareResult, state.lastCompareInput);
@@ -1429,7 +1429,7 @@ function recalculate() {
 
   renderThermalCharts(resultWithWarnings, input, state.settings.units);
   if (ternaryData()) renderTernary();
-  else clearTernaryDiagram(byId('ternary-canvas'));
+  else clearTernaryDiagram(document.querySelector('[data-result-host="blending"] [data-result-key="ternary-canvas"]'));
 }
 
 
@@ -2004,7 +2004,7 @@ function initialize() {
   updateStorageWarning();
   refreshPresetOptions();
   updateWaitModeFields();
-  observeTernaryCanvas(byId('ternary-canvas'), renderTernary);
+  observeTernaryCanvas(document.querySelector('[data-result-host="blending"] [data-result-key="ternary-canvas"]'), renderTernary);
   recalculate();
   if (!state.onboarding.consentAccepted) {
     state.onboardingController.open({ requireConsent: true });

@@ -15,12 +15,12 @@ export function setResultTab(root, tabId, tabs = getResultTabs('optimize')) {
       pane.hidden = !selected;
       pane.classList?.toggle('hidden', !selected);
       pane.setAttribute('aria-hidden', String(!selected));
-      pane.setAttribute('aria-labelledby', `tab-btn-${tab}`);
-    }
-    if (button) {
+      const paneId = pane.id;
+      const buttonId = button.id;
+      pane.setAttribute('aria-labelledby', buttonId);
+      button.setAttribute('aria-controls', paneId);
       button.className = selected ? ACTIVE_TAB_CLASSES : INACTIVE_TAB_CLASSES;
       button.setAttribute('aria-selected', String(selected));
-      button.setAttribute('aria-controls', `tab-pane-${tab}`);
       button.tabIndex = selected ? 0 : -1;
       if (selected) button.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
     }

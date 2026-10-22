@@ -102,7 +102,12 @@ async function warningSettings(page) {
     await warningSettings(page);
     await openWhatIf(page);
     await fillWhatIfStart(page, { pressureBar: '110', ambientTemperatureC: '20', inWaterTemperatureC: '24' });
-    await setWhatIfRow(page, 'compare-row-1', { type: 'wait', waitMode: 'target', targetTemperatureC: '24' });
+    await setWhatIfRow(page, 'compare-row-1', { type: 'drain', targetPressureBar: '20' });
+    await page.getByRole('button', { name: 'Add row', exact: true }).click();
+    const wait = page.locator('#screen-what-if fieldset[data-row-id^="compare-row-"]:visible').last();
+    await wait.locator('[data-compare-field="type"]').selectOption('wait');
+    await wait.locator('[data-compare-field="waitMode"]').selectOption('target');
+    await wait.locator('[data-compare-field="targetTemperatureC"]').fill('24');
     await runWhatIf(page);
     const host = page.locator('#what-if-result-host');
     await expect(host).toContainText(/Warning mode|working pressure|exceed/i);

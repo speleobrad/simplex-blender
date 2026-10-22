@@ -37,6 +37,13 @@ export function createResultPanel(document, host, { mode = 'optimize', instanceP
     if (!allowed.has(button.dataset.tab)) button.remove();
     else button.dataset.resultKey ??= `tab-btn-${button.dataset.tab}`;
   });
+  const initialTab = mode === 'what-if' ? 'scenario-summary' : 'recipe';
+  root.querySelectorAll?.('[data-result-key^="tab-pane-"]').forEach(pane => { pane.hidden = pane.dataset.resultKey !== `tab-pane-${initialTab}`; });
+  root.querySelectorAll?.('[data-action="select-tab"]').forEach(button => {
+    const selected = button.dataset.tab === initialTab;
+    button.setAttribute('aria-selected', String(selected));
+    button.tabIndex = selected ? 0 : -1;
+  });
   host.replaceChildren(root);
   return root;
 }
