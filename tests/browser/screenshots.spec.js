@@ -32,14 +32,14 @@ test.describe('approved UI screenshots', () => {
     const page = await load(appPage, 'lightTheme');
     await assertResultPanelExclusive(page, 'Recipe');
     await page.setViewportSize({ width: 1024, height: 1000 });
-    await expect(page.locator('#summary-banner'))
+    await expect(page.locator('[data-result-host="blending"] [data-result-key="summary-banner"]'))
       .toHaveScreenshot('results-recipe-summary-narrow-two-column.png', { animations: 'disabled' });
   });
 
   test('expanded recipe technical details', async ({ appPage }) => {
     const page = await load(appPage, 'lightTheme');
     await assertResultPanelExclusive(page, 'Recipe');
-    const technicalDetails = page.locator('#steps-container details')
+    const technicalDetails = page.locator('[data-result-host="blending"] [data-result-key="steps-container"] details')
       .filter({ hasText: 'Technical details' })
       .first();
     await technicalDetails.locator('summary').click();
