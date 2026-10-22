@@ -520,3 +520,59 @@ test('renders explicit thermal states and metadata-driven automatic wait warning
     globalThis.document = previousDocument;
   }
 });
+test('renders Warning mode pressure exceedances with measured limit and step', () => {
+  const previousDocument = globalThis.document;
+  const document = createFakeDocument();
+  globalThis.document = document;
+  try {
+    renderResults({
+      feasible: true,
+      blend: {
+        retainedPressureBar: 50, retainedPercent: 100, ventedPressureBar: 0,
+        ventedGasLitres: 0, heliumSalvagedLitres: 0, finalPressureBar: 100,
+        finalOxygenPercent: 21, finalHeliumPercent: 0
+      },
+      protocolSteps: [{ title: 'Transfer 2', description: 'Transfer gas.', resultingPressureBar: 100 }],
+      pressureLimitWarnings: [{
+        kind: 'hot-overfill',
+        pressureBar: 103,
+        limitBar: 102,
+        source: 'transfer',
+        stepIdentifier: 'Transfer 2'
+      }]
+    }, { settings: { pressureLimitMode: 'warning' } });
+
+    const status = document.elements.get('blend-status').textContent;
+    assert.match(status, /warning mode/i);
+    assert.match(status, /103\.0 bar/);
+    assert.match(status, /102\.0 bar/);
+    assert.match(status, /Transfer 2/);
+  } finally {
+    globalThis.document = previousDocument;
+  }
+});
+
+test('renders only the Warning mode policy notice when no limit is exceeded', () => {
+  const previousDocument = globalThis.document;
+  const document = createFakeDocument();
+  globalThis.document = document;
+  try {
+    renderResults({
+      feasible: true,
+      blend: {
+        retainedPressureBar: 50, retainedPercent: 100, ventedPressureBar: 0,
+        ventedGasLitres: 0, heliumSalvagedLitres: 0, finalPressureBar: 100,
+        finalOxygenPercent: 21, finalHeliumPercent: 0
+      },
+      protocolSteps: [{ title: 'Transfer 2', description: 'Transfer gas.', resultingPressureBar: 100 }],
+      pressureLimitWarnings: []
+    }, { settings: { pressureLimitMode: 'warning' } });
+
+    const status = document.elements.get('blend-status').textContent;
+    assert.match(status, /warning mode/i);
+    assert.match(status, /cylinder limits are not enforced/i);
+    assert.doesNotMatch(status, /exceeded/i);
+  } finally {
+    globalThis.document = previousDocument;
+  }
+});

@@ -107,6 +107,35 @@ test.describe('working tank blending inputs', () => {
     expect(Number.parseFloat(await page.locator('#res-ambient-pressure').innerText())).toBeLessThanOrEqual(100);
     expect(Number.parseFloat(await page.locator('#res-in-water-pressure').innerText())).toBeLessThanOrEqual(100);
   });
+  test('allows a hot-overfill exceedance in Warning mode without an automatic wait', async ({ appPage }) => {
+    test.setTimeout(90_000);
+    const settingsPage = await appPage.goto('settings');
+    const general = await openSettingsCategory(settingsPage, 'general');
+    const policy = general.getByRole('combobox', { name: 'Cylinder pressure limit behavior' });
+    const phrase = general.getByRole('textbox', { name: 'Type I KNOW WHAT I\'M DOING' });
+    await phrase.fill("I KNOW WHAT I'M DOING");
+    await general.getByRole('button', { name: 'Unlock warning mode', exact: true }).click();
+    await policy.selectOption('warning');
+    const cylinderPane = await openSettingsCategory(settingsPage, 'cylinder-presets');
+    for (const field of await cylinderPane.locator('[data-settings-field="workingPressureBar"]:visible').all()) await field.fill('100');
+    for (const field of await cylinderPane.locator('[data-settings-field="hotOverfillPercent"]:visible').all()) await field.fill('0');
+    await saveSettings(settingsPage);
+
+    const page = settingsPage;
+    await page.locator('#inlet-gas-temperature').evaluate(input => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, '40');
+    });
+    await fillWorkingTank(page, {
+      startPressure: 0, targetPressure: 99, ambientTemperature: 20,
+      targetInWaterTemperature: 20, medium: 'air', waitMode: 'minutes', waitMinutes: 0
+    });
+    await page.locator('#inlet-gas-temperature').dispatchEvent('input');
+    await expect(page.locator('#blend-status')).toContainText(/feasible/i);
+    await expect(page.locator('#blend-status')).toContainText(/warning mode/i);
+    await expect(page.locator('#blend-status')).toContainText(/hot-overfill limit/i);
+    await expect(page.locator('#steps-container')).not.toContainText(/automatic wait: cylinder pressure limit/i);
+  });
+
   test('enforces thermal boundaries and rejects target medium below ambient', async ({ appPage }) => {
     const page = await load(appPage);
     for (const [id, min, max] of [['#ambient-temperature', '5', '40'], ['#inlet-gas-temperature', '5', '40'], ['#wait-target-temperature', '5', '40'], ['#target-temperature', '1', '30']]) {
@@ -146,4 +175,27 @@ test('opens What-if and models an exact drain step', async ({ appPage }) => {
   await page.locator('[data-action="run-compare"]').evaluate(button => button.click());
   await expect(page.locator('#what-if-result')).toContainText(/Final: 20(?:\.0)? bar/);
   await expect(page.locator('#what-if-result')).toContainText(/Drain/);
+});
+
+test('reports a working-pressure exceedance in Warning-mode What-if results', async ({ appPage }) => {
+  test.setTimeout(90_000);
+  const settingsPage = await appPage.goto('settings');
+  const general = await openSettingsCategory(settingsPage, 'general');
+  const policy = general.getByRole('combobox', { name: 'Cylinder pressure limit behavior' });
+  const phrase = general.getByRole('textbox', { name: 'Type I KNOW WHAT I\'M DOING' });
+  await phrase.fill("I KNOW WHAT I'M DOING");
+  await general.getByRole('button', { name: 'Unlock warning mode', exact: true }).click();
+  await policy.selectOption('warning');
+  const cylinderPane = await openSettingsCategory(settingsPage, 'cylinder-presets');
+  for (const field of await cylinderPane.locator('[data-settings-field="workingPressureBar"]:visible').all()) await field.fill('100');
+  await saveSettings(settingsPage);
+
+  const page = settingsPage;
+  await fillWorkingTank(page, { startPressure: 110 });
+  await page.locator('[data-action="select-screen"][data-screen="what-if"]').click();
+  await expect(page.locator('#screen-what-if')).toBeVisible();
+  await page.locator('[data-row-id="compare-row-1"] [data-compare-field="targetPressureBar"]').fill('20');
+  await page.locator('[data-action="run-compare"]').evaluate(button => button.click());
+  await expect(page.locator('#what-if-result')).toContainText(/Final: 20(?:\.0)? bar/);
+  await expect(page.locator('#what-if-result')).toContainText(/working pressure/i);
 });
