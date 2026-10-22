@@ -278,9 +278,18 @@ test.describe('settings categories and drafts', () => {
     expect(saved.pressureLimitMode).toBe('warning');
     expect(saved.pressureWarningUnlocked).toBe(true);
     expect(JSON.stringify(saved)).not.toContain("I KNOW WHAT I'M DOING");
+    const management = await openSettingsCategory(page, 'preset-management');
+    page.once('dialog', dialog => dialog.accept());
+    await management.getByRole('button', { name: 'Reset to factory settings', exact: true }).click();
+    await page.waitForLoadState('domcontentloaded');
+    const resetGeneral = await openSettingsCategory(page, 'general');
+    await expect(resetGeneral.getByRole('combobox', { name: 'Cylinder pressure limit behavior' }))
+      .toHaveValue('hard-stop');
+    await expect(resetGeneral.getByRole('combobox', { name: 'Cylinder pressure limit behavior' })
+      .locator('option[value="warning"]')).toBeDisabled();
   });
 
-  test('resets warning unlock and discards an unlock draft on Cancel', async ({ appPage }) => {
+  test('discards an unlock draft on Cancel', async ({ appPage }) => {
     const page = await appPage.goto('tourSeen');
     const general = await openSettingsCategory(page, 'general');
     const phrase = general.getByRole('textbox', { name: 'Type I KNOW WHAT I\'M DOING' });
@@ -295,14 +304,5 @@ test.describe('settings categories and drafts', () => {
     await expect(lockedGeneral.getByRole('combobox', { name: 'Cylinder pressure limit behavior' })
       .locator('option[value="warning"]')).toBeDisabled();
 
-    const management = await openSettingsCategory(page, 'preset-management');
-    page.once('dialog', dialog => dialog.accept());
-    await management.getByRole('button', { name: 'Reset to factory settings', exact: true }).click();
-    await page.waitForLoadState('domcontentloaded');
-    const resetGeneral = await openSettingsCategory(page, 'general');
-    await expect(resetGeneral.getByRole('combobox', { name: 'Cylinder pressure limit behavior' }))
-      .toHaveValue('hard-stop');
-    await expect(resetGeneral.getByRole('combobox', { name: 'Cylinder pressure limit behavior' })
-      .locator('option[value="warning"]')).toBeDisabled();
   });
 });
