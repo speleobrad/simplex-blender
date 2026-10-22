@@ -60,14 +60,14 @@ test.describe('continued browser sessions', () => {
     await expect(rowC.getByRole('spinbutton', { name: /oxygen percentage$/i })).toHaveValue('18');
     await expect(rowC.getByRole('spinbutton', { name: /helium percentage$/i })).toHaveValue('45');
     await expect(rowC.getByRole('checkbox', { name: /Use Continued-session bank/i })).not.toBeChecked();
-    await expect(sessionC.page.locator('#steps-container')).not.toContainText('Continued-session bank');
+    await expect(sessionC.page.locator('[data-result-host="blending"] [data-result-key="steps-container"]')).not.toContainText('Continued-session bank');
     await removeBank(sessionC.page, index);
     const sessionD = await createContinuedSession(sessionC.page);
     await sessionD.page.getByRole('tab', { name: 'Inventory', exact: true }).click();
     await expect.poll(() => bankRows(sessionD.page).evaluateAll(rows => rows.some(row => (
       row.querySelector('input[aria-label$="bank name"]')?.value === 'Continued-session bank'
     )))).toBe(false);
-    await expect(sessionD.page.locator('#steps-container')).not.toContainText('Continued-session bank');
+    await expect(sessionD.page.locator('[data-result-host="blending"] [data-result-key="steps-container"]')).not.toContainText('Continued-session bank');
     await closeSession(sessionD);
   });
 
