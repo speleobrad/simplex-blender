@@ -18,6 +18,7 @@ class FakeElement {
 
   set textContent(value) {
     this._textContent = String(value);
+    this.children = [];
   }
 
   append(...children) {
@@ -516,6 +517,204 @@ test('renders explicit thermal states and metadata-driven automatic wait warning
     const waitText = document.elements.get('steps-container').textContent;
     assert.match(waitText, /! Automatic wait:.*cylinder pressure limit/);
     assert.ok((waitText.match(/! Automatic wait:/g) ?? []).length >= 2);
+  } finally {
+    globalThis.document = previousDocument;
+  }
+});
+test('renders Warning mode pressure exceedances with measured limit and step', () => {
+  const previousDocument = globalThis.document;
+  const document = createFakeDocument();
+  globalThis.document = document;
+  try {
+    renderResults({
+      feasible: true,
+      blend: {
+        retainedPressureBar: 50, retainedPercent: 100, ventedPressureBar: 0,
+        ventedGasLitres: 0, heliumSalvagedLitres: 0, finalPressureBar: 100,
+        finalOxygenPercent: 21, finalHeliumPercent: 0
+      },
+      protocolSteps: [{ title: 'Transfer 2', description: 'Transfer gas.', resultingPressureBar: 100 }],
+      pressureLimitWarnings: [{
+        kind: 'hot-overfill',
+        pressureBar: 103,
+        limitBar: 102,
+        source: 'transfer',
+        stepIdentifier: 'Transfer 2'
+      }]
+    }, { settings: { pressureLimitMode: 'warning' } });
+
+    const status = document.elements.get('blend-status').textContent;
+    assert.match(status, /warning mode/i);
+    assert.match(status, /103\.0 bar/);
+    assert.match(status, /102\.0 bar/);
+    assert.match(status, /Transfer 2/);
+  } finally {
+    globalThis.document = previousDocument;
+  }
+});
+
+test('renders only the Warning mode policy notice when no limit is exceeded', () => {
+  const previousDocument = globalThis.document;
+  const document = createFakeDocument();
+  globalThis.document = document;
+  try {
+    renderResults({
+      feasible: true,
+      blend: {
+        retainedPressureBar: 50, retainedPercent: 100, ventedPressureBar: 0,
+        ventedGasLitres: 0, heliumSalvagedLitres: 0, finalPressureBar: 100,
+        finalOxygenPercent: 21, finalHeliumPercent: 0
+      },
+      protocolSteps: [{ title: 'Transfer 2', description: 'Transfer gas.', resultingPressureBar: 100 }],
+      pressureLimitWarnings: []
+    }, { settings: { pressureLimitMode: 'warning' } });
+
+    const status = document.elements.get('blend-status').textContent;
+    assert.match(status, /warning mode/i);
+    assert.match(status, /cylinder limits are not enforced/i);
+    assert.doesNotMatch(status, /exceeded/i);
+  } finally {
+    globalThis.document = previousDocument;
+  }
+});
+
+test('preserves Warning notices and automatic-wait text during thermal rendering', () => {
+  const previousDocument = globalThis.document;
+  const document = createFakeDocument();
+  globalThis.document = document;
+  try {
+    renderResults({
+      feasible: true,
+      blend: {
+        retainedPressureBar: 50, retainedPercent: 100, ventedPressureBar: 0,
+        ventedGasLitres: 0, heliumSalvagedLitres: 0, finalPressureBar: 100,
+        finalOxygenPercent: 21, finalHeliumPercent: 0
+      },
+      thermal: {
+        finalTransferEndPressureBar: 103,
+        finalTransferEndTemperatureC: 40,
+        finalAmbientPressureBar: 100,
+        finalAmbientTemperatureC: 25,
+        finalInWaterPressureBar: 98,
+        finalInWaterTemperatureC: 20
+      },
+      protocolSteps: [{
+        title: 'Transfer 2',
+        description: 'Transfer gas.',
+        resultingPressureBar: 100,
+        automaticWaitMetadata: {
+          stepIdentifier: 'Transfer 2',
+          configuredWaitMinutes: 4,
+          actualWaitMinutes: 9,
+          addedWaitMinutes: 5
+        },
+        thermal: {
+          durationMinutes: 1,
+          temperatureAtTransferEndC: 40,
+          temperatureAfterWaitC: 25
+        }
+      }],
+      pressureLimitWarnings: [{
+        kind: 'working-pressure',
+        pressureBar: 103,
+        limitBar: 100,
+        source: 'transfer',
+        stepIdentifier: 'Transfer 2'
+      }]
+    }, { settings: { pressureLimitMode: 'warning' } });
+
+    const status = document.elements.get('blend-status');
+    assert.match(status.textContent, /warning mode/i);
+    assert.match(status.textContent, /103\.0 bar/);
+    assert.match(status.textContent, /working pressure/i);
+    assert.match(status.textContent, /! Automatic wait:.*cylinder pressure limit/i);
+    const notices = status.children.filter(child => child.attributes.get('role') === 'status');
+    assert.equal(notices.length, 2);
+    assert.ok(notices.every(notice => /\btext-amber-300\b/.test(notice.className)));
+  } finally {
+    globalThis.document = previousDocument;
+  }
+});
+
+test('qualifies Warning-mode maximum pressure by the active non-cylinder constraints', () => {
+  const previousDocument = globalThis.document;
+  const document = createFakeDocument();
+  globalThis.document = document;
+  try {
+    renderResults({
+      feasible: false,
+      error: 'Requested pressure is unavailable.',
+      gas: { initialPressureBar: 50, targetPressureBar: 200 },
+      maximumPressure: {
+        pressureBar: 150,
+        blend: { finalOxygenPercent: 21, finalHeliumPercent: 0 },
+        protocolSteps: []
+      }
+    }, {
+      settings: { pressureLimitMode: 'warning', units: 'metric' },
+      cylinder: { volumeL: 12, workingPressureBar: 100 },
+      physics: { model: 'ideal' }
+    });
+
+    const status = document.elements.get('blend-status').textContent;
+    const details = document.elements.get('steps-container').textContent;
+    assert.match(status, /maximum under active non-cylinder constraints/i);
+    assert.match(details, /maximum pressure under active non-cylinder constraints/i);
+    assert.doesNotMatch(status, /\bsafe(?:ly)?\b/i);
+    assert.doesNotMatch(details, /\bsafe(?:ly)?\b/i);
+  } finally {
+    globalThis.document = previousDocument;
+  }
+});
+
+test('renders infeasible results without a maximum pressure fallback', () => {
+  const previousDocument = globalThis.document;
+  const document = createFakeDocument();
+  globalThis.document = document;
+  try {
+    renderResults({
+      feasible: false,
+      error: 'Invalid input: Initial pressure must be between 0 and 350 bar.',
+      maximumPressure: null
+    }, { settings: { pressureLimitMode: 'warning' } });
+
+    assert.match(
+      document.elements.get('steps-container').textContent,
+      /Initial pressure must be between 0 and 350 bar/
+    );
+    assert.match(document.elements.get('blend-status').textContent, /warning mode/i);
+  } finally {
+    globalThis.document = previousDocument;
+  }
+});
+
+test('Warning mode keeps interim pressure input within the supported range', () => {
+  const previousDocument = globalThis.document;
+  const document = createFakeDocument();
+  globalThis.document = document;
+  try {
+    renderResults({
+      feasible: true,
+      blend: {
+        retainedPressureBar: 50, retainedPercent: 100, ventedPressureBar: 0,
+        ventedGasLitres: 0, heliumSalvagedLitres: 0, finalPressureBar: 150,
+        finalOxygenPercent: 21, finalHeliumPercent: 0
+      },
+      protocolSteps: [
+        { type: 'keep', title: 'Step 1', resultingPressureBar: 50 },
+        { type: 'boost', title: 'Step 2', resultingPressureBar: 150 }
+      ]
+    }, {
+      cylinder: { volumeL: 12, workingPressureBar: 100, hotOverfillPercent: 0 },
+      thermal: { interimMeasurements: [null, null] },
+      settings: { pressureLimitMode: 'warning', units: 'metric' }
+    });
+
+    const pressureInput = findElement(
+      document.elements.get('steps-container').children[1],
+      element => element.tagName === 'input' && element.name === 'pressureBar'
+    );
+    assert.equal(Number(pressureInput.max), 350);
   } finally {
     globalThis.document = previousDocument;
   }

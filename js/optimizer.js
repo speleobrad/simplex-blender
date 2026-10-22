@@ -6,6 +6,7 @@ import {
   DEFAULT_HOT_OVERFILL_PERCENT,
   isValidHotOverfillPercent
 } from './preset-validation.js';
+import { getCylinderPressureLimit } from './pressure-limits.js';
 import {
   simulateThermalProtocol,
   calculatePressureAtTemperature,
@@ -93,38 +94,90 @@ function cylinderHotOverfillPercent(cylinder) {
   return value;
 }
 
-function cylinderPressureLimitAtTemperature(temperatureC, workingPressureBar, context) {
+function configuredCylinderPressureLimit(workingPressureBar, isTransientHot, context) {
   const workingPressure = Number(workingPressureBar);
   if (!Number.isFinite(workingPressure)) return Infinity;
-  const ambientTemperatureC = context.thermal?.ambientTemperatureC;
-  if (Number.isFinite(temperatureC)
+  const cylinder = context.cylinder?.workingPressureBar === workingPressure
+    ? context.cylinder
+    : { ...(context.cylinder ?? {}), workingPressureBar: workingPressure };
+  return getCylinderPressureLimit({ cylinder, isTransientHot })?.limitBar ?? Infinity;
+}
+
+function isAboveAmbientTemperature(temperatureC, ambientTemperatureC) {
+  return Number.isFinite(temperatureC)
     && Number.isFinite(ambientTemperatureC)
-    && temperatureC > ambientTemperatureC) {
-    const hotOverfillPercent = cylinderHotOverfillPercent(context.cylinder);
-    return workingPressure * (1 + hotOverfillPercent / 100);
-  }
-  return workingPressure;
+    && temperatureC > ambientTemperatureC;
+}
+
+function cylinderPressureLimitAtTemperature(temperatureC, workingPressureBar, context, isTransientHot) {
+  const transientHot = isTransientHot
+    ?? isAboveAmbientTemperature(temperatureC, context.thermal?.ambientTemperatureC);
+  const configuredLimit = configuredCylinderPressureLimit(
+    workingPressureBar,
+    transientHot,
+    context
+  );
+  return context.settings?.pressureLimitMode === 'warning'
+    ? Infinity
+    : configuredLimit;
 }
 
 function pressureValuesForSafety(state, step, context) {
   const ambientTemperatureC = context.thermal?.ambientTemperatureC;
+  const targetTemperatureWait = context.thermal?.waitMode === 'temperature';
+  const waitEndMinutes = state.durationMinutes + state.waitMinutes;
+  const isTargetWaitEndpoint = sample => targetTemperatureWait
+    && Number.isFinite(sample.elapsedMinutes)
+    && Number.isFinite(waitEndMinutes)
+    && sample.elapsedMinutes >= waitEndMinutes - 1e-9;
   return [
-    { pressureBar: state.pressureStartBar, temperatureC: state.temperatureStartC },
+    {
+      pressureBar: state.pressureStartBar,
+      temperatureC: state.temperatureStartC,
+      isTransientHot: (!targetTemperatureWait || state.measurementApplied === true)
+        && isAboveAmbientTemperature(state.temperatureStartC, ambientTemperatureC)
+    },
     ...(state.measurementApplied === false ? [] : [{
       pressureBar: state.measuredStartPressureBar,
-      temperatureC: state.measuredStartTemperatureC
+      temperatureC: state.measuredStartTemperatureC,
+      isTransientHot: isAboveAmbientTemperature(
+        state.measuredStartTemperatureC,
+        ambientTemperatureC
+      )
     }]),
-    { pressureBar: state.pressureAtTransferEndAmbientBar, temperatureC: ambientTemperatureC },
-    { pressureBar: state.pressureAfterWaitBar, temperatureC: state.temperatureAfterWaitC },
+    {
+      pressureBar: state.pressureAtTransferEndAmbientBar,
+      temperatureC: ambientTemperatureC,
+      isTransientHot: false
+    },
+    {
+      pressureBar: state.pressureAfterWaitBar,
+      temperatureC: state.temperatureAfterWaitC,
+      isTransientHot: !targetTemperatureWait
+        && isAboveAmbientTemperature(state.temperatureAfterWaitC, ambientTemperatureC)
+    },
     {
       pressureBar: hotTransferEndpointPressure(state, step, context),
-      temperatureC: state.temperatureAtTransferEndC
+      temperatureC: state.temperatureAtTransferEndC,
+      isTransientHot: isAboveAmbientTemperature(
+        state.temperatureAtTransferEndC,
+        ambientTemperatureC
+      )
     },
     ...(state.samples ?? []).flatMap(sample => [
-      { pressureBar: sample.ambientPressureBar, temperatureC: ambientTemperatureC },
+      {
+        pressureBar: sample.ambientPressureBar,
+        temperatureC: ambientTemperatureC,
+        isTransientHot: false
+      },
       {
         pressureBar: pressureAtSample(sample, state, step, context),
-        temperatureC: sample.temperatureC ?? sample.pressureReferenceTemperatureC
+        temperatureC: sample.temperatureC ?? sample.pressureReferenceTemperatureC,
+        isTransientHot: !isTargetWaitEndpoint(sample)
+          && isAboveAmbientTemperature(
+            sample.temperatureC ?? sample.pressureReferenceTemperatureC,
+            ambientTemperatureC
+          )
       }
     ])
   ].filter(({ pressureBar }) => pressureBar !== undefined);
@@ -137,21 +190,25 @@ function exceedsThermalLimit(pressure, limit) {
 
 function unsafeThermalStep(state, step, workingPressureBar, equipmentLimit, context) {
   return pressureValuesForSafety(state, step, context)
-    .some(({ pressureBar, temperatureC }) => {
+    .some(({ pressureBar, temperatureC, isTransientHot }) => {
       const cylinderLimit = cylinderPressureLimitAtTemperature(
         temperatureC,
         workingPressureBar,
-        context
+        context,
+        isTransientHot
       );
       return exceedsThermalLimit(pressureBar, Math.min(cylinderLimit, equipmentLimit));
     });
 }
 
+
 function firstUnsafeThermalIndex(simulation, workingPressureBar, context) {
   cylinderHotOverfillPercent(context.cylinder);
-  const initialLimit = Number.isFinite(Number(workingPressureBar))
-    ? Number(workingPressureBar)
-    : Infinity;
+  const initialLimit = cylinderPressureLimitAtTemperature(
+    context.thermal?.ambientTemperatureC,
+    workingPressureBar,
+    context
+  );
   const initialPressureBar = context.cylinder?.initialPressureBar;
   if (exceedsThermalLimit(initialPressureBar, initialLimit)) {
     return -2;
@@ -172,9 +229,11 @@ export function isSafeSimulation(simulation, workingPressureBar, {
 } = {}) {
   cylinderHotOverfillPercent(cylinder);
   if (!thermal || !physics || !cylinder) {
-    const limit = Number.isFinite(Number(workingPressureBar))
-      ? Number(workingPressureBar) + THERMAL_SAFETY_TOLERANCE_BAR
-      : Infinity;
+    const limit = cylinderPressureLimitAtTemperature(
+      thermal?.ambientTemperatureC,
+      workingPressureBar,
+      { thermal, cylinder, settings }
+    ) + THERMAL_SAFETY_TOLERANCE_BAR;
     return Number(cylinder?.initialPressureBar ?? 0) <= limit
       && (simulation?.protocolSteps ?? []).every(step => {
         const state = step.thermal;
@@ -1589,7 +1648,12 @@ function validateBlendInput(input) {
   const validationCylinder = input[INTERNAL_THERMAL_TARGET]
     ? { ...cylinder, targetPressureBar: Math.min(350, Math.max(10, cylinder.targetPressureBar)) }
     : cylinder;
-  const errors = validateCalculatorInputs(validationCylinder, physics, input.thermal);
+  const errors = validateCalculatorInputs(
+    validationCylinder,
+    physics,
+    input.thermal,
+    { pressureLimitMode: input.settings?.pressureLimitMode }
+  );
   if (!isValidGasComposition(cylinder.initialOxygenPercent, cylinder.initialHeliumPercent)) {
     errors.push('Initial gas composition must total at most 100% O₂ and He.');
   }
@@ -2536,6 +2600,34 @@ function thermalLimitResult(input, requested, maximum) {
   };
 }
 
+function highestSafeThermalCandidate(searchInput, optimizeStatic, upperPressureBar) {
+  const floor = evaluateThermalCandidate(
+    searchInput,
+    optimizeStatic,
+    MINIMUM_TARGET_PRESSURE_BAR
+  );
+  if (!floor.result.feasible) return null;
+
+  let lowerPressureBar = MINIMUM_TARGET_PRESSURE_BAR;
+  let upperPressure = upperPressureBar;
+  let highestFeasible = floor;
+  for (let iteration = 0; iteration < 40; iteration++) {
+    const candidatePressureBar = (lowerPressureBar + upperPressure) / 2;
+    const candidate = evaluateThermalCandidate(
+      searchInput,
+      optimizeStatic,
+      candidatePressureBar
+    );
+    if (!candidate.result.feasible) {
+      upperPressure = candidatePressureBar;
+      continue;
+    }
+    lowerPressureBar = candidatePressureBar;
+    highestFeasible = candidate;
+  }
+  return highestFeasible;
+}
+
 function optimizeThermalBlend(input, optimizeStatic) {
   const inputErrors = validateBlendInput(input);
   if (inputErrors.length > 0) {
@@ -2554,6 +2646,13 @@ function optimizeThermalBlend(input, optimizeStatic) {
   const requestedPressureBar = ambientSettledTargetPressureBar;
   const requested = evaluateThermalCandidate(searchInput, optimizeStatic, requestedPressureBar);
   if (!requested.result.feasible) {
+    const highestSafe = highestSafeThermalCandidate(
+      searchInput,
+      optimizeStatic,
+      requestedPressureBar
+    );
+    if (highestSafe) return thermalLimitResult(input, requested, highestSafe);
+
     const infeasible = thermalizedMaximumResult(requested, requestedInWaterPressureBar, requestedInWaterTemperatureC, ambientSettledTargetPressureBar);
     const ambientDiagnostic = `Ambient-settled target: ${ambientSettledTargetPressureBar.toFixed(1)} bar.`;
     return { ...infeasible, error: `Requested in-water pressure ${requestedInWaterPressureBar.toFixed(1)} bar cannot be reached. ${infeasible.error ?? 'No safe thermal recipe is available.'} ${ambientDiagnostic}` };

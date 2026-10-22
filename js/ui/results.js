@@ -10,6 +10,43 @@ function setText(id, value) {
   if (element) element.textContent = value;
 }
 
+function pressureWarningLocation(warning) {
+  if (warning?.stepIdentifier) return String(warning.stepIdentifier);
+  return {
+    initial: 'Initial input',
+    target: 'Target input',
+    interim: 'Interim input',
+    ambient: 'Ambient state',
+    settled: 'Settled state',
+    start: 'Start state',
+    cooling: 'Cooling state'
+  }[warning?.source] ?? 'Recorded input';
+}
+
+function formatPressureWarning(warning, units = 'metric') {
+  const kind = warning?.kind === 'hot-overfill'
+    ? 'Transient hot-overfill'
+    : 'Working pressure';
+  return `${kind} limit exceeded: ${formatUnitValue(warning.pressureBar, 'pressureBar', units)} > ${formatUnitValue(warning.limitBar, 'pressureBar', units)} (${pressureWarningLocation(warning)})`;
+}
+
+export function renderPressureLimitWarnings(warnings = [], pressureLimitMode, units = 'metric') {
+  if (pressureLimitMode !== 'warning') return [];
+  const policy = document.createElement('p');
+  policy.className = 'mt-1 text-[11px] font-semibold text-amber-300';
+  policy.setAttribute('role', 'status');
+  policy.textContent = 'Warning mode: cylinder limits are not enforced.';
+  const notices = [policy];
+  for (const warning of warnings) {
+    const notice = document.createElement('p');
+    notice.className = 'mt-1 text-[11px] font-semibold text-amber-300';
+    notice.setAttribute('role', 'status');
+    notice.textContent = formatPressureWarning(warning, units);
+    notices.push(notice);
+  }
+  return notices;
+}
+
 function formatDiagnosticPressureBar(pressureBar, units = 'metric') {
   return formatUnitValue(pressureBar, 'pressureBar', units);
 }
@@ -36,7 +73,7 @@ function renderDiagnosticDetails(diagnostics, units = 'metric') {
 }
 
 
-function renderInfeasible(error, maximumPressure, requestedPressureBar, oxygenPercent, heliumPercent, diagnostics, thermal, units = 'metric') {
+function renderInfeasible(error, maximumPressure, requestedPressureBar, oxygenPercent, heliumPercent, diagnostics, thermal, units = 'metric', pressureLimitMode = 'hard-stop') {
   const message = document.createElement('div');
   message.className = 'p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs';
   message.setAttribute('role', 'alert');
@@ -54,12 +91,15 @@ function renderInfeasible(error, maximumPressure, requestedPressureBar, oxygenPe
   const requestedPressureReason = safetyReason
     ? `The exact target mix cannot safely reach ${formatUnitValue(requestedPressureBar, 'pressureBar', units)}.`
     : `The exact target mix (${oxygenPercent}/${heliumPercent}) cannot reach ${formatUnitValue(requestedPressureBar, 'pressureBar', units)} with the current gas supply.`;
+  const maximumPressureDescription = maximumPressure
+    ? `The maximum ${pressureLimitMode === 'warning' ? 'pressure under active non-cylinder constraints' : 'safely achievable pressure'} is ${formatUnitValue(maximumPressure.pressureBar, 'pressureBar', units)}.`
+    : '';
   const settledPressure = thermal?.finalAmbientPressureBar;
   const settledEstimate = Number.isFinite(settledPressure)
     ? ` Predicted settled pressure is ${formatUnitValue(settledPressure, 'pressureBar', units)} at ${formatUnitValue(thermal.finalAmbientTemperatureC, 'temperatureC', units)}.`
     : '';
   description.textContent = maximumPressure
-    ? `${requestedPressureReason} ${diagnosticDetails} The maximum safely achievable pressure is ${formatUnitValue(maximumPressure.pressureBar, 'pressureBar', units)}.${safetyReason}${settledEstimate} The recipe below makes that exact mix.`
+    ? `${requestedPressureReason} ${diagnosticDetails} ${maximumPressureDescription}${safetyReason}${settledEstimate} The recipe below makes that exact mix.`
     : [error || 'The available gas banks cannot satisfy both the target pressure and exact gas fractions.', diagnosticDetails, settledEstimate.trim()].filter(Boolean).join(' ');
   message.append(description);
   return message;
@@ -169,7 +209,7 @@ function protocolStepNumber(step, index) {
   return match ? Number(match[1]) : index + 1;
 }
 
-function renderInterimMeasurementControl(stepIndex, nextStep, measurement, workingPressureBar, hotOverfillPercent, units = 'metric') {
+function renderInterimMeasurementControl(stepIndex, nextStep, measurement, workingPressureBar, hotOverfillPercent, pressureLimitMode = 'hard-stop', units = 'metric') {
   const details = document.createElement('details');
   details.className = 'rounded-lg border border-ocean-800/80 bg-ocean-950/50 px-3 py-2';
 
@@ -184,9 +224,11 @@ function renderInterimMeasurementControl(stepIndex, nextStep, measurement, worki
   const hotOverfill = isValidHotOverfillPercent(hotOverfillPercent)
     ? hotOverfillPercent
     : DEFAULT_HOT_OVERFILL_PERCENT;
-  const pressureMaximumBar = Number.isFinite(workingPressureBar)
-    ? Math.min(350, workingPressureBar * (1 + hotOverfill / 100))
-    : 350;
+  const pressureMaximumBar = pressureLimitMode === 'warning'
+    ? 350
+    : Number.isFinite(workingPressureBar)
+      ? Math.min(350, workingPressureBar * (1 + hotOverfill / 100))
+      : 350;
 
   for (const field of [
     {
@@ -290,6 +332,7 @@ function renderProtocol(protocolSteps, alertMessage = null, calculation = null, 
         measurement,
         calculation?.cylinder?.workingPressureBar,
         calculation?.cylinder?.hotOverfillPercent,
+        calculation?.settings?.pressureLimitMode,
         units
       ));
     }
@@ -361,7 +404,12 @@ function renderThermalSummary(thermal, protocolSteps = [], units = 'metric') {
   setText('res-max-temperature', temperatures.length > 0 ? `${formatUnitValue(Math.max(...temperatures), 'temperatureC', units)}` : '—');
   const warnings = automaticWaitWarnings(protocolSteps);
   const status = document.getElementById('blend-status');
-  if (status && warnings.length) status.textContent = `${status.textContent} ${warnings.join(' ')}`;
+  if (status && warnings.length) {
+    const waitWarning = document.createElement('p');
+    waitWarning.className = 'mt-1 text-[11px] font-semibold text-amber-300';
+    waitWarning.textContent = warnings.join(' ');
+    status.append(waitWarning);
+  }
   const stateIds = [
     'res-hot-pressure', 'res-hot-temperature',
     'res-ambient-pressure', 'res-ambient-temperature',
@@ -381,21 +429,24 @@ function renderThermalSummary(thermal, protocolSteps = [], units = 'metric') {
   setText('res-in-water-temperature', temperature(thermal.finalInWaterTemperatureC));
 }
 
-function renderBlendStatus(result, units = 'metric') {
+function renderBlendStatus(result, units = 'metric', pressureLimitMode = 'hard-stop') {
   const status = document.getElementById('blend-status');
   if (!status) return;
   if (result.feasible) {
     status.className = 'rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300';
     status.textContent = 'Feasible blend · target pressure is achievable with the current supply.';
-    return;
-  }
-  if (result.maximumPressure) {
+  } else if (result.maximumPressure) {
     status.className = 'rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200';
-    status.textContent = `Target pressure limited · maximum safely achievable pressure is ${formatUnitValue(result.maximumPressure.pressureBar, 'pressureBar', units)}.`;
-    return;
+    status.textContent = `Target pressure limited · ${pressureLimitMode === 'warning' ? 'maximum under active non-cylinder constraints is' : 'maximum safely achievable pressure is'} ${formatUnitValue(result.maximumPressure.pressureBar, 'pressureBar', units)}.`;
+  } else {
+    status.className = 'rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-xs text-rose-300';
+    status.textContent = 'No feasible blend · review the target and enabled gas supply.';
   }
-  status.className = 'rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-xs text-rose-300';
-  status.textContent = 'No feasible blend · review the target and enabled gas supply.';
+  status.append(...renderPressureLimitWarnings(
+    result?.pressureLimitWarnings ?? [],
+    pressureLimitMode,
+    units
+  ));
 }
 
 function formatCompareState(state, units = 'metric') {
@@ -443,7 +494,7 @@ function renderCompareResults(compare, calculation) {
 
 export function renderResults(result, calculation = null) {
   const units = calculation?.settings?.units ?? 'metric';
-  renderBlendStatus(result, units);
+  renderBlendStatus(result, units, calculation?.settings?.pressureLimitMode);
   renderWaterPressurePane(null);
   const summaryBanner = document.getElementById('summary-banner');
   if (summaryBanner) summaryBanner.hidden = result?.mode === 'compare';
@@ -491,7 +542,8 @@ export function renderResults(result, calculation = null) {
           maximum.blend.finalHeliumPercent,
           result.diagnostics,
           thermal,
-          units
+          units,
+          calculation?.settings?.pressureLimitMode
         ),
         calculation,
         { units }

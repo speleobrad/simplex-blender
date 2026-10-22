@@ -7,10 +7,16 @@ import { buildCompareProtocol, createCompareRow, normalizeComparePressureFields,
 import { simulateCompareProtocol } from './thermodynamics.js';
 import { calcMolarDensity } from './physics.js';
 import {
+  collectCylinderPressureWarnings,
+  collectThermalPressureWarningObservations,
+  pressureWarningStepIdentifier
+} from './pressure-limits.js';
+import {
   addEquipmentPresetToDraft,
   applyGasPresetToBank,
   copySettings,
   loadSettings,
+  matchesPressureWarningUnlockPhrase,
   normalizePresetName,
   saveSettings,
   selectEquipmentPreset,
@@ -27,7 +33,7 @@ import { loadOnboardingState } from './onboarding.js';
 import { loadAnalytics } from './analytics.js';
 import { createOnboardingController } from './ui/onboarding.js';
 import { renderCompareRecipe } from './ui/compare-recipe.js';
-import { renderResults } from './ui/results.js';
+import { renderPressureLimitWarnings, renderResults } from './ui/results.js';
 import { renderSettingsDialog, renderPresetOptions } from './ui/settings-dialog.js';
 import { renderEquipmentSummary } from './ui/equipment-summary.js';
 import { renderSupplyBanks } from './ui/supply-banks.js';
@@ -278,10 +284,16 @@ function setSettingsCategory(category) {
     ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
 
+function clearPressureWarningConfirmation() {
+  const confirmation = byId('settings-pressure-limit-confirmation');
+  if (confirmation) confirmation.value = '';
+}
+
 function openSettings() {
   if (state.activeScreen !== 'settings') state.settingsReturnScreen = state.activeScreen;
   state.settingsSession += 1;
   state.settingsDraft = copySettings(state.settings);
+  clearPressureWarningConfirmation();
   resetPresetImportState();
   renderSettingsDraft();
   setSettingsCategory(state.settingsCategory);
@@ -460,6 +472,8 @@ function resetFactorySettings() {
     return;
   }
   if (!didReset) return;
+  clearPressureWarningConfirmation();
+  invalidateCompareResult();
 
   state.settingsSession += 1;
   state.onboardingController.reset(state.onboarding);
@@ -526,10 +540,24 @@ function updateSettingsDraft(input) {
       ? convertFromDisplay(Number.parseFloat(input.value), quantity, state.settingsDraft.units)
       : Number.parseFloat(input.value);
   if (collection === 'physics') state.settingsDraft.physics[field] = value;
-  else if (collection === 'general' || collection === 'units') state.settingsDraft.units = value;
+  else if (field === 'pressureLimitMode') {
+    state.settingsDraft.pressureLimitMode = value;
+    byId('settings-pressure-warning-notice')?.classList.toggle('hidden', value !== 'warning');
+  }
+  else if (collection === 'units') state.settingsDraft.units = value;
   else if (collection === 'cylinderPresets') state.settingsDraft.cylinderPresets[index][field] = value;
   else if (collection === 'booster') state.settingsDraft.booster[field] = value;
   else state.settingsDraft.gasPresets[index][field] = value;
+}
+
+function unlockPressureWarning() {
+  if (!state.settingsDraft || state.settingsDraft.pressureWarningUnlocked === true) return;
+  const confirmation = byId('settings-pressure-limit-confirmation');
+  if (!matchesPressureWarningUnlockPhrase(confirmation?.value)) return;
+  state.settingsDraft.pressureWarningUnlocked = true;
+  clearPressureWarningConfirmation();
+  renderSettingsDraft();
+  setSettingsCategory('general');
 }
 
 function addGasPreset() {
@@ -601,9 +629,12 @@ function saveSettingsDraft() {
     displaySettingsErrors(['Settings were not saved. Check that browser storage is enabled and has space, then try again.']);
     return;
   }
+  clearPressureWarningConfirmation();
+  const pressureLimitModeChanged = state.settings.pressureLimitMode !== state.settingsDraft.pressureLimitMode;
 
   const previousUnits = state.settings.units;
   state.settings = copySettings(state.settingsDraft);
+  if (pressureLimitModeChanged) invalidateCompareResult();
   convertDisplayedInputs(previousUnits, state.settings.units);
   updateStorageWarning();
   state.settingsDraft = null;
@@ -661,6 +692,7 @@ function markGasPresetCustom(input) {
 
 function cancelSettings() {
   state.settingsSession += 1;
+  clearPressureWarningConfirmation();
   state.settingsDraft = null;
   clearSettingsErrors();
   selectScreen(state.settingsReturnScreen);
@@ -718,7 +750,12 @@ function compareInput() {
 
 function compareSharedInputErrors(input) {
   const targetPressureBar = Math.max(10, input.cylinder.initialPressureBar);
-  const errors = validateCalculatorInputs({ ...input.cylinder, targetPressureBar }, input.physics, input.thermal);
+  const errors = validateCalculatorInputs(
+    { ...input.cylinder, targetPressureBar },
+    input.physics,
+    input.thermal,
+    { pressureLimitMode: state.settings.pressureLimitMode }
+  );
   if (!isValidGasComposition(input.cylinder.initialOxygenPercent, input.cylinder.initialHeliumPercent)) {
     errors.push('Initial oxygen and helium percentages must total no more than 100%.');
   }
@@ -818,6 +855,14 @@ function updateCompareStatus(message = '') {
   byId('compare-run-status').textContent = message;
 }
 
+function invalidateCompareResult() {
+  state.lastCompareInput = null;
+  state.lastCompareResult = null;
+  state.compareErrors = [];
+  state.compareHasRun = false;
+  updateCompareStatus();
+}
+
 function ternaryData() {
   if (state.activeScreen === 'what-if' || state.mode === 'compare') {
     const compare = state.lastCompareResult?.compare;
@@ -877,6 +922,91 @@ function invalidInputResult(errors) {
   };
 }
 
+function addPressureWarningObservation(observations, pressureBar, {
+  source,
+  stepIdentifier = null,
+  isTransientHot = false
+} = {}) {
+  if (!Number.isFinite(pressureBar)) return;
+  observations.push({ pressureBar, source, stepIdentifier, isTransientHot });
+}
+
+function addTemperaturePressureWarningObservation(observations, pressureBar, temperatureC, ambientTemperatureC, {
+  source,
+  stepIdentifier = null
+} = {}) {
+  addPressureWarningObservation(observations, pressureBar, {
+    source,
+    stepIdentifier,
+    isTransientHot: Number.isFinite(temperatureC)
+      && Number.isFinite(ambientTemperatureC)
+      && temperatureC > ambientTemperatureC
+  });
+}
+
+function pressureWarningObservationsForOptimize(input, result) {
+  const observations = [];
+  const protocolSteps = result?.protocolSteps?.length
+    ? result.protocolSteps
+    : result?.maximumPressure?.protocolSteps ?? [];
+  const ambientTemperatureC = input?.thermal?.ambientTemperatureC;
+  addPressureWarningObservation(observations, input?.cylinder?.initialPressureBar, {
+    source: 'initial'
+  });
+  addPressureWarningObservation(observations, input?.cylinder?.targetPressureBar, {
+    source: 'target'
+  });
+  for (const [index, measurement] of (input?.thermal?.interimMeasurements ?? []).entries()) {
+    if (!measurement) continue;
+    addTemperaturePressureWarningObservation(
+      observations,
+      measurement.pressureBar,
+      measurement.temperatureC,
+      ambientTemperatureC,
+      {
+        source: 'interim',
+        stepIdentifier: pressureWarningStepIdentifier(protocolSteps[index], index)
+      }
+    );
+  }
+  observations.push(...collectThermalPressureWarningObservations({
+    protocolSteps,
+    ambientTemperatureC,
+    waitMode: input?.thermal?.waitMode
+  }));
+  const thermal = result?.thermal ?? result?.maximumPressure?.thermal;
+  addPressureWarningObservation(observations, thermal?.finalInWaterPressureBar, {
+    source: 'target',
+    stepIdentifier: 'Target temperature'
+  });
+  return observations;
+}
+
+function pressureWarningObservationsForCompare(input, compare) {
+  const observations = [];
+  const ambientTemperatureC = input?.thermal?.ambientTemperatureC;
+  addPressureWarningObservation(observations, input?.cylinder?.initialPressureBar, {
+    source: 'initial'
+  });
+  observations.push(...collectThermalPressureWarningObservations({
+    protocolSteps: compare?.protocolSteps,
+    ambientTemperatureC
+  }));
+  addPressureWarningObservation(observations, compare?.final?.ambientSettled?.pressureBar, {
+    source: 'settled',
+    stepIdentifier: 'Settled result'
+  });
+  return observations;
+}
+
+function collectPressureWarnings(input, observations) {
+  if (input?.settings?.pressureLimitMode !== 'warning') return [];
+  return collectCylinderPressureWarnings({
+    cylinder: input.cylinder,
+    observations
+  });
+}
+
 function renderCompareResult() {
   const compare = state.lastCompareResult?.compare;
   if (!compare) {
@@ -929,7 +1059,16 @@ function renderWhatIfResult() {
     item.textContent = `${index + 1}. ${step.operation ?? step.title}${step.recipeGas ? ` · ${step.recipeGas}` : ''}${result}`;
     steps.append(item);
   }
-  container.replaceChildren(summary, heading, steps);
+  container.replaceChildren(
+    summary,
+    ...renderPressureLimitWarnings(
+      state.lastCompareResult?.pressureLimitWarnings ?? [],
+      state.lastCompareInput?.settings?.pressureLimitMode,
+      state.settings.units
+    ),
+    heading,
+    steps
+  );
 }
 
 function runCompare() {
@@ -972,6 +1111,10 @@ function runCompare() {
     state.lastCompareInput = input;
     state.lastCompareResult = {
       mode: 'compare',
+      pressureLimitWarnings: collectPressureWarnings(
+        input,
+        pressureWarningObservationsForCompare(input, { ...protocol, ...simulation })
+      ),
       compare: { ...protocol, ...simulation }
     };
     state.compareHasRun = true;
@@ -1007,16 +1150,29 @@ function recalculate() {
     state.interimMeasurementSignature = null;
     input = { ...readInput(), settings: state.settings };
   }
-  const inputErrors = validateCalculatorInputs(input.cylinder, input.physics, input.thermal);
+  const inputErrors = validateCalculatorInputs(
+    input.cylinder,
+    input.physics,
+    input.thermal,
+    { pressureLimitMode: state.settings.pressureLimitMode }
+  );
   const result = inputErrors.length > 0 ? invalidInputResult(inputErrors) : optimizeBlend(input);
+  const resultWithWarnings = {
+    ...result,
+    pressureLimitWarnings: collectPressureWarnings(
+      input,
+      pressureWarningObservationsForOptimize(input, result)
+    )
+  };
   state.lastInput = input;
-  state.lastResult = result;
+  state.lastResult = resultWithWarnings;
 
   renderSupplyBanks(state.banks, state.settings.gasPresets, state.settings.units);
   renderEquipmentSummary(state.settings, state.settings.units);
-  renderResults(result, input);
-  renderThermalCharts(result, input, state.settings.units);
-  if (result.feasible) renderTernary();
+  renderResults(resultWithWarnings, input);
+
+  renderThermalCharts(resultWithWarnings, input, state.settings.units);
+  if (resultWithWarnings.feasible) renderTernary();
   else clearTernaryDiagram(byId('ternary-canvas'));
 }
 
@@ -1227,6 +1383,12 @@ function handleInputOrChange(event) {
     state.settingsImport = { ...state.settingsImport, url: target.value, urlTouched: true };
     return;
   }
+  if (event.type === 'input' && target.id === 'settings-pressure-limit-confirmation') {
+    const unlock = document.querySelector('[data-action="unlock-pressure-warning"]');
+    if (unlock) unlock.disabled = !matchesPressureWarningUnlockPhrase(target.value)
+      || state.settingsDraft?.pressureWarningUnlocked === true;
+    return;
+  }
   if (event.type === 'change' && target.dataset.action === 'select-preset-import-category') {
     selectPresetImportCategory(target);
     return;
@@ -1379,6 +1541,9 @@ function handleClick(event) {
       break;
     case 'open-settings':
       openSettings();
+      break;
+    case 'unlock-pressure-warning':
+      unlockPressureWarning();
       break;
     case 'select-screen':
       selectScreen(actionElement.dataset.screen);

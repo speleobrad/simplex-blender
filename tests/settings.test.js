@@ -393,6 +393,52 @@ test('creates unique equipment names and appends active-setting clones', () => {
   });
 });
 
+test('pressure limit mode defaults safely and validates the warning unlock', () => {
+  assert.equal(DEFAULT_SETTINGS.pressureLimitMode, 'hard-stop');
+  assert.equal(DEFAULT_SETTINGS.pressureWarningUnlocked, false);
+
+  const legacy = copySettings(DEFAULT_SETTINGS);
+  delete legacy.pressureLimitMode;
+  delete legacy.pressureWarningUnlocked;
+  const storage = memoryStorage([[
+    'simplex-gas-remixer-settings', JSON.stringify(legacy)
+  ]]);
+  const loaded = loadSettings(storage);
+  assert.equal(loaded.pressureLimitMode, 'hard-stop');
+  assert.equal(loaded.pressureWarningUnlocked, false);
+
+  const lockedWarning = {
+    ...DEFAULT_SETTINGS,
+    pressureLimitMode: 'warning',
+    pressureWarningUnlocked: false
+  };
+  assert.match(validateSettings(lockedWarning).join(' '), /unlock/i);
+  assert.match(validateSettings({
+    ...DEFAULT_SETTINGS, pressureLimitMode: 'ignore'
+  }).join(' '), /pressure.*mode/i);
+  assert.match(validateSettings({
+    ...DEFAULT_SETTINGS, pressureWarningUnlocked: 'true'
+  }).join(' '), /unlock.*boolean/i);
+  const savedStorage = memoryStorage();
+  saveSettings({
+    ...DEFAULT_SETTINGS,
+    pressureLimitMode: 'warning',
+    pressureWarningUnlocked: true
+  }, savedStorage);
+  assert.equal(loadSettings(savedStorage).pressureLimitMode, 'warning');
+  assert.equal(loadSettings(savedStorage).pressureWarningUnlocked, true);
+
+  for (const invalid of [
+    { ...DEFAULT_SETTINGS, pressureLimitMode: 'ignore' },
+    { ...DEFAULT_SETTINGS, pressureLimitMode: 'warning', pressureWarningUnlocked: false }
+  ]) {
+    const invalidStorage = memoryStorage([[
+      'simplex-gas-remixer-settings', JSON.stringify(invalid)
+    ]]);
+    assert.deepEqual(loadSettings(invalidStorage), DEFAULT_SETTINGS);
+  }
+});
+
 test('old settings gain both pressure ceiling defaults', () => {
   const storage = memoryStorage([[
     'simplex-gas-remixer-settings',
@@ -475,6 +521,8 @@ test('saved gas and cylinder presets survive a load/save round trip', () => {
   const settings = {
     units: 'metric',
     physics: { model: 'vdw' },
+    pressureLimitMode: 'hard-stop',
+    pressureWarningUnlocked: false,
     gasPresets: [{ name: 'Tx 16/50', oxygenPercent: 16, heliumPercent: 50 }],
     cylinderPresets: [{
       name: 'Custom 11 L',
@@ -497,6 +545,8 @@ test('saved settings preserve the shared booster minimum source pressure', () =>
   const settings = {
     units: 'metric',
     physics: { model: 'vdw' },
+    pressureLimitMode: 'hard-stop',
+    pressureWarningUnlocked: false,
     gasPresets: [{ name: 'Tx 16/50', oxygenPercent: 16, heliumPercent: 50 }],
     cylinderPresets: [{
       name: '11 L Steel',
@@ -802,5 +852,27 @@ test('cylinder hot overfill accepts only zero to five percent in half-percent st
     const settings = copySettings(DEFAULT_SETTINGS);
     settings.cylinderPresets[0].hotOverfillPercent = value;
     assert.match(validateSettings(settings).join(' '), /hot overfill/i);
+  }
+});
+
+test('matches the Warning unlock phrase case-insensitively and accepts quote variants', async () => {
+  const { matchesPressureWarningUnlockPhrase } = await import('../js/settings.js');
+
+  assert.equal(typeof matchesPressureWarningUnlockPhrase, 'function');
+  for (const value of [
+    "i know what i'm doing",
+    'I kNoW wHaT I`M dOiNg',
+    'i know what i"m doing'
+  ]) {
+    assert.equal(matchesPressureWarningUnlockPhrase(value), true, value);
+  }
+  for (const value of [
+    'I KNOW WHAT I AM DOING',
+    'I  KNOW WHAT I\'M DOING',
+    'I KNOW WHAT I’M DOING',
+    "I KNOW WHAT ı'M DOING",
+    null
+  ]) {
+    assert.equal(matchesPressureWarningUnlockPhrase(value), false, String(value));
   }
 });

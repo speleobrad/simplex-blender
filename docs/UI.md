@@ -68,7 +68,7 @@ Gas percentage fields accept decimal text input and are paired for gas validatio
 
 Inputs recalculate the blend as they change. Invalid or unsupported values are reported in the result area rather than silently accepted.
 
-The cylinder preset's **Hot overfill** setting allows only modeled or measured transient pressures strictly above ambient to reach `working pressure × (1 + hot overfill % / 100)`. Ambient projections, the final ambient-settled pressure, and the final pressure at the requested target in-water temperature remain at or below working pressure. The optimizer may extend a wait or split a transfer when a state would exceed its applicable cylinder limit; the step and summary identify the wait reason as a cylinder pressure limit.
+The cylinder preset's **Hot overfill** setting allows only modeled or measured transient pressures strictly above ambient to reach `working pressure × (1 + hot overfill % / 100)`. In **Hard stop** mode, ambient projections, the final ambient-settled pressure, and the final pressure at the requested target in-water temperature remain at or below working pressure; the optimizer may extend a wait or split a transfer when a state exceeds its applicable cylinder limit. In **Warning** mode, cylinder working-pressure and hot-overfill enforcement is bypassed for planning, so those states may exceed working pressure and no cylinder-only wait is introduced; the result reports the policy and each observed exceedance instead. Warning does not bypass supported 350-bar input bounds, the calculator's 10-bar target minimum, or compressor/booster pressure ceilings.
 
 ### Result tabs
 
@@ -87,7 +87,7 @@ Tabs use `aria-selected`, roving `tabindex`, and keyboard handling in `main.js`.
 The tab starts with a live blend-status banner:
 
 - Green: `Feasible blend · target pressure is achievable with the current supply.`
-- Amber: target pressure is limited; the maximum safely achievable pressure is shown.
+- Amber: target pressure is limited; the maximum pressure under the active non-cylinder constraints is shown. In Warning mode, that result may exceed cylinder limits and is not a cylinder-safety guarantee.
 - Rose: no feasible blend; the user is directed to review the target and enabled supply.
 
 The summary banner is split into two side-by-side regions on wide screens:
@@ -99,7 +99,7 @@ When thermal data exists, the summary shows values for each of those three state
 
 The collapsed **Technical details** disclosure shows transfer metrics and their source/cooldown counterparts in two columns: rate / source leftover pressure, duration / cooloff period, pressure at transfer end / pressure after cooloff, and temperature at transfer end / temperature after cooloff. **Interim mix** appears in the last left-column row. Rows share a uniform height based on the tallest content in the block, with labels and values top-aligned; wait-only steps keep a single-column cooling layout with the same row sizing. The actual-reading control is rendered inside the step it precedes, above that step's title. When thermal settling makes an equalization source endpoint lower than the receiver endpoint, the displayed operation is `Boost`.
 
-For an unavailable requested pressure, the recipe still renders the maximum safe exact-mix protocol and an explanatory alert. Diagnostics may identify a component shortfall, the source bank involved, the required pressure, or an exhausted bank. If no solution exists, the summary is cleared and the explanatory error remains.
+For an unavailable requested pressure, the recipe still renders the maximum-pressure exact-mix protocol under the active constraints and an explanatory alert. In Hard stop mode this is the maximum safely achievable pressure for the cylinder policy; in Warning mode it may exceed cylinder limits and is not a safety guarantee. Diagnostics may identify a component shortfall, the source bank involved, the required pressure, or an exhausted bank. If no solution exists, the summary is cleared and the explanatory error remains.
 
 #### Diagram tab
 
@@ -166,6 +166,11 @@ The **Add bank** button appends a new editable source row. Compressor Air is imp
 Below the table, **Transfer conditions** contains **Incoming gas temperature** in °C. It is shared by compressor and inventory transfers; source-specific equipment temperature modifiers still apply.
 
 ## Settings screen
+### General
+
+General settings include **Cylinder pressure limit behavior**, with **Hard stop** selected by default and **Warning** available after a one-time unlock. Unlocking requires the phrase `I KNOW WHAT I'M DOING`; matching ignores letter case and accepts a single quote, backtick, or double quote for the apostrophe. Only the resulting `pressureWarningUnlocked` boolean is persisted, not the phrase. This is a local user-intent gate, not authorization or tamper resistance. Switching back to Hard stop does not relock an already unlocked option, while factory reset restores the default locked Hard stop state. When Warning is active, an amber policy notice is shown even when no cylinder exceedance is observed; actual exceedances identify the measured pressure, applicable threshold, exceedance kind, and the input or protocol step on both calculator and What-if/Compare result surfaces.
+
+Warning bypasses only cylinder working-pressure and above-ambient transient hot-overfill enforcement. It does not make over-limit filling safe and does not bypass supported 350-bar bounds, the calculator's 10-bar target minimum, or compressor/booster pressure ceilings. Hot overfill applies only to above-ambient transients; ambient, settled, and target-temperature states remain at working pressure in Hard stop, while Warning reports any exceedance.
 
 Settings is a full-width primary screen with a horizontal category topbar, validation-error region, **Cancel**, and **Save settings** actions. Cancel discards the current draft and returns to the screen that opened Settings. Save validates and persists the draft while keeping the user on Settings; validation errors remain visible on the screen.
 

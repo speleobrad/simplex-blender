@@ -386,6 +386,42 @@ test('rejects an add target above the configured cylinder working pressure', () 
       && /working pressure/i.test(error.message)
   )));
 });
+test('Compare Warning mode bypasses only cylinder pressure', () => {
+  const warningSettings = { ...settings, pressureLimitMode: 'warning' };
+  const warningCylinder = { ...cylinder, workingPressureBar: 100 };
+  const addAt150 = {
+    id: 'warning-add',
+    type: 'add',
+    bankId: 'compressor-air',
+    pressureAddedBar: 100,
+    targetPressureBar: 150,
+    pressureInputMode: 'target'
+  };
+  const warningOptions = {
+    cylinder: warningCylinder, banks, physics, settings: warningSettings
+  };
+  assert.equal(validateCompareRecipe([addAt150], warningOptions).valid, true);
+  assert.equal(
+    buildCompareProtocol([addAt150], warningOptions).trajectory.at(-1).pressureBar,
+    150
+  );
+
+  const initialAboveRating = buildCompareProtocol([{ id: 'keep', type: 'keep' }], {
+    ...warningOptions,
+    cylinder: { ...warningCylinder, initialPressureBar: 110 }
+  });
+  assert.equal(initialAboveRating.trajectory[0].pressureBar, 110);
+
+  const compressorOverCap = validateCompareRecipe([{
+    ...addAt150, targetPressureBar: 233, pressureAddedBar: 183
+  }], warningOptions);
+  assert.ok(compressorOverCap.errors.some(error => /Compressor Air.*232 bar/i.test(error.message)));
+  const outsideRange = validateCompareRecipe([{
+    ...addAt150, targetPressureBar: 351, pressureAddedBar: 301
+  }], warningOptions);
+  assert.ok(outsideRange.errors.some(error => /between 0 and 350 bar/i.test(error.message)));
+});
+
 
 test('carries configured decant and booster rates on planned stages', () => {
   const result = buildCompareProtocol([{

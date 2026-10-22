@@ -243,3 +243,80 @@ test('measured interim overfill is allowed only while hotter than ambient and wi
     /measured.*working pressure/i
   );
 });
+test('Warning mode bypasses only cylinder ceilings, not supported calculator inputs', () => {
+  const warning = { pressureLimitMode: 'warning' };
+  const rated = { ...defaultCylinder, workingPressureBar: 100, hotOverfillPercent: 2 };
+  const thermal = {
+    tankMaterial: 'steel',
+    coolingMedium: 'air',
+    ambientTemperatureC: 20,
+    inletTemperatureC: 20,
+    targetMediumTemperatureC: 20,
+    targetInWaterTemperatureC: 10,
+    waitMode: 'minutes',
+    waitMinutes: 0,
+    interimMeasurements: [null]
+  };
+  assert.deepEqual(validateCalculatorInputs(
+    { ...rated, initialPressureBar: 101, targetPressureBar: 110 },
+    defaultPhysics,
+    thermal,
+    warning
+  ), []);
+  assert.match(validateCalculatorInputs(
+    { ...rated, targetPressureBar: 110 }, defaultPhysics, thermal
+  ).join(' '), /working pressure/i);
+  assert.match(validateCalculatorInputs(
+    { ...rated, initialPressureBar: 101 }, defaultPhysics, thermal
+  ).join(' '), /working pressure/i);
+  assert.match(validateCalculatorInputs(
+    { ...rated, targetPressureBar: 351 }, defaultPhysics, thermal, warning
+  ).join(' '), /target pressure/i);
+  assert.match(validateCalculatorInputs(
+    { ...rated, initialPressureBar: 351 }, defaultPhysics, thermal, warning
+  ).join(' '), /initial pressure/i);
+  assert.match(validateCalculatorInputs(
+    { ...rated, targetPressureBar: 100.0000000005 },
+    defaultPhysics,
+    thermal
+  ).join(' '), /working pressure/i);
+  assert.match(validateCalculatorInputs(
+    rated,
+    defaultPhysics,
+    { ...thermal, interimMeasurements: [{ pressureBar: 90, temperatureC: 100.1 }] },
+    warning
+  ).join(' '), /measured temperature/i);
+  assert.deepEqual(validateCalculatorInputs(
+    rated,
+    defaultPhysics,
+    { ...thermal, interimMeasurements: [{ pressureBar: 103, temperatureC: 40 }] },
+    warning
+  ), []);
+  assert.match(validateCalculatorInputs(
+    rated,
+    defaultPhysics,
+    { ...thermal, interimMeasurements: [{ pressureBar: 351, temperatureC: 40 }] },
+    warning
+  ).join(' '), /measured pressure/i);
+  assert.match(validateCalculatorInputs(
+    { ...rated, hotOverfillPercent: 2.25 },
+    defaultPhysics,
+    thermal,
+    warning
+  ).join(' '), /hot overfill/i);
+  const invalidHotCylinder = { ...rated, hotOverfillPercent: 2.25 };
+  const overLimitReading = {
+    ...thermal,
+    interimMeasurements: [{ pressureBar: 103, temperatureC: 40 }]
+  };
+  const hardStopInvalidHotErrors = validateCalculatorInputs(
+    invalidHotCylinder, defaultPhysics, overLimitReading
+  );
+  assert.match(hardStopInvalidHotErrors.join(' '), /hot overfill/i);
+  assert.match(hardStopInvalidHotErrors.join(' '), /measured.*hot overfill/i);
+  const warningInvalidHotErrors = validateCalculatorInputs(
+    invalidHotCylinder, defaultPhysics, overLimitReading, warning
+  );
+  assert.match(warningInvalidHotErrors.join(' '), /hot overfill/i);
+  assert.doesNotMatch(warningInvalidHotErrors.join(' '), /measured.*hot overfill/i);
+});
