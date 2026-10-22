@@ -42,7 +42,7 @@ test('aggregates the highest limit exceedance per source and step', async () => 
       { pressureBar: 100.1, isTransientHot: false, source: 'settled', stepIdentifier: null }
     ]
   });
-  assert.equal(warnings?.length, 2);
+  assert.equal(warnings.length, 2);
   assert.ok(warnings?.some(warning => warning.kind === 'hot-overfill'
     && warning.pressureBar === 103
     && warning.limitBar === 102
