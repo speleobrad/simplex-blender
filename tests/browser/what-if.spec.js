@@ -55,14 +55,16 @@ async function warningSettings(page) {
     await wait.locator('[data-compare-field="waitMinutes"]').fill('5');
     await runWhatIf(page);
     const host = page.locator('#what-if-result-host');
-    await expect(host.locator('#scenario-summary-content')).toContainText(/Scenario start|Recipe end|Ambient|In-water/i);
-    for (const tab of ['Scenario summary', 'Recipe', 'Thermal Graph', 'In-water pressure', 'Tank summary', 'Simplex diagram']) {
-      const panel = await assertWhatIfResultPanelExclusive(page, tab);
-      await expect(panel).toContainText(/.+/);
-    }
     const recipe = await assertWhatIfResultPanelExclusive(page, 'Recipe');
-    await expect(recipe).toContainText(/Technical details/i);
-    await expect(recipe).not.toContainText(/Record actual/i);
+    await expect(recipe).toContainText(/Drain/i);
+    await expect(recipe).toContainText(/Compressor Air|Add gas|Top-up/i);
+    await expect(recipe).toContainText(/Wait|Cooloff period/i);
+    await expect(recipe).toContainText(/5\.0 min|5 min/);
+    await expect(recipe).toContainText(/Pressure after cooloff|Temperature after cooloff|Pressure at transfer end/i);
+    for (const tab of ['Scenario summary', 'Thermal Graph', 'In-water pressure', 'Tank summary', 'Simplex diagram']) {
+      const panel = await assertWhatIfResultPanelExclusive(page, tab);
+      await expect(panel).toContainText(/(?:temperature|pressure|stage|trajectory|unavailable|diagram|table)/i);
+    }
   });
 
   test('marks results stale after shared input changes and identifies disabled or removed banks', async ({ appPage }) => {
@@ -101,9 +103,10 @@ async function warningSettings(page) {
     await fillWhatIfStart(page, { pressureBar: '110', ambientTemperatureC: '20', inWaterTemperatureC: '24' });
     await setWhatIfRow(page, 'compare-row-1', { type: 'wait', waitMode: 'target', targetTemperatureC: '24' });
     await runWhatIf(page);
-    const host = page.locator('#what-if-result-host');
-    await expect(host).toContainText(/Warning|working pressure|exceed/i);
-    await expect(host).toContainText(/wait|24/i);
+    await expect(host).toContainText(/Warning mode|working pressure|exceed/i);
+    const recipe = await assertWhatIfResultPanelExclusive(page, 'Recipe');
+    await expect(recipe).toContainText(/Wait|Cooloff period|Temperature after cooloff/i);
+    await expect(recipe).toContainText(/24/);
   });
 
   test('activates result tabs from the keyboard without leaving the narrow viewport', async ({ appPage }) => {
@@ -116,11 +119,12 @@ async function warningSettings(page) {
     await run.press('Tab');
     await expect(page.locator('#screen-what-if')).toContainText(/Row|Add row/);
     await runWhatIf(page);
-    const recipeTab = page.locator('#what-if-result-host').getByRole('tab', { name: 'Recipe', exact: true });
-    await recipeTab.focus();
-    await recipeTab.press('Enter');
-    await expect(recipeTab).toHaveAttribute('aria-selected', 'true');
-    await expect(page.locator('#what-if-result-host')).toBeVisible();
+    const summaryTab = page.locator('#what-if-result-host').getByRole('tab', { name: 'Scenario summary', exact: true });
+    await summaryTab.focus();
+    await expect(summaryTab).toBeFocused();
+    await summaryTab.press('Enter');
+    await expect(summaryTab).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('#what-if-result-host #tab-pane-scenario-summary')).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBeTruthy();
   });
 
@@ -137,9 +141,11 @@ test('identifies a selected finite bank after it is disabled', async ({ appPage 
   await row.locator('[data-compare-field="targetPressureBar"]').fill('60');
   await runWhatIf(page);
   await page.getByRole('tab', { name: 'Inventory', exact: true }).click();
-  const bankRow = page.locator(`#tanks-tbody tr`).filter({ has: page.locator(`[value="${bankId}"]`) }).first();
+  const bankRow = page.locator(`#tanks-tbody [data-bank-id="${bankId}"]`);
+  await expect(bankRow).toHaveCount(1);
   const checkbox = bankRow.locator('input[type="checkbox"]');
-  if (await checkbox.count()) await checkbox.uncheck();
+  await expect(checkbox).toBeVisible();
+  await checkbox.uncheck();
   await page.getByRole('tab', { name: 'What-if', exact: true }).click();
   await runWhatIf(page);
   await expect(page.locator('#screen-what-if')).toContainText(/disabled|unavailable|bank|invalid/i);
