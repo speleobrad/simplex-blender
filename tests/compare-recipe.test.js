@@ -104,6 +104,40 @@ test('accepts unlimited compressor Air without a supply-bank record', () => {
   assert.equal(protocol.protocolSteps[0].sourceEndPressureBar, null);
   assert.equal(banks.length, 2);
 });
+test('reports deterministic finite source-bank summaries and excludes unused banks', () => {
+  const result = buildCompareProtocol([{
+    id: 'add-he',
+    type: 'add',
+    bankId: 'he-bank',
+    pressureAddedBar: 150,
+    targetPressureBar: 200,
+    pressureInputMode: 'target'
+  }], { cylinder, banks, physics, settings });
+
+  assert.deepEqual(result.sourceBanks.map(bank => bank.id), ['he-bank']);
+  assert.equal(result.sourceBanks[0].initial.pressureBar, 200);
+  assert.ok(result.sourceBanks[0].final.pressureBar < 200);
+  assert.equal(banks[0].pressureBar, 200);
+  assert.equal(result.sourceBanks.some(bank => bank.id === 'disabled-o2'), false);
+});
+
+test('reports Compressor Air composition without finite inventory depletion', () => {
+  const result = buildCompareProtocol([{
+    id: 'air',
+    type: 'add',
+    bankId: 'compressor-air',
+    pressureAddedBar: 150,
+    targetPressureBar: 200,
+    pressureInputMode: 'target'
+  }], { cylinder, banks, physics, settings });
+
+  assert.deepEqual(result.sourceBanks, [{
+    id: 'compressor-air',
+    name: 'Compressor Air',
+    initial: { pressureBar: null, moles: null, oxygenPercent: 21, heliumPercent: 0 },
+    final: { pressureBar: null, moles: null, oxygenPercent: 21, heliumPercent: 0 }
+  }]);
+});
 
 test('creates independent keep rows', () => {
   const first = createCompareRow('keep', 'row-1');

@@ -398,6 +398,15 @@ function sourceState(bank, moles, temperatureC, useVdw) {
   };
 }
 
+function sourceSummaryState(state) {
+  return {
+    pressureBar: state.pressureBar,
+    moles: state.moles,
+    oxygenPercent: state.oxygenPercent,
+    heliumPercent: state.heliumPercent
+  };
+}
+
 function transferRate(type, sourceStart, sourceEnd, receiverStart, receiverEnd, limits, receiverVolumeL, temperatureC, useVdw) {
   const pressureIncreaseBar = Math.max(0, receiverEnd.pressureBar - receiverStart.pressureBar);
   if (type === 'decant' || type === 'equalize') {
@@ -658,6 +667,42 @@ export function buildCompareProtocol(rows, { cylinder, physics, banks = [], sett
     pressureBar: initialPressureBar
   };
   const protocolSteps = [];
+  const sourceSummaries = new Map();
+  const recordCompressorSummary = (sourceBank) => {
+    if (!sourceSummaries.has(sourceBank.id)) {
+      const composition = {
+        pressureBar: null,
+        moles: null,
+        oxygenPercent: sourceBank.oxygenPercent,
+        heliumPercent: sourceBank.heliumPercent
+      };
+      sourceSummaries.set(sourceBank.id, {
+        id: sourceBank.id,
+        name: sourceBank.name,
+        initial: composition,
+        final: { ...composition }
+      });
+    }
+  };
+  const recordFiniteSummary = (sourceBank, sourceStart, sourceFinal) => {
+    let summary = sourceSummaries.get(sourceBank.id);
+    if (!summary) {
+      summary = {
+        id: sourceBank.id,
+        name: sourceBank.name,
+        initial: {
+          pressureBar: sourceBank.pressureBar,
+          moles: sourceStart.moles,
+          oxygenPercent: sourceStart.oxygenPercent,
+          heliumPercent: sourceStart.heliumPercent
+        },
+        final: sourceSummaryState(sourceFinal)
+      };
+      sourceSummaries.set(sourceBank.id, summary);
+    } else {
+      summary.final = sourceSummaryState(sourceFinal);
+    }
+  };
   const trajectory = [trajectoryPoint(0, 'Start Mix', receiver.mix, receiver.pressureBar, 0, '#f43f5e')];
   let trajectoryStep = 0;
 
@@ -713,6 +758,7 @@ export function buildCompareProtocol(rows, { cylinder, physics, banks = [], sett
     }
     if (isCompressorBank(row.sourceBank)) {
       const sourceBank = row.sourceBank;
+      recordCompressorSummary(sourceBank);
       const requiredMoles = solveAddedMoles(
         receiver,
         targetPressureBar,
@@ -771,6 +817,7 @@ export function buildCompareProtocol(rows, { cylinder, physics, banks = [], sett
     );
     receiverFinal.pressureBar = targetPressureBar;
     const sourceFinal = sourceState(sourceBank, source.moles - requiredMoles, temperatureC, useVdw);
+    recordFiniteSummary(sourceBank, sourceStart, sourceFinal);
 
     if (sourceFinal.pressureBar >= targetPressureBar - PRESSURE_TOLERANCE_BAR) {
       const step = plannedTransferStep(
@@ -869,5 +916,5 @@ export function buildCompareProtocol(rows, { cylinder, physics, banks = [], sett
     receiver = receiverFinal;
   }
 
-  return { protocolSteps, trajectory, initialMix };
+  return { protocolSteps, trajectory, initialMix, sourceBanks: [...sourceSummaries.values()] };
 }
