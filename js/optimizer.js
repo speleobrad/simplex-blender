@@ -6,6 +6,7 @@ import {
   DEFAULT_HOT_OVERFILL_PERCENT,
   isValidHotOverfillPercent
 } from './preset-validation.js';
+import { getCylinderPressureLimit } from './pressure-limits.js';
 import {
   simulateThermalProtocol,
   calculatePressureAtTemperature,
@@ -93,17 +94,28 @@ function cylinderHotOverfillPercent(cylinder) {
   return value;
 }
 
-function cylinderPressureLimitAtTemperature(temperatureC, workingPressureBar, context) {
+function configuredCylinderPressureLimit(workingPressureBar, isTransientHot, context) {
   const workingPressure = Number(workingPressureBar);
   if (!Number.isFinite(workingPressure)) return Infinity;
+  const cylinder = context.cylinder?.workingPressureBar === workingPressure
+    ? context.cylinder
+    : { ...(context.cylinder ?? {}), workingPressureBar: workingPressure };
+  return getCylinderPressureLimit({ cylinder, isTransientHot })?.limitBar ?? Infinity;
+}
+
+function cylinderPressureLimitAtTemperature(temperatureC, workingPressureBar, context) {
   const ambientTemperatureC = context.thermal?.ambientTemperatureC;
-  if (Number.isFinite(temperatureC)
+  const isTransientHot = Number.isFinite(temperatureC)
     && Number.isFinite(ambientTemperatureC)
-    && temperatureC > ambientTemperatureC) {
-    const hotOverfillPercent = cylinderHotOverfillPercent(context.cylinder);
-    return workingPressure * (1 + hotOverfillPercent / 100);
-  }
-  return workingPressure;
+    && temperatureC > ambientTemperatureC;
+  const configuredLimit = configuredCylinderPressureLimit(
+    workingPressureBar,
+    isTransientHot,
+    context
+  );
+  return context.settings?.pressureLimitMode === 'warning'
+    ? Infinity
+    : configuredLimit;
 }
 
 function pressureValuesForSafety(state, step, context) {
@@ -149,9 +161,11 @@ function unsafeThermalStep(state, step, workingPressureBar, equipmentLimit, cont
 
 function firstUnsafeThermalIndex(simulation, workingPressureBar, context) {
   cylinderHotOverfillPercent(context.cylinder);
-  const initialLimit = Number.isFinite(Number(workingPressureBar))
-    ? Number(workingPressureBar)
-    : Infinity;
+  const initialLimit = cylinderPressureLimitAtTemperature(
+    context.thermal?.ambientTemperatureC,
+    workingPressureBar,
+    context
+  );
   const initialPressureBar = context.cylinder?.initialPressureBar;
   if (exceedsThermalLimit(initialPressureBar, initialLimit)) {
     return -2;
@@ -172,9 +186,11 @@ export function isSafeSimulation(simulation, workingPressureBar, {
 } = {}) {
   cylinderHotOverfillPercent(cylinder);
   if (!thermal || !physics || !cylinder) {
-    const limit = Number.isFinite(Number(workingPressureBar))
-      ? Number(workingPressureBar) + THERMAL_SAFETY_TOLERANCE_BAR
-      : Infinity;
+    const limit = cylinderPressureLimitAtTemperature(
+      thermal?.ambientTemperatureC,
+      workingPressureBar,
+      { thermal, cylinder, settings }
+    ) + THERMAL_SAFETY_TOLERANCE_BAR;
     return Number(cylinder?.initialPressureBar ?? 0) <= limit
       && (simulation?.protocolSteps ?? []).every(step => {
         const state = step.thermal;
@@ -1589,7 +1605,12 @@ function validateBlendInput(input) {
   const validationCylinder = input[INTERNAL_THERMAL_TARGET]
     ? { ...cylinder, targetPressureBar: Math.min(350, Math.max(10, cylinder.targetPressureBar)) }
     : cylinder;
-  const errors = validateCalculatorInputs(validationCylinder, physics, input.thermal);
+  const errors = validateCalculatorInputs(
+    validationCylinder,
+    physics,
+    input.thermal,
+    { pressureLimitMode: input.settings?.pressureLimitMode }
+  );
   if (!isValidGasComposition(cylinder.initialOxygenPercent, cylinder.initialHeliumPercent)) {
     errors.push('Initial gas composition must total at most 100% O₂ and He.');
   }
