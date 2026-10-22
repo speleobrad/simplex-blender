@@ -413,7 +413,7 @@ function bindThermalInteractions(root = document) {
       clearThermalHover(root);
       return;
     }
-    const bounds = svg.getBoundingClientRect();
+    const viewY = (event.clientY - bounds.top) / bounds.height * CHART_HEIGHT;
     const plotBottom = CHART_HEIGHT - CHART_MARGIN.bottom;
     if (viewY < CHART_MARGIN.top || viewY > plotBottom) {
       clearThermalHover(root);
@@ -745,7 +745,7 @@ function protocolForResult(result) {
 }
 
 export function renderThermalCharts(result, input = {}, units = 'metric', { root = document } = {}) {
-  const scoped = id => root?.querySelector?.(`[data-result-key="${id}"]`) ?? root?.getElementById?.(id) ?? document.getElementById(id);
+  const scoped = id => root?.querySelector?.(`[data-result-key="${id}"]`) ?? root?.querySelector?.(`#${id}`) ?? (root === document ? document.getElementById(id) : null);
   const temperatureChart = scoped('thermal-temperature-chart');
   const pressureChart = scoped('thermal-pressure-chart');
   const dataTable = scoped('thermal-chart-data');

@@ -576,7 +576,7 @@ export function renderTernaryDiagram(canvas, { banks, initialMix, targetMix, tra
   context.stroke();
   context.setLineDash([]);
 
-  const summary = document.getElementById('ternary-steps-summary');
+  const summary = root?.querySelector?.('[data-result-key="ternary-steps-summary"]') ?? root?.querySelector?.('#ternary-steps-summary') ?? (root === document ? document.getElementById('ternary-steps-summary') : null);
   const boostCount = Math.max(0, trajectory.length - 1);
   if (summary) summary.textContent = `${boostCount} boost vector${boostCount === 1 ? '' : 's'}`;
   drawTrajectory(context, trajectory, toPoint, width, palette);
