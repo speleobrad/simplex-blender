@@ -526,10 +526,23 @@ function updateSettingsDraft(input) {
       ? convertFromDisplay(Number.parseFloat(input.value), quantity, state.settingsDraft.units)
       : Number.parseFloat(input.value);
   if (collection === 'physics') state.settingsDraft.physics[field] = value;
-  else if (collection === 'general' || collection === 'units') state.settingsDraft.units = value;
+  else if (field === 'pressureLimitMode') {
+    state.settingsDraft.pressureLimitMode = value;
+    byId('settings-pressure-warning-notice')?.classList.toggle('hidden', value !== 'warning');
+  }
+  else if (collection === 'units') state.settingsDraft.units = value;
   else if (collection === 'cylinderPresets') state.settingsDraft.cylinderPresets[index][field] = value;
   else if (collection === 'booster') state.settingsDraft.booster[field] = value;
   else state.settingsDraft.gasPresets[index][field] = value;
+}
+
+function unlockPressureWarning() {
+  if (!state.settingsDraft || state.settingsDraft.pressureWarningUnlocked === true) return;
+  const confirmation = byId('settings-pressure-limit-confirmation');
+  if (confirmation?.value !== `I KNOW WHAT I'M DOING`) return;
+  state.settingsDraft.pressureWarningUnlocked = true;
+  renderSettingsDraft();
+  setSettingsCategory('general');
 }
 
 function addGasPreset() {
@@ -1237,6 +1250,12 @@ function handleInputOrChange(event) {
     state.settingsImport = { ...state.settingsImport, url: target.value, urlTouched: true };
     return;
   }
+  if (event.type === 'input' && target.id === 'settings-pressure-limit-confirmation') {
+    const unlock = document.querySelector('[data-action="unlock-pressure-warning"]');
+    if (unlock) unlock.disabled = target.value !== `I KNOW WHAT I'M DOING`
+      || state.settingsDraft?.pressureWarningUnlocked === true;
+    return;
+  }
   if (event.type === 'change' && target.dataset.action === 'select-preset-import-category') {
     selectPresetImportCategory(target);
     return;
@@ -1389,6 +1408,9 @@ function handleClick(event) {
       break;
     case 'open-settings':
       openSettings();
+      break;
+    case 'unlock-pressure-warning':
+      unlockPressureWarning();
       break;
     case 'select-screen':
       selectScreen(actionElement.dataset.screen);

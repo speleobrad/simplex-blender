@@ -421,6 +421,18 @@ export function renderSettingsDialog(settings, importState) {
   if (units) units.value = settings.units === 'imperial' ? 'imperial' : 'metric';
   const physicsModel = document.getElementById('settings-physics-model');
   if (physicsModel && settings.physics?.model) physicsModel.value = settings.physics.model;
+  const pressureMode = document.getElementById('settings-pressure-limit-mode');
+  const warningUnlocked = settings.pressureWarningUnlocked === true;
+  if (pressureMode) {
+    pressureMode.value = settings.pressureLimitMode === 'warning' && warningUnlocked ? 'warning' : 'hard-stop';
+    const warningOption = pressureMode.querySelector('option[value="warning"]');
+    if (warningOption) warningOption.disabled = !warningUnlocked;
+  }
+  const confirmation = document.getElementById('settings-pressure-limit-confirmation');
+  const unlock = document.querySelector('[data-action="unlock-pressure-warning"]');
+  if (unlock) unlock.disabled = warningUnlocked || confirmation?.value !== `I KNOW WHAT I'M DOING`;
+  const notice = document.getElementById('settings-pressure-warning-notice');
+  if (notice) notice.classList.toggle('hidden', pressureMode?.value !== 'warning');
   renderGasRows(settings.gasPresets);
   renderCylinderRows(settings.cylinderPresets, settings.units);
   renderEquipmentPresetSelector(
