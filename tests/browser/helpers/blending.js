@@ -71,7 +71,7 @@ export async function fillWhatIfStart(page, values = {}) {
 }
 
 export async function setWhatIfRow(page, rowId, values = {}) {
-  const row = page.locator(`[data-row-id="${rowId}"]`);
+  const row = page.locator('#screen-what-if').locator(`[data-row-id="${rowId}"]`);
   await expect(row).toHaveCount(1);
   for (const [field, value] of Object.entries(values)) {
     const control = row.locator(`[data-compare-field="${field}"]`);
@@ -90,11 +90,16 @@ export async function runWhatIf(page) {
 export async function assertWhatIfResultPanelExclusive(page, tabName) {
   const ids = { 'Scenario summary': 'scenario-summary', Recipe: 'recipe', 'Simplex diagram': 'ternary', 'Thermal Graph': 'thermal', 'Tank summary': 'summary', 'In-water pressure': 'water-pressure' };
   const id = ids[tabName] ?? tabName;
-  await selectResultTab(page, tabName);
-  await expect(page.locator(`#tab-pane-${id}`)).toBeVisible();
+  const host = page.locator('#what-if-result-host');
+  const tab = host.getByRole('tab', { name: tabName, exact: true });
+  await expect(tab).toBeVisible();
+  await tab.click();
+  const panel = host.locator(`#tab-pane-${id}`);
+  await expect(panel).toBeVisible();
   for (const other of Object.values(ids)) {
-    const pane = page.locator(`#tab-pane-${other}`);
+    const pane = host.locator(`#tab-pane-${other}`);
     if (other !== id) await expect(pane).toBeHidden();
   }
-  return page.locator(`#tab-pane-${id}`);
+  await expect(tab).toHaveAttribute('aria-selected', 'true');
+  return panel;
 }

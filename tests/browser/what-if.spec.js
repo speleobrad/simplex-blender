@@ -31,12 +31,15 @@ async function load(appPage) { return appPage.goto('tourSeen'); }
     await wait.locator('[data-compare-field="waitMode"]').selectOption('fixed');
     await wait.locator('[data-compare-field="waitMinutes"]').fill('5');
     await runWhatIf(page);
-    await expect(page.locator('#scenario-summary-content')).toContainText(/Scenario start|Recipe end|Ambient|In-water/i);
+    const host = page.locator('#what-if-result-host');
+    await expect(host.locator('#scenario-summary-content')).toContainText(/Scenario start|Recipe end|Ambient|In-water/i);
     for (const tab of ['Scenario summary', 'Recipe', 'Thermal Graph', 'In-water pressure', 'Tank summary', 'Simplex diagram']) {
-      await assertWhatIfResultPanelExclusive(page, tab);
+      const panel = await assertWhatIfResultPanelExclusive(page, tab);
+      await expect(panel).toContainText(/.+/);
     }
-    await assertWhatIfResultPanelExclusive(page, 'Recipe');
-    await expect(page.locator('#tab-pane-recipe')).not.toContainText(/Record actual/i);
+    const recipe = await assertWhatIfResultPanelExclusive(page, 'Recipe');
+    await expect(recipe).toContainText(/Technical details/i);
+    await expect(recipe).not.toContainText(/Record actual/i);
   });
 
   test('marks results stale after shared input changes and identifies disabled or removed banks', async ({ appPage }) => {
