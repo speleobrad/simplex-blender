@@ -103,6 +103,7 @@ async function warningSettings(page) {
     await fillWhatIfStart(page, { pressureBar: '110', ambientTemperatureC: '20', inWaterTemperatureC: '24' });
     await setWhatIfRow(page, 'compare-row-1', { type: 'wait', waitMode: 'target', targetTemperatureC: '24' });
     await runWhatIf(page);
+    const host = page.locator('#what-if-result-host');
     await expect(host).toContainText(/Warning mode|working pressure|exceed/i);
     const recipe = await assertWhatIfResultPanelExclusive(page, 'Recipe');
     await expect(recipe).toContainText(/Wait|Cooloff period|Temperature after cooloff/i);
