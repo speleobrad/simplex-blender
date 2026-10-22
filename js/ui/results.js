@@ -396,6 +396,8 @@ function renderThermalSummary(thermal, protocolSteps = [], units = 'metric') {
   ]).filter(Number.isFinite);
   setText('res-fill-duration', thermalSteps.length > 0 ? `${duration.toFixed(1)} min` : '—');
   setText('res-max-temperature', temperatures.length > 0 ? `${formatUnitValue(Math.max(...temperatures), 'temperatureC', units)}` : '—');
+  const warnings = automaticWaitWarnings(protocolSteps);
+  const status = document.getElementById('blend-status');
   if (status && warnings.length) {
     const waitWarning = document.createElement('p');
     waitWarning.className = 'mt-1 text-[11px] font-semibold text-amber-300';
