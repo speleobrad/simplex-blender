@@ -2557,6 +2557,34 @@ function thermalLimitResult(input, requested, maximum) {
   };
 }
 
+function highestSafeThermalCandidate(searchInput, optimizeStatic, upperPressureBar) {
+  const floor = evaluateThermalCandidate(
+    searchInput,
+    optimizeStatic,
+    MINIMUM_TARGET_PRESSURE_BAR
+  );
+  if (!floor.result.feasible) return null;
+
+  let lowerPressureBar = MINIMUM_TARGET_PRESSURE_BAR;
+  let upperPressure = upperPressureBar;
+  let highestFeasible = floor;
+  for (let iteration = 0; iteration < 40; iteration++) {
+    const candidatePressureBar = (lowerPressureBar + upperPressure) / 2;
+    const candidate = evaluateThermalCandidate(
+      searchInput,
+      optimizeStatic,
+      candidatePressureBar
+    );
+    if (!candidate.result.feasible) {
+      upperPressure = candidatePressureBar;
+      continue;
+    }
+    lowerPressureBar = candidatePressureBar;
+    highestFeasible = candidate;
+  }
+  return highestFeasible;
+}
+
 function optimizeThermalBlend(input, optimizeStatic) {
   const inputErrors = validateBlendInput(input);
   if (inputErrors.length > 0) {
@@ -2575,6 +2603,13 @@ function optimizeThermalBlend(input, optimizeStatic) {
   const requestedPressureBar = ambientSettledTargetPressureBar;
   const requested = evaluateThermalCandidate(searchInput, optimizeStatic, requestedPressureBar);
   if (!requested.result.feasible) {
+    const highestSafe = highestSafeThermalCandidate(
+      searchInput,
+      optimizeStatic,
+      requestedPressureBar
+    );
+    if (highestSafe) return thermalLimitResult(input, requested, highestSafe);
+
     const infeasible = thermalizedMaximumResult(requested, requestedInWaterPressureBar, requestedInWaterTemperatureC, ambientSettledTargetPressureBar);
     const ambientDiagnostic = `Ambient-settled target: ${ambientSettledTargetPressureBar.toFixed(1)} bar.`;
     return { ...infeasible, error: `Requested in-water pressure ${requestedInWaterPressureBar.toFixed(1)} bar cannot be reached. ${infeasible.error ?? 'No safe thermal recipe is available.'} ${ambientDiagnostic}` };
