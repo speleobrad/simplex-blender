@@ -86,10 +86,10 @@ async function warningSettings(page) {
     await openWhatIf(page);
     await runWhatIf(page);
     const host = page.locator('#what-if-result-host');
-    const before = await host.locator('#scenario-summary-content').innerText();
+    const before = await host.locator('[data-result-key="scenario-summary-content"]').innerText();
     await fillWhatIfStart(page, { pressureBar: '-1' });
     await runWhatIf(page);
-    await expect(host.locator('#scenario-summary-content')).toContainText(before.slice(0, 20));
+    await expect(host.locator('[data-result-key="scenario-summary-content"]')).toContainText(before.slice(0, 20));
     await page.keyboard.press('Tab');
     await expect(page.locator('#screen-what-if')).toBeVisible();
     expect(await page.locator('body').evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBeTruthy();
@@ -126,7 +126,7 @@ async function warningSettings(page) {
     await expect(summaryTab).toBeFocused();
     await summaryTab.press('Enter');
     await expect(summaryTab).toHaveAttribute('aria-selected', 'true');
-    await expect(page.locator('#what-if-result-host #tab-pane-scenario-summary')).toBeVisible();
+    await expect(page.locator('#what-if-result-host [data-result-key="tab-pane-scenario-summary"]')).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBeTruthy();
   });
 

@@ -437,6 +437,9 @@
       <div id="results-navigation" class="min-w-0 bg-ocean-900/90 border border-ocean-800 rounded-2xl p-5 shadow-xl flex flex-col">
         <div class="min-w-0 flex items-center justify-between pb-3 border-b border-ocean-800">
           <div id="results-tablist" role="tablist" aria-label="Blend results" class="min-w-0 max-w-full flex flex-nowrap items-center gap-1 overflow-x-auto bg-ocean-950 p-1 rounded-xl border border-ocean-800">
+            <button id="tab-btn-scenario-summary" role="tab" aria-selected="false" aria-controls="tab-pane-scenario-summary" tabindex="-1" data-action="select-tab" data-tab="scenario-summary" data-result-key="tab-btn-scenario-summary" class="shrink-0 px-3.5 py-2 rounded-lg text-xs font-semibold text-slate-400 hover:text-slate-200 transition">
+              Scenario summary
+            </button>
             <button id="tab-btn-recipe" role="tab" aria-selected="true" aria-controls="tab-pane-recipe" tabindex="0" data-action="select-tab" data-tab="recipe" class="shrink-0 px-3.5 py-2 rounded-lg text-xs font-semibold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm transition">
               Recipe
             </button>
@@ -560,7 +563,7 @@
             <canvas id="ternary-canvas" role="img" aria-label="Gas composition ternary diagram" aria-describedby="ternary-chart-description" class="w-full h-full block cursor-crosshair"></canvas>
           </div>
           <p id="ternary-chart-description" class="sr-only">
-            The solid region connects Air, pure oxygen, and pure helium. The dotted boundary includes pure nitrogen. A dashed line connects the initial and target mixes; arrows show the blend sequence. Open the Tank summary tab for the plotted mix and stage values.
+            The solid region connects Air, pure oxygen, and pure helium. The dotted boundary includes pure nitrogen. A dashed line connects the initial and scenario endpoint mixes; arrows show the blend sequence. Open the Tank summary tab for the plotted mix and stage values.
           </p>
 
           <!-- Trajectory Legend & Step Path Info -->
@@ -571,7 +574,7 @@
               </span>
               <span class="text-slate-500">•</span>
               <span class="flex items-center gap-1 font-mono text-slate-400">
-                <span class="w-3 h-0.5 border-b border-dashed border-slate-500 inline-block"></span> Direct Target
+                <span class="w-3 h-0.5 border-b border-dashed border-slate-500 inline-block"></span> Initial-to-final reference
               </span>
             </div>
             <span id="ternary-steps-summary" class="font-mono text-[10px] text-amber-300 font-medium">Ready</span>
@@ -633,13 +636,7 @@
       </div>
       </div>
     </template>
-    <div id="blending-result-host" data-result-host="blending"></div>
-    <!-- RIGHT COLUMN: Recipe, Diagram, Thermal Graphs and Tank Summary -->
-    <div class="lg:col-span-7 min-w-0 flex flex-col gap-6">
-
-      <!-- Navigation Tabs for Results & Inspector -->
-
-    </div>
+    <div id="blending-result-host" data-result-host="blending" class="lg:col-span-7 min-w-0 flex flex-col gap-6"></div>
     </div>
     <div id="screen-what-if" data-primary-screen="what-if" role="tabpanel" aria-labelledby="primary-tab-what-if" hidden class="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-2">
       <section class="bg-ocean-900/90 border border-ocean-800 rounded-2xl p-5 shadow-xl">

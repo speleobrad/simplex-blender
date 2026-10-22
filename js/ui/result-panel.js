@@ -21,6 +21,22 @@ export function createResultPanel(document, host, { mode = 'optimize', instanceP
   if (!root) return null;
   root.dataset.resultMode = mode;
   root.dataset.instancePrefix = instancePrefix;
+  root.querySelectorAll?.('[id]').forEach(element => {
+    const logical = element.id;
+    element.dataset.resultKey ??= logical;
+    element.id = `${instancePrefix}${logical}`;
+  });
+  root.querySelectorAll?.('[aria-controls],[aria-labelledby],[aria-describedby]').forEach(element => {
+    for (const attribute of ['aria-controls', 'aria-labelledby', 'aria-describedby']) {
+      const value = element.getAttribute(attribute);
+      if (value) element.setAttribute(attribute, value.split(/\s+/).map(id => `${instancePrefix}${id}`).join(' '));
+    }
+  });
+  const allowed = new Set(getResultTabs(mode));
+  root.querySelectorAll?.('[data-action="select-tab"]').forEach(button => {
+    if (!allowed.has(button.dataset.tab)) button.remove();
+    else button.dataset.resultKey ??= `tab-btn-${button.dataset.tab}`;
+  });
   host.replaceChildren(root);
   return root;
 }

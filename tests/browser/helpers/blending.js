@@ -96,10 +96,10 @@ export async function assertWhatIfResultPanelExclusive(page, tabName) {
   const tab = host.getByRole('tab', { name: tabName, exact: true });
   await expect(tab).toBeVisible();
   await tab.click();
-  const panel = host.locator(`#tab-pane-${id}`);
+  const panel = host.locator(`[data-result-key="tab-pane-${id}"]`);
   await expect(panel).toBeVisible();
   for (const other of Object.values(ids)) {
-    const pane = host.locator(`#tab-pane-${other}`);
+    const pane = host.locator(`[data-result-key="tab-pane-${other}"]`);
     if (other !== id) await expect(pane).toBeHidden();
   }
   await expect(tab).toHaveAttribute('aria-selected', 'true');
