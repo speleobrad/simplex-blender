@@ -822,20 +822,12 @@ export function renderThermalCharts(result, input = {}, units = 'metric') {
   });
   renderDataTable(dataTable, displaySeries.points);
   if (status) {
-    const waits = [
-      ...(result?.automaticWaits ?? []),
-      ...(protocolForResult(result)?.map(step => step.automaticWaitMetadata).filter(Boolean) ?? [])
-    ];
-    const uniqueWaits = waits.filter((wait, index) => waits.indexOf(wait) === index);
-    const warning = uniqueWaits.length
-      ? ` ! Automatic waits: ${uniqueWaits.map(wait => `${wait.stepIdentifier ?? wait.stepTitle ?? `step ${wait.step ?? '?'}`} — ${Number(wait.configuredWaitMinutes).toFixed(1)} min configured; ${Number(wait.actualWaitMinutes).toFixed(1)} min actual; ${Number(wait.addedWaitMinutes).toFixed(1)} min added; ${wait.reason ?? 'cylinder pressure limit'}`).join(' | ')}.`
-      : '';
     const inWater = displaySeries.points.find(pointValue => pointValue.phase === 'in-water-target');
     const projection = inWater
       ? ` In-water target projection: ${inWater.pressureBar.toFixed(1)} ${getUnitLabel('pressure', units)} at ${inWater.temperatureC.toFixed(1)} ${getUnitLabel('temperature', units)}.`
       : '';
     status.textContent = displaySeries.final
-      ? `${displaySeries.final.step} ${result?.mode === 'compare' ? 'compare recipe' : 'blending'} step${displaySeries.final.step === 1 ? '' : 's'} shown over ${displaySeries.final.elapsedMinutes.toFixed(1)} minutes; final point is the ambient-settled tank state at ${displaySeries.final.pressureBar.toFixed(1)} ${getUnitLabel('pressure', units)} and ${displaySeries.final.temperatureC.toFixed(1)} ${getUnitLabel('temperature', units)}.${projection}${warning}`
+      ? `${displaySeries.final.step} ${result?.mode === 'compare' ? 'compare recipe' : 'blending'} step${displaySeries.final.step === 1 ? '' : 's'} shown over ${displaySeries.final.elapsedMinutes.toFixed(1)} minutes; final point is the ambient-settled tank state at ${displaySeries.final.pressureBar.toFixed(1)} ${getUnitLabel('pressure', units)} and ${displaySeries.final.temperatureC.toFixed(1)} ${getUnitLabel('temperature', units)}.${projection}`
       : 'Chart data appears when a completed blend protocol is available.';
   }
 }

@@ -119,20 +119,31 @@ function selectedCylinderPreset() {
     ?? state.settings.cylinderPresets[0];
 }
 
-function updateCylinderRatingHint(preset) {
+function updateCylinderRatingHint(preset, units = state.settings.units) {
   const hint = byId('cylinder-rating-hint');
   if (!hint || !preset) return;
-  hint.textContent = `${preset.volumeL} L ${preset.material} cylinder, ${preset.massKg} kg empty assembly, rated to ${preset.workingPressureBar} bar.`;
+  const equipmentValue = (value, quantity) => units === METRIC_UNITS
+    ? `${value} ${unitLabel(quantity, units)}`
+    : `${convertToDisplay(value, quantity, units).toFixed(1)} ${unitLabel(quantity, units)}`;
+  hint.textContent = `${equipmentValue(preset.volumeL, 'volumeL')} ${preset.material} cylinder, ${equipmentValue(preset.massKg, 'massKg')} empty assembly, rated to ${equipmentValue(preset.workingPressureBar, 'pressureBar')}.`;
 }
 
 function refreshPresetOptions(selectedCylinderName = null) {
   const requestedName = selectedCylinderName ?? (byId('cylinder-preset')?.value || undefined);
-  renderPresetOptions(state.settings, requestedName);
+  renderPresetOptions(state.settings, requestedName, state.settings.units);
   updateCylinderRatingHint(selectedCylinderPreset());
 }
 
 
 const byId = id => document.getElementById(id);
+
+function updateWorkingTankUnitLabels(units) {
+  const workingTank = byId('working-tank-section');
+  if (!workingTank) return;
+  for (const label of workingTank.querySelectorAll('[data-unit-quantity]')) {
+    label.textContent = unitLabel(label.dataset.unitQuantity, units);
+  }
+}
 const numberValue = id => parseNumericInput(byId(id).value);
 const canonicalNumberValue = (id, quantity) => convertFromDisplay(numberValue(id), quantity, state.settings.units);
 
@@ -167,6 +178,7 @@ function convertDisplayedInputs(fromUnits, toUnits) {
     input.max = formatInputValue(350, 'pressureBar', toUnits);
     input.step = pressureStep;
   }
+  updateWorkingTankUnitLabels(toUnits);
 }
 state.onboarding = loadOnboardingState(settingsStorage, error => {
   state.onboardingLoadFailure = error;
@@ -263,7 +275,7 @@ function toggleTheme() {
     console.warn('Theme preference was not saved.', error);
     status.textContent = 'Theme changed for this session only; preference could not be saved.';
   }
-  if (state.lastResult?.feasible) requestAnimationFrame(renderTernary);
+  if (ternaryData()) requestAnimationFrame(renderTernary);
 }
 
 
@@ -880,7 +892,9 @@ function ternaryData() {
       trajectory: compare.trajectory
     };
   }
-  if (!state.lastInput || !state.lastResult?.feasible) return null;
+  const result = state.lastResult;
+  const recipe = result?.feasible ? result : result?.maximumPressure;
+  if (!state.lastInput || !recipe) return null;
   const cylinder = state.lastInput.cylinder;
   return {
     banks: state.banks,
@@ -894,7 +908,7 @@ function ternaryData() {
       heliumPercent: cylinder.targetHeliumPercent,
       nitrogenPercent: Math.max(0, 100 - cylinder.targetOxygenPercent - cylinder.targetHeliumPercent)
     },
-    trajectory: state.lastResult.trajectory
+    trajectory: recipe.trajectory
   };
 }
 
@@ -1172,7 +1186,7 @@ function recalculate() {
   renderResults(resultWithWarnings, input);
 
   renderThermalCharts(resultWithWarnings, input, state.settings.units);
-  if (resultWithWarnings.feasible) renderTernary();
+  if (ternaryData()) renderTernary();
   else clearTernaryDiagram(byId('ternary-canvas'));
 }
 

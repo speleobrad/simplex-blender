@@ -282,10 +282,27 @@ test('renders recipe aggregates and normalized technical details', () => {
         resultingMix: { oxygenPercent: 18, heliumPercent: 45 },
         sourceEndPressureBar: 25
       }]
+    }, {
+      cylinder: {
+        workingPressureBar: 232,
+        targetPressureBar: 200,
+        targetOxygenPercent: 18,
+        targetHeliumPercent: 45
+      },
+      settings: { units: 'metric' }
     });
 
     assert.equal(document.elements.get('res-fill-duration').textContent, '10.0 min');
     assert.equal(document.elements.get('res-max-temperature').textContent, '36.0 °C');
+    assert.match(document.elements.get('res-retained-p').className, /text-slate-300/);
+    assert.match(document.elements.get('res-vented-p').className, /text-amber-400/);
+    assert.match(document.elements.get('res-he-salvaged').className, /text-emerald-400/);
+    assert.match(document.elements.get('res-final-mix').className, /text-emerald-400/);
+    assert.match(document.elements.get('res-fill-duration').className, /text-slate-300/);
+    assert.match(document.elements.get('res-max-temperature').className, /text-rose-400/);
+    assert.match(document.elements.get('res-hot-pressure').className, /text-slate-300/);
+    assert.match(document.elements.get('res-ambient-pressure').className, /text-slate-300/);
+    assert.match(document.elements.get('res-in-water-pressure').className, /text-rose-400/);
     const step = document.elements.get('steps-container').children[0];
     assert.match(step.textContent, /Step 1/);
     assert.match(step.textContent, /Transfer helium/);
@@ -326,6 +343,314 @@ test('renders recipe aggregates and normalized technical details', () => {
       'Tx 18.0/45.0',
       ''
     ]);
+  } finally {
+    globalThis.document = previousDocument;
+  }
+});
+test('highlights technical details at source, cooloff, and pressure limits and shows oxygen boost ratio', () => {
+  const previousDocument = globalThis.document;
+  const document = createFakeDocument();
+  globalThis.document = document;
+
+  try {
+    renderResults({
+      feasible: true,
+      blend: {
+        retainedPressureBar: 100,
+        retainedPercent: 100,
+        ventedPressureBar: 0,
+        ventedGasLitres: 0,
+        heliumSalvagedLitres: 0,
+        finalPressureBar: 200,
+        finalOxygenPercent: 18,
+        finalHeliumPercent: 45
+      },
+      thermal: {
+        finalTransferEndPressureBar: 205,
+        finalTransferEndTemperatureC: 40,
+        finalAmbientPressureBar: 201,
+        finalAmbientTemperatureC: 25,
+        finalInWaterPressureBar: 200,
+        finalInWaterTemperatureC: 10
+      },
+      protocolSteps: [{
+        type: 'boost',
+        title: 'Boost Oxygen',
+        sourceEndPressureBar: 5,
+        minimumSourcePressureBar: 5,
+        sourceExhausted: true,
+        oxygenCompressionRatio: 1.5,
+        thermal: {
+          rateSource: 'booster',
+          rateBarPerMin: 5,
+          durationMinutes: 10,
+          pressureAtTransferEndBar: 205,
+          temperatureAtTransferEndC: 40,
+          waitMinutes: 4,
+          pressureAfterWaitBar: 201,
+          temperatureAfterWaitC: 30
+        }
+      }]
+    }, {
+      cylinder: {
+        workingPressureBar: 200,
+        hotOverfillPercent: 5,
+        targetPressureBar: 200,
+        targetOxygenPercent: 18,
+        targetHeliumPercent: 45
+      },
+      settings: { units: 'metric' }
+    });
+
+    const step = document.elements.get('steps-container').children[0];
+    const technicalDetails = step.children[0].children.find(child =>
+      child.tagName === 'details' && child.children[0]?.textContent === 'Technical details'
+    );
+    const cells = technicalDetails.children[1].children;
+    const cell = label => cells.find(item => item.children[0].textContent === label);
+
+    assert.match(cell('Source leftover pressure').children[0].className, /text-amber-300/);
+    assert.match(cell('Cooloff period').children[0].className, /text-slate-500/);
+    assert.match(cell('Pressure at transfer end').children[0].className, /text-amber-300/);
+    assert.match(cell('Pressure at transfer end').children[1].className, /text-amber-300/);
+    assert.match(cell('Pressure after cooloff').children[0].className, /text-rose-400/);
+    assert.match(cell('Pressure after cooloff').children[1].className, /text-rose-400/);
+    assert.equal(cell('O₂ boost ratio').children[1].textContent, '1.50:1');
+  } finally {
+    globalThis.document = previousDocument;
+  }
+});
+
+test('highlights oxygen boost ratios above 3.5:1 and 3.8:1', () => {
+  const previousDocument = globalThis.document;
+  try {
+    for (const [ratio, expectedColor] of [
+      [3.5, 'text-slate-300'],
+      [3.51, 'text-amber-300'],
+      [3.8, 'text-amber-300'],
+      [3.81, 'text-rose-400']
+    ]) {
+      const document = createFakeDocument();
+      globalThis.document = document;
+      renderResults({
+        feasible: true,
+        blend: {
+          retainedPressureBar: 100,
+          retainedPercent: 100,
+          ventedPressureBar: 0,
+          ventedGasLitres: 0,
+          heliumSalvagedLitres: 0,
+          finalPressureBar: 200,
+          finalOxygenPercent: 50,
+          finalHeliumPercent: 0
+        },
+        protocolSteps: [{
+          type: 'boost',
+          title: 'Boost Oxygen',
+          oxygenCompressionRatio: ratio,
+          thermal: {
+            rateSource: 'booster',
+            rateBarPerMin: 5,
+            durationMinutes: 10,
+            pressureAtTransferEndBar: 200,
+            temperatureAtTransferEndC: 25,
+            waitMinutes: 0,
+            pressureAfterWaitBar: 200,
+            temperatureAfterWaitC: 25
+          }
+        }]
+      }, {
+        cylinder: { workingPressureBar: 232, targetPressureBar: 200 },
+        settings: { units: 'metric' }
+      });
+
+      const step = document.elements.get('steps-container').children[0];
+      const technicalDetails = step.children[0].children.find(child =>
+        child.tagName === 'details' && child.children[0]?.textContent === 'Technical details'
+      );
+      const ratioCell = technicalDetails.children[1].children.find(item =>
+        item.children[0].textContent === 'O₂ boost ratio'
+      );
+      assert.match(ratioCell.children[1].className, new RegExp(expectedColor));
+    }
+  } finally {
+    globalThis.document = previousDocument;
+  }
+});
+
+
+test('shows planned start readings struck out beside manually recorded readings', () => {
+  const previousDocument = globalThis.document;
+  const document = createFakeDocument();
+  globalThis.document = document;
+
+  try {
+    renderResults({
+      feasible: true,
+      blend: {
+        retainedPressureBar: 100,
+        retainedPercent: 100,
+        ventedPressureBar: 0,
+        ventedGasLitres: 0,
+        heliumSalvagedLitres: 0,
+        finalPressureBar: 200,
+        finalOxygenPercent: 18,
+        finalHeliumPercent: 45
+      },
+      thermal: {
+        finalTransferEndPressureBar: 200,
+        finalTransferEndTemperatureC: 40,
+        finalAmbientPressureBar: 198,
+        finalAmbientTemperatureC: 25,
+        finalInWaterPressureBar: 200,
+        finalInWaterTemperatureC: 10,
+        interimMeasurements: [{ pressureBar: 110, temperatureC: 30 }]
+      },
+      protocolSteps: [{
+        title: 'Boost Helium',
+        receiverStartPressureBar: 100,
+        thermal: {
+          measurementIndex: 0,
+          measurementApplied: true,
+          plannedStartPressureBar: 100,
+          plannedStartTemperatureC: 25,
+          pressureStartBar: 110,
+          temperatureStartC: 30,
+          rateSource: 'booster',
+          rateBarPerMin: 5,
+          durationMinutes: 10,
+          pressureAtTransferEndBar: 200,
+          temperatureAtTransferEndC: 40,
+          waitMinutes: 4,
+          pressureAfterWaitBar: 198,
+          temperatureAfterWaitC: 30
+        }
+      }]
+    }, {
+      cylinder: {
+        workingPressureBar: 232,
+        targetPressureBar: 200,
+        targetOxygenPercent: 18,
+        targetHeliumPercent: 45
+      },
+      thermal: {
+        interimMeasurements: [{ pressureBar: 110, temperatureC: 30 }]
+      },
+      settings: { units: 'metric' }
+    });
+
+    const step = document.elements.get('steps-container').children[0];
+    const technicalDetails = step.children[0].children.find(child =>
+      child.tagName === 'details' && child.children[0]?.textContent === 'Technical details'
+    );
+    const cells = technicalDetails.children[1].children;
+    const cell = label => cells.find(item => item.children[0].textContent === label);
+
+    for (const [label, planned, actual] of [
+      ['Start pressure', '100.0 bar', '110.0 bar'],
+      ['Start temperature', '25.0 °C', '30.0 °C']
+    ]) {
+      const reading = cell(label).children[1].children[0];
+      assert.equal(reading.children[0].tagName, 's');
+      assert.equal(reading.children[0].textContent, planned);
+      assert.match(reading.children[0].className, /line-through/);
+      assert.equal(reading.children[2].textContent, actual);
+      assert.match(reading.children[2].className, /text-amber-300/);
+    }
+  } finally {
+    globalThis.document = previousDocument;
+  }
+});
+
+
+test('classifies summary metrics at zero, full, partial, and over-limit boundaries', () => {
+  const previousDocument = globalThis.document;
+  const document = createFakeDocument();
+  globalThis.document = document;
+  const calculation = {
+    cylinder: {
+      workingPressureBar: 232,
+      targetOxygenPercent: 18,
+      targetHeliumPercent: 45
+    },
+    settings: { units: 'metric' }
+  };
+  const renderSummary = ({
+    retainedPercent,
+    ventedPressureBar,
+    heliumSalvagedLitres,
+    finalOxygenPercent,
+    finalHeliumPercent,
+    hotPressureBar,
+    ambientPressureBar,
+    inWaterPressureBar
+  }) => renderResults({
+    feasible: true,
+    blend: {
+      retainedPressureBar: retainedPercent,
+      retainedPercent,
+      ventedPressureBar,
+      ventedGasLitres: ventedPressureBar,
+      heliumSalvagedLitres,
+      finalPressureBar: ambientPressureBar,
+      finalOxygenPercent,
+      finalHeliumPercent
+    },
+    thermal: {
+      finalTransferEndPressureBar: hotPressureBar,
+      finalTransferEndTemperatureC: 40,
+      finalAmbientPressureBar: ambientPressureBar,
+      finalAmbientTemperatureC: 25,
+      finalInWaterPressureBar: inWaterPressureBar,
+      finalInWaterTemperatureC: 10,
+      requestedInWaterPressureBar: 200,
+      requestedInWaterTemperatureC: 10
+    },
+    protocolSteps: [{
+      resultingPressureBar: ambientPressureBar,
+      thermal: {
+        durationMinutes: 5,
+        temperatureStartC: 25,
+        temperatureAtTransferEndC: 40,
+        temperatureAfterWaitC: 25
+      }
+    }]
+  }, calculation);
+
+  try {
+    renderSummary({
+      retainedPercent: 100,
+      ventedPressureBar: 0,
+      heliumSalvagedLitres: 0,
+      finalOxygenPercent: 18,
+      finalHeliumPercent: 45,
+      hotPressureBar: 200,
+      ambientPressureBar: 200,
+      inWaterPressureBar: 200
+    });
+    assert.match(document.elements.get('res-retained-p').className, /text-emerald-400/);
+    assert.match(document.elements.get('res-vented-p').className, /text-emerald-400/);
+    assert.match(document.elements.get('res-he-salvaged').className, /text-slate-300/);
+    assert.match(document.elements.get('res-final-mix').className, /text-emerald-400/);
+    assert.match(document.elements.get('res-in-water-pressure').className, /text-emerald-400/);
+
+    renderSummary({
+      retainedPercent: 0,
+      ventedPressureBar: 100,
+      heliumSalvagedLitres: 1,
+      finalOxygenPercent: 20,
+      finalHeliumPercent: 40,
+      hotPressureBar: 240,
+      ambientPressureBar: 233,
+      inWaterPressureBar: 195
+    });
+    assert.match(document.elements.get('res-retained-p').className, /text-rose-400/);
+    assert.match(document.elements.get('res-vented-p').className, /text-rose-400/);
+    assert.match(document.elements.get('res-he-salvaged').className, /text-emerald-400/);
+    assert.match(document.elements.get('res-final-mix').className, /text-amber-400/);
+    assert.match(document.elements.get('res-hot-pressure').className, /text-rose-400/);
+    assert.match(document.elements.get('res-ambient-pressure').className, /text-rose-400/);
+    assert.match(document.elements.get('res-in-water-pressure').className, /text-rose-400/);
   } finally {
     globalThis.document = previousDocument;
   }
@@ -500,7 +825,7 @@ test('pressure warnings trigger only above the cylinder working pressure', () =>
   assert.equal(isPressureAboveWorkingPressure(Number.NaN, 232), false);
 });
 
-test('renders explicit thermal states and metadata-driven automatic wait warning', () => {
+test('renders explicit thermal states and one adjusted cooloff warning in the step', () => {
   const previousDocument = globalThis.document;
   const document = createFakeDocument();
   globalThis.document = document;
@@ -509,14 +834,34 @@ test('renders explicit thermal states and metadata-driven automatic wait warning
       feasible: true,
       blend: { retainedPressureBar: 1, retainedPercent: 1, ventedPressureBar: 0, ventedGasLitres: 0, heliumSalvagedLitres: 0, finalPressureBar: 200, finalOxygenPercent: 18, finalHeliumPercent: 45 },
       thermal: { finalInWaterPressureBar: 188.6, finalInWaterTemperatureC: 10, finalTransferEndPressureBar: 204.8, finalTransferEndTemperatureC: 40, finalAmbientPressureBar: 200, finalAmbientTemperatureC: 25 },
-      protocolSteps: [{ title: 'Transfer', description: 'Transfer gas.', resultingPressureBar: 200, automaticWaitMetadata: { configuredWaitMinutes: 4, actualWaitMinutes: 9, addedWaitMinutes: 5 }, thermal: { durationMinutes: 1, temperatureAtTransferEndC: 40, temperatureAfterWaitC: 25 } }]
+      protocolSteps: [{
+        title: 'Step 4: Boost Helium to 192.5 bar',
+        description: 'Transfer gas.',
+        resultingPressureBar: 200,
+        automaticWaitMetadata: { configuredWaitMinutes: 7, actualWaitMinutes: 12.8, addedWaitMinutes: 5.8 },
+        thermal: { durationMinutes: 1, temperatureAtTransferEndC: 40, temperatureAfterWaitC: 29.1 }
+      }]
     });
     assert.match(document.elements.get('res-hot-pressure').textContent, /204\.8 bar/);
     assert.match(document.elements.get('res-ambient-pressure').textContent, /200\.0 bar/);
     assert.match(document.elements.get('res-in-water-temperature').textContent, /10\.0 °C/);
-    const waitText = document.elements.get('steps-container').textContent;
-    assert.match(waitText, /! Automatic wait:.*cylinder pressure limit/);
-    assert.ok((waitText.match(/! Automatic wait:/g) ?? []).length >= 2);
+    const statusText = document.elements.get('blend-status').textContent;
+    assert.doesNotMatch(statusText, /Adjusted cooloff|Automatic wait/);
+    const step = document.elements.get('steps-container').children[0];
+    assert.equal((step.textContent.match(/⚠️ Adjusted cooloff:/g) ?? []).length, 1);
+    assert.match(step.textContent, /cylinder pressure limit reached \(Step 4: Boost Helium to 192\.5 bar\)/);
+    assert.match(step.textContent, /Waiting time extended to 12\.8 min or until temperature lower than 29\.1 °C is reached\./);
+    const warning = findElement(step, element => element.attributes.get('role') === 'status');
+    assert.ok(warning);
+    assert.match(warning.className, /rounded-lg/);
+    const technicalDetails = step.children[0].children.find(child =>
+      child.tagName === 'details' && child.children[0]?.textContent === 'Technical details'
+    );
+    const cooloff = technicalDetails.children[1].children.find(cell =>
+      cell.children[0].textContent === 'Cooloff period'
+    );
+    assert.match(cooloff.children[0].className, /text-amber-300/);
+    assert.match(cooloff.children[1].className, /text-amber-300/);
   } finally {
     globalThis.document = previousDocument;
   }
@@ -578,7 +923,7 @@ test('renders only the Warning mode policy notice when no limit is exceeded', ()
   }
 });
 
-test('preserves Warning notices and automatic-wait text during thermal rendering', () => {
+test('keeps Warning notices separate from the adjusted cooloff box', () => {
   const previousDocument = globalThis.document;
   const document = createFakeDocument();
   globalThis.document = document;
@@ -586,8 +931,7 @@ test('preserves Warning notices and automatic-wait text during thermal rendering
     renderResults({
       feasible: true,
       blend: {
-        retainedPressureBar: 50, retainedPercent: 100, ventedPressureBar: 0,
-        ventedGasLitres: 0, heliumSalvagedLitres: 0, finalPressureBar: 100,
+        retainedPressureBar: 50, retainedPercent: 100, ventedPressureBar: 0, ventedGasLitres: 0, heliumSalvagedLitres: 0, finalPressureBar: 100,
         finalOxygenPercent: 21, finalHeliumPercent: 0
       },
       thermal: {
@@ -627,10 +971,12 @@ test('preserves Warning notices and automatic-wait text during thermal rendering
     assert.match(status.textContent, /warning mode/i);
     assert.match(status.textContent, /103\.0 bar/);
     assert.match(status.textContent, /working pressure/i);
-    assert.match(status.textContent, /! Automatic wait:.*cylinder pressure limit/i);
+    assert.doesNotMatch(status.textContent, /Adjusted cooloff|Automatic wait/);
     const notices = status.children.filter(child => child.attributes.get('role') === 'status');
     assert.equal(notices.length, 2);
     assert.ok(notices.every(notice => /\btext-amber-300\b/.test(notice.className)));
+    const step = document.elements.get('steps-container').children[0];
+    assert.equal((step.textContent.match(/⚠️ Adjusted cooloff:/g) ?? []).length, 1);
   } finally {
     globalThis.document = previousDocument;
   }
@@ -647,7 +993,16 @@ test('qualifies Warning-mode maximum pressure by the active non-cylinder constra
       gas: { initialPressureBar: 50, targetPressureBar: 200 },
       maximumPressure: {
         pressureBar: 150,
-        blend: { finalOxygenPercent: 21, finalHeliumPercent: 0 },
+        blend: {
+          retainedPressureBar: 50,
+          retainedPercent: 100,
+          ventedPressureBar: 0,
+          ventedGasLitres: 0,
+          heliumSalvagedLitres: 0,
+          finalPressureBar: 150,
+          finalOxygenPercent: 21,
+          finalHeliumPercent: 0
+        },
         protocolSteps: []
       }
     }, {
@@ -662,6 +1017,238 @@ test('qualifies Warning-mode maximum pressure by the active non-cylinder constra
     assert.match(details, /maximum pressure under active non-cylinder constraints/i);
     assert.doesNotMatch(status, /\bsafe(?:ly)?\b/i);
     assert.doesNotMatch(details, /\bsafe(?:ly)?\b/i);
+  } finally {
+    globalThis.document = previousDocument;
+  }
+});
+test('replaces the previous recipe summary with the safety-limited target-temperature result', () => {
+  const previousDocument = globalThis.document;
+  const document = createFakeDocument();
+  globalThis.document = document;
+  try {
+    renderResults({
+      feasible: true,
+      blend: {
+        retainedPressureBar: 20,
+        retainedPercent: 40,
+        ventedPressureBar: 30,
+        ventedGasLitres: 360,
+        heliumSalvagedLitres: 120,
+        finalPressureBar: 200,
+        finalOxygenPercent: 18,
+        finalHeliumPercent: 45
+      },
+      protocolSteps: [{ title: 'Previous recipe step', resultingPressureBar: 200 }],
+      thermal: {
+        finalTransferEndPressureBar: 205,
+        finalTransferEndTemperatureC: 35,
+        finalAmbientPressureBar: 200,
+        finalAmbientTemperatureC: 25,
+        finalInWaterPressureBar: 200,
+        finalInWaterTemperatureC: 25,
+        requestedInWaterPressureBar: 200,
+        requestedInWaterTemperatureC: 25
+      }
+    }, { settings: { pressureLimitMode: 'hard-stop', units: 'metric' } });
+
+    renderResults({
+      feasible: false,
+      error: 'Requested in-water pressure is unavailable.',
+      gas: { targetPressureBar: 200 },
+      diagnostics: {
+        componentShortfalls: [
+          { component: 'Oxygen', sourceBank: null },
+          { component: 'Helium', sourceBank: null }
+        ],
+        exhaustedBanks: []
+      },
+      maximumPressure: {
+        pressureBar: 207,
+        blend: {
+          retainedPressureBar: 80,
+          retainedPercent: 100,
+          ventedPressureBar: 0,
+          ventedGasLitres: 0,
+          heliumSalvagedLitres: 240,
+          finalPressureBar: 207,
+          finalOxygenPercent: 18,
+          finalHeliumPercent: 45
+        },
+        protocolSteps: [{ title: 'Safety-limited recipe step', resultingPressureBar: 207 }],
+        thermal: {
+          finalTransferEndPressureBar: 211,
+          finalTransferEndTemperatureC: 30,
+          finalAmbientPressureBar: 207,
+          finalAmbientTemperatureC: 25,
+          finalInWaterPressureBar: 195,
+          finalInWaterTemperatureC: 10,
+          requestedInWaterPressureBar: 200,
+          requestedInWaterTemperatureC: 10
+        }
+      }
+    }, {
+      settings: { pressureLimitMode: 'hard-stop', units: 'metric' },
+      cylinder: { volumeL: 11.1, workingPressureBar: 207 },
+      physics: { model: 'vdw' }
+    });
+
+    assert.equal(document.elements.get('res-retained-p').textContent, '80.0 bar');
+    assert.equal(document.elements.get('res-vented-p').textContent, '0.0 bar');
+    assert.equal(document.elements.get('res-he-salvaged').textContent, '240 L');
+    assert.equal(document.elements.get('res-final-p').textContent, '195.0 bar');
+    assert.equal(document.elements.get('res-final-mix').textContent, 'Tx 18/45');
+    assert.equal(document.elements.get('res-in-water-pressure').textContent, '195.0 bar');
+    assert.equal(document.elements.get('res-in-water-temperature').textContent, '10.0 °C');
+    assert.match(document.elements.get('blend-status').textContent, /maximum safely achievable pressure is 195\.0 bar/i);
+    const alert = findElement(document.elements.get('steps-container'), element =>
+      element.attributes.get('role') === 'alert'
+    );
+    assert.ok(alert);
+    assert.equal(alert.children[1].textContent, [
+      'The target mix (18/45) cannot reach 200.0 bar at target 10.0 °C.',
+      'No enabled source bank can add oxygen.',
+      'No enabled source bank can add helium.',
+      'The maximum safely achievable pressure is 195.0 bar at 10.0 °C.',
+      'Predicted settled pressure is 207.0 bar at 25.0 °C.'
+    ].join('\n'));
+    assert.match(document.elements.get('steps-container').textContent, /Safety-limited recipe step/);
+    assert.doesNotMatch(document.elements.get('steps-container').textContent, /Previous recipe step/);
+  } finally {
+    globalThis.document = previousDocument;
+  }
+});
+
+
+test('explains an unavailable EAN50 target with its oxygen-ratio limit', () => {
+  const previousDocument = globalThis.document;
+  const document = createFakeDocument();
+  globalThis.document = document;
+  try {
+    renderResults({
+      feasible: false,
+      reasonCode: 'oxygen-boost-ratio',
+      error: 'Unsafe 50% O₂ transfer from EAN 50: exceeding the 4:1 limit.',
+      gas: { targetPressureBar: 200 },
+      diagnostics: { componentShortfalls: [], exhaustedBanks: [] },
+      maximumPressure: {
+        pressureBar: 112,
+        blend: {
+          retainedPressureBar: 10,
+          retainedPercent: 100,
+          ventedPressureBar: 0,
+          ventedGasLitres: 0,
+          heliumSalvagedLitres: 0,
+          finalPressureBar: 112,
+          finalOxygenPercent: 50,
+          finalHeliumPercent: 0
+        },
+        protocolSteps: [],
+        thermal: {
+          finalTransferEndPressureBar: 112,
+          finalTransferEndTemperatureC: 25,
+          finalAmbientPressureBar: 112,
+          finalAmbientTemperatureC: 25,
+          finalInWaterPressureBar: 112,
+          finalInWaterTemperatureC: 25,
+          requestedInWaterPressureBar: 200,
+          requestedInWaterTemperatureC: 25
+        }
+      }
+    }, {
+      settings: { pressureLimitMode: 'hard-stop', units: 'metric' },
+      cylinder: { volumeL: 12, workingPressureBar: 232 },
+      physics: { model: 'ideal' }
+    });
+
+    const alert = findElement(document.elements.get('steps-container'), element =>
+      element.attributes.get('role') === 'alert'
+    );
+    assert.ok(alert);
+    assert.equal(alert.children[0].textContent, 'Requested Mix Is Unavailable');
+    assert.match(
+      alert.children[1].textContent,
+      /The target mix \(50\/0\) cannot safely reach 200\.0 bar at target 25\.0 °C due to unsafe oxygen boost ratio \(maximum 4:1\)\./
+    );
+  } finally {
+    globalThis.document = previousDocument;
+  }
+});
+
+
+test('renders working-pressure and source-shortage reasons in unavailable-mix summaries', () => {
+  const previousDocument = globalThis.document;
+  try {
+    for (const [reasonCode, expectedReason] of [
+      ['working-pressure', 'due to exceeding the working pressure of the cylinder.'],
+      ['insufficient-source-gas', 'due to insufficient source gas.']
+    ]) {
+      const document = createFakeDocument();
+      globalThis.document = document;
+      renderResults({
+        feasible: false,
+        reasonCode,
+        error: 'The requested mix is unavailable.',
+        gas: { targetPressureBar: 200 },
+        diagnostics: { componentShortfalls: [], exhaustedBanks: [] },
+        maximumPressure: {
+          pressureBar: 150,
+          blend: {
+            retainedPressureBar: 10,
+            retainedPercent: 100,
+            ventedPressureBar: 0,
+            ventedGasLitres: 0,
+            heliumSalvagedLitres: 0,
+            finalPressureBar: 150,
+            finalOxygenPercent: 32,
+            finalHeliumPercent: 0
+          },
+          protocolSteps: [],
+          thermal: {
+            finalAmbientPressureBar: 150,
+            finalAmbientTemperatureC: 25,
+            finalInWaterPressureBar: 150,
+            finalInWaterTemperatureC: 25,
+            requestedInWaterTemperatureC: 25
+          }
+        }
+      }, {
+        settings: { pressureLimitMode: 'hard-stop', units: 'metric' },
+        cylinder: { volumeL: 12, workingPressureBar: 232 },
+        physics: { model: 'ideal' }
+      });
+
+      const alert = findElement(document.elements.get('steps-container'), element =>
+        element.attributes.get('role') === 'alert'
+      );
+      assert.match(alert.children[1].textContent, new RegExp(expectedReason));
+    }
+  } finally {
+    globalThis.document = previousDocument;
+  }
+});
+
+
+test('explains no-positive-quantity failures as unavailable source-gas combinations', () => {
+  const previousDocument = globalThis.document;
+  const document = createFakeDocument();
+  globalThis.document = document;
+  try {
+    renderResults({
+      feasible: false,
+      reasonCode: 'insufficient-source-gas',
+      error: 'The exact target mix cannot be made from the current cylinder and enabled gas banks at any positive pressure.',
+      gas: { targetPressureBar: 200 },
+      maximumPressure: null
+    });
+
+    const expected = 'No feasible blend — the combination and availability of source gases in the inventory does not allow this mix to be made in any quantity.';
+    assert.equal(document.elements.get('blend-status').textContent, expected);
+    const alert = findElement(document.elements.get('steps-container'), element =>
+      element.attributes.get('role') === 'alert'
+    );
+    assert.ok(alert);
+    assert.equal(alert.children[0].textContent, 'No Feasible Blend');
+    assert.equal(alert.children[1].textContent, expected);
   } finally {
     globalThis.document = previousDocument;
   }

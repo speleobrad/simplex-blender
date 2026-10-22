@@ -30,6 +30,18 @@ test.describe('working tank blending inputs', () => {
     await expect(page.locator('#target-o2')).toHaveValue('21');
     await expect(page.locator('#target-he')).toHaveValue('30');
   });
+  test('switches working tank pressure and temperature labels to imperial units', async ({ appPage }) => {
+    const page = await load(appPage);
+    const general = await openSettingsCategory(page, 'general');
+    await general.getByRole('combobox', { name: 'Units' }).selectOption('imperial');
+    await saveSettings(page);
+
+    const workingTank = page.locator('#working-tank-section');
+    await expect(workingTank.locator('[data-unit-quantity="pressure"]')).toHaveText(['psi', 'psi']);
+    await expect(workingTank.locator('[data-unit-quantity="temperature"]')).toHaveText(['°F', '°F', '°F']);
+    await expect(workingTank).not.toContainText('bar');
+    await expect(workingTank).not.toContainText('°C');
+  });
   test('aligns current and target first-row inputs horizontally', async ({ appPage }) => {
     const page = await load(appPage);
     await page.setViewportSize({ width: 1440, height: 1000 });
@@ -107,7 +119,11 @@ test.describe('working tank blending inputs', () => {
     });
     await page.locator('#inlet-gas-temperature').dispatchEvent('input');
     await expect(page.locator('#blend-status')).toContainText(/feasible/i);
-    await expect(page.locator('#steps-container')).toContainText(/Automatic wait: cylinder pressure limit/);
+    const adjustedCooloff = page.locator('#steps-container [role="status"]')
+      .filter({ hasText: 'Adjusted cooloff: cylinder pressure limit' });
+    await expect(adjustedCooloff).toHaveCount(1);
+    await expect(adjustedCooloff).toContainText(/Waiting time extended to/);
+    await expect(page.locator('#steps-container details [role="status"]')).toHaveCount(0);
     expect(Number.parseFloat(await page.locator('#res-ambient-pressure').innerText())).toBeLessThanOrEqual(100);
     expect(Number.parseFloat(await page.locator('#res-in-water-pressure').innerText())).toBeLessThanOrEqual(100);
 
@@ -115,7 +131,7 @@ test.describe('working tank blending inputs', () => {
     for (const field of await openPane.locator('[data-settings-field="hotOverfillPercent"]:visible').all()) await field.fill('2');
     await saveSettings(page);
     await expect(page.locator('#blend-status')).toContainText(/feasible/i);
-    await expect(page.locator('#steps-container')).not.toContainText(/Automatic wait:/);
+    await expect(page.locator('#steps-container')).not.toContainText(/Adjusted cooloff:/);
     const hotPressure = Number.parseFloat(await page.locator('#res-hot-pressure').innerText());
     expect(hotPressure).toBeGreaterThan(100);
     expect(hotPressure).toBeLessThanOrEqual(102);

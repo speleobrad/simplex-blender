@@ -438,6 +438,11 @@ function transferRate(type, sourceStart, sourceEnd, receiverStart, receiverEnd, 
 
 function plannedTransferStep(type, row, sourceStart, sourceEnd, receiverStart, receiverEnd, limits, receiverVolumeL, temperatureC, useVdw) {
   const operation = type[0].toUpperCase() + type.slice(1);
+  const oxygenCompressionRatio = type === 'boost'
+    && row.sourceBank.oxygenPercent > 40
+    && sourceEnd.pressureBar > 0
+    ? receiverEnd.pressureBar / sourceEnd.pressureBar
+    : null;
   return {
     type,
     compareRowId: row.id,
@@ -457,6 +462,7 @@ function plannedTransferStep(type, row, sourceStart, sourceEnd, receiverStart, r
     receiverEndPressureBar: receiverEnd.pressureBar,
     resultingPressureBar: receiverEnd.pressureBar,
     resultingMix: { ...receiverEnd.mix },
+    oxygenCompressionRatio,
     transferRate: transferRate(
       type,
       sourceStart,

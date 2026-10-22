@@ -276,7 +276,7 @@ function automaticWaitMetadata(simulation) {
     if (!state || !(state.automaticWaitMinutes > THERMAL_SAFETY_TOLERANCE_BAR)) return [];
     return [{
       stepIndex,
-      stepIdentifier: step.id ?? step.title ?? stepIndex,
+      stepIdentifier: step.title ?? step.id ?? stepIndex,
       configuredWaitMinutes: state.configuredWaitMinutes,
       actualWaitMinutes: state.waitMinutes,
       addedWaitMinutes: state.automaticWaitMinutes,
@@ -1423,7 +1423,6 @@ function maximumOutsideOxygenMoles({
     0
   );
 }
-
 function maximumPressureResult(pressureBar, solverResult, blend, protocolSteps, trajectory) {
   return {
     pressureBar,
@@ -1435,10 +1434,41 @@ function maximumPressureResult(pressureBar, solverResult, blend, protocolSteps, 
   };
 }
 
-function failedResult(error, gas, tableauSteps, maximumPressure = null, diagnostics = null) {
+
+function inferInfeasibilityReason(error, componentShortfalls = []) {
+  const message = String(error ?? '');
+  if (/4:1|oxygen (?:boost|compression) ratio/i.test(message)) {
+    return 'oxygen-boost-ratio';
+  }
+  if (/working pressure|cylinder pressure|1440-minute wait limit/i.test(message)) {
+    return 'working-pressure';
+  }
+  if (/booster output|compressor air cannot top up|compressor pressure|pressure limit/i.test(message)) {
+    return 'equipment-pressure-limit';
+  }
+  if (
+    componentShortfalls.some(shortfall =>
+      Number.isFinite(shortfall?.deficitMoles) && shortfall.deficitMoles > 1e-9
+    )
+    || /insufficient source|not enough|current cylinder and enabled gas banks|current gas banks/i.test(message)
+  ) {
+    return 'insufficient-source-gas';
+  }
+  return null;
+}
+
+function failedResult(
+  error,
+  gas,
+  tableauSteps,
+  maximumPressure = null,
+  diagnostics = null,
+  reasonCode = inferInfeasibilityReason(error, diagnostics?.componentShortfalls)
+) {
   return {
     feasible: false,
     error,
+    reasonCode,
     gas,
     solution: null,
     tableauSteps,
@@ -2594,7 +2624,8 @@ function thermalLimitResult(input, requested, maximum) {
       { ...requested.result.gas, targetPressureBar: requestedInWaterPressureBar },
       maximum.result.tableauSteps,
       maximumPressure,
-      requested.result.diagnostics ?? null
+      requested.result.diagnostics ?? null,
+      requested.result.reasonCode
     ),
     thermal
   };

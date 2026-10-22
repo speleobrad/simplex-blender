@@ -444,6 +444,43 @@ test('carries configured decant and booster rates on planned stages', () => {
   assert.ok(Number.isFinite(boost.transferRate.rateBarPerMin));
   assert.ok(Number.isFinite(boost.transferRate.estimatedDurationMinutes));
 });
+test('reports the oxygen boost ratio for source gas above 40 percent oxygen', () => {
+  const oxygenRichBank = {
+    id: 'ean-50',
+    name: 'EAN 50',
+    volumeL: 50,
+    pressureBar: 200,
+    oxygenPercent: 50,
+    heliumPercent: 0,
+    enabled: true
+  };
+  const result = buildCompareProtocol([{
+    id: 'oxygen-add',
+    type: 'add',
+    bankId: oxygenRichBank.id,
+    pressureAddedBar: 250,
+    targetPressureBar: 300,
+    pressureInputMode: 'target'
+  }], {
+    cylinder: {
+      ...cylinder,
+      workingPressureBar: 350,
+      targetPressureBar: 300
+    },
+    physics,
+    banks: [oxygenRichBank],
+    settings: {
+      ...settings,
+      booster: { ...settings.booster, maxBoosterOutputPressureBar: 350 }
+    }
+  });
+  const boost = result.protocolSteps.find(step => step.type === 'boost');
+
+  assert.ok(boost);
+  assert.ok(Math.abs(boost.oxygenCompressionRatio - (
+    boost.receiverEndPressureBar / boost.sourceEndPressureBar
+  )) < 1e-12);
+});
 
 test('rejects a selected supply bank without a name', () => {
   const namelessBank = { ...banks[0], id: 'nameless', name: '' };

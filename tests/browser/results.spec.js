@@ -1,5 +1,6 @@
 import { test, expect } from './fixtures/app-fixtures.js';
 import { assertResultPanelExclusive, openRecipeScenario } from './helpers/blending.js';
+import { selectResultTab, toggleTheme } from './helpers/navigation.js';
 
 async function populated(appPage) { return appPage.goto('tourSeen'); }
 
@@ -30,6 +31,25 @@ test.describe('result tabs', () => {
       );
       expect(order).toEqual(['pressure', 'temperature']);
     }
+  });
+  test('keeps partial recipe data in the diagram and tank summary', async ({ appPage }) => {
+    const page = await appPage.goto('tourSeen');
+    await openRecipeScenario(page, { values: { targetInWaterTemperature: 10 } });
+    await expect(page.locator('#blend-status')).toContainText(/target pressure limited/i);
+
+    await assertResultPanelExclusive(page, 'Simplex diagram');
+    await expect(page.locator('#ternary-steps-summary')).not.toHaveText('No feasible blend');
+    await expect(page.locator('#ternary-data-trajectory tr')).not.toHaveCount(0);
+
+    await assertResultPanelExclusive(page, 'Tank summary');
+    await expect(page.locator('#ternary-data-status')).toContainText(/trajectory points/i);
+    await expect(page.locator('#ternary-data-trajectory tr')).not.toHaveCount(0);
+    await selectResultTab(page, 'Simplex diagram');
+    await expect(page.locator('#ternary-canvas')).toBeVisible();
+    const canvas = page.locator('#ternary-canvas');
+    const beforeThemeChange = await canvas.evaluate(element => element.toDataURL());
+    await toggleTheme(page);
+    await expect.poll(() => canvas.evaluate(element => element.toDataURL())).not.toBe(beforeThemeChange);
   });
 
   test('uses equal-height technical-details rows with top-aligned content', async ({ appPage }) => {
@@ -210,6 +230,8 @@ test.describe('result tabs', () => {
     await expect(page.locator('#steps-container')).toContainText(/no feasible|invalid|error|unable/i);
     await assertResultPanelExclusive(page, 'Simplex diagram');
     await expect(page.locator('#ternary-steps-summary')).toContainText(/no|unavailable|invalid|ready/i);
+    await expect(page.locator('#ternary-data-mixes tr')).toHaveCount(0);
+    await expect(page.locator('#ternary-data-trajectory tr')).toHaveCount(0);
     await assertResultPanelExclusive(page, 'Thermal Graph');
     await expect(page.locator('#thermal-chart-status')).toContainText(/available|appears|invalid|error/i);
     await assertResultPanelExclusive(page, 'Tank summary');

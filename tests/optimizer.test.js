@@ -756,6 +756,7 @@ test('reports helium shortage as required source-bank pressure and names the dep
   });
 
   assert.equal(result.feasible, false);
+  assert.equal(result.reasonCode, 'insufficient-source-gas');
   assert.ok(result.maximumPressure);
   const helium = result.diagnostics.componentShortfalls.find(item => item.component === 'Helium');
   assert.ok(helium);
@@ -1259,6 +1260,7 @@ test('rejects oxygen-rich transfer when receiver exceeds four times source resid
 
   assert.equal(result.feasible, false);
   assert.match(result.error, /4:1/);
+  assert.equal(result.reasonCode, 'oxygen-boost-ratio');
   assert.equal(result.blend, null);
   assert.deepEqual(result.protocolSteps, []);
 });
@@ -1293,6 +1295,7 @@ test('checks oxygen transfer after compressor Air is staged first', () => {
 
   assert.equal(result.feasible, false);
   assert.match(result.error, /4:1/);
+  assert.equal(result.reasonCode, 'oxygen-boost-ratio');
 });
 
 test('finds the maximum lower pressure that keeps the exact mix within the oxygen transfer limit', () => {

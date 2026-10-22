@@ -703,6 +703,8 @@ export function simulateThermalProtocol({
       measuredTemperatureC: measuredStart?.temperatureC,
       tauMinutes
     });
+    const plannedStartPressureBar = currentPressureBar;
+    const plannedStartTemperatureC = currentTemperatureC;
     const pressureStartBar = currentPressureBar;
     const temperatureStartC = currentTemperatureC;
     const pressureReferenceTemperatureC = Number.isFinite(step.pressureReferenceTemperatureC)
@@ -863,6 +865,8 @@ export function simulateThermalProtocol({
       useVdw
     }));
     const thermalStep = {
+      plannedStartPressureBar,
+      plannedStartTemperatureC,
       pressureStartBar,
       rateSource: transfer.rateSource,
       rateBarPerMin: transfer.rateBarPerMin,

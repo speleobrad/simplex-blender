@@ -476,7 +476,7 @@ function createOption(value, label) {
   return option;
 }
 
-export function renderPresetOptions(settings, selectedCylinderName) {
+export function renderPresetOptions(settings, selectedCylinderName, units = 'metric') {
   for (const select of document.querySelectorAll('[data-action="select-cylinder-gas"]')) {
     const side = select.dataset.mix;
     const prefix = side === 'initial' ? 'init' : 'target';
@@ -494,10 +494,13 @@ export function renderPresetOptions(settings, selectedCylinderName) {
 
   const select = document.getElementById('cylinder-preset');
   if (!select) return;
+  const displayValue = (value, quantity) => units === 'metric'
+    ? `${value} ${unitLabel(quantity, units)}`
+    : `${convertToDisplay(value, quantity, units).toFixed(1)} ${unitLabel(quantity, units)}`;
   const options = sortCylinderPresetEntries(settings.cylinderPresets)
     .map(({ preset }) => createOption(
       preset.name,
-      `${preset.name} — ${preset.volumeL} L / ${preset.material} / ${preset.workingPressureBar} bar`
+      `${preset.name} — ${displayValue(preset.volumeL, 'volumeL')} / ${preset.material} / ${displayValue(preset.workingPressureBar, 'pressureBar')}`
     ));
   select.replaceChildren(...options);
   const requested = selectedCylinderName === undefined
