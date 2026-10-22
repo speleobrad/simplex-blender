@@ -140,9 +140,8 @@ function rowFields(card, row, rowNumber, banks, errors, pressureStarts, units = 
       row,
       rowNumber,
       'targetPressureBar',
-      'Drain target pressure (bar)',
-      input(row, 'targetPressureBar', row.targetPressureBar, 'number'),
-      errors
+      `Drain target pressure (${unitLabel('pressureBar', units)})`,
+      input(row, 'targetPressureBar', formatInputValue(row.targetPressureBar, 'pressureBar', units), 'number'),
     );
     fields.append(targetField);
   }
@@ -155,7 +154,7 @@ function rowFields(card, row, rowNumber, banks, errors, pressureStarts, units = 
     fields.append(modeField);
     if (row.waitMode === 'target') {
       const temperatureField = element('div');
-      appendLabelledControl(temperatureField, row, rowNumber, 'targetTemperatureC', 'Target medium temperature (°C)', input(row, 'targetTemperatureC', row.targetTemperatureC, 'number'), errors);
+      appendLabelledControl(temperatureField, row, rowNumber, 'targetTemperatureC', `Target medium temperature (${unitLabel('temperatureC', units)})`, input(row, 'targetTemperatureC', formatInputValue(row.targetTemperatureC, 'temperatureC', units), 'number'), errors);
       fields.append(temperatureField);
     } else {
       const waitField = element('div');
