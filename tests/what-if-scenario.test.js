@@ -34,8 +34,8 @@ test('scenario patches are independent and advance the draft revision', () => {
 test('scenario input resolves the selected shared cylinder but retains independent start values', () => {
   const scenario = { ...createWhatIfScenario(), initialized: true, start: { ...snapshotWhatIfFromBlending(blendingInput), pressureBar: 80 } };
   const settings = { physics: { model: 'ideal' }, cylinderPresets: [{ name: 'Catalina S80', volumeL: 11.1, material: 'aluminum', massKg: 14.3, workingPressureBar: 207, hotOverfillPercent: 2 }] };
-  const input = buildWhatIfInput(scenario, { settings, banks: [] });
-  assert.equal(input.cylinder.initialPressureBar, 80); assert.equal(input.cylinder.targetPressureBar, undefined); assert.equal(input.thermal.targetInWaterTemperatureC, undefined); assert.equal(input.thermal.inWaterTemperatureC, 10); assert.equal(input.thermal.waitMinutes, undefined);
+  const input = buildWhatIfInput(scenario, { settings, banks: [], inletTemperatureC: 33 });
+  assert.equal(input.cylinder.initialPressureBar, 80); assert.equal(input.cylinder.targetPressureBar, undefined); assert.equal(input.thermal.targetInWaterTemperatureC, undefined); assert.equal(input.thermal.inWaterTemperatureC, 10); assert.equal(input.thermal.inletTemperatureC, 33); assert.equal(input.thermal.waitMinutes, undefined);
 });
 test('in-water projection uses the explicit scenario temperature', () => {
   const projection = projectWhatIfInWater({ pressureBar: 200, temperatureC: 25, oxygenPercent: 18, heliumPercent: 45 }, { inWaterTemperatureC: 10, volumeL: 11.1, useVdw: false });
@@ -164,18 +164,28 @@ test('shared signatures change when What-if equipment or pressure policy changes
   const signature = whatIfSharedInputSignature({
     settings: base,
     banks: [],
-    cylinderPresetName: 'Catalina S80'
+    cylinderPresetName: 'Catalina S80',
+    inletTemperatureC: 25
   });
   const changedEquipment = whatIfSharedInputSignature({
     settings: { ...base, booster: { ...base.booster, drainingRateBarPerMin: 6 } },
     banks: [],
-    cylinderPresetName: 'Catalina S80'
+    cylinderPresetName: 'Catalina S80',
+    inletTemperatureC: 25
   });
   const changedPolicy = whatIfSharedInputSignature({
     settings: { ...base, pressureLimitMode: 'warning' },
     banks: [],
-    cylinderPresetName: 'Catalina S80'
+    cylinderPresetName: 'Catalina S80',
+    inletTemperatureC: 25
+  });
+  const changedInlet = whatIfSharedInputSignature({
+    settings: base,
+    banks: [],
+    cylinderPresetName: 'Catalina S80',
+    inletTemperatureC: 26
   });
   assert.notEqual(signature, changedEquipment);
   assert.notEqual(signature, changedPolicy);
+  assert.notEqual(signature, changedInlet);
 });

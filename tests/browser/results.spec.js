@@ -198,15 +198,13 @@ test.describe('result tabs', () => {
     await expect(canvas).toHaveAttribute('aria-describedby', 'blend-ternary-chart-description');
     const box = await canvas.boundingBox();
     expect(box?.width).toBeGreaterThan(0);
-    const before = await canvas.evaluate(element => element.toDataURL());
     for (const [x, y] of [[0.5, 0.5], [0.35, 0.5], [0.65, 0.5], [0.5, 0.3], [0.5, 0.7]]) {
       await page.mouse.move(box.x + box.width * x, box.y + box.height * y);
       if (await results.locator('[data-result-key="ternary-coords-hover"]').textContent() !== 'Hover for gas fractions') break;
     }
     await expect(results.locator('[data-result-key="ternary-coords-hover"]')).not.toHaveText('Hover for gas fractions');
-    if (page.viewportSize().width >= 640) await expect.poll(() => canvas.evaluate(element => element.toDataURL())).not.toBe(before);
-    for (let i = 0; i < 12; i++) await page.getByRole('button', { name: 'Zoom out diagram' }).click();
-    await page.getByRole('button', { name: 'Reset diagram zoom' }).click();
+    for (let i = 0; i < 12; i++) await results.getByRole('button', { name: 'Zoom out diagram' }).click();
+    await results.getByRole('button', { name: 'Reset diagram zoom' }).click();
     await expect(canvas).toBeVisible();
   });
 

@@ -36,11 +36,12 @@ export function whatIfDraftSignature(scenario) {
   return stable({ start, rows: scenario.rows ?? [] });
 }
 
-export function whatIfSharedInputSignature({ settings, banks, cylinderPresetName }) {
+export function whatIfSharedInputSignature({ settings, banks, cylinderPresetName, inletTemperatureC }) {
   const physics = settings?.physics ?? {};
   const preset = settings?.cylinderPresets?.find(item => item.name === cylinderPresetName) ?? null;
   return stable({
     physics: { model: physics.model, temperatureC: physics.temperatureC },
+    thermal: { inletTemperatureC },
     cylinderPreset: preset,
     booster: settings?.booster ?? {},
     pressureLimitMode: settings?.pressureLimitMode ?? 'hard-stop',
@@ -48,19 +49,21 @@ export function whatIfSharedInputSignature({ settings, banks, cylinderPresetName
   });
 }
 
-export function buildWhatIfInput(scenario, { settings, banks }) {
+export function buildWhatIfInput(scenario, { settings, banks, inletTemperatureC }) {
   const start = scenario.start ?? {};
   const preset = settings?.cylinderPresets?.find(item => item.name === start.cylinderPresetName) ?? {};
   const cylinder = { ...clone(preset), presetName: start.cylinderPresetName, initialPressureBar: start.pressureBar, initialOxygenPercent: start.oxygenPercent, initialHeliumPercent: start.heliumPercent };
   const sharedPhysics = settings?.physics ?? {};
+  const sharedInletTemperatureC = Number.isFinite(inletTemperatureC) ? inletTemperatureC : start.ambientTemperatureC;
   return {
     cylinder,
     physics: { model: sharedPhysics.model ?? 'ideal', temperatureC: start.ambientTemperatureC },
-    thermal: { tankMaterial: preset.material, tankMassKg: preset.massKg, coolingMedium: start.coolingMedium, ambientTemperatureC: start.ambientTemperatureC, inletTemperatureC: start.ambientTemperatureC, inWaterTemperatureC: start.inWaterTemperatureC },
+    thermal: { tankMaterial: preset.material, tankMassKg: preset.massKg, coolingMedium: start.coolingMedium, ambientTemperatureC: start.ambientTemperatureC, inletTemperatureC: sharedInletTemperatureC, inWaterTemperatureC: start.inWaterTemperatureC },
     banks: clone(banks ?? []),
     settings: clone(settings)
   };
 }
+
 
 export function projectWhatIfInWater(finalState, { inWaterTemperatureC, volumeL, useVdw }) {
   return {

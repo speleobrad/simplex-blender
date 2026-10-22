@@ -103,11 +103,20 @@ async function warningSettings(page) {
     await warningSettings(page);
     await openWhatIf(page);
     await fillWhatIfStart(page, { pressureBar: '110', ambientTemperatureC: '20', inWaterTemperatureC: '24' });
-    await setWhatIfRow(page, 'compare-row-1', { type: 'wait', waitMode: 'target', targetTemperatureC: '24' });
-    await page.getByRole('button', { name: 'Add row', exact: true }).click();
-    const drain = page.locator('#screen-what-if fieldset[data-row-id^="compare-row-"]:visible').last();
-    await drain.locator('[data-compare-field="type"]').selectOption('drain');
-    await drain.locator('[data-compare-field="targetPressureBar"]').fill('20');
+    await expect(page.locator('[data-what-if-field="ambientTemperatureC"]')).toHaveValue('20');
+    await setWhatIfRow(page, 'compare-row-1', {
+      type: 'add',
+      bankId: 'compressor-air',
+      targetPressureBar: '200'
+    });
+    await page.getByRole('button', { name: 'Add row', exact: true }).evaluate(button => button.click());
+    const rows = page.locator('#screen-what-if fieldset[data-row-id^="compare-row-"]:visible');
+    await rows.nth(1).locator('[data-compare-field="type"]').selectOption('wait');
+    await rows.nth(1).locator('[data-compare-field="waitMode"]').selectOption('target');
+    await rows.nth(1).locator('[data-compare-field="targetTemperatureC"]').fill('24');
+    await page.getByRole('button', { name: 'Add row', exact: true }).evaluate(button => button.click());
+    await rows.nth(2).locator('[data-compare-field="type"]').selectOption('drain');
+    await rows.nth(2).locator('[data-compare-field="targetPressureBar"]').fill('20');
     await runWhatIf(page);
     const host = page.locator('#what-if-result-host');
     await expect(host).toContainText(/Warning mode|working pressure|exceed/i);

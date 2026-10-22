@@ -76,7 +76,7 @@ test.describe('working tank blending inputs', () => {
   test('uses the target in-water temperature for the recipe result', async ({ appPage }) => {
     const page = await load(appPage);
     await fillWorkingTank(page, { targetInWaterTemperature: 30 });
-    await page.locator('[data-action="select-tab"][data-tab="thermal"]').click();
+    await page.locator('[data-result-host="blending"] [data-action="select-tab"][data-tab="thermal"]').click();
     await expect(page.locator('[data-result-host="blending"] [data-result-key="thermal-chart-status"]')).toContainText(/30\.0/);
   });
 

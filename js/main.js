@@ -861,7 +861,8 @@ function whatIfCurrentSharedSignature() {
   return whatIfSharedInputSignature({
     settings: state.settings,
     banks: state.banks,
-    cylinderPresetName: state.whatIfScenario.start?.cylinderPresetName
+    cylinderPresetName: state.whatIfScenario.start?.cylinderPresetName,
+    inletTemperatureC: canonicalNumberValue('inlet-gas-temperature', 'temperatureC')
   });
 }
 
@@ -875,7 +876,8 @@ function whatIfResultIsStale() {
 function scenarioInputForCurrentDraft() {
   return buildWhatIfInput(state.whatIfScenario, {
     settings: state.settings,
-    banks: state.banks
+    banks: state.banks,
+    inletTemperatureC: canonicalNumberValue('inlet-gas-temperature', 'temperatureC')
   });
 }
 
@@ -1233,8 +1235,7 @@ function scenarioSharedInputErrors(input) {
   const thermal = {
     ...input.thermal,
     targetMediumTemperatureC: input.thermal.ambientTemperatureC,
-    targetInWaterTemperatureC: input.thermal.inWaterTemperatureC,
-    inletTemperatureC: input.thermal.ambientTemperatureC
+    targetInWaterTemperatureC: input.thermal.inWaterTemperatureC
   };
   const targetPressureBar = Math.max(10, input.cylinder.initialPressureBar);
   errors.push(...validateCalculatorInputs(

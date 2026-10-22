@@ -67,8 +67,13 @@ export async function fillWhatIfStart(page, values = {}) {
   for (const [field, value] of Object.entries(values)) {
     const control = page.locator(`[data-what-if-field="${field}"]`);
     await expect(control).toHaveCount(1);
-    if ((await control.evaluate(element => element.tagName)) === 'SELECT') await control.selectOption(String(value));
-    else await control.fill(String(value));
+    if ((await control.evaluate(element => element.tagName)) === 'SELECT') {
+      await control.selectOption(String(value));
+    } else {
+      await control.click();
+      await control.press('Control+A');
+      await control.type(String(value));
+    }
   }
   return page.locator('#screen-what-if');
 }
