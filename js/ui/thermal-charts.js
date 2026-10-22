@@ -16,6 +16,7 @@ function phaseLabel(phase) {
   if (phase === 'transfer-end') return 'transfer end';
   if (phase === 'settled') return 'ambient settled';
   if (phase === 'ambient-settled') return 'ambient-settled projection';
+  if (phase === 'in-water-projection') return 'explicit in-water projection';
   if (phase === 'in-water-target') return 'in-water target projection';
   if (phase === 'measured-start') return 'measured start';
   return 'step start';
@@ -210,11 +211,14 @@ export function buildThermalSeries(protocolSteps, initial = {}, terminalProjecti
     lineSegments.push({ style: 'estimated', samples: [terminalStart, terminalSample] });
     if (finite(terminalProjection.inWaterPressureBar)
       && finite(terminalProjection.inWaterTemperatureC)) {
+      const explicitInWater = terminalProjection.mode === 'what-if';
+      const inWaterPhase = explicitInWater ? 'in-water-projection' : 'in-water-target';
+      const inWaterLabel = explicitInWater ? 'In-water projection' : 'In-water target projection';
       const inWaterPoint = point(
         terminalPoint.step,
-        'in-water-target',
-        'In-water target projection',
-        'In-water target projection',
+        inWaterPhase,
+        inWaterLabel,
+        inWaterLabel,
         undefined,
         undefined,
         terminalProjection.inWaterPressureBar,
@@ -753,11 +757,14 @@ export function renderThermalCharts(result, input = {}, units = 'metric', { root
   const status = scoped('thermal-chart-status');
   bindThermalInteractions(root);
 
-  const terminalProjection = result?.mode === 'compare'
+  const terminalProjection = result?.mode === 'compare' || result?.mode === 'what-if'
     ? {
+      mode: result.mode,
       pressureBar: result.compare?.final?.ambientSettled?.pressureBar,
       temperatureC: result.compare?.final?.ambientSettled?.temperatureC,
-      durationMinutes: result.compare?.final?.ambientSettledDurationMinutes
+      durationMinutes: result.compare?.final?.ambientSettledDurationMinutes,
+      inWaterPressureBar: result.compare?.final?.inWater?.pressureBar,
+      inWaterTemperatureC: result.compare?.final?.inWater?.temperatureC
     }
     : {
       pressureBar: result?.thermal?.finalAmbientPressureBar,
@@ -786,7 +793,7 @@ export function renderThermalCharts(result, input = {}, units = 'metric', { root
   };
   const state = getThermalState(root);
   state.pointSamples = displaySeries.points;
-  state.samples = displaySeries.samples.filter(sample => sample.title !== 'In-water target projection');
+  state.samples = displaySeries.samples.filter(sample => !['In-water target projection', 'In-water projection'].includes(sample.title));
   state.readout = scoped('thermal-chart-hover-readout');
   clearThermalHover(root);
   const ambientTemperatureC = input.thermal?.ambientTemperatureC ?? input.physics?.temperatureC;
@@ -815,12 +822,15 @@ export function renderThermalCharts(result, input = {}, units = 'metric', { root
   });
   renderDataTable(dataTable, displaySeries.points);
   if (status) {
-    const inWater = displaySeries.points.find(pointValue => pointValue.phase === 'in-water-target');
+    const whatIf = result?.mode === 'what-if';
+    const inWater = displaySeries.points.find(pointValue =>
+      pointValue.phase === (whatIf ? 'in-water-projection' : 'in-water-target')
+    );
     const projection = inWater
-      ? ` In-water target projection: ${inWater.pressureBar.toFixed(1)} ${getUnitLabel('pressure', units)} at ${inWater.temperatureC.toFixed(1)} ${getUnitLabel('temperature', units)}.`
+      ? ` ${whatIf ? 'Explicit in-water projection' : 'In-water target projection'}: ${inWater.pressureBar.toFixed(1)} ${getUnitLabel('pressure', units)} at ${inWater.temperatureC.toFixed(1)} ${getUnitLabel('temperature', units)}.`
       : '';
     status.textContent = displaySeries.final
-      ? `${displaySeries.final.step} ${result?.mode === 'compare' ? 'compare recipe' : 'blending'} step${displaySeries.final.step === 1 ? '' : 's'} shown over ${displaySeries.final.elapsedMinutes.toFixed(1)} minutes; final point is the ambient-settled tank state at ${displaySeries.final.pressureBar.toFixed(1)} ${getUnitLabel('pressure', units)} and ${displaySeries.final.temperatureC.toFixed(1)} ${getUnitLabel('temperature', units)}.${projection}`
+      ? `${displaySeries.final.step} ${whatIf ? 'What-if' : result?.mode === 'compare' ? 'compare recipe' : 'blending'} step${displaySeries.final.step === 1 ? '' : 's'} shown over ${displaySeries.final.elapsedMinutes.toFixed(1)} minutes; final point is the ambient-settled tank state at ${displaySeries.final.pressureBar.toFixed(1)} ${getUnitLabel('pressure', units)} and ${displaySeries.final.temperatureC.toFixed(1)} ${getUnitLabel('temperature', units)}.${projection}`
       : 'Chart data appears when a completed blend protocol is available.';
   }
 }

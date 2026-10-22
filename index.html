@@ -634,7 +634,6 @@
       </div>
     </template>
     <div id="blending-result-host" data-result-host="blending"></div>
-    <div id="what-if-result-host" data-result-host="what-if" hidden></div>
     <!-- RIGHT COLUMN: Recipe, Diagram, Thermal Graphs and Tank Summary -->
     <div class="lg:col-span-7 min-w-0 flex flex-col gap-6">
 
@@ -651,12 +650,7 @@
         <div id="what-if-editor" data-what-if-editor></div>
         <div id="compare-recipe-editor" class="mt-3" aria-describedby="compare-recipe-description"></div>
       </section>
-      <section class="bg-ocean-900/90 border border-ocean-800 rounded-2xl p-5 shadow-xl">
-        <h2 class="text-sm font-bold uppercase tracking-wider text-slate-200">Projected result</h2>
-        <div id="what-if-result" class="mt-3 space-y-3 text-xs text-slate-300" aria-live="polite">
-          <p>Run the sequence to see the modeled result.</p>
-        </div>
-      </section>
+      <div id="what-if-result-host" data-result-host="what-if"></div>
     </div>
     <div id="screen-inventory" data-primary-screen="inventory" role="tabpanel" aria-labelledby="primary-tab-inventory" hidden class="flex min-w-0 flex-col gap-6">
       <div id="inventory-section" class="flex min-w-0 flex-col gap-6">

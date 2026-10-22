@@ -4,6 +4,14 @@ import { isValidGasComposition, parseNumericInput, splitGasInput } from './gas-i
 import { validateCalculatorInputs, validateSupplyBankInput } from './input-validation.js';
 import { DEFAULT_HOT_OVERFILL_PERCENT } from './preset-validation.js';
 import { buildCompareProtocol, createCompareRow, normalizeComparePressureFields, validateCompareRecipe } from './compare-recipe.js';
+import {
+  applyWhatIfStartPatch,
+  buildWhatIfInput,
+  createWhatIfScenario,
+  projectWhatIfInWater,
+  snapshotWhatIfFromBlending,
+  whatIfSharedInputSignature
+} from './what-if-scenario.js';
 import { simulateCompareProtocol } from './thermodynamics.js';
 import { calcMolarDensity } from './physics.js';
 import {
@@ -28,7 +36,7 @@ import { analyzePresetSource, mergeSelectedPresets, PRESET_IMPORT_DEFAULT_URLS }
 import { loadSupplyBanks, saveSupplyBanks } from './bank-storage.js';
 import { loadTheme, saveTheme } from './theme.js';
 import { setPrimaryScreen } from './navigation.js';
-import { RESULT_TABS, setResultTab } from './result-tabs.js';
+import { setResultTab } from './result-tabs.js';
 import { loadOnboardingState } from './onboarding.js';
 import { loadAnalytics } from './analytics.js';
 import { createOnboardingController } from './ui/onboarding.js';
@@ -40,6 +48,8 @@ import { renderSupplyBanks } from './ui/supply-banks.js';
 import { renderStorageWarning } from './ui/storage-warning.js';
 import { renderThermalCharts } from './ui/thermal-charts.js';
 import { changeTernaryZoom, clearTernaryDiagram, observeTernaryCanvas, renderTernaryDiagram } from './ui/ternary.js';
+import { renderWhatIfScenarioEditor } from './ui/what-if-scenario.js';
+import { getResultTabs } from './ui/result-panel.js';
 
 const settingsStorage = {
   getItem: key => window.localStorage.getItem(key),
@@ -103,7 +113,10 @@ const state = {
   compareErrors: [],
   lastCompareInput: null,
   lastCompareResult: null,
-  compareHasRun: false
+  compareHasRun: false,
+  whatIfScenario: createWhatIfScenario(),
+  whatIfErrors: [],
+  whatIfHasRun: false
 };
 let nextCompareRowNumber = 2;
 let onboardingSettingsOpen = false;
@@ -486,6 +499,9 @@ function resetFactorySettings() {
   if (!didReset) return;
   clearPressureWarningConfirmation();
   invalidateCompareResult();
+  state.whatIfScenario = createWhatIfScenario();
+  state.whatIfErrors = [];
+  state.whatIfHasRun = false;
 
   state.settingsSession += 1;
   state.onboardingController.reset(state.onboarding);
@@ -777,13 +793,13 @@ function compareSharedInputErrors(input) {
   return errors;
 }
 
-function compareWaitStates(input = compareInput()) {
+function compareWaitStates(input = compareInput(), rows = state.compareRows) {
   const waitStates = {};
-  for (let index = 0; index < state.compareRows.length; index += 1) {
-    const row = state.compareRows[index];
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index];
     if (row.type !== 'wait') continue;
     try {
-      const protocol = buildCompareProtocol(state.compareRows.slice(0, index + 1), {
+      const protocol = buildCompareProtocol(rows.slice(0, index + 1), {
         cylinder: input.cylinder,
         physics: input.physics,
         banks: input.banks,
@@ -819,17 +835,17 @@ function compareWaitStates(input = compareInput()) {
         }
       };
     } catch {
-      // Validation presents the underlying draft error; omit an unavailable modeled state.
+      // Validation reports the underlying row error; unavailable states are omitted.
     }
   }
   return waitStates;
 }
 
-function comparePressureStarts(input = compareInput()) {
+function comparePressureStarts(input = compareInput(), rows = state.compareRows) {
   const starts = {};
-  const waitStates = compareWaitStates(input);
+  const waitStates = compareWaitStates(input, rows);
   let currentPressure = input.cylinder.initialPressureBar;
-  for (const row of state.compareRows) {
+  for (const row of rows) {
     if (row.type === 'add') {
       starts[row.id] = currentPressure;
       const normalized = normalizeComparePressureFields(row, currentPressure);
@@ -841,19 +857,124 @@ function comparePressureStarts(input = compareInput()) {
   return starts;
 }
 
+function whatIfCurrentSharedSignature() {
+  return whatIfSharedInputSignature({
+    settings: state.settings,
+    banks: state.banks,
+    cylinderPresetName: state.whatIfScenario.start?.cylinderPresetName
+  });
+}
+
+function whatIfResultIsStale() {
+  const scenario = state.whatIfScenario;
+  return Boolean(scenario.result)
+    && (scenario.resultRevision !== scenario.draftRevision
+      || scenario.sharedInputSignature !== whatIfCurrentSharedSignature());
+}
+
+function scenarioInputForCurrentDraft() {
+  return buildWhatIfInput(state.whatIfScenario, {
+    settings: state.settings,
+    banks: state.banks
+  });
+}
+
+function renderWhatIfEditor() {
+  const container = byId('what-if-editor');
+  if (!container) return;
+  const input = scenarioInputForCurrentDraft();
+  const pressureStarts = state.whatIfScenario.start
+    ? comparePressureStarts(input, state.whatIfScenario.rows)
+    : {};
+  renderWhatIfScenarioEditor(container, {
+    scenario: state.whatIfScenario,
+    cylinderPresets: state.settings.cylinderPresets,
+    units: state.settings.units,
+    errors: state.whatIfErrors,
+    sharedInputChanged: whatIfResultIsStale()
+      && state.whatIfScenario.sharedInputSignature !== whatIfCurrentSharedSignature(),
+    banks: state.banks,
+    pressureStarts
+  });
+}
+
+function renderWhatIfErrors() {
+  const container = byId('compare-recipe-errors');
+  if (!container) return;
+  container.replaceChildren(...state.whatIfErrors.map(({ message }) => {
+    const line = document.createElement('p');
+    line.className = 'text-xs text-rose-300';
+    line.textContent = message;
+    return line;
+  }));
+}
+
+function updateWhatIfStatus(message = '') {
+  const status = byId('compare-run-status');
+  if (status) status.textContent = message;
+}
+
+function initializeWhatIfScenario() {
+  if (state.whatIfScenario.initialized) return;
+  let input;
+  try {
+    input = readInput();
+  } catch {
+    return;
+  }
+  state.whatIfScenario = {
+    ...createWhatIfScenario(),
+    initialized: true,
+    start: snapshotWhatIfFromBlending(input)
+  };
+}
+
+function copyWhatIfFromBlending() {
+  let input;
+  try {
+    input = readInput();
+  } catch {
+    return;
+  }
+  const scenario = state.whatIfScenario;
+  const copied = applyWhatIfStartPatch(scenario, snapshotWhatIfFromBlending(input));
+  state.whatIfScenario = {
+    ...copied,
+    initialized: true,
+    result: null,
+    resultRevision: -1,
+    sharedInputSignature: null
+  };
+  state.whatIfErrors = [];
+  state.whatIfHasRun = false;
+  renderWhatIfEditor();
+  renderWhatIfErrors();
+  updateWhatIfStatus('Copied current Blending starting state.');
+  renderWhatIfResult();
+}
+
 function renderCompareEditor() {
+  if (state.activeScreen === 'what-if') {
+    renderWhatIfEditor();
+    return;
+  }
   renderCompareRecipe(byId('compare-recipe-editor'), {
     rows: state.compareRows,
     banks: state.banks,
     errors: state.compareErrors,
     pressureStarts: comparePressureStarts(),
     units: state.settings.units,
-    whatIf: state.activeScreen === 'what-if'
+    whatIf: false
   });
 }
 
 function renderCompareErrors() {
+  if (state.activeScreen === 'what-if') {
+    renderWhatIfErrors();
+    return;
+  }
   const container = byId('compare-recipe-errors');
+  if (!container) return;
   container.replaceChildren(...state.compareErrors
     .filter(({ rowId }) => rowId === null)
     .map(({ message }) => {
@@ -877,7 +998,36 @@ function invalidateCompareResult() {
 }
 
 function ternaryData() {
-  if (state.activeScreen === 'what-if' || state.mode === 'compare') {
+  if (state.activeScreen === 'what-if') {
+    const result = state.whatIfScenario.result;
+    const compare = result?.compare;
+    if (!compare || !result.input) return null;
+    const finalMix = compare.final.recipeEnd;
+    return {
+      mode: 'what-if',
+      banks: (compare.sourceBanks ?? []).map(source => ({
+        id: source.id,
+        name: source.name,
+        enabled: true,
+        pressureBar: source.initial?.pressureBar,
+        endPressureBar: source.final?.pressureBar,
+        oxygenPercent: source.initial?.oxygenPercent,
+        heliumPercent: source.initial?.heliumPercent,
+        volumeL: source.initial?.volumeL ?? 1
+      })),
+      initialMix: {
+        ...compare.initialMix,
+        nitrogenPercent: Math.max(0, 100 - compare.initialMix.oxygenPercent - compare.initialMix.heliumPercent)
+      },
+      targetMix: {
+        oxygenPercent: finalMix.oxygenPercent,
+        heliumPercent: finalMix.heliumPercent,
+        nitrogenPercent: Math.max(0, 100 - finalMix.oxygenPercent - finalMix.heliumPercent)
+      },
+      trajectory: compare.trajectory
+    };
+  }
+  if (state.mode === 'compare') {
     const compare = state.lastCompareResult?.compare;
     if (!compare || !state.lastCompareInput) return null;
     const finalMix = compare.final.recipeEnd;
@@ -917,9 +1067,13 @@ function ternaryData() {
 
 function renderTernary() {
   const data = ternaryData();
-  if (data) {
-    renderTernaryDiagram(byId('ternary-canvas'), data);
-  }
+  const root = state.activeScreen === 'what-if'
+    ? byId('what-if-result-host')?.querySelector?.('[data-result-panel]')
+    : document;
+  const canvas = root?.querySelector?.('[data-result-key="ternary-canvas"]')
+    ?? root?.querySelector?.('#ternary-canvas')
+    ?? byId('ternary-canvas');
+  if (data && canvas) renderTernaryDiagram(canvas, data, { root });
 }
 
 function invalidInputResult(errors) {
@@ -1013,6 +1167,14 @@ function pressureWarningObservationsForCompare(input, compare) {
   });
   return observations;
 }
+function pressureWarningObservationsForWhatIf(input, compare) {
+  const observations = pressureWarningObservationsForCompare(input, compare);
+  addPressureWarningObservation(observations, compare?.final?.inWater?.pressureBar, {
+    source: 'cooling',
+    stepIdentifier: 'In-water projection'
+  });
+  return observations;
+}
 
 function collectPressureWarnings(input, observations) {
   if (input?.settings?.pressureLimitMode !== 'warning') return [];
@@ -1034,56 +1196,135 @@ function renderCompareResult() {
 }
 
 function renderWhatIfResult() {
-  const container = byId('what-if-result');
-  if (!container) return;
-  const compare = state.lastCompareResult?.compare;
-  if (!compare) {
-    container.replaceChildren(Object.assign(document.createElement('p'), {
-      textContent: 'Run the sequence to see the modeled result.'
-    }));
+  const root = byId('what-if-result-host')?.querySelector?.('[data-result-panel]')
+    ?? byId('what-if-result-host');
+  const result = state.whatIfScenario.result;
+  if (!root) return;
+  if (!result) {
+    const status = root.querySelector?.('[data-result-key="blend-status"]');
+    if (status) status.textContent = 'Run the sequence to see the modeled result.';
+    const canvas = root.querySelector?.('[data-result-key="ternary-canvas"]')
+      ?? root.querySelector?.('#ternary-canvas');
+    clearTernaryDiagram(canvas, root);
+    renderThermalCharts(null, {}, state.settings.units, { root });
+    root.querySelector?.('[data-result-key="steps-container"]')?.replaceChildren();
+    root.querySelector?.('[data-result-key="scenario-summary-content"]')?.replaceChildren();
     return;
   }
-  const stateText = value => {
-    const temperature = Number.isFinite(value.temperatureC) ? ` at ${formatInputValue(value.temperatureC, 'temperatureC', state.settings.units)} ${unitLabel('temperatureC', state.settings.units)}` : '';
-    return `${formatInputValue(value.pressureBar, 'pressureBar', state.settings.units)} ${unitLabel('pressureBar', state.settings.units)}${temperature} · Tx ${value.oxygenPercent.toFixed(1)}/${value.heliumPercent.toFixed(1)}`;
-  };
-  const summary = document.createElement('div');
-  summary.className = 'rounded-xl border border-ocean-700 bg-ocean-950/60 p-3 space-y-1';
-  summary.textContent = `Start: ${stateText({
-    pressureBar: compare.trajectory?.[0]?.pressureBar ?? 0,
-    ...compare.initialMix,
-    temperatureC: state.lastCompareInput?.physics?.temperatureC
-  })}`;
-  const final = document.createElement('p');
-  final.textContent = `Final: ${stateText(compare.final.recipeEnd)}`;
-  summary.append(final);
-  const settled = document.createElement('p');
-  settled.textContent = `After settling: ${stateText(compare.final.ambientSettled)}`;
-  summary.append(settled);
-  const heading = document.createElement('h3');
-  heading.className = 'font-semibold text-slate-200';
-  heading.textContent = 'Steps';
-  const steps = document.createElement('ol');
-  steps.className = 'space-y-2';
-  for (const [index, step] of compare.protocolSteps.entries()) {
-    const item = document.createElement('li');
-    item.className = 'rounded-lg border border-ocean-800 bg-ocean-950/40 p-2';
-    const result = step.resultingMix
-      ? ` → ${step.resultingPressureBar.toFixed(1)} bar · Tx ${step.resultingMix.oxygenPercent.toFixed(1)}/${step.resultingMix.heliumPercent.toFixed(1)}`
-      : '';
-    item.textContent = `${index + 1}. ${step.operation ?? step.title}${step.recipeGas ? ` · ${step.recipeGas}` : ''}${result}`;
-    steps.append(item);
+  renderResults(result, result.input, { root, mode: 'what-if' });
+  renderThermalCharts(result, result.input, state.settings.units, { root });
+  renderTernary();
+  if (whatIfResultIsStale()) {
+    const status = root.querySelector?.('[data-result-key="blend-status"]');
+    if (status) {
+      status.className = 'rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200';
+      status.textContent = state.whatIfScenario.sharedInputSignature !== whatIfCurrentSharedSignature()
+        ? 'Out of date — shared inputs changed. Run scenario again.'
+        : 'Out of date — scenario draft changed. Run scenario again.';
+    }
   }
-  container.replaceChildren(
-    summary,
-    ...renderPressureLimitWarnings(
-      state.lastCompareResult?.pressureLimitWarnings ?? [],
-      state.lastCompareInput?.settings?.pressureLimitMode,
-      state.settings.units
-    ),
-    heading,
-    steps
-  );
+}
+
+function scenarioSharedInputErrors(input) {
+  const errors = [];
+  const selectedPreset = state.settings.cylinderPresets
+    ?.find(preset => preset.name === state.whatIfScenario.start?.cylinderPresetName);
+  if (!selectedPreset) errors.push('Select an available cylinder preset.');
+  const thermal = {
+    ...input.thermal,
+    targetMediumTemperatureC: input.thermal.ambientTemperatureC,
+    targetInWaterTemperatureC: input.thermal.inWaterTemperatureC,
+    inletTemperatureC: input.thermal.ambientTemperatureC
+  };
+  const targetPressureBar = Math.max(10, input.cylinder.initialPressureBar);
+  errors.push(...validateCalculatorInputs(
+    { ...input.cylinder, targetPressureBar },
+    input.physics,
+    thermal,
+    { pressureLimitMode: state.settings.pressureLimitMode }
+  ));
+  if (!isValidGasComposition(input.cylinder.initialOxygenPercent, input.cylinder.initialHeliumPercent)) {
+    errors.push('Initial oxygen and helium percentages must total no more than 100%.');
+  }
+  if (!['ideal', 'vdw'].includes(input.physics.model)) errors.push('Physics model must be ideal or vdw.');
+  return errors;
+}
+
+function runWhatIf() {
+  const scenario = state.whatIfScenario;
+  const input = scenarioInputForCurrentDraft();
+  const sharedErrors = scenarioSharedInputErrors(input);
+  const waitStates = compareWaitStates(input, scenario.rows);
+  const validation = validateCompareRecipe(scenario.rows, {
+    cylinder: input.cylinder,
+    banks: input.banks,
+    physics: input.physics,
+    settings: input.settings,
+    waitStates
+  });
+  state.whatIfErrors = [
+    ...sharedErrors.map(message => ({ rowId: null, field: 'scenario', message })),
+    ...validation.errors
+  ];
+  renderWhatIfErrors();
+  renderWhatIfEditor();
+  if (state.whatIfErrors.length > 0) {
+    state.whatIfHasRun = true;
+    updateWhatIfStatus('Correct the highlighted scenario inputs before running.');
+    renderWhatIfResult();
+    return;
+  }
+  try {
+    const protocol = buildCompareProtocol(validation.normalizedRows, {
+      cylinder: input.cylinder,
+      physics: input.physics,
+      banks: input.banks,
+      settings: input.settings,
+      waitStates
+    });
+    const simulation = simulateCompareProtocol({
+      protocolSteps: protocol.protocolSteps,
+      cylinder: input.cylinder,
+      physics: input.physics,
+      thermal: input.thermal,
+      settings: input.settings
+    });
+    const inWater = projectWhatIfInWater(simulation.final.ambientSettled, {
+      inWaterTemperatureC: input.thermal.inWaterTemperatureC,
+      volumeL: input.cylinder.volumeL,
+      useVdw: input.physics.model === 'vdw'
+    });
+    const compare = { ...protocol, ...simulation, final: { ...simulation.final, inWater } };
+    const result = {
+      mode: 'what-if',
+      input,
+      sharedInputSignature: whatIfCurrentSharedSignature(),
+      pressureLimitWarnings: collectPressureWarnings(
+        input,
+        pressureWarningObservationsForWhatIf(input, compare)
+      ),
+      compare
+    };
+    state.whatIfScenario = {
+      ...scenario,
+      result,
+      resultRevision: scenario.draftRevision,
+      sharedInputSignature: result.sharedInputSignature
+    };
+    state.whatIfErrors = [];
+    state.whatIfHasRun = true;
+    renderWhatIfErrors();
+    renderWhatIfEditor();
+    updateWhatIfStatus('Scenario run complete.');
+    renderWhatIfResult();
+  } catch (error) {
+    state.whatIfErrors = [{ rowId: null, field: 'scenario', message: error.message }];
+    state.whatIfHasRun = true;
+    renderWhatIfErrors();
+    renderWhatIfEditor();
+    updateWhatIfStatus('Correct the highlighted scenario inputs before running.');
+    renderWhatIfResult();
+  }
 }
 
 function runCompare() {
@@ -1151,8 +1392,8 @@ function recalculate() {
   renderSupplyBanks(state.banks, state.settings.gasPresets);
   renderEquipmentSummary(state.settings);
   if (state.activeScreen === 'what-if') {
-    renderCompareEditor();
-    renderCompareErrors();
+    renderWhatIfEditor();
+    renderWhatIfErrors();
     renderWhatIfResult();
     return;
   }
@@ -1200,35 +1441,46 @@ function selectScreen(screenId) {
   if (!setPrimaryScreen(document, screenId)) return;
   state.activeScreen = screenId;
   if (screenId === 'what-if') {
-    renderCompareEditor();
-    renderCompareErrors();
+    initializeWhatIfScenario();
+    renderWhatIfEditor();
+    renderWhatIfErrors();
     renderWhatIfResult();
   }
-
 }
+
+function activeResultRoot() {
+  const host = byId(state.activeScreen === 'what-if' ? 'what-if-result-host' : 'blending-result-host');
+  return host?.querySelector?.('[data-result-panel]') ?? host ?? document;
+}
+
 function setTab(tabId, focus = false) {
-  if (!setResultTab(document, tabId)) return;
+  const root = activeResultRoot();
+  const tabs = getResultTabs(state.activeScreen === 'what-if' ? 'what-if' : 'optimize');
+  if (!setResultTab(root, tabId, tabs)) return;
   state.activeTab = tabId;
-  if (focus) byId(`tab-btn-${tabId}`)?.focus();
+  if (focus) root.querySelector?.(`[data-result-key="tab-btn-${tabId}"]`)?.focus();
   if (tabId === 'ternary') {
     renderTernary();
-    byId('ternary-coords-hover').textContent = 'Move over diagram for gas fractions';
+    const hover = root.querySelector?.('[data-result-key="ternary-coords-hover"]');
+    if (hover) hover.textContent = 'Move over diagram for gas fractions';
   }
 }
 
 function handleResultTabKeydown(event) {
   const button = event.target.closest?.('[role="tab"]');
   if (!button) return;
-  const currentIndex = RESULT_TABS.indexOf(button.dataset.tab);
+  const root = button.closest?.('[data-result-panel]') ?? document;
+  const tabs = getResultTabs(root.dataset?.resultMode === 'what-if' ? 'what-if' : 'optimize');
+  const currentIndex = tabs.indexOf(button.dataset.tab);
   if (currentIndex < 0) return;
   let nextIndex = currentIndex;
-  if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % RESULT_TABS.length;
-  else if (event.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + RESULT_TABS.length) % RESULT_TABS.length;
+  if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % tabs.length;
+  else if (event.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
   else if (event.key === 'Home') nextIndex = 0;
-  else if (event.key === 'End') nextIndex = RESULT_TABS.length - 1;
+  else if (event.key === 'End') nextIndex = tabs.length - 1;
   else return;
   event.preventDefault();
-  setTab(RESULT_TABS[nextIndex], true);
+  setTab(tabs[nextIndex], true);
 }
 
 
@@ -1351,6 +1603,68 @@ function updateBankFromInput(input) {
   recalculate();
 }
 
+function updateWhatIfField(input, rerender) {
+  const field = input.dataset.whatIfField;
+  if (!field) return;
+  let value = input.value;
+  if (['pressureBar', 'ambientTemperatureC', 'inWaterTemperatureC'].includes(field)) {
+    value = convertFromDisplay(
+      Number.parseFloat(value),
+      field === 'pressureBar' ? 'pressureBar' : 'temperatureC',
+      state.settings.units
+    );
+  } else if (['oxygenPercent', 'heliumPercent'].includes(field)) {
+    value = Number.parseFloat(value);
+  }
+  state.whatIfScenario = applyWhatIfStartPatch(state.whatIfScenario, { [field]: value });
+  state.whatIfErrors = [];
+  if (rerender) {
+    renderWhatIfEditor();
+    renderWhatIfErrors();
+    renderWhatIfResult();
+  }
+}
+
+function updateWhatIfRow(input, rerender) {
+  const index = state.whatIfScenario.rows.findIndex(row => row.id === input.dataset.rowId);
+  if (index < 0) return;
+  const row = state.whatIfScenario.rows[index];
+  const field = input.dataset.compareField;
+  let value = input.value;
+  if (['pressureAddedBar', 'targetPressureBar'].includes(field)) {
+    value = convertFromDisplay(Number.parseFloat(value), 'pressureBar', state.settings.units);
+  } else if (field === 'targetTemperatureC') {
+    value = convertFromDisplay(Number.parseFloat(value), 'temperatureC', state.settings.units);
+  } else if (field === 'waitMinutes') {
+    value = Number.parseFloat(value);
+  }
+  let updatedRow;
+  if (field === 'type') updatedRow = createCompareRow(value, row.id);
+  else if (field === 'bankId') updatedRow = { ...row, bankId: value || null };
+  else if (field === 'pressureAddedBar' || (field === 'targetPressureBar' && row.type === 'add')) {
+    const inputState = scenarioInputForCurrentDraft();
+    const pressureStart = comparePressureStarts(inputState, state.whatIfScenario.rows)[row.id];
+    updatedRow = normalizeComparePressureFields({
+      ...row,
+      [field]: value,
+      pressureInputMode: input.dataset.pressureInputMode
+    }, pressureStart);
+  } else updatedRow = { ...row, [field]: value };
+  const rows = state.whatIfScenario.rows.slice();
+  rows[index] = updatedRow;
+  state.whatIfScenario = {
+    ...state.whatIfScenario,
+    rows,
+    draftRevision: state.whatIfScenario.draftRevision + 1
+  };
+  state.whatIfErrors = [];
+  if (rerender) {
+    renderWhatIfEditor();
+    renderWhatIfErrors();
+    renderWhatIfResult();
+  }
+}
+
 function updateCompareRow(input, rerender) {
   const index = state.compareRows.findIndex(row => row.id === input.dataset.rowId);
   if (index < 0) return;
@@ -1390,8 +1704,13 @@ function updateCompareRow(input, rerender) {
 
 function handleInputOrChange(event) {
   const target = event.target;
+  if (target.dataset.whatIfField) {
+    updateWhatIfField(target, event.type === 'change');
+    return;
+  }
   if (target.dataset.compareField && target.dataset.rowId) {
-    updateCompareRow(target, event.type === 'change');
+    if (state.activeScreen === 'what-if') updateWhatIfRow(target, event.type === 'change');
+    else updateCompareRow(target, event.type === 'change');
     return;
   }
   if (event.type === 'input' && target.dataset.settingsPresetImportUrl !== undefined) {
@@ -1522,31 +1841,71 @@ function moveCompareRow(rowId, offset) {
   renderCompareEditor();
 }
 
+function updateWhatIfRows(rows) {
+  state.whatIfScenario = {
+    ...state.whatIfScenario,
+    rows,
+    draftRevision: state.whatIfScenario.draftRevision + 1
+  };
+  state.whatIfErrors = [];
+  renderWhatIfEditor();
+  renderWhatIfErrors();
+  renderWhatIfResult();
+}
+
+function moveWhatIfRow(rowId, offset) {
+  const rows = state.whatIfScenario.rows.slice();
+  const index = rows.findIndex(row => row.id === rowId);
+  const destination = index + offset;
+  if (index < 0 || destination < 0 || destination >= rows.length) return;
+  [rows[index], rows[destination]] = [rows[destination], rows[index]];
+  updateWhatIfRows(rows);
+}
+
 function handleClick(event) {
   const actionElement = event.target.closest('[data-action]');
   if (!actionElement || actionElement.disabled) return;
 
   switch (actionElement.dataset.action) {
     case 'add-compare-row':
-      state.compareRows.push(createCompareRow('drain', `compare-row-${nextCompareRowNumber++}`));
-      state.compareErrors = [];
-      renderCompareErrors();
-      renderCompareEditor();
+      if (state.activeScreen === 'what-if') {
+        updateWhatIfRows([
+          ...state.whatIfScenario.rows,
+          createCompareRow('drain', `compare-row-${nextCompareRowNumber++}`)
+        ]);
+      } else {
+        state.compareRows.push(createCompareRow('drain', `compare-row-${nextCompareRowNumber++}`));
+        state.compareErrors = [];
+        renderCompareErrors();
+        renderCompareEditor();
+      }
       break;
     case 'remove-compare-row':
-      state.compareRows = state.compareRows.filter(row => row.id !== actionElement.dataset.rowId);
-      state.compareErrors = [];
-      renderCompareErrors();
-      renderCompareEditor();
+      if (state.activeScreen === 'what-if') {
+        updateWhatIfRows(state.whatIfScenario.rows.filter(row => row.id !== actionElement.dataset.rowId));
+      } else {
+        state.compareRows = state.compareRows.filter(row => row.id !== actionElement.dataset.rowId);
+        state.compareErrors = [];
+        renderCompareErrors();
+        renderCompareEditor();
+      }
       break;
     case 'move-compare-row-up':
-      moveCompareRow(actionElement.dataset.rowId, -1);
+      if (state.activeScreen === 'what-if') moveWhatIfRow(actionElement.dataset.rowId, -1);
+      else moveCompareRow(actionElement.dataset.rowId, -1);
       break;
     case 'move-compare-row-down':
-      moveCompareRow(actionElement.dataset.rowId, 1);
+      if (state.activeScreen === 'what-if') moveWhatIfRow(actionElement.dataset.rowId, 1);
+      else moveCompareRow(actionElement.dataset.rowId, 1);
       break;
     case 'run-compare':
       runCompare();
+      break;
+    case 'run-what-if':
+      runWhatIf();
+      break;
+    case 'copy-what-if-from-blending':
+      copyWhatIfFromBlending();
       break;
     case 'add-bank':
       addBank();
@@ -1621,13 +1980,13 @@ function handleClick(event) {
       setTab(actionElement.dataset.tab);
       break;
     case 'ternary-zoom-in':
-      changeTernaryZoom(byId('ternary-canvas'), renderTernary, 1);
+      changeTernaryZoom(activeResultRoot().querySelector?.('[data-result-key="ternary-canvas"]'), renderTernary, 1);
       break;
     case 'ternary-zoom-out':
-      changeTernaryZoom(byId('ternary-canvas'), renderTernary, -1);
+      changeTernaryZoom(activeResultRoot().querySelector?.('[data-result-key="ternary-canvas"]'), renderTernary, -1);
       break;
     case 'ternary-zoom-reset':
-      changeTernaryZoom(byId('ternary-canvas'), renderTernary, 0);
+      changeTernaryZoom(activeResultRoot().querySelector?.('[data-result-key="ternary-canvas"]'), renderTernary, 0);
       break;
   }
 }

@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { buildCompareProtocol, validateCompareRecipe } from '../js/compare-recipe.js';
+import { simulateCompareProtocol } from '../js/thermodynamics.js';
 import {
   applyWhatIfStartPatch,
   buildWhatIfInput,
@@ -47,4 +49,95 @@ test('signatures track draft behavior and shared behavior only', () => {
   const shared = whatIfSharedInputSignature({ settings: { physics: { model: 'ideal' }, uiOnly: 1 }, banks: [], cylinderPresetName: 'Catalina S80' });
   assert.equal(shared, whatIfSharedInputSignature({ settings: { physics: { model: 'ideal' }, uiOnly: 2 }, banks: [], cylinderPresetName: 'Catalina S80' }));
   assert.notEqual(shared, whatIfSharedInputSignature({ settings: { physics: { model: 'ideal' }, uiOnly: 1 }, banks: [{ id: 'b' }], cylinderPresetName: 'Catalina S80' }));
+});
+test('assembles the complete What-if result contract through an explicit wait', () => {
+  const settings = {
+    physics: { model: 'ideal' },
+    cylinderPresets: [{
+      name: 'Catalina S80',
+      volumeL: 11.1,
+      material: 'aluminum',
+      massKg: 14.3,
+      workingPressureBar: 207,
+      hotOverfillPercent: 2
+    }],
+    booster: {
+      drainingRateBarPerMin: 5,
+      oxygenDecantRateBarPerMin: 5,
+      otherDecantRateBarPerMin: 5
+    }
+  };
+  const scenario = {
+    ...createWhatIfScenario(),
+    initialized: true,
+    start: snapshotWhatIfFromBlending(blendingInput),
+    rows: [
+      { id: 'drain', type: 'drain', targetPressureBar: 20 },
+      { id: 'wait', type: 'wait', waitMode: 'minutes', waitMinutes: 7, targetTemperatureC: null }
+    ]
+  };
+  const input = buildWhatIfInput(scenario, { settings, banks: [] });
+  const protocol = buildCompareProtocol(scenario.rows, {
+    cylinder: input.cylinder,
+    physics: input.physics,
+    thermal: input.thermal,
+    banks: input.banks,
+    settings: input.settings
+  });
+  const simulation = simulateCompareProtocol({
+    protocolSteps: protocol.protocolSteps,
+    cylinder: input.cylinder,
+    physics: input.physics,
+    thermal: input.thermal,
+    settings: input.settings
+  });
+  const inWater = projectWhatIfInWater(simulation.final.ambientSettled, {
+    inWaterTemperatureC: input.thermal.inWaterTemperatureC,
+    volumeL: input.cylinder.volumeL,
+    useVdw: false
+  });
+  const result = {
+    mode: 'what-if',
+    input: scenario,
+    sharedInputSignature: whatIfSharedInputSignature({
+      settings,
+      banks: [],
+      cylinderPresetName: scenario.start.cylinderPresetName
+    }),
+    pressureLimitWarnings: [],
+    compare: { ...protocol, ...simulation, final: { ...simulation.final, inWater } }
+  };
+  assert.equal(result.mode, 'what-if');
+  assert.equal(result.compare.final.inWater.temperatureC, 10);
+  assert.ok(Number.isFinite(result.compare.final.inWater.pressureBar));
+  assert.ok(result.compare.sourceBanks.length >= 0);
+});
+test('invalid scenario rows preserve the prior result while reporting row errors', () => {
+  const priorResult = { mode: 'what-if', compare: { final: {} } };
+  const scenario = {
+    ...createWhatIfScenario(),
+    initialized: true,
+    start: snapshotWhatIfFromBlending(blendingInput),
+    result: priorResult,
+    resultRevision: 0,
+    draftRevision: 0
+  };
+  const updated = {
+    ...scenario,
+    rows: [{ id: 'invalid-row', type: 'unknown' }],
+    draftRevision: scenario.draftRevision + 1
+  };
+  const validation = validateCompareRecipe(updated.rows, {
+    cylinder: {
+      volumeL: 11.1,
+      workingPressureBar: 207,
+      initialPressureBar: 50
+    },
+    physics: { model: 'ideal', temperatureC: 25 },
+    settings: { booster: {} }
+  });
+  assert.equal(updated.result, priorResult);
+  assert.equal(updated.draftRevision, 1);
+  assert.equal(validation.valid, false);
+  assert.equal(validation.errors[0].rowId, 'invalid-row');
 });
