@@ -393,6 +393,52 @@ test('creates unique equipment names and appends active-setting clones', () => {
   });
 });
 
+test('pressure limit mode defaults safely and validates the warning unlock', () => {
+  assert.equal(DEFAULT_SETTINGS.pressureLimitMode, 'hard-stop');
+  assert.equal(DEFAULT_SETTINGS.pressureWarningUnlocked, false);
+
+  const legacy = copySettings(DEFAULT_SETTINGS);
+  delete legacy.pressureLimitMode;
+  delete legacy.pressureWarningUnlocked;
+  const storage = memoryStorage([[
+    'simplex-gas-remixer-settings', JSON.stringify(legacy)
+  ]]);
+  const loaded = loadSettings(storage);
+  assert.equal(loaded.pressureLimitMode, 'hard-stop');
+  assert.equal(loaded.pressureWarningUnlocked, false);
+
+  const lockedWarning = {
+    ...DEFAULT_SETTINGS,
+    pressureLimitMode: 'warning',
+    pressureWarningUnlocked: false
+  };
+  assert.match(validateSettings(lockedWarning).join(' '), /unlock/i);
+  assert.match(validateSettings({
+    ...DEFAULT_SETTINGS, pressureLimitMode: 'ignore'
+  }).join(' '), /pressure.*mode/i);
+  assert.match(validateSettings({
+    ...DEFAULT_SETTINGS, pressureWarningUnlocked: 'true'
+  }).join(' '), /unlock.*boolean/i);
+  const savedStorage = memoryStorage();
+  saveSettings({
+    ...DEFAULT_SETTINGS,
+    pressureLimitMode: 'warning',
+    pressureWarningUnlocked: true
+  }, savedStorage);
+  assert.equal(loadSettings(savedStorage).pressureLimitMode, 'warning');
+  assert.equal(loadSettings(savedStorage).pressureWarningUnlocked, true);
+
+  for (const invalid of [
+    { ...DEFAULT_SETTINGS, pressureLimitMode: 'ignore' },
+    { ...DEFAULT_SETTINGS, pressureLimitMode: 'warning', pressureWarningUnlocked: false }
+  ]) {
+    const invalidStorage = memoryStorage([[
+      'simplex-gas-remixer-settings', JSON.stringify(invalid)
+    ]]);
+    assert.deepEqual(loadSettings(invalidStorage), DEFAULT_SETTINGS);
+  }
+});
+
 test('old settings gain both pressure ceiling defaults', () => {
   const storage = memoryStorage([[
     'simplex-gas-remixer-settings',
