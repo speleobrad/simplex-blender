@@ -18,6 +18,7 @@ class FakeElement {
 
   set textContent(value) {
     this._textContent = String(value);
+    this.children = [];
   }
 
   append(...children) {
@@ -572,6 +573,64 @@ test('renders only the Warning mode policy notice when no limit is exceeded', ()
     assert.match(status, /warning mode/i);
     assert.match(status, /cylinder limits are not enforced/i);
     assert.doesNotMatch(status, /exceeded/i);
+  } finally {
+    globalThis.document = previousDocument;
+  }
+});
+
+test('preserves Warning notices and automatic-wait text during thermal rendering', () => {
+  const previousDocument = globalThis.document;
+  const document = createFakeDocument();
+  globalThis.document = document;
+  try {
+    renderResults({
+      feasible: true,
+      blend: {
+        retainedPressureBar: 50, retainedPercent: 100, ventedPressureBar: 0,
+        ventedGasLitres: 0, heliumSalvagedLitres: 0, finalPressureBar: 100,
+        finalOxygenPercent: 21, finalHeliumPercent: 0
+      },
+      thermal: {
+        finalTransferEndPressureBar: 103,
+        finalTransferEndTemperatureC: 40,
+        finalAmbientPressureBar: 100,
+        finalAmbientTemperatureC: 25,
+        finalInWaterPressureBar: 98,
+        finalInWaterTemperatureC: 20
+      },
+      protocolSteps: [{
+        title: 'Transfer 2',
+        description: 'Transfer gas.',
+        resultingPressureBar: 100,
+        automaticWaitMetadata: {
+          stepIdentifier: 'Transfer 2',
+          configuredWaitMinutes: 4,
+          actualWaitMinutes: 9,
+          addedWaitMinutes: 5
+        },
+        thermal: {
+          durationMinutes: 1,
+          temperatureAtTransferEndC: 40,
+          temperatureAfterWaitC: 25
+        }
+      }],
+      pressureLimitWarnings: [{
+        kind: 'working-pressure',
+        pressureBar: 103,
+        limitBar: 100,
+        source: 'transfer',
+        stepIdentifier: 'Transfer 2'
+      }]
+    }, { settings: { pressureLimitMode: 'warning' } });
+
+    const status = document.elements.get('blend-status');
+    assert.match(status.textContent, /warning mode/i);
+    assert.match(status.textContent, /103\.0 bar/);
+    assert.match(status.textContent, /working pressure/i);
+    assert.match(status.textContent, /! Automatic wait:.*cylinder pressure limit/i);
+    const notices = status.children.filter(child => child.attributes.get('role') === 'status');
+    assert.equal(notices.length, 2);
+    assert.ok(notices.every(notice => /\btext-amber-300\b/.test(notice.className)));
   } finally {
     globalThis.document = previousDocument;
   }

@@ -40,3 +40,31 @@ Existing Hard stop coverage was preserved. No tests, build, lint, or formatting 
 ## Fix-round 4 fixture finding
 
 - The target-temperature wait at 30°C was unreachable from the modeled transfer temperature. The flow now uses a 99-bar Compressor Air target and a reachable 24°C wait target with 20°C ambient, asserting the settled final pressure remains between 100 and 105 bar while retaining the single working-pressure/no-hot-overfill checks.
+
+## Fix-round controller RED
+
+- The focused browser command was run against the corrected fixtures:
+  `env -u NO_COLOR npm run test:ui -- --config .superpowers/sdd/2026-10-22-pressure-limit-warning-mode/playwright-alt-port.config.mjs --reporter=dot --workers=4 --grep "keeps a Compressor Air What-if transfer|reports only the settled working-pressure" tests/browser/blending.spec.js`
+- Result: 6 failed across desktop/tablet/mobile, as expected against the current mapper. A transient Compressor Air transfer at 101.5 bar (<105-bar hot ceiling) received false working-pressure notices; the target-temperature wait case produced four working-pressure notices rather than one.
+- `node --test tests/results.test.js` remains 13 passed, 0 failed; the rendering unit tests do not exercise main.js observation classification.
+
+## Controller RED after production fix round 1
+
+- `node --test tests/results.test.js`: 13 passed, 0 failed.
+- The focused browser suite after the first production fix passed the within-hot-ceiling case on all projects but still failed the target-temperature case on desktop/tablet/mobile (3 passed, 3 failed overall).
+- Error-context evidence: the result showed `Working pressure limit exceeded: 102.8 bar > 100.0 bar (Wait)` plus the expected settled target warning at `100.7 bar`. The 102.8-bar value comes from the no-transfer Wait step's `pressureAtTransferEndAmbientBar`, which is not an ambient projection in that Compare state.
+
+## RED after production fix round 1 (remaining no-transfer ambient classification)
+
+- `node --test tests/results.test.js`: 13 passed, 0 failed.
+- Focused browser suite: 3 passed, 3 failed. The target-temperature What-if flow displayed two Wait warnings: a false `102.8 bar > 100 bar` ambient-threshold event from the no-transfer Wait row and the correct `100.7 bar > 100 bar` settled target event.
+
+## Controller GREEN after production fix round 2
+
+- Focused browser suite: 6 passed, 0 failed across desktop/tablet/mobile.
+- `node --test tests/results.test.js tests/optimizer.test.js tests/compare-recipe.test.js tests/pressure-limits.test.js`: 127 passed, 0 failed.
+- `env -u NO_COLOR npm run test:ui -- --config .superpowers/sdd/2026-10-22-pressure-limit-warning-mode/playwright-alt-port.config.mjs --reporter=dot --workers=4 tests/browser/settings.spec.js tests/browser/blending.spec.js`: 72 passed, 0 failed across desktop/tablet/mobile.
+
+## Fix-round 3 rendering regression
+
+- Added a results regression combining Warning-mode policy/exceedance notices with automatic-wait metadata. The fake DOM now clears child nodes when `textContent` is assigned, matching browser semantics; the test verifies amber `role=status` notices and automatic-wait text survive thermal-summary rendering.
