@@ -4,6 +4,20 @@ import { openSettingsCategory, saveSettings } from './helpers/settings.js';
 
 async function load(appPage) { return appPage.goto('tourSeen'); }
 
+async function configureWarningMode(page, { workingPressure = 100, hotOverfill = 5 } = {}) {
+  const general = await openSettingsCategory(page, 'general');
+  const policy = general.getByRole('combobox', { name: 'Cylinder pressure limit behavior' });
+  const phrase = general.locator('#settings-pressure-limit-confirmation');
+  await expect(phrase).toBeVisible();
+  await phrase.fill("I KNOW WHAT I'M DOING");
+  await general.getByRole('button', { name: 'Unlock warning mode', exact: true }).click();
+  await policy.selectOption('warning');
+  const cylinderPane = await openSettingsCategory(page, 'cylinder-presets');
+  for (const field of await cylinderPane.locator('[data-settings-field="workingPressureBar"]:visible').all()) await field.fill(String(workingPressure));
+  for (const field of await cylinderPane.locator('[data-settings-field="hotOverfillPercent"]:visible').all()) await field.fill(String(hotOverfill));
+  await saveSettings(page);
+}
+
 test.describe('working tank blending inputs', () => {
   test('selects gas presets and edits custom oxygen/helium values', async ({ appPage }) => {
     const page = await load(appPage);
@@ -134,6 +148,7 @@ test.describe('working tank blending inputs', () => {
     await expect(page.locator('#blend-status')).toContainText(/warning mode/i);
     await expect(page.locator('#blend-status')).toContainText(/hot-overfill limit/i);
     await expect(page.locator('#steps-container')).not.toContainText(/automatic wait: cylinder pressure limit/i);
+    await expect(page.locator('#steps-container')).not.toContainText(/recorded input/i);
   });
 
   test('enforces thermal boundaries and rejects target medium below ambient', async ({ appPage }) => {
@@ -198,4 +213,65 @@ test('reports a working-pressure exceedance in Warning-mode What-if results', as
   await page.locator('[data-action="run-compare"]').evaluate(button => button.click());
   await expect(page.locator('#what-if-result')).toContainText(/Final: 20(?:\.0)? bar/);
   await expect(page.locator('#what-if-result')).toContainText(/working pressure/i);
+});
+
+test('keeps a Compressor Air What-if transfer inside the hot ceiling in Warning mode', async ({ appPage }) => {
+  test.setTimeout(90_000);
+  const page = await appPage.goto('settings');
+  await configureWarningMode(page, { workingPressure: 100, hotOverfill: 5 });
+  await page.locator('#inlet-gas-temperature').evaluate(input => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, '40');
+  });
+  await fillWorkingTank(page, { startPressure: 0 });
+  await page.locator('#inlet-gas-temperature').dispatchEvent('input');
+  await page.locator('[data-action="select-screen"][data-screen="what-if"]').click();
+  await expect(page.locator('#screen-what-if')).toBeVisible();
+  const row = page.locator('[data-row-id="compare-row-1"]');
+  await row.locator('[data-compare-field="type"]').selectOption('add');
+  await row.locator('[data-compare-field="bankId"]').selectOption('compressor-air');
+  await row.locator('[data-compare-field="targetPressureBar"]').fill('98');
+  await page.locator('[data-action="run-compare"]').evaluate(button => button.click());
+  await expect(page.locator('#compare-run-status')).toHaveText('Comparison run.');
+  const result = page.locator('#what-if-result');
+  const resultText = await result.innerText();
+  const finalPressure = Number(resultText.match(/Final:\s+([0-9.]+) bar/)?.[1]);
+  expect(finalPressure).toBeGreaterThan(100);
+  expect(finalPressure).toBeLessThan(105);
+  await expect(result).toContainText(/cylinder limits are not enforced/i);
+  await expect(result).not.toContainText(/pressure limit exceeded|pressure exceedance/i);
+});
+
+test('reports only the settled working-pressure exceedance for a target-temperature wait', async ({ appPage }) => {
+  test.setTimeout(90_000);
+  const page = await appPage.goto('settings');
+  await configureWarningMode(page, { workingPressure: 100, hotOverfill: 5 });
+  await page.locator('#inlet-gas-temperature').evaluate(input => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, '40');
+  });
+  await fillWorkingTank(page, { startPressure: 0, ambientTemperature: 20 });
+  await page.locator('#inlet-gas-temperature').dispatchEvent('input');
+  await page.locator('[data-action="select-screen"][data-screen="what-if"]').click();
+  await expect(page.locator('#screen-what-if')).toBeVisible();
+  const addRow = page.locator('[data-row-id="compare-row-1"]');
+  await addRow.locator('[data-compare-field="type"]').selectOption('add');
+  await addRow.locator('[data-compare-field="bankId"]').selectOption('compressor-air');
+  await addRow.locator('[data-compare-field="targetPressureBar"]').fill('99');
+  const compareRows = page.locator('fieldset[data-row-id^="compare-row-"]');
+  const initialRowCount = await compareRows.count();
+  await page.getByRole('button', { name: 'Add row', exact: true }).evaluate(button => button.click());
+  await expect(compareRows).toHaveCount(initialRowCount + 1);
+  const waitRow = compareRows.last();
+  await waitRow.locator('[data-compare-field="type"]').selectOption('wait');
+  await waitRow.locator('[data-compare-field="waitMode"]').selectOption('target');
+  await waitRow.locator('[data-compare-field="targetTemperatureC"]').fill('24');
+  await page.locator('[data-action="run-compare"]').evaluate(button => button.click());
+  await expect(page.locator('#compare-run-status')).toHaveText('Comparison run.');
+  const result = page.locator('#what-if-result');
+  const resultText = await result.innerText();
+  const finalPressure = Number(resultText.match(/Final:\s+([0-9.]+) bar/)?.[1]);
+  expect(finalPressure).toBeGreaterThan(100);
+  expect(finalPressure).toBeLessThan(105);
+  await expect(result).toContainText(/Wait|target temperature/i);
+  expect(resultText.match(/working pressure/gi) ?? []).toHaveLength(1);
+  expect(resultText).not.toMatch(/hot-overfill/i);
 });
