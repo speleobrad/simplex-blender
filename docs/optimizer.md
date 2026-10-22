@@ -2,6 +2,12 @@
 
 `js/optimizer.js` validates the gas model, calculator ranges, user-managed non-Air bank records, physical gas compositions, and thermal equipment input before constructing the requested-mix and maximum-pressure linear programs. It injects unlimited 21/0 compressor Air, applies the shared booster minimum source pressure to finite banks, enforces the compressor and booster operation ceilings, and returns gas quantities, pumping steps, and ternary trajectory data. Per-bank available-mole limits remain internal to optimization.
 
+## Pressure-limit policy
+
+The persisted `pressureLimitMode` is **`hard-stop`** by default. Hard stop enforces the selected cylinder's working-pressure ceiling (with hot overfill only for above-ambient transients), automatically inserting cooling waits or splitting transfers when needed. **`warning`** mode bypasses only those cylinder working-pressure and hot-overfill checks; it does not bypass supported 350-bar bounds, the calculator's 10-bar target minimum, or compressor/booster pressure ceilings. Warning mode therefore introduces no cylinder-only wait, and returns pressure-limit observations for visible result notices rather than making an over-limit fill safe.
+
+Hot overfill applies only to above-ambient transient states. Ambient projections, settled states, and the target-temperature result remain at working pressure. The shared pressure-limit policy is propagated into both Optimize and Compare; equipment and calculator constraints remain active in either mode.
+
 ## Decision variables and constraints
 
 - `x_cyl`: moles retained from the cylinder's initial mix.
@@ -36,9 +42,9 @@ Drain steps use the configured `drainingRateBarPerMin`, integrate the same signe
 
 The target temperature is a final settled-temperature requirement. It must not be below ambient; the separate wait target temperature remains applicable only to between-fill waits selected as `temperature`.
 
-Each cylinder preset defines a working-pressure limit and a hot-overfill percentage (default 2%; valid values are 0–5% in 0.5% steps). Only actual transient states above ambient may use `workingPressureBar × (1 + hotOverfillPercent / 100)`. Actual ambient projections, the final ambient-settled pressure, and the final pressure projected to the requested target in-water temperature remain capped at working pressure. Interim measured readings use the hot limit only when their measured temperature is above ambient. Compressor and booster operation ceilings remain independent, and Compare Recipe target inputs remain capped at working pressure.
+Each cylinder preset defines a working-pressure limit and a hot-overfill percentage (default 2%; valid values are 0–5% in 0.5% steps). Only actual transient states above ambient may use `workingPressureBar × (1 + hotOverfillPercent / 100)`. Actual ambient projections, the final ambient-settled pressure, and the final pressure projected to the requested target in-water temperature remain capped at working pressure. Interim measured readings use the hot limit only when their measured temperature is above ambient. The selected pressure-limit mode determines whether these cylinder ceilings stop planning or become reported warnings; compressor and booster operation ceilings remain independent, and Compare Recipe target inputs remain subject to supported calculator bounds.
 
 
-These are operational estimates, not a pressure guarantee: actual heating, transfer rate, and cooling depend on equipment condition, gas flow, fill technique, and the surrounding environment. The optimizer does not use the estimates to relax gas composition, supply capacity, or transfer-safety constraints.
+These are operational estimates, not a pressure guarantee: actual heating, transfer rate, and cooling depend on equipment condition, gas flow, fill technique, and the surrounding environment. The optimizer does not use the estimates to relax gas composition, supply capacity, equipment ceilings, or transfer-safety constraints.
 
 If the requested pressure is unreachable, the optimizer reports the maximum safely achievable pressure for the exact target mix and its recipe. If no positive safe amount exists, the UI explains why and shows no recipe. See [Gas Physics](gas-physics.md) for the density calculations and [Architecture](architecture.md) for module flow.

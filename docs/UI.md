@@ -68,7 +68,7 @@ Gas percentage fields accept decimal text input and are paired for gas validatio
 
 Inputs recalculate the blend as they change. Invalid or unsupported values are reported in the result area rather than silently accepted.
 
-The cylinder preset's **Hot overfill** setting allows only modeled or measured transient pressures strictly above ambient to reach `working pressure × (1 + hot overfill % / 100)`. Ambient projections, the final ambient-settled pressure, and the final pressure at the requested target in-water temperature remain at or below working pressure. The optimizer may extend a wait or split a transfer when a state would exceed its applicable cylinder limit; the step and summary identify the wait reason as a cylinder pressure limit.
+The cylinder preset's **Hot overfill** setting allows only modeled or measured transient pressures strictly above ambient to reach `working pressure × (1 + hot overfill % / 100)`. Ambient projections, the final ambient-settled pressure, and the final pressure at the requested target in-water temperature remain at or below working pressure. In **Hard stop** mode, the optimizer may extend a wait or split a transfer when a state would exceed its applicable cylinder limit; the step and summary identify the wait reason as a cylinder pressure limit. In **Warning** mode, cylinder working-pressure and hot-overfill enforcement is bypassed for planning, so no cylinder-only wait is introduced; the result instead shows a visible warning for each observed exceedance. Warning does not bypass supported 350-bar input bounds, the calculator's 10-bar target minimum, or compressor/booster pressure ceilings.
 
 ### Result tabs
 
@@ -166,6 +166,11 @@ The **Add bank** button appends a new editable source row. Compressor Air is imp
 Below the table, **Transfer conditions** contains **Incoming gas temperature** in °C. It is shared by compressor and inventory transfers; source-specific equipment temperature modifiers still apply.
 
 ## Settings screen
+### General
+
+General settings include **Cylinder pressure limit behavior**, with **Hard stop** selected by default and **Warning** available after a one-time unlock. Unlocking requires entering the exact phrase `I KNOW WHAT I'M DOING`; only the resulting `pressureWarningUnlocked` boolean is persisted, not the phrase. This is a local user-intent gate, not authorization or tamper resistance. Switching back to Hard stop does not relock an already unlocked option, while factory reset restores the default locked Hard stop state.
+
+Warning bypasses only cylinder working-pressure and above-ambient transient hot-overfill enforcement. It does not make over-limit filling safe and does not bypass supported 350-bar bounds, the calculator's 10-bar target minimum, or compressor/booster pressure ceilings. Hot overfill applies only to above-ambient transients; ambient, settled, and target-temperature states remain at working pressure.
 
 Settings is a full-width primary screen with a horizontal category topbar, validation-error region, **Cancel**, and **Save settings** actions. Cancel discards the current draft and returns to the screen that opened Settings. Save validates and persists the draft while keeping the user on Settings; validation errors remain visible on the screen.
 
