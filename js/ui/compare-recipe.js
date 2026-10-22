@@ -142,6 +142,7 @@ function rowFields(card, row, rowNumber, banks, errors, pressureStarts, units = 
       'targetPressureBar',
       `Drain target pressure (${unitLabel('pressureBar', units)})`,
       input(row, 'targetPressureBar', formatInputValue(row.targetPressureBar, 'pressureBar', units), 'number'),
+      errors
     );
     fields.append(targetField);
   }
