@@ -176,7 +176,7 @@ test.describe('working tank blending inputs', () => {
       startPressure: 50, targetPressure: 200, ambientTemperature: 20
     });
 
-    const form = page.locator('#steps-container form').first();
+    const form = page.locator('[data-result-host="blending"] [data-result-key="steps-container"] form').first();
     await form.locator('xpath=..').locator('summary').click();
     await expect(form).toBeVisible();
     const pressure = form.locator('[name="pressureBar"]');
@@ -185,8 +185,8 @@ test.describe('working tank blending inputs', () => {
     await form.locator('[name="temperatureC"]').fill('40');
     await form.locator('[data-action="apply-interim-measurement"]').click();
 
-    await expect(page.locator('#blend-status')).toContainText(/Transient hot-overfill limit exceeded/i);
-    await expect(page.locator('#blend-status')).toContainText(/103\.0 bar > 100\.0 bar/i);
+    await expect(page.locator('[data-result-host="blending"] [data-result-key="blend-status"]')).toContainText(/Transient hot-overfill limit exceeded/i);
+    await expect(page.locator('[data-result-host="blending"] [data-result-key="blend-status"]')).toContainText(/103\.0 bar > 100\.0 bar/i);
   });
 
 
@@ -199,17 +199,17 @@ test.describe('working tank blending inputs', () => {
     await page.locator('#wait-mode').selectOption('temperature');
     await page.locator('#wait-target-temperature').fill('20');
     await page.locator('#wait-target-temperature').blur();
-    await expect(page.locator('#steps-container')).toContainText(/target-medium temperature cannot be below ambient/i);
+    await expect(page.locator('[data-result-host="blending"] [data-result-key="steps-container"]')).toContainText(/target-medium temperature cannot be below ambient/i);
   });
 
   test('invalid input clears the result and recovers after correction', async ({ appPage }) => {
     const page = await load(appPage);
     await page.locator('#target-o2').fill('not-a-number');
     await page.locator('#target-o2').blur();
-    await expect(page.locator('#steps-container')).toContainText(/invalid|error|unable|no recipe/i);
+    await expect(page.locator('[data-result-host="blending"] [data-result-key="steps-container"]')).toContainText(/invalid|error|unable|no recipe/i);
     await fillWorkingTank(page, { targetOxygen: 18 });
     await expect(page.locator('#target-o2')).toHaveValue('18');
-    await expect(page.locator('#steps-container')).not.toContainText(/invalid input/i);
+    await expect(page.locator('[data-result-host="blending"] [data-result-key="steps-container"]')).not.toContainText(/invalid input/i);
   });
 
   test('working tank remains contained on narrow mobile viewport', async ({ appPage }) => {
