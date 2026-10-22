@@ -34,8 +34,8 @@ async function warningSettings(page) {
     await expect(page.locator('#ambient-temperature')).toHaveValue(values.ambientTemperatureC);
     await expect(page.locator('#cooling-medium')).toHaveValue(values.coolingMedium);
     await expect(page.locator('#target-temperature')).toHaveValue(values.inWaterTemperatureC);
-    await page.locator('[data-action="copy-what-if-from-blending"]').click();
-    for (const [field, value] of Object.entries(values)) await expect(page.locator(`[data-what-if-field="${field}"]`)).toHaveValue(value);
+    await page.locator('#screen-what-if [data-action="copy-what-if-from-blending"]:visible').click();
+    for (const [field, value] of Object.entries(values)) await expect(page.locator(`#screen-what-if [data-what-if-field="${field}"]:visible`)).toHaveValue(value);
   });
 
   test('runs drain, add-gas, and explicit wait and exposes every result panel', async ({ appPage }) => {
