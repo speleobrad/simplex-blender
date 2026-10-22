@@ -237,4 +237,72 @@ test.describe('settings categories and drafts', () => {
     }
     await cancelSettings(page);
   });
+  test('unlocks warning mode with the exact phrase and persists only the unlock flag', async ({ appPage }) => {
+    const page = await appPage.goto('tourSeen');
+    const general = await openSettingsCategory(page, 'general');
+    const policy = general.getByRole('combobox', { name: 'Cylinder pressure limit behavior' });
+    const phrase = general.getByRole('textbox', { name: 'Type I KNOW WHAT I\'M DOING' });
+    const unlock = general.getByRole('button', { name: 'Unlock warning mode', exact: true });
+
+    await expect(policy).toHaveValue('hard-stop');
+    await expect(policy.locator('option[value="warning"]')).toBeDisabled();
+    await phrase.fill("i know what i'm doing");
+    await expect(unlock).toBeDisabled();
+    await phrase.fill('I KNOW WHAT I AM DOING');
+    await expect(unlock).toBeDisabled();
+    await phrase.fill("I KNOW WHAT I'M DOING");
+    await expect(unlock).toBeEnabled();
+    await unlock.click();
+    await expect(policy.locator('option[value="warning"]')).toBeEnabled();
+    await policy.selectOption('warning');
+    await expect(general.getByText(/cylinder limits are not enforced/i)).toBeVisible();
+
+    await saveSettings(page);
+    await page.reload();
+    const persistedGeneral = await openSettingsCategory(page, 'general');
+    const persistedPolicy = persistedGeneral.getByRole('combobox', { name: 'Cylinder pressure limit behavior' });
+    await expect(persistedPolicy).toHaveValue('warning');
+    await expect(persistedPolicy.locator('option[value="warning"]')).toBeEnabled();
+
+    await persistedPolicy.selectOption('hard-stop');
+    await saveSettings(page);
+    const reenabledGeneral = await openSettingsCategory(page, 'general');
+    const reenabledPolicy = reenabledGeneral.getByRole('combobox', { name: 'Cylinder pressure limit behavior' });
+    await expect(reenabledPolicy.locator('option[value="warning"]')).toBeEnabled();
+    await reenabledPolicy.selectOption('warning');
+    await saveSettings(page);
+
+    const saved = await page.evaluate(() => JSON.parse(
+      localStorage.getItem('simplex-gas-remixer-settings')
+    ));
+    expect(saved.pressureLimitMode).toBe('warning');
+    expect(saved.pressureWarningUnlocked).toBe(true);
+    expect(JSON.stringify(saved)).not.toContain("I KNOW WHAT I'M DOING");
+  });
+
+  test('resets warning unlock and discards an unlock draft on Cancel', async ({ appPage }) => {
+    const page = await appPage.goto('tourSeen');
+    const general = await openSettingsCategory(page, 'general');
+    const phrase = general.getByRole('textbox', { name: 'Type I KNOW WHAT I\'M DOING' });
+    await phrase.fill("I KNOW WHAT I'M DOING");
+    await general.getByRole('button', { name: 'Unlock warning mode', exact: true }).click();
+    await expect(general.getByRole('combobox', { name: 'Cylinder pressure limit behavior' })
+      .locator('option[value="warning"]')).toBeEnabled();
+    await cancelSettings(page);
+    await page.reload();
+
+    const lockedGeneral = await openSettingsCategory(page, 'general');
+    await expect(lockedGeneral.getByRole('combobox', { name: 'Cylinder pressure limit behavior' })
+      .locator('option[value="warning"]')).toBeDisabled();
+
+    const management = await openSettingsCategory(page, 'preset-management');
+    page.once('dialog', dialog => dialog.accept());
+    await management.getByRole('button', { name: 'Reset to factory settings', exact: true }).click();
+    await page.waitForLoadState('domcontentloaded');
+    const resetGeneral = await openSettingsCategory(page, 'general');
+    await expect(resetGeneral.getByRole('combobox', { name: 'Cylinder pressure limit behavior' }))
+      .toHaveValue('hard-stop');
+    await expect(resetGeneral.getByRole('combobox', { name: 'Cylinder pressure limit behavior' })
+      .locator('option[value="warning"]')).toBeDisabled();
+  });
 });
