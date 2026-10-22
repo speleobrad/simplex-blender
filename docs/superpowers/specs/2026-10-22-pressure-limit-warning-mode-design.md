@@ -6,7 +6,7 @@ Approved in conversation; implementation has not started.
 
 ## Goal
 
-Add a global setting in **Settings → General** that selects whether cylinder working-pressure and transient hot-overfill limits are enforced or reported as warnings. Hard stop is the default. Warning mode requires the exact phrase `I KNOW WHAT I'M DOING` once to permanently unlock the option.
+Add a global setting in **Settings → General** that selects whether cylinder working-pressure and transient hot-overfill limits are enforced or reported as warnings. Hard stop is the default. Warning mode requires the phrase `I KNOW WHAT I'M DOING` once to permanently unlock the option; matching ignores case and accepts a single quote, backtick, or double quote for the apostrophe.
 
 ## Approved decisions
 
@@ -40,7 +40,7 @@ Add these fields to `DEFAULT_SETTINGS`:
 
 `pressureLimitMode` accepts only `'hard-stop'` or `'warning'`. `pressureWarningUnlocked` is boolean. A warning mode is valid only when unlocked. Settings normalization, copying, validation, loading, and saving preserve these fields. Legacy saved settings without them normalize to Hard stop and locked. Invalid mode/unlock combinations follow the existing invalid-settings fallback behavior.
 
-Settings → General presents Hard stop and Warning. Warning cannot be selected until the exact confirmation phrase is entered. The phrase unlocks Warning in the current draft; Save persists the unlocked flag and selected mode, while Cancel discards draft changes. Once saved, the unlock survives reloads and switching back to Hard stop does not relock the option. Factory reset restores Hard stop and locked. Only the boolean unlock state is persisted; the phrase is not. This is an explicit user-intent confirmation in a local browser setting, not an authorization or tamper-resistance mechanism.
+Settings → General presents Hard stop and Warning. Warning cannot be selected until the phrase is entered with the correct words and spacing; matching ignores letter case and accepts a single quote, backtick, or double quote for the apostrophe in “I'm”. The phrase unlocks Warning in the current draft; Save persists the unlocked flag and selected mode, while Cancel discards draft changes. Once saved, the unlock survives reloads and switching back to Hard stop does not relock the option. Factory reset restores Hard stop and locked. Only the boolean unlock state is persisted; the phrase is not. This is an explicit user-intent confirmation in a local browser setting, not an authorization or tamper-resistance mechanism.
 
 When Warning is selected, General displays an amber notice that cylinder limits will not be enforced.
 
@@ -91,7 +91,7 @@ Optimize's existing automatic-wait notices remain unchanged in Hard stop mode. W
 
 ## Error handling and edge cases
 
-- A wrong, incomplete, or differently capitalized phrase does not unlock Warning.
+- A wrong phrase or altered wording/spacing does not unlock Warning. Matching is case-insensitive and accepts a single quote, backtick, or double quote for the apostrophe.
 - Cancel discards an unlock that has not been saved.
 - Malformed saved mode or an invalid warning-without-unlock combination falls back through existing settings-load behavior; legacy records missing the fields remain valid and default locked.
 - Invalid cylinder preset hot-overfill values remain invalid regardless of mode.
@@ -101,7 +101,7 @@ Optimize's existing automatic-wait notices remain unchanged in Hard stop mode. W
 ## Acceptance criteria
 
 1. A first-run or legacy settings record loads Hard stop with Warning locked.
-2. The exact phrase unlocks Warning once; the unlock and selected mode persist on Save, the phrase is not persisted, Cancel discards unsaved unlocks, and factory reset relocks.
+2. The case-insensitive confirmation phrase, with single-quote/backtick/double-quote apostrophe variants, unlocks Warning once; the unlock and selected mode persist on Save, the phrase is not persisted, Cancel discards unsaved unlocks, and factory reset relocks.
 3. Hard stop retains existing calculator validation, Compare limits, and Optimize wait/split behavior.
 4. Warning mode lets calculator and Compare flows proceed above cylinder limits within their existing field-specific pressure ranges (maximum 350 bar) and does not schedule waits/splits solely to satisfy cylinder limits.
 5. Warning mode still enforces supported input ranges, compressor/booster pressure limits, and other existing validation/safety constraints.
