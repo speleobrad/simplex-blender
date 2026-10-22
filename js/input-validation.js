@@ -3,8 +3,10 @@ import {
   isValidHotOverfillPercent
 } from './preset-validation.js';
 import { isValidGasComposition } from './gas-input.js';
+import { getCylinderPressureExceedance } from './pressure-limits.js';
 
-export function validateCalculatorInputs(cylinder, physics, thermal) {
+export function validateCalculatorInputs(cylinder, physics, thermal, options = {}) {
+  const pressureLimitMode = options?.pressureLimitMode ?? 'hard-stop';
   const errors = [];
   if (!Number.isFinite(cylinder?.volumeL) || cylinder.volumeL < 0.1) {
     errors.push('Cylinder capacity must be at least 0.1 L.');
@@ -23,13 +25,23 @@ export function validateCalculatorInputs(cylinder, physics, thermal) {
       || cylinder.workingPressureBar > 350) {
       errors.push('Cylinder working pressure must be between 10 and 350 bar.');
     } else {
-      if (Number.isFinite(cylinder.initialPressureBar)
-        && cylinder.initialPressureBar > cylinder.workingPressureBar) {
-        errors.push(`Initial pressure cannot exceed the selected cylinder working pressure of ${cylinder.workingPressureBar} bar.`);
+      const initialPressureExceedance = getCylinderPressureExceedance({
+        pressureBar: cylinder.initialPressureBar,
+        cylinder,
+        isTransientHot: false,
+        toleranceBar: 0
+      });
+      if (pressureLimitMode !== 'warning' && initialPressureExceedance) {
+        errors.push(`Initial pressure cannot exceed the selected cylinder working pressure of ${initialPressureExceedance.limitBar} bar.`);
       }
-      if (Number.isFinite(cylinder.targetPressureBar)
-        && cylinder.targetPressureBar > cylinder.workingPressureBar) {
-        errors.push(`Target pressure cannot exceed the selected cylinder working pressure of ${cylinder.workingPressureBar} bar.`);
+      const targetPressureExceedance = getCylinderPressureExceedance({
+        pressureBar: cylinder.targetPressureBar,
+        cylinder,
+        isTransientHot: false,
+        toleranceBar: 0
+      });
+      if (pressureLimitMode !== 'warning' && targetPressureExceedance) {
+        errors.push(`Target pressure cannot exceed the selected cylinder working pressure of ${targetPressureExceedance.limitBar} bar.`);
       }
     }
   }
@@ -91,20 +103,24 @@ export function validateCalculatorInputs(cylinder, physics, thermal) {
           || measurement.pressureBar < 0
           || measurement.pressureBar > 350) {
           errors.push('Measured pressure must be between 0 and 350 bar.');
-        } else if (Number.isFinite(cylinder?.workingPressureBar)
-          && measurement.pressureBar > cylinder.workingPressureBar) {
-          const hotOverfillPercent = isValidHotOverfillPercent(cylinder.hotOverfillPercent)
-            ? cylinder.hotOverfillPercent
-            : DEFAULT_HOT_OVERFILL_PERCENT;
-          const hotOverfillPressureBar = cylinder.workingPressureBar
-            * (1 + hotOverfillPercent / 100);
+        } else if (Number.isFinite(cylinder?.workingPressureBar)) {
           const isTransientHot = Number.isFinite(thermal.ambientTemperatureC)
             && Number.isFinite(measurement.temperatureC)
             && measurement.temperatureC > thermal.ambientTemperatureC;
-          if (!isTransientHot || measurement.pressureBar > hotOverfillPressureBar) {
-            errors.push(isTransientHot
-              ? `Measured pressure cannot exceed the selected cylinder hot overfill limit of ${hotOverfillPressureBar} bar.`
-              : `Measured pressure cannot exceed the selected cylinder working pressure of ${cylinder.workingPressureBar} bar.`);
+          const diagnosticCylinder = isTransientHot
+            && !isValidHotOverfillPercent(cylinder.hotOverfillPercent)
+            ? { ...cylinder, hotOverfillPercent: DEFAULT_HOT_OVERFILL_PERCENT }
+            : cylinder;
+          const pressureExceedance = getCylinderPressureExceedance({
+            pressureBar: measurement.pressureBar,
+            cylinder: diagnosticCylinder,
+            isTransientHot,
+            toleranceBar: 0
+          });
+          if (pressureLimitMode !== 'warning' && pressureExceedance) {
+            errors.push(pressureExceedance.kind === 'hot-overfill'
+              ? `Measured pressure cannot exceed the selected cylinder hot overfill limit of ${pressureExceedance.limitBar} bar.`
+              : `Measured pressure cannot exceed the selected cylinder working pressure of ${pressureExceedance.limitBar} bar.`);
           }
         }
         if (!Number.isFinite(measurement.temperatureC)

@@ -718,7 +718,12 @@ function compareInput() {
 
 function compareSharedInputErrors(input) {
   const targetPressureBar = Math.max(10, input.cylinder.initialPressureBar);
-  const errors = validateCalculatorInputs({ ...input.cylinder, targetPressureBar }, input.physics, input.thermal);
+  const errors = validateCalculatorInputs(
+    { ...input.cylinder, targetPressureBar },
+    input.physics,
+    input.thermal,
+    { pressureLimitMode: state.settings.pressureLimitMode }
+  );
   if (!isValidGasComposition(input.cylinder.initialOxygenPercent, input.cylinder.initialHeliumPercent)) {
     errors.push('Initial oxygen and helium percentages must total no more than 100%.');
   }
@@ -1007,7 +1012,12 @@ function recalculate() {
     state.interimMeasurementSignature = null;
     input = { ...readInput(), settings: state.settings };
   }
-  const inputErrors = validateCalculatorInputs(input.cylinder, input.physics, input.thermal);
+  const inputErrors = validateCalculatorInputs(
+    input.cylinder,
+    input.physics,
+    input.thermal,
+    { pressureLimitMode: state.settings.pressureLimitMode }
+  );
   const result = inputErrors.length > 0 ? invalidInputResult(inputErrors) : optimizeBlend(input);
   state.lastInput = input;
   state.lastResult = result;
