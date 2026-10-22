@@ -847,7 +847,8 @@ function renderCompareEditor() {
     banks: state.banks,
     errors: state.compareErrors,
     pressureStarts: comparePressureStarts(),
-    units: state.settings.units
+    units: state.settings.units,
+    whatIf: state.activeScreen === 'what-if'
   });
 }
 
