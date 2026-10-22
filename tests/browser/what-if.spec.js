@@ -85,10 +85,11 @@ async function warningSettings(page) {
     await page.setViewportSize({ width: 390, height: 844 });
     await openWhatIf(page);
     await runWhatIf(page);
-    const before = await page.locator('#scenario-summary-content').innerText();
+    const host = page.locator('#what-if-result-host');
+    const before = await host.locator('#scenario-summary-content').innerText();
     await fillWhatIfStart(page, { pressureBar: '-1' });
     await runWhatIf(page);
-    await expect(page.locator('#scenario-summary-content')).toContainText(before.slice(0, 20));
+    await expect(host.locator('#scenario-summary-content')).toContainText(before.slice(0, 20));
     await page.keyboard.press('Tab');
     await expect(page.locator('#screen-what-if')).toBeVisible();
     expect(await page.locator('body').evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBeTruthy();

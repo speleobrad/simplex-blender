@@ -71,7 +71,7 @@ export async function fillWhatIfStart(page, values = {}) {
 }
 
 export async function setWhatIfRow(page, rowId, values = {}) {
-  const row = page.locator('#screen-what-if').locator(`[data-row-id="${rowId}"]`);
+  const row = page.locator(`#screen-what-if fieldset[data-row-id="${rowId}"]:visible`);
   await expect(row).toHaveCount(1);
   for (const [field, value] of Object.entries(values)) {
     const control = row.locator(`[data-compare-field="${field}"]`);
@@ -83,8 +83,10 @@ export async function setWhatIfRow(page, rowId, values = {}) {
 }
 
 export async function runWhatIf(page) {
-  await page.getByRole('button', { name: 'Run scenario', exact: true }).click();
-  await expect(page.locator('#compare-run-status')).toContainText(/run|error|invalid/i);
+  await page.locator('#screen-what-if').getByRole('button', { name: 'Run scenario', exact: true }).click();
+  const host = page.locator('#what-if-result-host');
+  await expect(host).toBeVisible();
+  await expect(host.getByRole('tab').first()).toBeVisible();
 }
 
 export async function assertWhatIfResultPanelExclusive(page, tabName) {
