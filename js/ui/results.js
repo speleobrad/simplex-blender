@@ -6,8 +6,10 @@ import { formatUnitValue, convertToDisplay, unitLabel } from '../units.js';
 import { renderWaterPressurePane as renderPressurePaneImplementation } from './water-pressure.js';
 import { getCylinderPressureLimit } from '../pressure-limits.js';
 
+let activeRoot = globalThis.document;
+const resultElement = id => activeRoot?.querySelector?.(`[data-result-key="${id}"]`) ?? activeRoot?.getElementById?.(id) ?? globalThis.document?.getElementById?.(id);
 function setText(id, value) {
-  const element = document.getElementById(id);
+  const element = resultElement(id);
   if (element) element.textContent = value;
 }
 
@@ -43,7 +45,7 @@ function oxygenCompressionRatioColor(ratio) {
 const SUMMARY_TOLERANCE = 1e-9;
 
 function setColor(id, color) {
-  const element = document.getElementById(id);
+  const element = resultElement(id);
   if (!element) return;
   element.className = `${element.className
     .replace(/\btext-(?:cyan|emerald|amber|rose|slate)-(?:200|300|400)\b/g, '')
@@ -250,7 +252,7 @@ function formatAutomaticWaitWarning(metadata, thermal, units = 'metric', stepTit
 }
 
 function renderWaterPressurePane(data) {
-  const container = document.getElementById('water-pressure-container');
+  const container = resultElement('water-pressure-container');
   if (!container) return;
   if (!data) {
     container.replaceChildren();
@@ -554,7 +556,7 @@ function renderProtocol(protocolSteps, alertMessage = null, calculation = null, 
   showInterimMeasurements = true,
   finalStepIncludesAmbientCoolOff = true
 } = {}) {
-  const container = document.getElementById('steps-container');
+  const container = resultElement('steps-container');
   if (!container) return;
 
   const cards = [];
@@ -699,7 +701,7 @@ function renderThermalSummary(
 }
 
 function renderBlendStatus(result, units = 'metric', pressureLimitMode = 'hard-stop') {
-  const status = document.getElementById('blend-status');
+  const status = resultElement('blend-status');
   if (!status) return;
   if (result.feasible) {
     status.className = 'rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300';
@@ -727,9 +729,9 @@ function formatCompareState(state, units = 'metric') {
 }
 
 function renderCompareResults(compare, calculation) {
-  const summaryBanner = document.getElementById('summary-banner');
+  const summaryBanner = resultElement('summary-banner');
   if (summaryBanner) summaryBanner.hidden = true;
-  const compareSummary = document.getElementById('compare-summary');
+  const compareSummary = resultElement('compare-summary');
   if (compareSummary) compareSummary.hidden = false;
   for (const id of [
     'res-retained-p',
@@ -761,14 +763,15 @@ function renderCompareResults(compare, calculation) {
     finalStepIncludesAmbientCoolOff: false
   });
 }
+export function renderResults(result, calculation = null, { root = document, mode = 'optimize' } = {}) {
+  activeRoot = root;
 
-export function renderResults(result, calculation = null) {
   const units = calculation?.settings?.units ?? 'metric';
   renderBlendStatus(result, units, calculation?.settings?.pressureLimitMode);
   renderWaterPressurePane(null);
-  const summaryBanner = document.getElementById('summary-banner');
+  const summaryBanner = resultElement('summary-banner');
   if (summaryBanner) summaryBanner.hidden = result?.mode === 'compare';
-  const compareSummary = document.getElementById('compare-summary');
+  const compareSummary = resultElement('compare-summary');
   if (compareSummary) compareSummary.hidden = result?.mode !== 'compare';
   if (result?.mode === 'compare') {
     renderCompareResults(result.compare, calculation);

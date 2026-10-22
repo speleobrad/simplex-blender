@@ -455,9 +455,10 @@ export function buildAccessibleTernaryData({
   };
 }
 
-function renderAccessibleChartData({ banks, initialMix, targetMix, trajectory, mode }) {
-  const mixesTable = document.getElementById('ternary-data-mixes');
-  const trajectoryTable = document.getElementById('ternary-data-trajectory');
+function renderAccessibleChartData({ banks, initialMix, targetMix, trajectory, mode }, root = document) {
+  const scoped = id => root?.querySelector?.(`[data-result-key="${id}"]`) ?? root?.getElementById?.(id) ?? document.getElementById(id);
+  const mixesTable = scoped('ternary-data-mixes');
+  const trajectoryTable = scoped('ternary-data-trajectory');
   if (!mixesTable || !trajectoryTable) return;
 
   const data = buildAccessibleTernaryData({ banks, initialMix, targetMix, trajectory, mode });
@@ -473,15 +474,15 @@ function renderAccessibleChartData({ banks, initialMix, targetMix, trajectory, m
     row.pressureBar
   )));
 
-  const status = document.getElementById('ternary-data-status');
+  const status = scoped('ternary-data-status');
   if (status) status.textContent = data.status;
 }
 
 
-export function renderTernaryDiagram(canvas, { banks, initialMix, targetMix, trajectory, mode = 'optimizer' }) {
+export function renderTernaryDiagram(canvas, { banks, initialMix, targetMix, trajectory, mode = 'optimizer' }, { root = document } = {}) {
   if (!canvas) return;
   canvas.setAttribute('aria-label', 'Gas composition ternary diagram');
-  renderAccessibleChartData({ banks, initialMix, targetMix, trajectory, mode });
+  renderAccessibleChartData({ banks, initialMix, targetMix, trajectory, mode }, root);
   attachPointerReadout(canvas);
   activeCanvases.add(canvas);
   const rect = canvas.getBoundingClientRect();

@@ -753,12 +753,12 @@ function protocolForResult(result) {
   return result?.maximumPressure?.protocolSteps ?? result?.protocolSteps;
 }
 
-export function renderThermalCharts(result, input = {}, units = 'metric') {
-  const temperatureChart = document.getElementById('thermal-temperature-chart');
-  const pressureChart = document.getElementById('thermal-pressure-chart');
-  const dataTable = document.getElementById('thermal-chart-data');
-  const status = document.getElementById('thermal-chart-status');
-  if (!temperatureChart || !pressureChart || !dataTable) return;
+export function renderThermalCharts(result, input = {}, units = 'metric', { root = document } = {}) {
+  const scoped = id => root?.querySelector?.(`[data-result-key="${id}"]`) ?? root?.getElementById?.(id) ?? document.getElementById(id);
+  const temperatureChart = scoped('thermal-temperature-chart');
+  const pressureChart = scoped('thermal-pressure-chart');
+  const dataTable = scoped('thermal-chart-data');
+  const status = scoped('thermal-chart-status');
   bindThermalInteractions();
 
   const terminalProjection = result?.mode === 'compare'
@@ -794,7 +794,7 @@ export function renderThermalCharts(result, input = {}, units = 'metric') {
   };
   thermalHoverPointSamples = displaySeries.points;
   thermalHoverSamples = displaySeries.samples.filter(sample => sample.title !== 'In-water target projection');
-  thermalHoverReadout = document.getElementById('thermal-chart-hover-readout');
+  thermalHoverReadout = scoped('thermal-chart-hover-readout');
   clearThermalHover();
   const ambientTemperatureC = input.thermal?.ambientTemperatureC ?? input.physics?.temperatureC;
   renderChart(temperatureChart, {
