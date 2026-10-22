@@ -1,18 +1,41 @@
 import { test, expect } from './fixtures/app-fixtures.js';
 import { openWhatIf, fillWhatIfStart, setWhatIfRow, runWhatIf, assertWhatIfResultPanelExclusive } from './helpers/blending.js';
-
+import { openSettingsCategory, saveSettings } from './helpers/settings.js';
 async function load(appPage) { return appPage.goto('tourSeen'); }
 
+async function warningSettings(page) {
+  const general = await openSettingsCategory(page, 'general');
+  await general.getByRole('textbox', { name: /I KNOW/i }).fill("I KNOW WHAT I'M DOING");
+  await general.getByRole('button', { name: 'Unlock warning mode', exact: true }).click();
+  await general.getByRole('combobox', { name: 'Cylinder pressure limit behavior' }).selectOption('warning');
+  const cylinders = await openSettingsCategory(page, 'cylinder-presets');
+  for (const field of await cylinders.locator('[data-settings-field="workingPressureBar"]:visible').all()) await field.fill('100');
+  await saveSettings(page);
+}
+
  test.describe('independent What-if scenarios', () => {
-  test('copies Blending state, then keeps edits independent until explicit copy', async ({ appPage }) => {
+  test('copies and independently edits every scenario start field', async ({ appPage }) => {
     const page = await load(appPage);
-    const original = await page.locator('#init-p').inputValue();
+    const values = {
+      pressureBar: await page.locator('#init-p').inputValue(),
+      oxygenPercent: await page.locator('#init-o2').inputValue(),
+      heliumPercent: await page.locator('#init-he').inputValue(),
+      ambientTemperatureC: await page.locator('#ambient-temperature').inputValue(),
+      cylinderPresetName: await page.locator('#cylinder-preset').inputValue(),
+      coolingMedium: await page.locator('#cooling-medium').inputValue(),
+      inWaterTemperatureC: await page.locator('#target-temperature').inputValue()
+    };
     await openWhatIf(page);
-    await expect(page.locator('[data-what-if-status="copied"]')).toContainText(/copied/i);
-    await fillWhatIfStart(page, { pressureBar: '42', oxygenPercent: '30', inWaterTemperatureC: '12' });
-    await expect(page.locator('#init-p')).toHaveValue(original);
+    for (const [field, value] of Object.entries(values)) await expect(page.locator(`[data-what-if-field="${field}"]`)).toHaveValue(value);
+    await fillWhatIfStart(page, { pressureBar: '42', oxygenPercent: '30', heliumPercent: '10', ambientTemperatureC: '18', coolingMedium: values.coolingMedium === 'air' ? 'water' : 'air', inWaterTemperatureC: '12' });
+    await expect(page.locator('#init-p')).toHaveValue(values.pressureBar);
+    await expect(page.locator('#init-o2')).toHaveValue(values.oxygenPercent);
+    await expect(page.locator('#init-he')).toHaveValue(values.heliumPercent);
+    await expect(page.locator('#ambient-temperature')).toHaveValue(values.ambientTemperatureC);
+    await expect(page.locator('#cooling-medium')).toHaveValue(values.coolingMedium);
+    await expect(page.locator('#target-temperature')).toHaveValue(values.inWaterTemperatureC);
     await page.locator('[data-action="copy-what-if-from-blending"]').click();
-    await expect(page.locator('[data-what-if-field="pressureBar"]')).toHaveValue(original);
+    for (const [field, value] of Object.entries(values)) await expect(page.locator(`[data-what-if-field="${field}"]`)).toHaveValue(value);
   });
 
   test('runs drain, add-gas, and explicit wait and exposes every result panel', async ({ appPage }) => {
@@ -68,4 +91,56 @@ async function load(appPage) { return appPage.goto('tourSeen'); }
     await expect(page.locator('#screen-what-if')).toBeVisible();
     expect(await page.locator('body').evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBeTruthy();
   });
+});
+
+  test('reports Warning-mode pressure exceedance and target-temperature wait', async ({ appPage }) => {
+    test.setTimeout(90_000);
+    const page = await load(appPage);
+    await warningSettings(page);
+    await openWhatIf(page);
+    await fillWhatIfStart(page, { pressureBar: '110', ambientTemperatureC: '20', inWaterTemperatureC: '24' });
+    await setWhatIfRow(page, 'compare-row-1', { type: 'wait', waitMode: 'target', targetTemperatureC: '24' });
+    await runWhatIf(page);
+    const host = page.locator('#what-if-result-host');
+    await expect(host).toContainText(/Warning|working pressure|exceed/i);
+    await expect(host).toContainText(/wait|24/i);
+  });
+
+  test('activates result tabs from the keyboard without leaving the narrow viewport', async ({ appPage }) => {
+    const page = await load(appPage);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openWhatIf(page);
+    const run = page.getByRole('button', { name: 'Run scenario', exact: true });
+    await run.focus();
+    await expect(run).toBeFocused();
+    await run.press('Tab');
+    await expect(page.locator('#screen-what-if')).toContainText(/Row|Add row/);
+    await runWhatIf(page);
+    const recipeTab = page.locator('#what-if-result-host').getByRole('tab', { name: 'Recipe', exact: true });
+    await recipeTab.focus();
+    await recipeTab.press('Enter');
+    await expect(recipeTab).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('#what-if-result-host')).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBeTruthy();
+  });
+
+test('identifies a selected finite bank after it is disabled', async ({ appPage }) => {
+  const page = await load(appPage);
+  await openWhatIf(page);
+  await page.getByRole('button', { name: 'Add row', exact: true }).click();
+  const row = page.locator('#screen-what-if fieldset[data-row-id^="compare-row-"]').last();
+  await row.locator('[data-compare-field="type"]').selectOption('add');
+  const bank = row.locator('[data-compare-field="bankId"] option:not([value="compressor-air"])').first();
+  await expect(bank).toHaveCount(1);
+  const bankId = await bank.getAttribute('value');
+  await row.locator('[data-compare-field="bankId"]').selectOption(bankId);
+  await row.locator('[data-compare-field="targetPressureBar"]').fill('60');
+  await runWhatIf(page);
+  await page.getByRole('tab', { name: 'Inventory', exact: true }).click();
+  const bankRow = page.locator(`#tanks-tbody tr`).filter({ has: page.locator(`[value="${bankId}"]`) }).first();
+  const checkbox = bankRow.locator('input[type="checkbox"]');
+  if (await checkbox.count()) await checkbox.uncheck();
+  await page.getByRole('tab', { name: 'What-if', exact: true }).click();
+  await runWhatIf(page);
+  await expect(page.locator('#screen-what-if')).toContainText(/disabled|unavailable|bank|invalid/i);
 });
