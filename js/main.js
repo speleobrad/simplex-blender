@@ -969,10 +969,12 @@ function appendThermalPressureWarningObservations(observations, protocolSteps, a
         targetTemperature: isTargetTemperature(thermal.temperatureStartC)
       }
     );
-    addPressureWarningObservation(observations, thermal.pressureAtTransferEndAmbientBar, {
-      source: 'ambient',
-      stepIdentifier
-    });
+    if (thermal.rateSource !== 'none') {
+      addPressureWarningObservation(observations, thermal.pressureAtTransferEndAmbientBar, {
+        source: 'ambient',
+        stepIdentifier
+      });
+    }
     addTemperaturePressureWarningObservation(
       observations,
       thermal.pressureAtTransferEndHotBar ?? thermal.pressureAtTransferEndBar,
