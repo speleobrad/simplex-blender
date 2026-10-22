@@ -1136,25 +1136,44 @@ export function simulateCompareProtocol({
     oxygenPercent: currentMix.oxygenPercent,
     heliumPercent: currentMix.heliumPercent
   };
+  const ambientSettled = {
+    pressureBar: Math.max(0, calculatePressureAtTemperature({
+      pressureBar: recipeEnd.pressureBar,
+      oxygenPercent: recipeEnd.oxygenPercent,
+      heliumPercent: recipeEnd.heliumPercent,
+      fromTemperatureC: recipeEnd.temperatureC,
+      toTemperatureC: thermal.ambientTemperatureC,
+      volumeL: cylinder.volumeL,
+      useVdw
+    })),
+    temperatureC: thermal.ambientTemperatureC,
+    oxygenPercent: recipeEnd.oxygenPercent,
+    heliumPercent: recipeEnd.heliumPercent
+  };
+  const inWaterTemperatureC = thermal.targetInWaterTemperatureC;
+  const inWaterProjection = Number.isFinite(inWaterTemperatureC)
+    ? {
+      pressureBar: Math.max(0, calculatePressureAtTemperature({
+        pressureBar: ambientSettled.pressureBar,
+        oxygenPercent: ambientSettled.oxygenPercent,
+        heliumPercent: ambientSettled.heliumPercent,
+        fromTemperatureC: ambientSettled.temperatureC,
+        toTemperatureC: inWaterTemperatureC,
+        volumeL: cylinder.volumeL,
+        useVdw
+      })),
+      temperatureC: inWaterTemperatureC,
+      oxygenPercent: ambientSettled.oxygenPercent,
+      heliumPercent: ambientSettled.heliumPercent
+    }
+    : null;
   return {
     protocolSteps: simulatedProtocolSteps,
     final: {
       recipeEnd,
-      ambientSettled: {
-        pressureBar: Math.max(0, calculatePressureAtTemperature({
-          pressureBar: recipeEnd.pressureBar,
-          oxygenPercent: recipeEnd.oxygenPercent,
-          heliumPercent: recipeEnd.heliumPercent,
-          fromTemperatureC: recipeEnd.temperatureC,
-          toTemperatureC: thermal.ambientTemperatureC,
-          volumeL: cylinder.volumeL,
-          useVdw
-        })),
-        temperatureC: thermal.ambientTemperatureC,
-        oxygenPercent: recipeEnd.oxygenPercent,
-        heliumPercent: recipeEnd.heliumPercent
-      },
-      ambientSettledDurationMinutes: 4.6 * tauMinutes
+      ambientSettled,
+      ambientSettledDurationMinutes: 4.6 * tauMinutes,
+      inWaterProjection
     }
   };
 }

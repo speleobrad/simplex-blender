@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { renderResults } from '../js/ui/results.js';
+import { buildThermalSeries } from '../js/ui/thermal-charts.js';
 import { isPressureAboveWorkingPressure } from '../js/ui/water-pressure.js';
 
 class FakeElement {
@@ -1305,4 +1306,37 @@ test('Warning mode keeps interim pressure input within the supported range', () 
   } finally {
     globalThis.document = previousDocument;
   }
+});
+test('labels What-if terminal projections without optimizer target wording', () => {
+  const series = buildThermalSeries([{
+    type: 'drain',
+    title: 'Step 1: Drain',
+    thermal: {
+      durationMinutes: 1,
+      waitMinutes: 0,
+      temperatureStartC: 25,
+      temperatureAtTransferEndC: 24,
+      pressureAtTransferEndBar: 20,
+      pressureAfterWaitBar: 20,
+      temperatureAfterWaitC: 24,
+      samples: [
+        { elapsedMinutes: 0, pressureBar: 50, temperatureC: 25 },
+        { elapsedMinutes: 1, pressureBar: 20, temperatureC: 24 }
+      ]
+    }
+  }], {
+    initialPressureBar: 50,
+    initialTemperatureC: 25
+  }, {
+    mode: 'what-if',
+    pressureBar: 19,
+    temperatureC: 25,
+    durationMinutes: 4,
+    inWaterPressureBar: 18,
+    inWaterTemperatureC: 10
+  });
+  const inWater = series.points.at(-1);
+  assert.equal(inWater.phase, 'in-water-projection');
+  assert.match(inWater.label, /In-water projection/);
+  assert.doesNotMatch(inWater.label, /target/i);
 });

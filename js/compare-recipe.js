@@ -397,6 +397,25 @@ function sourceState(bank, moles, temperatureC, useVdw) {
     heliumPercent: bank.heliumPercent
   };
 }
+function sourceBankSummary(bank, initial, final) {
+  return {
+    id: bank.id,
+    name: bank.name,
+    initial: {
+      pressureBar: initial.pressureBar,
+      moles: initial.moles,
+      oxygenPercent: initial.oxygenPercent,
+      heliumPercent: initial.heliumPercent
+    },
+    final: {
+      pressureBar: final.pressureBar,
+      moles: final.moles,
+      oxygenPercent: final.oxygenPercent,
+      heliumPercent: final.heliumPercent
+    }
+  };
+}
+
 
 function transferRate(type, sourceStart, sourceEnd, receiverStart, receiverEnd, limits, receiverVolumeL, temperatureC, useVdw) {
   const pressureIncreaseBar = Math.max(0, receiverEnd.pressureBar - receiverStart.pressureBar);
@@ -660,6 +679,8 @@ export function buildCompareProtocol(rows, { cylinder, physics, banks = [], sett
   const protocolSteps = [];
   const trajectory = [trajectoryPoint(0, 'Start Mix', receiver.mix, receiver.pressureBar, 0, '#f43f5e')];
   let trajectoryStep = 0;
+  const sourceBanks = new Map();
+
 
   for (const row of validation.normalizedRows) {
     if (row.type === 'drain') {
@@ -731,6 +752,16 @@ export function buildCompareProtocol(rows, { cylinder, physics, banks = [], sett
         useVdw
       );
       receiverFinal.pressureBar = targetPressureBar;
+      const sourceInitial = {
+        pressureBar: null,
+        moles: null,
+        oxygenPercent: sourceBank.oxygenPercent,
+        heliumPercent: sourceBank.heliumPercent
+      };
+      if (!sourceBanks.has(sourceBank.id)) {
+        sourceBanks.set(sourceBank.id, sourceBankSummary(sourceBank, sourceInitial, sourceInitial));
+      }
+
       const step = plannedCompressorStep(row, receiverStart, receiverFinal);
       protocolSteps.push(step);
       trajectoryStep = addTrajectoryPoint(trajectory, step, trajectoryStep);
@@ -771,6 +802,21 @@ export function buildCompareProtocol(rows, { cylinder, physics, banks = [], sett
     );
     receiverFinal.pressureBar = targetPressureBar;
     const sourceFinal = sourceState(sourceBank, source.moles - requiredMoles, temperatureC, useVdw);
+    if (!sourceBanks.has(sourceBank.id)) {
+      sourceBanks.set(sourceBank.id, sourceBankSummary(
+        sourceBank,
+        { ...sourceStart, pressureBar: sourceBank.pressureBar },
+        sourceFinal
+      ));
+    } else {
+      sourceBanks.get(sourceBank.id).final = {
+        pressureBar: sourceFinal.pressureBar,
+        moles: sourceFinal.moles,
+        oxygenPercent: sourceFinal.oxygenPercent,
+        heliumPercent: sourceFinal.heliumPercent
+      };
+    }
+
 
     if (sourceFinal.pressureBar >= targetPressureBar - PRESSURE_TOLERANCE_BAR) {
       const step = plannedTransferStep(
@@ -869,5 +915,5 @@ export function buildCompareProtocol(rows, { cylinder, physics, banks = [], sett
     receiver = receiverFinal;
   }
 
-  return { protocolSteps, trajectory, initialMix };
+  return { protocolSteps, trajectory, initialMix, sourceBanks: [...sourceBanks.values()] };
 }

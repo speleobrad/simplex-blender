@@ -228,6 +228,7 @@ test('opens What-if and models an exact drain step', async ({ appPage }) => {
   await page.locator('[data-action="run-compare"]').evaluate(button => button.click());
   await expect(page.locator('#what-if-result')).toContainText(/Final: 20(?:\.0)? bar/);
   await expect(page.locator('#what-if-result')).toContainText(/Drain/);
+  await expect(page.locator('#what-if-result')).toContainText(/In-water projection:/i);
 });
 
 test('reports a working-pressure exceedance in Warning-mode What-if results', async ({ appPage }) => {

@@ -24,6 +24,8 @@ export default defineConfig({
     command: 'python3 -m http.server 4173',
     url: 'http://127.0.0.1:4173/index.html',
     reuseExistingServer: !process.env.CI,
+    stdout: 'ignore',
+    stderr: 'ignore',
     timeout: 30_000
   }
 });

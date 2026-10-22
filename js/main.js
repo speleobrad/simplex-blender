@@ -1059,6 +1059,12 @@ function renderWhatIfResult() {
   const settled = document.createElement('p');
   settled.textContent = `After settling: ${stateText(compare.final.ambientSettled)}`;
   summary.append(settled);
+  const inWaterProjection = compare.final.inWaterProjection;
+  if (inWaterProjection) {
+    const inWater = document.createElement('p');
+    inWater.textContent = `In-water projection: ${stateText(inWaterProjection)}`;
+    summary.append(inWater);
+  }
   const heading = document.createElement('h3');
   heading.className = 'font-semibold text-slate-200';
   heading.textContent = 'Steps';
