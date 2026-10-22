@@ -22,6 +22,12 @@ function phaseLabel(phase) {
   return 'step start';
 }
 
+export function isThermalTerminalProjection(phase) {
+  return phase === 'ambient-settled'
+    || phase === 'in-water-target'
+    || phase === 'in-water-projection';
+}
+
 export function thermalCurveAttributes(color, style = 'estimated') {
   const attributes = {
     fill: 'none',
@@ -699,8 +705,7 @@ function renderDataTable(container, points) {
   const body = document.createElement('tbody');
   for (let index = 0; index < points.length;) {
     const pointValue = points[index];
-    const isTerminalProjection = pointValue.phase === 'ambient-settled'
-      || pointValue.phase === 'in-water-target';
+    const isTerminalProjection = isThermalTerminalProjection(pointValue.phase);
     const row = document.createElement('tr');
     const bandIndex = pointValue.step - 1;
     row.className = `thermal-band-${bandIndex % 2 === 0 ? 'even' : 'odd'} border-b border-ocean-800/60 last:border-0`;

@@ -39,7 +39,13 @@ export function whatIfDraftSignature(scenario) {
 export function whatIfSharedInputSignature({ settings, banks, cylinderPresetName }) {
   const physics = settings?.physics ?? {};
   const preset = settings?.cylinderPresets?.find(item => item.name === cylinderPresetName) ?? null;
-  return stable({ physics: { model: physics.model, temperatureC: physics.temperatureC }, cylinderPreset: preset, banks: banks ?? [] });
+  return stable({
+    physics: { model: physics.model, temperatureC: physics.temperatureC },
+    cylinderPreset: preset,
+    booster: settings?.booster ?? {},
+    pressureLimitMode: settings?.pressureLimitMode ?? 'hard-stop',
+    banks: banks ?? []
+  });
 }
 
 export function buildWhatIfInput(scenario, { settings, banks }) {

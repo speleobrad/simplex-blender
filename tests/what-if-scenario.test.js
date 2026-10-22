@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildCompareProtocol, validateCompareRecipe } from '../js/compare-recipe.js';
 import { simulateCompareProtocol } from '../js/thermodynamics.js';
+import { isThermalTerminalProjection } from '../js/ui/thermal-charts.js';
 import {
   applyWhatIfStartPatch,
   buildWhatIfInput,
@@ -140,4 +141,41 @@ test('invalid scenario rows preserve the prior result while reporting row errors
   assert.equal(updated.draftRevision, 1);
   assert.equal(validation.valid, false);
   assert.equal(validation.errors[0].rowId, 'invalid-row');
+});
+test('thermal tables classify explicit in-water projections as terminal points', () => {
+  assert.equal(isThermalTerminalProjection('ambient-settled'), true);
+  assert.equal(isThermalTerminalProjection('in-water-target'), true);
+  assert.equal(isThermalTerminalProjection('in-water-projection'), true);
+  assert.equal(isThermalTerminalProjection('transfer-end'), false);
+});
+
+test('shared signatures change when What-if equipment or pressure policy changes', () => {
+  const base = {
+    physics: { model: 'ideal', temperatureC: 25 },
+    cylinderPresets: [{ name: 'Catalina S80', workingPressureBar: 207 }],
+    booster: {
+      drainingRateBarPerMin: 5,
+      oxygenBoostBpm: 35,
+      boosterTemperatureModifierC: 4,
+      maxBoosterOutputPressureBar: 300
+    },
+    pressureLimitMode: 'hard-stop'
+  };
+  const signature = whatIfSharedInputSignature({
+    settings: base,
+    banks: [],
+    cylinderPresetName: 'Catalina S80'
+  });
+  const changedEquipment = whatIfSharedInputSignature({
+    settings: { ...base, booster: { ...base.booster, drainingRateBarPerMin: 6 } },
+    banks: [],
+    cylinderPresetName: 'Catalina S80'
+  });
+  const changedPolicy = whatIfSharedInputSignature({
+    settings: { ...base, pressureLimitMode: 'warning' },
+    banks: [],
+    cylinderPresetName: 'Catalina S80'
+  });
+  assert.notEqual(signature, changedEquipment);
+  assert.notEqual(signature, changedPolicy);
 });
