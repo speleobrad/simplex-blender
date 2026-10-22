@@ -457,7 +457,7 @@ export function buildAccessibleTernaryData({
 }
 
 function renderAccessibleChartData({ banks, initialMix, targetMix, trajectory, mode }, root = document) {
-  const scoped = id => root?.querySelector?.(`[data-result-key="${id}"]`) ?? root?.getElementById?.(id) ?? document.getElementById(id);
+  const scoped = id => root?.querySelector?.(`[data-result-key="${id}"]`) ?? root?.querySelector?.(`#${id}`) ?? (root === document ? document.getElementById(id) : null);
   const mixesTable = scoped('ternary-data-mixes');
   const trajectoryTable = scoped('ternary-data-trajectory');
   if (!mixesTable || !trajectoryTable) return;

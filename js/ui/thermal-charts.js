@@ -311,10 +311,15 @@ const THERMAL_CONTAINER_IDS = [
   'thermal-chart-data'
 ];
 
-let thermalInteractionsBound = false;
-let thermalHoverPointSamples = [];
-let thermalHoverSamples = [];
-let thermalHoverReadout = null;
+const thermalStates = new WeakMap();
+const getThermalState = root => {
+  let state = thermalStates.get(root);
+  if (!state) {
+    state = { pointSamples: [], samples: [], readout: null };
+    thermalStates.set(root, state);
+  }
+  return state;
+};
 const THERMAL_HOVER_DEFAULT = 'Hover either graph to inspect time, temperature, and pressure.';
 
 
@@ -324,48 +329,34 @@ function pointDescription(pointValue) {
   return `${pointValue.label || pointValue.title}, ${phaseLabel(pointValue.phase)}, ${pointValue.elapsedMinutes.toFixed(1)} minutes, ${pointValue.temperatureC.toFixed(1)} ${temperatureUnit}, ${pointValue.pressureBar.toFixed(1)} ${pressureUnit}`;
 }
 
-function setActiveThermalPoint(index) {
-  for (const element of document.querySelectorAll('[data-thermal-point-index]')) {
-    element.classList.toggle('thermal-point-active', element.dataset.thermalPointIndex === String(index));
-  }
+function setActiveThermalPoint(index, root) {
+  for (const element of root.querySelectorAll?.('[data-thermal-point-index]') ?? []) element.classList.toggle('thermal-point-active', element.dataset.thermalPointIndex === String(index));
 }
-
-function clearActiveThermalPoint() {
-  for (const element of document.querySelectorAll('.thermal-point-active')) {
-    element.classList.remove('thermal-point-active');
-  }
+function clearActiveThermalPoint(root) {
+  for (const element of root.querySelectorAll?.('.thermal-point-active') ?? []) element.classList.remove('thermal-point-active');
 }
-
-function clearThermalHover() {
-  if (thermalHoverReadout) thermalHoverReadout.textContent = THERMAL_HOVER_DEFAULT;
-  for (const svg of document.querySelectorAll('.thermal-chart-svg')) {
+function clearThermalHover(root) {
+  const state = getThermalState(root);
+  if (state.readout) state.readout.textContent = THERMAL_HOVER_DEFAULT;
+  for (const svg of root.querySelectorAll?.('.thermal-chart-svg') ?? []) {
     svg.querySelector('[data-thermal-hover-line]')?.setAttribute('display', 'none');
     svg.querySelector('[data-thermal-hover-marker]')?.setAttribute('display', 'none');
   }
 }
-
-function updateThermalHover(sample) {
-  if (thermalHoverReadout) {
-    thermalHoverReadout.textContent = `Time: ${sample.elapsedMinutes.toFixed(1)} min · Temperature: ${sample.temperatureC.toFixed(1)} ${sample.temperatureUnit ?? '°C'} · Pressure: ${sample.pressureBar.toFixed(1)} ${sample.pressureUnit ?? 'bar'}`;
-  }
-  for (const svg of document.querySelectorAll('.thermal-chart-svg')) {
+function updateThermalHover(sample, root) {
+  const state = getThermalState(root);
+  if (state.readout) state.readout.textContent = `Time: ${sample.elapsedMinutes.toFixed(1)} min · Temperature: ${sample.temperatureC.toFixed(1)} ${sample.temperatureUnit ?? '°C'} · Pressure: ${sample.pressureBar.toFixed(1)} ${sample.pressureUnit ?? 'bar'}`;
+  for (const svg of root.querySelectorAll?.('.thermal-chart-svg') ?? []) {
     const maximumTime = Number(svg.dataset.thermalMaximumTime);
     const minimum = Number(svg.dataset.thermalMinimum);
     const maximum = Number(svg.dataset.thermalMaximum);
     const key = svg.dataset.thermalKey;
-    const x = CHART_MARGIN.left + (sample.elapsedMinutes / maximumTime)
-      * (CHART_WIDTH - CHART_MARGIN.left - CHART_MARGIN.right);
-    const value = sample[key];
-    const y = CHART_MARGIN.top + (1 - (value - minimum) / (maximum - minimum))
-      * (CHART_HEIGHT - CHART_MARGIN.top - CHART_MARGIN.bottom);
+    const x = CHART_MARGIN.left + (sample.elapsedMinutes / maximumTime) * (CHART_WIDTH - CHART_MARGIN.left - CHART_MARGIN.right);
+    const y = CHART_MARGIN.top + (1 - (sample[key] - minimum) / (maximum - minimum)) * (CHART_HEIGHT - CHART_MARGIN.top - CHART_MARGIN.bottom);
     const line = svg.querySelector('[data-thermal-hover-line]');
     const marker = svg.querySelector('[data-thermal-hover-marker]');
-    line?.setAttribute('x1', x);
-    line?.setAttribute('x2', x);
-    line?.setAttribute('display', 'inline');
-    marker?.setAttribute('cx', x);
-    marker?.setAttribute('cy', y);
-    marker?.setAttribute('display', 'inline');
+    line?.setAttribute('x1', x); line?.setAttribute('x2', x); line?.setAttribute('display', 'inline');
+    marker?.setAttribute('cx', x); marker?.setAttribute('cy', y); marker?.setAttribute('display', 'inline');
   }
 }
 
@@ -398,9 +389,9 @@ function bindThermalInteractions(root = document) {
       ? event.relatedTarget.closest('[data-thermal-point-index]')
       : null;
     if (relatedPoint === point) return;
-    setActiveThermalPoint(point.dataset.thermalPointIndex);
-    const pointSample = thermalHoverPointSamples[Number(point.dataset.thermalPointIndex)];
-    if (pointSample) updateThermalHover(pointSample);
+    setActiveThermalPoint(point.dataset.thermalPointIndex, root);
+    const pointSample = getThermalState(root).pointSamples[Number(point.dataset.thermalPointIndex)];
+    if (pointSample) updateThermalHover(pointSample, root);
   };
 
   const handleLeave = event => {
@@ -410,7 +401,7 @@ function bindThermalInteractions(root = document) {
       ? event.relatedTarget.closest('[data-thermal-point-index]')
       : null;
     if (relatedPoint === point) return;
-    clearActiveThermalPoint();
+    clearActiveThermalPoint(root);
   };
 
   const handleChartMove = event => {
@@ -418,21 +409,20 @@ function bindThermalInteractions(root = document) {
     const svg = target && typeof target.closest === 'function'
       ? target.closest('.thermal-chart-svg')
       : null;
-    if (!svg || !thermalHoverSamples.length) {
-      clearThermalHover();
+    if (!svg || !getThermalState(root).samples.length) {
+      clearThermalHover(root);
       return;
     }
     const bounds = svg.getBoundingClientRect();
-    const viewY = (event.clientY - bounds.top) / bounds.height * CHART_HEIGHT;
     const plotBottom = CHART_HEIGHT - CHART_MARGIN.bottom;
     if (viewY < CHART_MARGIN.top || viewY > plotBottom) {
-      clearThermalHover();
+      clearThermalHover(root);
       return;
     }
     const minutes = thermalHoverMinutes(event, svg);
-    updateThermalHover(interpolateThermalSample(thermalHoverSamples, minutes));
+    updateThermalHover(interpolateThermalSample(getThermalState(root).samples, minutes), root);
   };
-  const handleChartLeave = () => clearThermalHover();
+  const handleChartLeave = () => clearThermalHover(root);
 
   for (const container of containers) {
     container.addEventListener('mouseover', handleEnter);
@@ -444,7 +434,7 @@ function bindThermalInteractions(root = document) {
       container.addEventListener('pointerleave', handleChartLeave);
     }
   }
-  thermalInteractionsBound = true;
+  root.__thermalInteractionsBound = true;
 }
 
 function thermalPointAttributes(pointValue, index) {
@@ -793,10 +783,11 @@ export function renderThermalCharts(result, input = {}, units = 'metric', { root
     segments: series.segments.map(segment => ({ ...segment, samples: segment.samples.map(displayPoint) })),
     final: series.final ? displayPoint(series.final) : null
   };
-  thermalHoverPointSamples = displaySeries.points;
-  thermalHoverSamples = displaySeries.samples.filter(sample => sample.title !== 'In-water target projection');
-  thermalHoverReadout = scoped('thermal-chart-hover-readout');
-  clearThermalHover();
+  const state = getThermalState(root);
+  state.pointSamples = displaySeries.points;
+  state.samples = displaySeries.samples.filter(sample => sample.title !== 'In-water target projection');
+  state.readout = scoped('thermal-chart-hover-readout');
+  clearThermalHover(root);
   const ambientTemperatureC = input.thermal?.ambientTemperatureC ?? input.physics?.temperatureC;
   renderChart(temperatureChart, {
     title: 'Temperature',
