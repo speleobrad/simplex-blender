@@ -520,6 +520,7 @@ test('saved gas and cylinder presets survive a load/save round trip', () => {
   const storage = memoryStorage();
   const settings = {
     units: 'metric',
+    physics: { model: 'vdw' },
     pressureLimitMode: 'hard-stop',
     pressureWarningUnlocked: false,
     gasPresets: [{ name: 'Tx 16/50', oxygenPercent: 16, heliumPercent: 50 }],
@@ -543,6 +544,7 @@ test('saved settings preserve the shared booster minimum source pressure', () =>
   const storage = memoryStorage();
   const settings = {
     units: 'metric',
+    physics: { model: 'vdw' },
     pressureLimitMode: 'hard-stop',
     pressureWarningUnlocked: false,
     gasPresets: [{ name: 'Tx 16/50', oxygenPercent: 16, heliumPercent: 50 }],
