@@ -155,7 +155,7 @@ function rowFields(card, row, rowNumber, banks, errors, pressureStarts, units = 
     fields.append(modeField);
     if (row.waitMode === 'target') {
       const temperatureField = element('div');
-      appendLabelledControl(temperatureField, row, rowNumber, 'targetTemperatureC', `Target medium temperature (${unitLabel('temperatureC', units)})`, input(row, 'targetTemperatureC', formatInputValue(row.targetTemperatureC, 'temperatureC', units), 'number'), errors);
+      appendLabelledControl(temperatureField, row, rowNumber, 'targetTemperatureC', `Target medium temperature (${unitLabel('temperatureC', units)})`, input(row, 'targetTemperatureC', Number.isFinite(row.targetTemperatureC) ? formatInputValue(row.targetTemperatureC, 'temperatureC', units) : '', 'number'), errors);
       fields.append(temperatureField);
     } else {
       const waitField = element('div');

@@ -136,7 +136,7 @@ test('identifies a selected finite bank after it is disabled', async ({ appPage 
   await page.getByRole('button', { name: 'Add row', exact: true }).click();
   const row = page.locator('#screen-what-if fieldset[data-row-id^="compare-row-"]').last();
   await row.locator('[data-compare-field="type"]').selectOption('add');
-  const bank = row.locator('[data-compare-field="bankId"] option:not([value="compressor-air"])').first();
+  const bank = row.locator('[data-compare-field="bankId"] option[value]:not([value=""]):not([value="compressor-air"])').first();
   await expect(bank).toHaveCount(1);
   const bankId = await bank.getAttribute('value');
   await row.locator('[data-compare-field="bankId"]').selectOption(bankId);
