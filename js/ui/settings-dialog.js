@@ -76,12 +76,6 @@ function renderGasRows(presets) {
   container.replaceChildren(...rows);
 }
 
-function createTableCell(content, className = '') {
-  const cell = document.createElement('td');
-  cell.className = className;
-  cell.append(content);
-  return cell;
-}
 
 function createCylinderNumberInput({ value, index, field, label, min, max, step, width = 'w-20' }) {
   const input = createPresetInput({
@@ -96,13 +90,13 @@ function createCylinderNumberInput({ value, index, field, label, min, max, step,
     step
   });
   input.className = input.className.replace('px-1', 'px-0.5');
-  input.classList.add(width);
+  input.classList.add(...width.split(/\s+/).filter(Boolean));
   return input;
 }
 
 function createMaterialSelect(preset, index) {
   const select = document.createElement('select');
-  select.className = 'w-20 min-w-0 rounded border border-ocean-700 bg-ocean-950 px-1 py-1 text-xs text-slate-100';
+  select.className = 'w-24 min-w-0 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-xs text-slate-100';
   select.dataset.settingsCollection = 'cylinderPresets';
   select.dataset.settingsIndex = String(index);
   select.dataset.settingsField = 'material';
@@ -119,8 +113,9 @@ function createMaterialSelect(preset, index) {
 
 function createCylinderField(label, content) {
   const field = document.createElement('div');
+  field.className = 'min-w-0 px-1';
   const labelElement = document.createElement('span');
-  labelElement.className = 'mb-1 block text-[10px] uppercase tracking-wide text-slate-500';
+  labelElement.className = 'mb-1 block truncate text-[10px] uppercase tracking-wide text-slate-500';
   labelElement.textContent = label;
   field.append(labelElement, content);
   return field;
@@ -218,32 +213,35 @@ function renderCylinderRows(presets, units) {
   }
 
   const table = document.createElement('table');
-  table.className = 'hidden w-full table-fixed text-left text-xs sm:table';
+  table.className = 'hidden min-w-[48rem] w-full text-left text-xs sm:table sm:grid';
   const thead = document.createElement('thead');
+  thead.className = 'grid';
   const headerRow = document.createElement('tr');
-  headerRow.className = 'text-[10px] uppercase tracking-wide text-slate-400';
-  for (const [label, className, ariaLabel] of [
-    ['Name', 'min-w-[8.5rem]'],
-    ['Material', 'w-20'],
-    ['Volume (L)', 'w-14'],
-    ['Mass (kg)', 'w-16'],
-    [`Working pressure (${cylinderUnitLabel('workingPressureBar', units)})`, 'w-16'],
-    ['Hot overfill (%)', 'w-16'],
-    ['', 'w-6', 'Actions']
+  headerRow.className = 'grid grid-cols-[minmax(0,1fr)_6rem_4.5rem_4.5rem_6rem_5.5rem_1.5rem] items-end gap-2 px-2 pb-1 text-[10px] uppercase tracking-wide text-slate-400';
+  for (const [label, ariaLabel] of [
+    ['Name', undefined],
+    ['Material', undefined],
+    ['Volume (L)', undefined],
+    ['Mass (kg)', undefined],
+    [`Working pressure (${cylinderUnitLabel('workingPressureBar', units)})`, undefined],
+    ['Hot overfill (%)', undefined],
+    ['', 'Actions']
   ]) {
     const header = document.createElement('th');
     header.scope = 'col';
-    header.className = `px-1.5 pb-1 text-left font-medium ${className}`;
+    header.className = `min-w-0 text-left font-medium ${/Mass|Working pressure/.test(label) ? 'w-16' : ''}`;
     header.textContent = label;
     if (ariaLabel) header.setAttribute('aria-label', ariaLabel);
     headerRow.append(header);
   }
   thead.append(headerRow);
+  table.append(thead);
 
   const tbody = document.createElement('tbody');
+  tbody.className = 'grid';
   for (const { preset, index } of sortedPresets) {
     const row = document.createElement('tr');
-    row.className = 'border-t border-ocean-800/70 align-middle';
+    row.className = 'grid grid-cols-[minmax(0,1fr)_6rem_4.5rem_4.5rem_6rem_5.5rem_1.5rem] items-center gap-2 border-t border-ocean-800/70 px-2 py-1';
     const name = createPresetInput({
       value: preset.name,
       type: 'text',
@@ -253,52 +251,56 @@ function renderCylinderRows(presets, units) {
       label: 'Cylinder preset name'
     });
     name.classList.add('w-full');
+    const volume = createCylinderNumberInput({
+      value: cylinderDisplayValue(preset.volumeL, 'volumeL', units),
+      index,
+      field: 'volumeL',
+      width: 'w-full',
+      label: `${preset.name || 'Cylinder'} internal volume in ${cylinderUnitLabel('volumeL', units)}`,
+      min: 0.1,
+      step: 0.1
+    });
+    const mass = createCylinderNumberInput({
+      value: cylinderDisplayValue(preset.massKg, 'massKg', units),
+      index,
+      field: 'massKg',
+      width: 'w-full w-16',
+      label: `${preset.name || 'Cylinder'} mass in ${cylinderUnitLabel('massKg', units)}`,
+      min: 0.1,
+      step: 0.1
+    });
+    const workingPressure = createCylinderNumberInput({
+      value: cylinderDisplayValue(preset.workingPressureBar, 'workingPressureBar', units),
+      index,
+      field: 'workingPressureBar',
+      width: 'w-full',
+      label: `${preset.name || 'Cylinder'} working pressure in ${cylinderUnitLabel('workingPressureBar', units)}`,
+      min: cylinderDisplayValue(10, 'workingPressureBar', units),
+      max: cylinderDisplayValue(350, 'workingPressureBar', units),
+      step: 1
+    });
+    const hotOverfill = createCylinderNumberInput({
+      value: preset.hotOverfillPercent,
+      index,
+      field: 'hotOverfillPercent',
+      width: 'w-full',
+      label: `${preset.name || 'Cylinder'} hot overfill percentage`,
+      min: 0,
+      max: 5,
+      step: 0.5
+    });
     row.append(
-      createTableCell(name, 'px-1.5 py-1'),
-      createTableCell(createMaterialSelect(preset, index), 'px-1.5 py-1'),
-      createTableCell(createCylinderNumberInput({
-        value: cylinderDisplayValue(preset.volumeL, 'volumeL', units),
-        index,
-        field: 'volumeL',
-        label: `${preset.name || 'Cylinder'} internal volume in ${cylinderUnitLabel('volumeL', units)}`,
-        min: 0.1,
-        step: 0.1
-      }), 'px-1.5 py-1'),
-      createTableCell(createCylinderNumberInput({
-        value: cylinderDisplayValue(preset.massKg, 'massKg', units),
-        index,
-        field: 'massKg',
-        width: 'w-16',
-        label: `${preset.name || 'Cylinder'} mass in ${cylinderUnitLabel('massKg', units)}`,
-        min: 0.1,
-        step: 0.1
-      }), 'px-1.5 py-1'),
-      createTableCell(createCylinderNumberInput({
-        value: cylinderDisplayValue(preset.workingPressureBar, 'workingPressureBar', units),
-        index,
-        field: 'workingPressureBar',
-        label: `${preset.name || 'Cylinder'} working pressure in ${cylinderUnitLabel('workingPressureBar', units)}`,
-        min: cylinderDisplayValue(10, 'workingPressureBar', units),
-        max: cylinderDisplayValue(350, 'workingPressureBar', units),
-        step: 1
-      }), 'px-1.5 py-1'),
-      createTableCell(createCylinderNumberInput({
-        value: preset.hotOverfillPercent,
-        index,
-        field: 'hotOverfillPercent',
-        label: `${preset.name || 'Cylinder'} hot overfill percentage`,
-        min: 0,
-        max: 5,
-        step: 0.5
-      }), 'px-1.5 py-1'),
-      createTableCell(
-        createRemoveButton('remove-cylinder-preset', index, `Remove ${preset.name || 'cylinder preset'}`, presets.length <= 1),
-        'px-0 py-1 text-center'
-      )
+      name,
+      createMaterialSelect(preset, index),
+      volume,
+      mass,
+      workingPressure,
+      hotOverfill,
+      createRemoveButton('remove-cylinder-preset', index, `Remove ${preset.name || 'cylinder preset'}`, presets.length <= 1)
     );
     tbody.append(row);
   }
-  table.append(thead, tbody);
+  table.append(tbody);
 
   const scrollContainer = document.createElement('div');
   scrollContainer.className = 'hidden overflow-x-auto sm:block';
@@ -464,9 +466,15 @@ export function renderSettingsDialog(settings, importState) {
   };
   for (const [id, value] of Object.entries(boosterFields)) {
     const input = document.getElementById(id);
-    if (input) input.value = String(value);
+    if (!input) continue;
+    input.value = ['settings-booster-temperature-modifier', 'settings-compressor-temperature-modifier'].includes(id)
+      ? `${Number(value) >= 0 ? '+' : ''}${value}`
+      : String(value);
+    if (id.includes('temperature-modifier')) {
+      input.classList.toggle('text-orange-300', Number(value) > 0);
+      input.classList.toggle('text-emerald-300', Number(value) < 0);
+    }
   }
-  renderPresetImport(settings, importState);
 }
 
 function createOption(value, label) {

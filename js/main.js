@@ -516,6 +516,7 @@ function selectCompressorPreset(select) {
   const settings = selectEquipmentPreset(state.settingsDraft, 'compressorPresets', select.value);
   if (!settings) return;
   state.settingsDraft = settings;
+  persistSettingsDraft();
   renderSettingsDraft();
 }
 
@@ -523,6 +524,7 @@ function selectBoosterPreset(select) {
   const settings = selectEquipmentPreset(state.settingsDraft, 'boosterPresets', select.value);
   if (!settings) return;
   state.settingsDraft = settings;
+  persistSettingsDraft();
   renderSettingsDraft();
 }
 function selectInventoryEquipmentPreset(select, collection) {
@@ -540,6 +542,31 @@ function selectInventoryEquipmentPreset(select, collection) {
   recalculate();
 }
 
+function persistSettingsDraft() {
+  const errors = validateSettings(state.settingsDraft);
+  if (errors.length > 0) {
+    displaySettingsErrors(errors);
+    return false;
+  }
+  const pressureLimitModeChanged = state.settings.pressureLimitMode !== state.settingsDraft.pressureLimitMode;
+  const previousUnits = state.settings.units;
+  try {
+    saveSettings(state.settingsDraft, settingsStorage);
+  } catch (error) {
+    console.warn('Simplex blender settings were not saved.', error);
+    displaySettingsErrors(['Settings were not saved. Check that browser storage is enabled and has space, then try again.']);
+    return false;
+  }
+  state.settings = copySettings(state.settingsDraft);
+  if (pressureLimitModeChanged) invalidateCompareResult();
+  convertDisplayedInputs(previousUnits, state.settings.units);
+  updateStorageWarning();
+  refreshPresetOptions();
+  recalculate();
+  clearSettingsErrors();
+  return true;
+}
+
 function updateSettingsDraft(input) {
   if (!state.settingsDraft) return;
   const collection = input.dataset.settingsCollection;
@@ -555,11 +582,11 @@ function updateSettingsDraft(input) {
   else if (field === 'pressureLimitMode') {
     state.settingsDraft.pressureLimitMode = value;
     byId('settings-pressure-warning-notice')?.classList.toggle('hidden', value !== 'warning');
-  }
-  else if (collection === 'units') state.settingsDraft.units = value;
+  } else if (collection === 'units') state.settingsDraft.units = value;
   else if (collection === 'cylinderPresets') state.settingsDraft.cylinderPresets[index][field] = value;
   else if (collection === 'booster') state.settingsDraft.booster[field] = value;
   else state.settingsDraft.gasPresets[index][field] = value;
+  persistSettingsDraft();
 }
 
 function unlockPressureWarning() {
@@ -567,6 +594,7 @@ function unlockPressureWarning() {
   const confirmation = byId('settings-pressure-limit-confirmation');
   if (!matchesPressureWarningUnlockPhrase(confirmation?.value)) return;
   state.settingsDraft.pressureWarningUnlocked = true;
+  persistSettingsDraft();
   clearPressureWarningConfirmation();
   renderSettingsDraft();
   setSettingsCategory('general');
@@ -578,8 +606,8 @@ function addGasPreset() {
   let suffix = 2;
   while (names.has(normalizePresetName(name))) name = `New gas ${suffix++}`;
   state.settingsDraft.gasPresets.push({ name, oxygenPercent: 21, heliumPercent: 0 });
+  persistSettingsDraft();
   renderSettingsDraft();
-  setSettingsCategory(state.settingsCategory);
 }
 
 function addCylinderPreset() {
@@ -595,18 +623,21 @@ function addCylinderPreset() {
     workingPressureBar: 232,
     hotOverfillPercent: DEFAULT_HOT_OVERFILL_PERCENT
   });
+  persistSettingsDraft();
   renderSettingsDraft();
   setSettingsCategory(state.settingsCategory);
 }
 
 function addCompressorPreset() {
   addEquipmentPresetToDraft(state.settingsDraft, 'compressorPresets', 'New compressor');
+  persistSettingsDraft();
   renderSettingsDraft();
   setSettingsCategory('equipment');
 }
 
 function addBoosterPreset() {
   addEquipmentPresetToDraft(state.settingsDraft, 'boosterPresets', 'New booster');
+  persistSettingsDraft();
   renderSettingsDraft();
   setSettingsCategory('equipment');
 }
@@ -616,6 +647,7 @@ function removeSettingsPreset(collection, index) {
   if (!Array.isArray(presets) || presets.length <= 1 || !Number.isInteger(index)
     || index < 0 || index >= presets.length) return;
   presets.splice(index, 1);
+  persistSettingsDraft();
   renderSettingsDraft();
   setSettingsCategory(state.settingsCategory);
 }

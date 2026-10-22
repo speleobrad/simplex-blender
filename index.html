@@ -94,23 +94,27 @@
                 </select>
                 <p class="mt-1 text-[10px] text-slate-500">Choose the units shown throughout the calculator. Calculations and saved values remain canonical.</p>
               </div>
-              <div>
-                <label for="settings-pressure-limit-mode" class="block text-xs text-slate-400">Cylinder pressure limit behavior</label>
-                <select id="settings-pressure-limit-mode" data-settings-collection="general" data-settings-field="pressureLimitMode" aria-label="Cylinder pressure limit behavior" class="mt-1 w-full rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-xs text-slate-100">
-                  <option value="hard-stop">Hard stop</option>
-                  <option value="warning" disabled>Warning</option>
-                </select>
-                <p class="mt-1 text-[10px] text-slate-500">Hard stop prevents pressures above the cylinder rating. Warning mode allows them after confirmation.</p>
-                <div id="settings-pressure-warning-unlock" class="mt-2 space-y-2">
-                  <p id="settings-pressure-warning-instructions" class="mb-1 text-[10px] text-slate-500">Type <span class="font-mono font-semibold text-amber-200">I KNOW WHAT I'M DOING</span> to unlock Warning mode. Matching is case-insensitive; the apostrophe may be a single quote, backtick, or double quote.</p>
-                  <input id="settings-pressure-limit-confirmation" type="text" aria-label="Type I KNOW WHAT I'M DOING" aria-describedby="settings-pressure-warning-instructions" autocomplete="off" class="w-full rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-xs text-slate-100">
+              <div class="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label for="settings-pressure-limit-mode" class="block text-xs text-slate-400">Cylinder pressure limit behavior</label>
+                  <select id="settings-pressure-limit-mode" data-settings-collection="general" data-settings-field="pressureLimitMode" aria-label="Cylinder pressure limit behavior" class="mt-1 w-full rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-xs text-slate-100">
+                    <option value="hard-stop">Hard stop</option>
+                    <option value="warning" disabled>Warning</option>
+                  </select>
+                  <p class="mt-1 text-[10px] text-slate-500">Hard stop prevents pressures above the cylinder rating. Warning mode allows them after confirmation.</p>
+                  <p id="settings-pressure-warning-notice" class="hidden mt-2 rounded border border-amber-500/40 bg-amber-500/10 px-2 py-2 text-xs text-amber-200">Warning mode selected: cylinder limits are not enforced. Use caution.</p>
+                </div>
+                <div id="settings-pressure-warning-unlock" class="space-y-2">
+                  <label for="settings-pressure-limit-confirmation" class="block text-xs text-slate-400">Unlock warning mode</label>
+                  <input id="settings-pressure-limit-confirmation" type="text" aria-label="Type I KNOW WHAT I'M DOING" aria-describedby="settings-pressure-warning-instructions" autocomplete="off" class="mt-1 w-full rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-xs text-slate-100">
+                  <p id="settings-pressure-warning-instructions" class="text-[10px] text-slate-500">Type <span class="font-mono font-semibold text-amber-200">I KNOW WHAT I'M DOING</span> to unlock Warning mode. Matching is case-insensitive; the apostrophe may be a single quote, backtick, or double quote.</p>
                   <button id="settings-pressure-warning-unlock-button" type="button" data-action="unlock-pressure-warning" class="rounded border border-amber-500/50 px-2 py-1 text-xs text-amber-300 hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-40" disabled>Unlock warning mode</button>
                 </div>
-                <p id="settings-pressure-warning-notice" class="hidden mt-2 rounded border border-amber-500/40 bg-amber-500/10 px-2 py-2 text-xs text-amber-200">Warning mode selected: cylinder limits are not enforced. Use caution.</p>
               </div>
             </div>
           </section>
- 
+
+
 
           <section id="settings-pane-gas-presets" aria-labelledby="settings-pane-gas-presets-title" class="hidden">
             <div class="mb-3 flex items-center justify-between gap-2">
@@ -290,10 +294,6 @@
           </section>
       </div>
       <div id="settings-errors" role="alert" class="mb-4 hidden rounded-lg border border-rose-500/40 bg-rose-500/10 p-3 text-xs text-rose-300"></div>
-      <div class="flex justify-end gap-2 border-t border-ocean-800 pt-4">
-        <button type="button" data-action="cancel-settings" class="rounded-lg border border-ocean-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-ocean-800">Cancel</button>
-        <button type="button" data-action="save-settings" class="rounded-lg bg-cyan-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-cyan-500">Save settings</button>
-      </div>
     </div>
   </div>
   </div>
