@@ -212,15 +212,26 @@ function createController(options = {}) {
     target.setAttribute('id', id);
     document.body.append(target);
   }
-  const resultHost = document.createElement('section');
-  resultHost.setAttribute('data-result-host', 'blending');
-  for (const key of ['results-navigation', 'tab-btn-summary', 'tab-btn-water-pressure', 'tab-btn-ternary']) {
-    const target = document.createElement('button');
-    target.setAttribute('id', `blend-${key}`);
-    target.setAttribute('data-result-key', key);
-    resultHost.append(target);
+  const resultKeys = ['results-navigation', 'tab-btn-summary', 'tab-btn-water-pressure', 'tab-btn-ternary'];
+  if (options.resultLayout === 'ordinary') {
+    for (const key of resultKeys) {
+      const target = document.createElement('button');
+      target.setAttribute('id', key);
+      document.body.append(target);
+    }
+  } else {
+    for (const [hostName, idPrefix] of [['blending', 'blend'], ['what-if', 'what-if']]) {
+      const resultHost = document.createElement('section');
+      resultHost.setAttribute('data-result-host', hostName);
+      for (const key of resultKeys) {
+        const target = document.createElement('button');
+        target.setAttribute('id', `${idPrefix}-${key}`);
+        target.setAttribute('data-result-key', key);
+        resultHost.append(target);
+      }
+      document.body.append(resultHost);
+    }
   }
-  document.body.append(resultHost);
   const settingsDialog = document.createElement('dialog');
   settingsDialog.open = true;
   const equipmentPane = document.createElement('div');
@@ -259,8 +270,8 @@ function createController(options = {}) {
   };
 }
 
-function resultTarget(document, key) {
-  return document.querySelector(`[data-result-host="blending"] [data-result-key="${key}"]`);
+function resultTarget(document, key, host = 'blending') {
+  return document.querySelector(`[data-result-host="${host}"] [data-result-key="${key}"]`);
 }
 
 function consentDialog(document) {
@@ -300,8 +311,12 @@ test('opening an accepted user creates a Driver.js tour for the new layout', () 
   assert.equal(fixture.drivers[0].config.steps[0].element, '#primary-navigation');
   assert.equal(fixture.drivers[0].config.steps[0].popover.title, 'Welcome to Simplex Blender');
   assert.equal(fixture.drivers[0].config.steps[2].element, '#inventory-section');
-  assert.equal(fixture.drivers[0].config.steps[4].element, '[data-result-host="blending"] [data-result-key="results-navigation"]');
-  assert.equal(fixture.drivers[0].config.steps[5].element, '[data-result-host="blending"] [data-result-key="results-navigation"]');
+  assert.equal(fixture.drivers[0].config.steps[4].element, resultTarget(fixture.document, 'results-navigation'));
+  assert.equal(fixture.drivers[0].config.steps[5].element, resultTarget(fixture.document, 'results-navigation'));
+  assert.notEqual(
+    fixture.drivers[0].config.steps[4].element,
+    resultTarget(fixture.document, 'results-navigation', 'what-if')
+  );
   assert.equal(fixture.drivers[0].config.steps[6].element, '#settings-launch');
   assert.equal(fixture.drivers[0].config.steps[7].element, '#settings-pane-equipment');
   assert.equal(fixture.drivers[0].config.steps[7].popover.progressText, 'Step 7 of 8');
@@ -326,6 +341,25 @@ test('result target popovers resolve through the scoped Blending selector', () =
   fixture.controller.open();
   const driver = fixture.drivers[0];
 
+  for (let index = 0; index < 4; index += 1) driver.clickNext();
+
+  const popover = fixture.document.createElement('div');
+  driver.config.onPopoverRender({ wrapper: popover }, { index: 4, driver });
+
+  assert.equal(
+    fixture.document.querySelectorCalls.includes('[data-result-host="blending"] [data-result-key="results-navigation"]'),
+    true
+  );
+  assert.equal(popover.parentNode, fixture.document.body);
+});
+
+test('result tour primary targets fall back to ordinary IDs', () => {
+  const fixture = createController({ resultLayout: 'ordinary' });
+  fixture.controller.open();
+  const driver = fixture.drivers[0];
+  const target = fixture.document.getElementById('results-navigation');
+
+  assert.equal(driver.config.steps[4].element, target);
   for (let index = 0; index < 4; index += 1) driver.clickNext();
 
   const popover = fixture.document.createElement('div');

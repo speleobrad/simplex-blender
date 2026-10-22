@@ -55,9 +55,16 @@ function tourDestinations() {
   });
 }
 
-function driverSteps(destinations) {
+function driverTarget(document, destination) {
+  if (!destination.targetId) return null;
+  const selector = targetSelector(destination.targetId, destination.screen);
+  if (destination.screen !== 'blending' || !BLENDING_RESULT_TARGETS.has(destination.targetId)) return selector;
+  return resolveTarget(document, destination.targetId, destination.screen) ?? selector;
+}
+
+function driverSteps(destinations, document) {
   return destinations.map(destination => ({
-    ...(destination.targetId ? { element: targetSelector(destination.targetId, destination.screen) } : {}),
+    ...(destination.targetId ? { element: driverTarget(document, destination) } : {}),
     popover: {
       title: destination.title,
       description: destination.body,
@@ -280,7 +287,7 @@ export function createOnboardingController({
 
   function startTour() {
     destinations = tourDestinations();
-    const steps = driverSteps(destinations);
+    const steps = driverSteps(destinations, document);
     activeIndex = 0;
     clearSecondaryHighlights();
     mode = 'wizard';
