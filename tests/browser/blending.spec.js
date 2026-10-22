@@ -119,25 +119,25 @@ test.describe('working tank blending inputs', () => {
       waitMinutes: 0
     });
     await page.locator('#inlet-gas-temperature').dispatchEvent('input');
-    await expect(page.locator('#blend-status')).toContainText(/feasible/i);
-    const adjustedCooloff = page.locator('#steps-container [role="status"]')
+    await expect(page.locator('[data-result-host="blending"] [data-result-key="blend-status"]')).toContainText(/feasible/i);
+    const adjustedCooloff = page.locator('[data-result-host="blending"] [data-result-key="steps-container"] [role="status"]')
       .filter({ hasText: 'Adjusted cooloff: cylinder pressure limit' });
     await expect(adjustedCooloff).toHaveCount(1);
     await expect(adjustedCooloff).toContainText(/Waiting time extended to/);
-    await expect(page.locator('#steps-container details [role="status"]')).toHaveCount(0);
-    expect(Number.parseFloat(await page.locator('#res-ambient-pressure').innerText())).toBeLessThanOrEqual(100);
-    expect(Number.parseFloat(await page.locator('#res-in-water-pressure').innerText())).toBeLessThanOrEqual(100);
+    await expect(page.locator('[data-result-host="blending"] [data-result-key="steps-container"] details [role="status"]')).toHaveCount(0);
+    expect(Number.parseFloat(await page.locator('[data-result-host="blending"] [data-result-key="res-ambient-pressure"]').innerText())).toBeLessThanOrEqual(100);
+    expect(Number.parseFloat(await page.locator('[data-result-host="blending"] [data-result-key="res-in-water-pressure"]').innerText())).toBeLessThanOrEqual(100);
 
     const openPane = await openSettingsCategory(page, 'cylinder-presets');
     for (const field of await openPane.locator('[data-settings-field="hotOverfillPercent"]:visible').all()) await field.fill('2');
     await saveSettings(page);
-    await expect(page.locator('#blend-status')).toContainText(/feasible/i);
-    await expect(page.locator('#steps-container')).not.toContainText(/Adjusted cooloff:/);
-    const hotPressure = Number.parseFloat(await page.locator('#res-hot-pressure').innerText());
+    await expect(page.locator('[data-result-host="blending"] [data-result-key="blend-status"]')).toContainText(/feasible/i);
+    await expect(page.locator('[data-result-host="blending"] [data-result-key="steps-container"]')).not.toContainText(/Adjusted cooloff:/);
+    const hotPressure = Number.parseFloat(await page.locator('[data-result-host="blending"] [data-result-key="res-hot-pressure"]').innerText());
     expect(hotPressure).toBeGreaterThan(100);
     expect(hotPressure).toBeLessThanOrEqual(102);
-    expect(Number.parseFloat(await page.locator('#res-ambient-pressure').innerText())).toBeLessThanOrEqual(100);
-    expect(Number.parseFloat(await page.locator('#res-in-water-pressure').innerText())).toBeLessThanOrEqual(100);
+    expect(Number.parseFloat(await page.locator('[data-result-host="blending"] [data-result-key="res-ambient-pressure"]').innerText())).toBeLessThanOrEqual(100);
+    expect(Number.parseFloat(await page.locator('[data-result-host="blending"] [data-result-key="res-in-water-pressure"]').innerText())).toBeLessThanOrEqual(100);
   });
   test('allows a hot-overfill exceedance in Warning mode without an automatic wait', async ({ appPage }) => {
     test.setTimeout(90_000);
@@ -162,11 +162,11 @@ test.describe('working tank blending inputs', () => {
       targetInWaterTemperature: 20, medium: 'air', waitMode: 'minutes', waitMinutes: 0
     });
     await page.locator('#inlet-gas-temperature').dispatchEvent('input');
-    await expect(page.locator('#blend-status')).toContainText(/feasible/i);
-    await expect(page.locator('#blend-status')).toContainText(/warning mode/i);
-    await expect(page.locator('#blend-status')).toContainText(/hot-overfill limit/i);
-    await expect(page.locator('#steps-container')).not.toContainText(/automatic wait: cylinder pressure limit/i);
-    await expect(page.locator('#steps-container')).not.toContainText(/recorded input/i);
+    await expect(page.locator('[data-result-host="blending"] [data-result-key="blend-status"]')).toContainText(/feasible/i);
+    await expect(page.locator('[data-result-host="blending"] [data-result-key="blend-status"]')).toContainText(/warning mode/i);
+    await expect(page.locator('[data-result-host="blending"] [data-result-key="blend-status"]')).toContainText(/hot-overfill limit/i);
+    await expect(page.locator('[data-result-host="blending"] [data-result-key="steps-container"]')).not.toContainText(/automatic wait: cylinder pressure limit/i);
+    await expect(page.locator('[data-result-host="blending"] [data-result-key="steps-container"]')).not.toContainText(/recorded input/i);
   });
   test('Warning mode accepts interim readings above hot overfill within the supported range', async ({ appPage }) => {
     test.setTimeout(90_000);
