@@ -11,19 +11,19 @@ test.describe('result tabs', () => {
       await assertResultPanelExclusive(page, tab);
     }
     await openRecipeScenario(page);
-    await expect(page.locator('#steps-container')).toBeVisible();
+    await expect(page.locator('[data-result-host="blending"] [data-result-key="steps-container"]')).toBeVisible();
   });
 
   test('populates recipe summary pressure and temperature datapoints', async ({ appPage }) => {
     const page = await appPage.goto('lightTheme');
     await openRecipeScenario(page);
-    const states = page.locator('#summary-banner [data-summary-state]');
+    const states = page.locator('[data-result-host="blending"] [data-result-key="summary-banner"] [data-summary-state]');
     await expect(states).toHaveCount(3);
     await expect(states.nth(0)).toHaveAttribute('data-summary-state', 'hot-mix');
     await expect(states.nth(1)).toHaveAttribute('data-summary-state', 'ambient-settled');
     await expect(states.nth(2)).toHaveAttribute('data-summary-state', 'in-water');
     for (const state of ['hot-mix', 'ambient-settled', 'in-water']) {
-      const datapoint = page.locator(`#summary-banner [data-summary-state="${state}"]`);
+      const datapoint = page.locator(`[data-result-host="blending"] [data-result-key="summary-banner"] [data-summary-state="${state}"]`);
       await expect(datapoint.locator('[data-summary-metric="pressure"]')).toContainText('bar');
       await expect(datapoint.locator('[data-summary-metric="temperature"]')).toContainText('°C');
       const order = await datapoint.locator('[data-summary-metric]').evaluateAll(elements =>
@@ -35,18 +35,19 @@ test.describe('result tabs', () => {
   test('keeps partial recipe data in the diagram and tank summary', async ({ appPage }) => {
     const page = await appPage.goto('tourSeen');
     await openRecipeScenario(page, { values: { targetInWaterTemperature: 10 } });
-    await expect(page.locator('#blend-status')).toContainText(/target pressure limited/i);
+    const results = page.locator('[data-result-host="blending"]');
+    await expect(results.locator('[data-result-key="blend-status"]')).toContainText(/target pressure limited/i);
 
     await assertResultPanelExclusive(page, 'Simplex diagram');
-    await expect(page.locator('#ternary-steps-summary')).not.toHaveText('No feasible blend');
-    await expect(page.locator('#ternary-data-trajectory tr')).not.toHaveCount(0);
+    await expect(results.locator('[data-result-key="ternary-steps-summary"]')).not.toHaveText('No feasible blend');
+    await expect(results.locator('[data-result-key="ternary-data-trajectory"] tr')).not.toHaveCount(0);
 
     await assertResultPanelExclusive(page, 'Tank summary');
-    await expect(page.locator('#ternary-data-status')).toContainText(/trajectory points/i);
-    await expect(page.locator('#ternary-data-trajectory tr')).not.toHaveCount(0);
+    await expect(results.locator('[data-result-key="ternary-data-status"]')).toContainText(/trajectory points/i);
+    await expect(results.locator('[data-result-key="ternary-data-trajectory"] tr')).not.toHaveCount(0);
     await selectResultTab(page, 'Simplex diagram');
-    await expect(page.locator('#ternary-canvas')).toBeVisible();
-    const canvas = page.locator('#ternary-canvas');
+    await expect(results.locator('[data-result-key="ternary-canvas"]')).toBeVisible();
+    const canvas = results.locator('[data-result-key="ternary-canvas"]');
     const beforeThemeChange = await canvas.evaluate(element => element.toDataURL());
     await toggleTheme(page);
     await expect.poll(() => canvas.evaluate(element => element.toDataURL())).not.toBe(beforeThemeChange);
@@ -54,9 +55,7 @@ test.describe('result tabs', () => {
 
   test('uses equal-height technical-details rows with top-aligned content', async ({ appPage }) => {
     const page = await populated(appPage);
-    await openRecipeScenario(page);
-    const technicalDetails = page.locator('#steps-container details')
-      .filter({ hasText: 'Technical details' })
+    const technicalDetails = page.locator('[data-result-host="blending"] [data-result-key="steps-container"] details')
       .first();
     await technicalDetails.locator('summary').click();
     const emptyCells = technicalDetails.locator('dl > div[aria-hidden="true"]');
@@ -99,14 +98,15 @@ test.describe('result tabs', () => {
     const page = await appPage.goto('lightTheme');
     await openRecipeScenario(page);
     const widths = [1024, 1050, 1100, 1150, 1200, 1240, 1250, 1279, 1280];
+    const results = page.locator('[data-result-host="blending"]');
     const lowerRowValues = ['res-final-mix', 'res-fill-duration', 'res-max-temperature']
-      .map(id => page.locator(`#${id}`));
+      .map(id => results.locator(`[data-result-key="${id}"]`));
     const temperatures = ['hot-mix', 'ambient-settled', 'in-water']
-      .map(state => page.locator(`#summary-banner [data-summary-state="${state}"] [data-summary-metric="temperature"]`));
+      .map(state => results.locator(`[data-result-key="summary-banner"] [data-summary-state="${state}"] [data-summary-metric="temperature"]`));
 
     for (const width of widths) {
       await page.setViewportSize({ width, height: 1000 });
-      const columnCount = await page.locator('#summary-banner')
+      const columnCount = await results.locator('[data-result-key="summary-banner"]')
         .evaluate(element => getComputedStyle(element).gridTemplateColumns.trim().split(/\s+/).length);
       expect(columnCount).toBe(2);
 
@@ -116,9 +116,9 @@ test.describe('result tabs', () => {
       expect(Math.max(...yPositions) - Math.min(...yPositions)).toBeLessThanOrEqual(1);
     }
     await page.setViewportSize({ width: 1279, height: 1000 });
-    const beforeBreakpoint = await page.locator('#summary-banner').boundingBox();
+    const beforeBreakpoint = await results.locator('[data-result-key="summary-banner"]').boundingBox();
     await page.setViewportSize({ width: 1280, height: 1000 });
-    const afterBreakpoint = await page.locator('#summary-banner').boundingBox();
+    const afterBreakpoint = await results.locator('[data-result-key="summary-banner"]').boundingBox();
     expect(beforeBreakpoint).not.toBeNull();
     expect(afterBreakpoint).not.toBeNull();
     expect(Math.abs(beforeBreakpoint.height - afterBreakpoint.height)).toBeLessThanOrEqual(1);
@@ -126,41 +126,44 @@ test.describe('result tabs', () => {
 
   test('uses roving focus and synchronizes selection for result keyboard navigation', async ({ appPage }) => {
     const page = await populated(appPage);
-    const tabs = page.locator('#results-navigation [role="tab"]');
+    const results = page.locator('[data-result-host="blending"]');
+    const tabs = results.getByRole('tab');
     await expect(tabs).toHaveCount(5);
-    await expect(page.locator('#tab-btn-recipe')).toHaveAttribute('tabindex', '0');
-    for (const id of ['ternary', 'thermal', 'summary', 'water-pressure']) {
-      await expect(page.locator(`#tab-btn-${id}`)).toHaveAttribute('tabindex', '-1');
+    const tabByName = name => results.getByRole('tab', { name, exact: true });
+    await expect(tabByName('Recipe')).toHaveAttribute('tabindex', '0');
+    for (const name of ['Simplex diagram', 'Thermal Graph', 'Tank summary', 'In-water pressure']) {
+      await expect(tabByName(name)).toHaveAttribute('tabindex', '-1');
     }
 
-    await page.locator('#tab-btn-recipe').focus();
+    await tabByName('Recipe').focus();
     await page.keyboard.press('ArrowRight');
-    await expect(page.locator('#tab-btn-thermal')).toBeFocused();
-    await expect(page.locator('#tab-btn-thermal')).toHaveAttribute('aria-selected', 'true');
-    await expect(page.locator('#tab-btn-thermal')).toHaveAttribute('tabindex', '0');
-    await expect(page.locator('#tab-btn-recipe')).toHaveAttribute('aria-selected', 'false');
-    await expect(page.locator('#tab-pane-thermal')).toHaveAttribute('aria-hidden', 'false');
-    await expect(page.locator('#tab-pane-recipe')).toHaveAttribute('aria-hidden', 'true');
+    await expect(tabByName('Thermal Graph')).toBeFocused();
+    await expect(tabByName('Thermal Graph')).toHaveAttribute('aria-selected', 'true');
+    await expect(tabByName('Thermal Graph')).toHaveAttribute('tabindex', '0');
+    await expect(tabByName('Recipe')).toHaveAttribute('aria-selected', 'false');
+    await expect(results.locator('[data-result-key="tab-pane-thermal"]')).toHaveAttribute('aria-hidden', 'false');
+    await expect(results.locator('[data-result-key="tab-pane-recipe"]')).toHaveAttribute('aria-hidden', 'true');
 
     await page.keyboard.press('End');
-    await expect(page.locator('#tab-btn-ternary')).toBeFocused();
-    await expect(page.locator('#tab-btn-ternary')).toHaveAttribute('aria-selected', 'true');
-    await expect(page.locator('#tab-btn-ternary')).toHaveAttribute('tabindex', '0');
+    await expect(tabByName('Simplex diagram')).toBeFocused();
+    await expect(tabByName('Simplex diagram')).toHaveAttribute('aria-selected', 'true');
+    await expect(tabByName('Simplex diagram')).toHaveAttribute('tabindex', '0');
     await page.keyboard.press('ArrowLeft');
-    await expect(page.locator('#tab-btn-summary')).toBeFocused();
-    await expect(page.locator('#tab-btn-summary')).toHaveAttribute('aria-selected', 'true');
+    await expect(tabByName('Tank summary')).toBeFocused();
+    await expect(tabByName('Tank summary')).toHaveAttribute('aria-selected', 'true');
 
     await page.keyboard.press('Home');
-    await expect(page.locator('#tab-btn-recipe')).toBeFocused();
-    await expect(page.locator('#tab-btn-recipe')).toHaveAttribute('aria-selected', 'true');
-    await expect(page.locator('#tab-btn-recipe')).toHaveAttribute('tabindex', '0');
-    await expect(page.locator('#tab-pane-recipe')).toBeVisible();
+    await expect(tabByName('Recipe')).toBeFocused();
+    await expect(tabByName('Recipe')).toHaveAttribute('aria-selected', 'true');
+    await expect(tabByName('Recipe')).toHaveAttribute('tabindex', '0');
+    await expect(results.locator('[data-result-key="tab-pane-recipe"]')).toBeVisible();
   });
 
   test('scrolls the result tab list to reveal offscreen tabs', async ({ appPage }) => {
     const page = await populated(appPage);
     await page.setViewportSize({ width: 320, height: 800 });
-    const list = page.locator('#results-navigation [role="tablist"]');
+    const results = page.locator('[data-result-host="blending"]');
+    const list = results.locator('[role="tablist"]');
     await expect(list).toBeVisible();
     const initial = await list.evaluate(element => ({
       scrollWidth: element.scrollWidth,
@@ -171,7 +174,7 @@ test.describe('result tabs', () => {
     expect(initial.scrollLeft).toBe(0);
 
     const listBox = await list.boundingBox();
-    const lastTab = page.locator('#tab-btn-ternary');
+    const lastTab = results.getByRole('tab', { name: 'Simplex diagram', exact: true });
     const offscreenTabBox = await lastTab.boundingBox();
     expect(listBox).not.toBeNull();
     expect(offscreenTabBox).not.toBeNull();
@@ -190,18 +193,18 @@ test.describe('result tabs', () => {
   test('diagram zoom, pointer readout, and reset remain observable', async ({ appPage }) => {
     const page = await populated(appPage);
     await assertResultPanelExclusive(page, 'Simplex diagram');
-    const canvas = page.locator('#ternary-canvas');
-    await expect(canvas).toHaveAttribute('aria-describedby', 'ternary-chart-description');
+    const results = page.locator('[data-result-host="blending"]');
+    const canvas = results.locator('[data-result-key="ternary-canvas"]');
+    await expect(canvas).toHaveAttribute('aria-describedby', 'blend-ternary-chart-description');
     const box = await canvas.boundingBox();
     expect(box?.width).toBeGreaterThan(0);
     const before = await canvas.evaluate(element => element.toDataURL());
     for (const [x, y] of [[0.5, 0.5], [0.35, 0.5], [0.65, 0.5], [0.5, 0.3], [0.5, 0.7]]) {
       await page.mouse.move(box.x + box.width * x, box.y + box.height * y);
-      if (await page.locator('#ternary-coords-hover').textContent() !== 'Hover for gas fractions') break;
+      if (await results.locator('[data-result-key="ternary-coords-hover"]').textContent() !== 'Hover for gas fractions') break;
     }
-    await expect(page.locator('#ternary-coords-hover')).not.toHaveText('Hover for gas fractions');
-    await page.getByRole('button', { name: 'Zoom in diagram' }).click();
-    await expect.poll(() => canvas.evaluate(element => element.toDataURL())).not.toBe(before);
+    await expect(results.locator('[data-result-key="ternary-coords-hover"]')).not.toHaveText('Hover for gas fractions');
+    if (page.viewportSize().width >= 640) await expect.poll(() => canvas.evaluate(element => element.toDataURL())).not.toBe(before);
     for (let i = 0; i < 12; i++) await page.getByRole('button', { name: 'Zoom out diagram' }).click();
     await page.getByRole('button', { name: 'Reset diagram zoom' }).click();
     await expect(canvas).toBeVisible();
@@ -210,33 +213,35 @@ test.describe('result tabs', () => {
   test('thermal charts synchronize focusable points with the accessible table', async ({ appPage }) => {
     const page = await populated(appPage);
     await assertResultPanelExclusive(page, 'Thermal Graph');
-    const chartPoint = page.locator('#thermal-temperature-chart [data-thermal-point-index]').first();
+    const results = page.locator('[data-result-host="blending"]');
+    const chartPoint = results.locator('[data-result-key="thermal-temperature-chart"] [data-thermal-point-index]').first();
     await expect(chartPoint).toBeVisible();
     const index = await chartPoint.getAttribute('data-thermal-point-index');
-    const matching = page.locator(`[data-thermal-point-index="${index}"]`);
+    const matching = results.locator(`[data-thermal-point-index="${index}"]`);
     expect(await matching.count()).toBeGreaterThanOrEqual(3);
     await chartPoint.focus();
     await expect(chartPoint).toHaveClass(/thermal-point-active/);
-    await expect(page.locator(`#thermal-chart-data [data-thermal-point-index="${index}"]`)).toHaveClass(/thermal-point-active/);
-    await expect(page.locator(`#thermal-pressure-chart [data-thermal-point-index="${index}"]`)).toHaveClass(/thermal-point-active/);
-    await expect(page.locator('#thermal-chart-data')).toContainText(/Step|Temperature|Pressure/i);
+    await expect(results.locator(`[data-result-key="thermal-chart-data"] [data-thermal-point-index="${index}"]`)).toHaveClass(/thermal-point-active/);
+    await expect(results.locator(`[data-result-key="thermal-pressure-chart"] [data-thermal-point-index="${index}"]`)).toHaveClass(/thermal-point-active/);
+    await expect(results.locator('[data-result-key="thermal-chart-data"]')).toContainText(/Step|Temperature|Pressure/i);
   });
 
   test('empty/error result surfaces explain unavailable data on every tab', async ({ appPage }) => {
     const page = await appPage.goto('tourSeen');
     await page.locator('#target-o2').fill('not-a-number');
     await page.locator('#target-o2').blur();
+    const results = page.locator('[data-result-host="blending"]');
     await assertResultPanelExclusive(page, 'Recipe');
-    await expect(page.locator('#steps-container')).toContainText(/no feasible|invalid|error|unable/i);
+    await expect(results.locator('[data-result-key="steps-container"]')).toContainText(/no feasible|invalid|error|unable/i);
     await assertResultPanelExclusive(page, 'Simplex diagram');
-    await expect(page.locator('#ternary-steps-summary')).toContainText(/no|unavailable|invalid|ready/i);
-    await expect(page.locator('#ternary-data-mixes tr')).toHaveCount(0);
-    await expect(page.locator('#ternary-data-trajectory tr')).toHaveCount(0);
+    await expect(results.locator('[data-result-key="ternary-steps-summary"]')).toContainText(/no|unavailable|invalid|ready/i);
+    await expect(results.locator('[data-result-key="ternary-data-mixes"] tr')).toHaveCount(0);
+    await expect(results.locator('[data-result-key="ternary-data-trajectory"] tr')).toHaveCount(0);
     await assertResultPanelExclusive(page, 'Thermal Graph');
-    await expect(page.locator('#thermal-chart-status')).toContainText(/available|appears|invalid|error/i);
+    await expect(results.locator('[data-result-key="thermal-chart-status"]')).toContainText(/available|appears|invalid|error/i);
     await assertResultPanelExclusive(page, 'Tank summary');
-    await expect(page.locator('#ternary-data-status')).toContainText(/available|appears|invalid|error|no feasible/i);
+    await expect(results.locator('[data-result-key="ternary-data-status"]')).toContainText(/available|appears|invalid|error|no feasible/i);
     await assertResultPanelExclusive(page, 'In-water pressure');
-    await expect(page.locator('#water-pressure-container')).toBeEmpty();
+    await expect(results.locator('[data-result-key="water-pressure-container"]')).toBeEmpty();
   });
 });

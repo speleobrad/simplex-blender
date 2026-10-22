@@ -75,26 +75,27 @@ test.describe('responsive artifact surfaces', () => {
 
   test('keeps result tabs, diagrams, and thermal charts contained and focusable', async ({ appPage }) => {
     const page = await appPage.goto('tourSeen');
-    await checkSurface(page, '#results-navigation [role="tablist"]', {
-      focus: '#results-navigation [role="tab"]:nth-child(-n+3)',
-      overlap: '#results-navigation [role="tab"]:nth-child(-n+3)',
-      clip: '#results-navigation [role="tab"]:nth-child(-n+3)'
+    const blendingResults = page.locator('[data-result-host="blending"]');
+    await checkSurface(page, blendingResults.locator('[role="tablist"]'), {
+      focus: '[role="tab"]:nth-child(-n+3)',
+      overlap: '[role="tab"]:nth-child(-n+3)',
+      clip: '[role="tab"]:nth-child(-n+3)'
     });
 
     await assertResultPanelExclusive(page, 'Simplex diagram');
-    await checkSurface(page, '#tab-pane-ternary', {
-      children: '#tab-pane-ternary > div, #ternary-canvas',
-      focus: '#results-navigation [role="tab"][aria-selected="true"]',
+    await checkSurface(page, blendingResults.locator('[data-result-key="tab-pane-ternary"]'), {
+      children: '[data-result-key="ternary-canvas"], [data-result-key="ternary-data-mixes"], [data-result-key="ternary-data-trajectory"]',
+      focus: '[role="tab"][aria-selected="true"]',
       overlap: '[aria-label="Zoom in diagram"], [aria-label="Zoom out diagram"], [aria-label="Reset diagram zoom"]',
       clip: '[aria-label="Zoom in diagram"], [aria-label="Zoom out diagram"], [aria-label="Reset diagram zoom"]'
     });
 
     await assertResultPanelExclusive(page, 'Thermal Graph');
-    await checkSurface(page, '#tab-pane-thermal', {
-      children: '#thermal-temperature-chart, #thermal-pressure-chart, #thermal-chart-data',
-      focus: '#results-navigation [role="tab"][aria-selected="true"]',
-      overlap: '#thermal-temperature-chart, #thermal-pressure-chart, #thermal-chart-data',
-      clip: '#thermal-chart-data th:visible, #thermal-chart-data td:visible'
+    await checkSurface(page, blendingResults.locator('[data-result-key="tab-pane-thermal"]'), {
+      children: '[data-result-key="thermal-temperature-chart"], [data-result-key="thermal-pressure-chart"], [data-result-key="thermal-chart-data"]',
+      focus: '[role="tab"][aria-selected="true"]',
+      overlap: '[data-result-key="thermal-temperature-chart"], [data-result-key="thermal-pressure-chart"], [data-result-key="thermal-chart-data"]',
+      clip: '[data-result-key="thermal-chart-data"] th:visible, [data-result-key="thermal-chart-data"] td:visible'
     });
   });
 

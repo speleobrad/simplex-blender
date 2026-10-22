@@ -48,12 +48,13 @@ test.describe('consent and guided tour', () => {
 
     await nextTourStep(page);
     await expect(page.locator('.driver-popover-title')).toHaveText('Review the tank summary');
-    await expect(page.locator('#tab-pane-summary')).toBeVisible();
-    await expect(page.locator('#tab-btn-summary')).toHaveClass(/bg-cyan/);
+    const blendingResults = page.locator('[data-result-host="blending"]');
+    await expect(blendingResults.locator('[data-result-key="tab-pane-summary"]')).toBeVisible();
+    await expect(blendingResults.getByRole('tab', { name: 'Tank summary', exact: true })).toHaveAttribute('aria-selected', 'true');
 
     await nextTourStep(page);
     await expect(page.locator('.driver-popover-title')).toHaveText('Check in-water pressure');
-    await expect(page.locator('#tab-pane-water-pressure')).toBeVisible();
+    await expect(blendingResults.locator('[data-result-key="tab-pane-water-pressure"]')).toBeVisible();
 
     await nextTourStep(page);
     await expect(page.locator('.driver-popover-title')).toHaveText('Find Settings');
@@ -67,12 +68,12 @@ test.describe('consent and guided tour', () => {
 
     await nextTourStep(page);
     await expect(page.locator('.driver-popover-title')).toHaveText('Explore and stay safe');
-    await expect(page.locator('#tab-pane-ternary')).toBeVisible();
+    await expect(blendingResults.locator('[data-result-key="tab-pane-ternary"]')).toBeVisible();
     await expect(page.locator('#settings-dialog')).not.toBeVisible();
     expect(analyticsRequests.length).toBeGreaterThan(0);
 
     await completeOrExitTour(page, 'Done');
-    await expect(page.locator('#tab-pane-recipe')).toBeVisible();
+    await expect(blendingResults.locator('[data-result-key="tab-pane-recipe"]')).toBeVisible();
     await expect(page.locator('#settings-dialog')).not.toBeVisible();
 
     await page.evaluate(() => { window.name = '__skipStorageSeed'; });
@@ -98,7 +99,7 @@ test.describe('consent and guided tour', () => {
     await expect(page.locator('.driver-popover-title')).toHaveText('Check in-water pressure');
     await page.locator('.driver-popover-prev-btn').click();
     await expect(page.locator('.driver-popover-title')).toHaveText('Review the tank summary');
-    await expect(page.locator('#tab-pane-summary')).toBeVisible();
+    await expect(page.locator('[data-result-host="blending"] [data-result-key="tab-pane-summary"]')).toBeVisible();
 
     await completeOrExitTour(page, 'Skip');
     await expect(page.getByRole('dialog', { name: 'Analytics consent' })).toHaveCount(0);

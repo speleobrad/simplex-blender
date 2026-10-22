@@ -77,7 +77,7 @@ test.describe('working tank blending inputs', () => {
     const page = await load(appPage);
     await fillWorkingTank(page, { targetInWaterTemperature: 30 });
     await page.locator('[data-action="select-tab"][data-tab="thermal"]').click();
-    await expect(page.locator('#thermal-chart-status')).toContainText(/30\.0/);
+    await expect(page.locator('[data-result-host="blending"] [data-result-key="thermal-chart-status"]')).toContainText(/30\.0/);
   });
 
   test('optimizes 50-bar Air to Tx 18/45 at 188.6 bar in water', async ({ appPage }) => {

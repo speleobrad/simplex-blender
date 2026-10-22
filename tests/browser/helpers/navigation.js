@@ -51,7 +51,8 @@ export async function selectPrimaryScreen(page, name) {
 
   if (name === 'Blending') {
     const panel = await selectResultTab(page, 'Recipe');
-    await expect(page.locator('#tab-btn-recipe')).toHaveClass(/bg-cyan/);
+    await expect(page.locator('[data-result-host="blending"]').getByRole('tab', { name: 'Recipe', exact: true }))
+      .toHaveAttribute('aria-selected', 'true');
     return panel;
   }
 

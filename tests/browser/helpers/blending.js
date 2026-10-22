@@ -9,8 +9,9 @@ const FIELD_IDS = {
   targetTemperature: 'wait-target-temperature', inletTemperature: 'inlet-gas-temperature'
 };
 async function waitForResultUpdate(page) {
-  await expect(page.locator('#summary-banner')).toBeVisible();
-  await expect.poll(async () => (await page.locator('#summary-banner').innerText()).trim()).not.toBe('');
+  const status = page.locator('[data-result-host="blending"] [data-result-key="summary-banner"]');
+  await expect(status).toBeVisible();
+  await expect.poll(async () => (await status.innerText()).trim()).not.toBe('');
 }
 
 export async function fillWorkingTank(page, values = {}) {
@@ -21,9 +22,10 @@ export async function fillWorkingTank(page, values = {}) {
     if ((await control.evaluate(element => element.tagName)) === 'SELECT') await control.selectOption(String(value));
     else await control.fill(String(value));
   }
-  await page.locator('#tab-pane-recipe').scrollIntoViewIfNeeded();
+  const recipe = page.locator('[data-result-host="blending"] [data-result-key="tab-pane-recipe"]');
+  await recipe.scrollIntoViewIfNeeded();
   await waitForResultUpdate(page);
-  return page.locator('#tab-pane-recipe');
+  return recipe;
 }
 
 export async function openRecipeScenario(page, scenario = {}) {
@@ -31,25 +33,26 @@ export async function openRecipeScenario(page, scenario = {}) {
   if (scenario.storage) await page.evaluate(name => { window.name = name; }, scenario.storage);
   if (scenario.values) await fillWorkingTank(page, scenario.values);
   else await waitForResultUpdate(page);
-  if (scenario.expectEmpty) await expect(page.locator('#steps-container')).toContainText(/no|unavailable|error|invalid/i);
-  else await expect(page.locator('#steps-container')).toBeVisible();
-  return page.locator('#tab-pane-recipe');
+  const recipe = page.locator('[data-result-host="blending"] [data-result-key="tab-pane-recipe"]');
+  if (scenario.expectEmpty) await expect(recipe).toContainText(/no|unavailable|error|invalid/i);
+  else await expect(recipe).toBeVisible();
+  return recipe;
 }
 
 export async function assertResultPanelExclusive(page, tabName) {
   const ids = { Recipe: 'recipe', 'Simplex diagram': 'ternary', 'Thermal Graph': 'thermal', 'Tank summary': 'summary', 'In-water pressure': 'water-pressure' };
   const id = ids[tabName] ?? tabName;
+  const host = page.locator('[data-result-host="blending"]');
   await selectResultTab(page, tabName);
-  const panel = page.locator(`#tab-pane-${id}`);
+  const panel = host.locator(`[data-result-key="tab-pane-${id}"]`);
   await expect(panel).toBeVisible();
   for (const other of Object.values(ids)) {
-    const candidate = page.locator(`#tab-pane-${other}`);
+    const candidate = host.locator(`[data-result-key="tab-pane-${other}"]`);
     if (other !== id) await expect(candidate).toBeHidden();
-    const otherButton = page.locator(`#tab-btn-${other}`);
+    const otherButton = host.getByRole('tab', { name: Object.entries(ids).find(([, value]) => value === other)?.[0], exact: true });
     await expect(otherButton).toHaveAttribute('aria-selected', other === id ? 'true' : 'false');
   }
-  const button = page.locator(`#tab-btn-${id}`);
-  await expect(button).toHaveClass(/bg-cyan/);
+  const button = host.getByRole('tab', { name: tabName, exact: true });
   await expect(button).toHaveAttribute('aria-selected', 'true');
   return panel;
 }
