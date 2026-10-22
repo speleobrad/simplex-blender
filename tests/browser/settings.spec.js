@@ -1,6 +1,7 @@
 import { test, expect } from './fixtures/app-fixtures.js';
 import { assertContained, assertInsideViewport, assertNoUnexpectedOverlap } from './assertions/layout.js';
 import { cancelSettings, openSettingsCategory, saveSettings, settingsDialog } from './helpers/settings.js';
+import { acceptConsent, completeOrExitTour } from './helpers/onboarding.js';
 
 const categories = ['general', 'gas-presets', 'cylinder-presets', 'equipment', 'preset-management'];
 
@@ -282,6 +283,8 @@ test.describe('settings categories and drafts', () => {
     page.once('dialog', dialog => dialog.accept());
     await management.getByRole('button', { name: 'Reset to factory settings', exact: true }).click();
     await page.waitForLoadState('domcontentloaded');
+    await acceptConsent(page);
+    await completeOrExitTour(page, 'Skip');
     const resetGeneral = await openSettingsCategory(page, 'general');
     await expect(resetGeneral.getByRole('combobox', { name: 'Cylinder pressure limit behavior' }))
       .toHaveValue('hard-stop');
