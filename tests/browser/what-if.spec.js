@@ -110,12 +110,13 @@ async function warningSettings(page) {
     await runWhatIf(page);
     const host = page.locator('#what-if-result-host');
     const before = await host.locator('[data-result-key="scenario-summary-content"]').innerText();
+    const expectedExcerpt = before.replace(/\s+/g, '').slice(0, 20);
     await page.locator('#screen-what-if [data-action="copy-what-if-from-blending"]:visible').evaluate(button => button.click());
-    await expect(host.locator('[data-result-key="scenario-summary-content"]')).toContainText(before.slice(0, 20));
+    await expect.poll(async () => (await host.locator('[data-result-key="scenario-summary-content"]').innerText()).replace(/\s+/g, '')).toContain(expectedExcerpt);
     await expect(host.locator('[data-what-if-stale-status]')).toContainText(/out of date.*scenario draft changed/i);
     await fillWhatIfStart(page, { pressureBar: '-1' });
     await runWhatIf(page);
-    await expect(host.locator('[data-result-key="scenario-summary-content"]')).toContainText(before.slice(0, 20));
+    await expect.poll(async () => (await host.locator('[data-result-key="scenario-summary-content"]').innerText()).replace(/\s+/g, '')).toContain(expectedExcerpt);
     await page.keyboard.press('Tab');
     await expect(page.locator('#screen-what-if')).toBeVisible();
     expect(await page.locator('body').evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBeTruthy();
