@@ -12,6 +12,34 @@ export function getResultElement(root, key) {
     ?? root.querySelector?.(`#${String(key).replaceAll('"', '\\"')}`)
     ?? (root === document ? root.getElementById(key) : null);
 }
+const ACTIVE_TAB_CLASSES = 'shrink-0 px-3.5 py-2 rounded-lg text-xs font-semibold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm transition';
+const INACTIVE_TAB_CLASSES = 'shrink-0 px-3.5 py-2 rounded-lg text-xs font-semibold text-slate-400 hover:text-slate-200 transition';
+
+export function setResultTabState(root, tabId, tabs = OPTIMIZE_RESULT_TABS) {
+  if (!tabs.includes(tabId)) return false;
+  const scope = root ?? (typeof document !== 'undefined' ? document : null);
+  if (!scope) return false;
+  for (const tab of tabs) {
+    const selected = tab === tabId;
+    const pane = scope.querySelector?.(`[data-result-key="tab-pane-${tab}"]`) ?? scope.getElementById?.(`tab-pane-${tab}`);
+    const button = scope.querySelector?.(`[data-result-key="tab-btn-${tab}"]`) ?? scope.getElementById?.(`tab-btn-${tab}`);
+    if (pane) {
+      pane.hidden = !selected;
+      pane.classList?.toggle('hidden', !selected);
+      pane.setAttribute('aria-hidden', String(!selected));
+      const paneId = pane.id || pane.getAttribute?.('id') || `tab-pane-${tab}`;
+      const buttonId = button?.id || button?.getAttribute?.('id') || `tab-btn-${tab}`;
+      pane.setAttribute('aria-labelledby', buttonId);
+      if (button) button.setAttribute('aria-controls', paneId);
+    }
+    if (button) {
+      button.className = selected ? ACTIVE_TAB_CLASSES : INACTIVE_TAB_CLASSES;
+      button.setAttribute('aria-selected', String(selected));
+      button.tabIndex = selected ? 0 : -1;
+    }
+  }
+  return true;
+}
 
 export function createResultPanel(document, host, { mode = 'optimize', instancePrefix = '' } = {}) {
   const template = document.getElementById('result-panel-template');
@@ -38,12 +66,7 @@ export function createResultPanel(document, host, { mode = 'optimize', instanceP
     else button.dataset.resultKey ??= `tab-btn-${button.dataset.tab}`;
   });
   const initialTab = mode === 'what-if' ? 'scenario-summary' : 'recipe';
-  root.querySelectorAll?.('[data-result-key^="tab-pane-"]').forEach(pane => { pane.hidden = pane.dataset.resultKey !== `tab-pane-${initialTab}`; });
-  root.querySelectorAll?.('[data-action="select-tab"]').forEach(button => {
-    const selected = button.dataset.tab === initialTab;
-    button.setAttribute('aria-selected', String(selected));
-    button.tabIndex = selected ? 0 : -1;
-  });
+  setResultTabState(root, initialTab, getResultTabs(mode));
   host.replaceChildren(root);
   return root;
 }

@@ -14,6 +14,28 @@ async function warningSettings(page) {
 }
 
  test.describe('independent What-if scenarios', () => {
+
+  test('initializes What-if results on the visible Scenario summary tab', async ({ appPage }) => {
+    const page = await load(appPage);
+    await openWhatIf(page);
+    const host = page.locator('#what-if-result-host');
+    const scenarioPane = host.locator('[data-result-key="tab-pane-scenario-summary"]');
+    const scenarioButton = host.locator('[data-result-key="tab-btn-scenario-summary"]');
+    await expect(scenarioPane).toBeVisible();
+    await expect(scenarioPane).not.toHaveClass(/\bhidden\b/);
+    await expect(scenarioPane).toHaveAttribute('aria-hidden', 'false');
+    await expect(scenarioPane).toHaveAttribute('aria-labelledby', 'what-if-tab-btn-scenario-summary');
+    await expect(scenarioButton).toHaveAttribute('aria-selected', 'true');
+    await expect(scenarioButton).toHaveAttribute('aria-controls', 'what-if-tab-pane-scenario-summary');
+    await expect(scenarioButton).toHaveAttribute('tabindex', '0');
+    await expect(scenarioButton).toHaveClass(/bg-cyan-500\/20/);
+    const recipePane = host.locator('[data-result-key="tab-pane-recipe"]');
+    const recipeButton = host.locator('[data-result-key="tab-btn-recipe"]');
+    await expect(recipePane).toBeHidden();
+    await expect(recipeButton).toHaveAttribute('aria-selected', 'false');
+    await expect(recipeButton).toHaveAttribute('tabindex', '-1');
+    await expect(recipeButton).toHaveClass(/text-slate-400/);
+  });
   test('copies and independently edits every scenario start field', async ({ appPage }) => {
     const page = await load(appPage);
     const values = {
