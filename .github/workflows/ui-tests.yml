@@ -22,6 +22,7 @@ jobs:
 
   ui:
     name: UI (${{ matrix.segment }})
+    runs-on: ubuntu-24.04
     needs: unit
     strategy:
       fail-fast: true
