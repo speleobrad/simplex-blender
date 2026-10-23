@@ -2065,9 +2065,13 @@ function initialize() {
   refreshPresetOptions();
   updateWaitModeFields();
   observeTernaryCanvas(document.querySelector('[data-result-host="blending"] [data-result-key="ternary-canvas"]'), renderTernary);
+  const whatIfResultRoot = byId('what-if-result-host')?.querySelector?.('[data-result-panel]')
+    ?? byId('what-if-result-host');
   observeTernaryCanvas(
-    document.querySelector('[data-result-host="what-if"] [data-result-key="ternary-canvas"]'),
-    () => renderTernary('what-if')
+    whatIfResultRoot?.querySelector?.('[data-result-key="ternary-canvas"]')
+      ?? whatIfResultRoot?.querySelector?.('#ternary-canvas'),
+    () => renderTernary('what-if'),
+    whatIfResultRoot
   );
   recalculate();
   if (!state.onboarding.consentAccepted) {

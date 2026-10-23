@@ -633,9 +633,9 @@ export function clearTernaryDiagram(canvas, root = document) {
   canvas.setAttribute('aria-label', 'Gas composition ternary diagram. No feasible blend.');
 }
 
-export function observeTernaryCanvas(canvas, redraw) {
+export function observeTernaryCanvas(canvas, redraw, root = document) {
   if (!canvas) return null;
-  attachPointerReadout(canvas);
+  attachPointerReadout(canvas, root);
   activeCanvases.add(canvas);
   attachWheelZoom(canvas, redraw);
   const observer = new ResizeObserver(redraw);
