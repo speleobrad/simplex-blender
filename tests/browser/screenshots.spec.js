@@ -5,27 +5,28 @@ import { openSettingsCategory } from './helpers/settings.js';
 import { assertResultPanelExclusive } from './helpers/blending.js';
 
 const validGasFixture = fileURLToPath(new URL('./fixtures/import-fixtures/valid-gases.json', import.meta.url));
+const screenshotOptions = { animations: 'disabled', maxDiffPixelRatio: 0.01 };
 async function load(appPage, scenario = 'tourSeen') { return appPage.goto(scenario); }
 
 test.describe('approved UI screenshots', () => {
   test('desktop blending light theme', async ({ appPage }) => {
     const page = await load(appPage, 'lightTheme');
-    await expect(page).toHaveScreenshot('blending-desktop-light.png', { animations: 'disabled', fullPage: false });
+    await expect(page).toHaveScreenshot('blending-desktop-light.png', { ...screenshotOptions, fullPage: false });
   });
 
   test('mobile blending light theme', async ({ appPage }) => {
     const page = await load(appPage, 'lightTheme');
-    await expect(page).toHaveScreenshot('blending-mobile-light.png', { animations: 'disabled', fullPage: false });
+    await expect(page).toHaveScreenshot('blending-mobile-light.png', { ...screenshotOptions, fullPage: false });
   });
 
   test('populated recipe, diagram, and thermal surfaces', async ({ appPage }) => {
     const page = await load(appPage, 'lightTheme');
     await assertResultPanelExclusive(page, 'Recipe');
-    await expect(page).toHaveScreenshot('results-recipe-light.png', { animations: 'disabled', fullPage: false });
+    await expect(page).toHaveScreenshot('results-recipe-light.png', { ...screenshotOptions, fullPage: false });
     await assertResultPanelExclusive(page, 'Simplex diagram');
-    await expect(page).toHaveScreenshot('results-diagram-light.png', { animations: 'disabled', fullPage: false });
+    await expect(page).toHaveScreenshot('results-diagram-light.png', { ...screenshotOptions, fullPage: false });
     await assertResultPanelExclusive(page, 'Thermal Graph');
-    await expect(page).toHaveScreenshot('results-thermal-light.png', { animations: 'disabled', fullPage: false });
+    await expect(page).toHaveScreenshot('results-thermal-light.png', { ...screenshotOptions, fullPage: false });
   });
   test('renders recipe summary at the narrow two-column breakpoint', async ({ appPage }, testInfo) => {
     test.skip(testInfo.project.name !== 'desktop', 'Keep one representative intermediate-width baseline');
@@ -33,7 +34,7 @@ test.describe('approved UI screenshots', () => {
     await assertResultPanelExclusive(page, 'Recipe');
     await page.setViewportSize({ width: 1024, height: 1000 });
     await expect(page.locator('#summary-banner'))
-      .toHaveScreenshot('results-recipe-summary-narrow-two-column.png', { animations: 'disabled' });
+      .toHaveScreenshot('results-recipe-summary-narrow-two-column.png', screenshotOptions);
   });
 
   test('expanded recipe technical details', async ({ appPage }) => {
@@ -43,19 +44,19 @@ test.describe('approved UI screenshots', () => {
       .filter({ hasText: 'Technical details' })
       .first();
     await technicalDetails.locator('summary').click();
-    await expect(technicalDetails).toHaveScreenshot('results-technical-details-light.png', { animations: 'disabled' });
+    await expect(technicalDetails).toHaveScreenshot('results-technical-details-light.png', screenshotOptions);
   });
 
   test('dark theme recipe representative', async ({ appPage }) => {
     const page = await load(appPage, 'darkTheme');
     await assertResultPanelExclusive(page, 'Recipe');
-    await expect(page).toHaveScreenshot('results-recipe-dark.png', { animations: 'disabled', fullPage: false });
+    await expect(page).toHaveScreenshot('results-recipe-dark.png', { ...screenshotOptions, fullPage: false });
   });
   test('populated inventory representative', async ({ appPage }) => {
     const page = await load(appPage, 'populatedInventory');
     const inventory = page.locator('#supply-banks-section');
     await inventory.scrollIntoViewIfNeeded();
-    await expect(inventory).toHaveScreenshot('inventory-populated.png', { animations: 'disabled' });
+    await expect(inventory).toHaveScreenshot('inventory-populated.png', screenshotOptions);
   });
   test('shows the full imperial bank volume in its narrow input', async ({ appPage }, testInfo) => {
     test.skip(testInfo.project.name !== 'mobile', 'One narrow visual baseline verifies the widest displayed value');
@@ -63,13 +64,13 @@ test.describe('approved UI screenshots', () => {
     const volume = page.getByRole('spinbutton', { name: 'Helium reserve volume in cu ft', exact: true });
     await volume.scrollIntoViewIfNeeded();
     await expect(volume).toHaveValue('1.4125866688595436');
-    await expect(volume).toHaveScreenshot('imperial-inventory-volume-input.png', { animations: 'disabled' });
+    await expect(volume).toHaveScreenshot('imperial-inventory-volume-input.png', screenshotOptions);
   });
 
   test('expanded equipment settings representative', async ({ appPage }) => {
     const page = await load(appPage);
     await openSettingsCategory(page, 'equipment');
-    await expect(page.locator('#settings-dialog')).toHaveScreenshot('settings-equipment-expanded.png', { animations: 'disabled' });
+    await expect(page.locator('#settings-dialog')).toHaveScreenshot('settings-equipment-expanded.png', screenshotOptions);
   });
 
   test('preset-management review representative', async ({ appPage }) => {
@@ -78,18 +79,18 @@ test.describe('approved UI screenshots', () => {
     await page.locator('#settings-preset-import-file').setInputFiles(validGasFixture);
     await expect(page.locator('#settings-preset-import-status')).toContainText('Loaded 3 entries');
     await expect(page.locator('#settings-preset-import-candidates')).toContainText('EAN 32');
-    await expect(page.locator('#settings-dialog')).toHaveScreenshot('preset-management-review.png', { animations: 'disabled' });
+    await expect(page.locator('#settings-dialog')).toHaveScreenshot('preset-management-review.png', screenshotOptions);
   });
 
   test('consent dialog representative', async ({ appPage }) => {
     const page = await load(appPage, 'factory');
     await expect(page.getByRole('dialog', { name: 'Analytics consent', exact: true }))
-      .toHaveScreenshot('consent-dialog.png', { animations: 'disabled' });
+      .toHaveScreenshot('consent-dialog.png', screenshotOptions);
   });
 
   test('guided-tour welcome representative', async ({ appPage }) => {
     const page = await load(appPage, 'factory');
     await acceptConsent(page);
-    await expect(page).toHaveScreenshot('guided-tour-welcome.png', { animations: 'disabled', fullPage: false });
+    await expect(page).toHaveScreenshot('guided-tour-welcome.png', { ...screenshotOptions, fullPage: false });
   });
 });
