@@ -5,8 +5,39 @@ on:
   workflow_dispatch:
 
 jobs:
-  test:
+  unit:
     runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - run: npm test
+
+  ui:
+    name: UI (${{ matrix.segment }})
+    needs: unit
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - segment: core
+            script: test:ui:core
+          - segment: blending
+            script: test:ui:blending
+          - segment: settings
+            script: test:ui:settings
+          - segment: results
+            script: test:ui:results
+          - segment: data
+            script: test:ui:data
+          - segment: layout
+            script: test:ui:layout
+          - segment: screenshots
+            script: test:ui:screenshots
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -26,12 +57,12 @@ jobs:
       - name: Install Chromium
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install chromium
-      - run: npm test
-      - run: npm run test:ui
+      - name: Run ${{ matrix.segment }} UI tests
+        run: npm run ${{ matrix.script }} -- --max-failures=1
       - if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: playwright-results
+          name: playwright-results-${{ matrix.segment }}
           path: |
             playwright-report/
             test-results/
