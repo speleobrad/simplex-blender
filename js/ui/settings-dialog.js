@@ -525,6 +525,7 @@ export function renderSettingsDialog(settings, importState) {
       input.classList.toggle('text-emerald-300', Number(value) < 0);
     }
   }
+  renderPresetImport(settings, importState);
 }
 
 function createOption(value, label) {

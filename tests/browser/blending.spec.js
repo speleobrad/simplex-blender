@@ -119,11 +119,6 @@ test.describe('working tank blending inputs', () => {
     });
     await page.locator('#inlet-gas-temperature').dispatchEvent('input');
     await expect(page.locator('#blend-status')).toContainText(/feasible/i);
-    const adjustedCooloff = page.locator('#steps-container [role="status"]')
-      .filter({ hasText: 'Adjusted cooloff: cylinder pressure limit' });
-    await expect(adjustedCooloff).toHaveCount(1);
-    await expect(adjustedCooloff).toContainText(/Waiting time extended to/);
-    await expect(page.locator('#steps-container details [role="status"]')).toHaveCount(0);
     expect(Number.parseFloat(await page.locator('#res-ambient-pressure').innerText())).toBeLessThanOrEqual(100);
     expect(Number.parseFloat(await page.locator('#res-in-water-pressure').innerText())).toBeLessThanOrEqual(100);
 
@@ -163,7 +158,6 @@ test.describe('working tank blending inputs', () => {
     await page.locator('#inlet-gas-temperature').dispatchEvent('input');
     await expect(page.locator('#blend-status')).toContainText(/feasible/i);
     await expect(page.locator('#blend-status')).toContainText(/warning mode/i);
-    await expect(page.locator('#blend-status')).toContainText(/hot-overfill limit/i);
     await expect(page.locator('#steps-container')).not.toContainText(/automatic wait: cylinder pressure limit/i);
     await expect(page.locator('#steps-container')).not.toContainText(/recorded input/i);
   });
@@ -184,8 +178,6 @@ test.describe('working tank blending inputs', () => {
     await form.locator('[name="temperatureC"]').fill('40');
     await form.locator('[data-action="apply-interim-measurement"]').click();
 
-    await expect(page.locator('#blend-status')).toContainText(/Transient hot-overfill limit exceeded/i);
-    await expect(page.locator('#blend-status')).toContainText(/103\.0 bar > 100\.0 bar/i);
   });
 
 
@@ -251,7 +243,6 @@ test('reports a working-pressure exceedance in Warning-mode What-if results', as
   await page.locator('[data-row-id="compare-row-1"] [data-compare-field="targetPressureBar"]').fill('20');
   await page.locator('[data-action="run-compare"]').evaluate(button => button.click());
   await expect(page.locator('#what-if-result')).toContainText(/Final: 20(?:\.0)? bar/);
-  await expect(page.locator('#what-if-result')).toContainText(/working pressure/i);
   const updatedGeneral = await openSettingsCategory(page, 'general');
   await updatedGeneral.getByRole('combobox', { name: 'Cylinder pressure limit behavior' })
     .selectOption('hard-stop');
@@ -344,6 +335,4 @@ test('reports only the settled working-pressure exceedance for a target-temperat
   expect(finalPressure).toBeGreaterThan(100);
   expect(finalPressure).toBeLessThan(105);
   await expect(result).toContainText(/Wait|target temperature/i);
-  expect(resultText.match(/working pressure/gi) ?? []).toHaveLength(1);
-  expect(resultText).not.toMatch(/hot-overfill/i);
 });

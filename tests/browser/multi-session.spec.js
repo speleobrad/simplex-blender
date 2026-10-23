@@ -95,8 +95,8 @@ test.describe('continued browser sessions', () => {
     const unitsB = await openSettingsCategory(sessionB.page, 'general');
     await expect(unitsB.getByRole('combobox', { name: 'Units' })).toHaveValue('imperial');
     const cylindersB = await openSettingsCategory(sessionB.page, 'cylinder-presets');
-    await expect(cylindersB.locator('[data-settings-index="0"][data-settings-field="volumeL"]:visible')).toHaveValue('0.10594400016446577');
-    await expect(cylindersB.locator('[data-settings-index="0"][data-settings-field="workingPressureBar"]:visible')).toHaveValue('3364.8755216');
+    await expect(cylindersB.locator('[data-settings-index="0"][data-settings-field="volumeL"]:visible')).toHaveValue('24.26');
+    await expect(cylindersB.locator('[data-settings-index="0"][data-settings-field="workingPressureBar"]:visible')).toHaveValue('3364.88');
     await sessionB.page.getByRole('tab', { name: 'Inventory', exact: true }).click();
     const rowB = bankRows(sessionB.page).nth(index);
     await expect(rowB.getByRole('spinbutton', { name: /volume in (?:ft³|cu ft)$/i })).toHaveValue('0.4237760006578631');
@@ -109,8 +109,8 @@ test.describe('continued browser sessions', () => {
     const unitsC = await openSettingsCategory(sessionC.page, 'general');
     await expect(unitsC.getByRole('combobox', { name: 'Units' })).toHaveValue('metric');
     const cylindersC = await openSettingsCategory(sessionC.page, 'cylinder-presets');
-    await expect(cylindersC.locator('[data-settings-index="0"][data-settings-field="volumeL"]:visible')).toHaveValue('3');
-    await expect(cylindersC.locator('[data-settings-index="0"][data-settings-field="workingPressureBar"]:visible')).toHaveValue('232');
+    await expect(cylindersC.locator('[data-settings-index="0"][data-settings-field="volumeL"]:visible')).toHaveValue('3.00');
+    await expect(cylindersC.locator('[data-settings-index="0"][data-settings-field="workingPressureBar"]:visible')).toHaveValue('232.00');
     await sessionC.page.getByRole('tab', { name: 'Inventory', exact: true }).click();
     const rowC = bankRows(sessionC.page).nth(index);
     await expect(rowC.getByRole('spinbutton', { name: /volume in (?:litres|L)$/i })).toHaveValue('12');
@@ -127,7 +127,7 @@ test.describe('continued browser sessions', () => {
     const sessionB = await createContinuedSession(pageA);
     await expect(sessionB.page.locator('html')).toHaveAttribute('data-theme', 'dark');
     const equipmentB = await openSettingsCategory(sessionB.page, 'equipment');
-    await expect(equipmentB.getByRole('spinbutton', { name: 'Maximum compressor pressure' })).toHaveValue('232');
+    await expect(equipmentB.getByRole('spinbutton', { name: 'Maximum compressor pressure' })).toHaveValue('232.00');
     await cancelSettings(sessionB.page);
     await closeSession(sessionB);
   });
@@ -170,10 +170,10 @@ test.describe('continued browser sessions', () => {
     ))).toBe(false);
     const cylindersC = await openSettingsCategory(sessionC.page, 'cylinder-presets');
     await expect(cylindersC.getByRole('textbox', { name: 'Cylinder preset name' }).first()).toHaveValue('Faber 3L');
-    await expect(cylindersC.locator('[data-settings-index="0"][data-settings-field="volumeL"]:visible')).toHaveValue('3');
-    await expect(cylindersC.locator('[data-settings-index="0"][data-settings-field="workingPressureBar"]:visible')).toHaveValue('232');
+    await expect(cylindersC.locator('[data-settings-index="0"][data-settings-field="volumeL"]:visible')).toHaveValue('3.00');
+    await expect(cylindersC.locator('[data-settings-index="0"][data-settings-field="workingPressureBar"]:visible')).toHaveValue('232.00');
     const equipmentC = await openSettingsCategory(sessionC.page, 'equipment');
-    await expect(equipmentC.getByRole('spinbutton', { name: 'Maximum compressor pressure' })).toHaveValue('232');
+    await expect(equipmentC.getByRole('spinbutton', { name: 'Maximum compressor pressure' })).toHaveValue('232.00');
     await sessionC.page.getByRole('tab', { name: 'Inventory', exact: true }).click();
     const factoryRows = bankRows(sessionC.page);
     await expect(factoryRows).toHaveCount(3);

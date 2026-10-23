@@ -43,8 +43,8 @@ test.describe('settings categories and drafts', () => {
     const pressureInputs = pane.locator('input[aria-label*="working pressure in psi"]:visible');
     await expect(pressureInputs).toHaveCount(2);
     for (const input of await pressureInputs.all()) {
-      await expect(input).toHaveAttribute('min', '145.037738');
-      await expect(input).toHaveAttribute('max', '5076.32083');
+      await expect(input).toHaveAttribute('min', '145.04');
+      await expect(input).toHaveAttribute('max', '5076.32');
     }
     await expect(pane.locator('table th').filter({ hasText: 'Working pressure (psi)' })).toHaveCount(1);
     await cancelSettings(page);
@@ -86,13 +86,13 @@ test.describe('settings categories and drafts', () => {
     await added.fill('Cylinder with an intentionally long responsive label');
     await added.blur();
     const pressure = pane.locator('input[aria-label*="working pressure in bar"]:visible').last();
-    const mass = pane.locator('input[aria-label*="mass in kilograms"]:visible').last();
+    const mass = pane.locator('input[aria-label*="mass in kg"]:visible').last();
     await pressure.fill('350');
     await pressure.blur();
     await mass.fill('14.3');
     await mass.blur();
     await expect(added).toHaveValue('Cylinder with an intentionally long responsive label');
-    await expect(pressure).toHaveValue('350');
+    await expect(pressure).toHaveValue('350.00');
     await expect(mass).toHaveValue('14.3');
     await cancelSettings(page);
   });
@@ -105,10 +105,10 @@ test.describe('settings categories and drafts', () => {
     await expect(names).toHaveCount(initialCount + 1);
 
     const overfill = pane.locator('input[aria-label*="hot overfill percentage"]:visible').last();
-    await expect(overfill).toHaveValue('2');
-    await expect(overfill).toHaveAttribute('min', '0');
-    await expect(overfill).toHaveAttribute('max', '5');
-    await expect(overfill).toHaveAttribute('step', '0.5');
+    await expect(overfill).toHaveValue('2.00');
+    await expect(overfill).toHaveAttribute('min', '0.00');
+    await expect(overfill).toHaveAttribute('max', '5.00');
+    await expect(overfill).toHaveAttribute('step', '0.50');
     await overfill.fill('4.5');
     await overfill.blur();
     await expect(overfill).toHaveValue('4.5');

@@ -80,6 +80,7 @@ const state = {
   banks: initialBanks,
   settings: initialSettings,
   settingsDraft: null,
+  settingsBeforeDraft: null,
   settingsSession: 0,
   settingsCategory: 'general',
   settingsImport: createPresetImportState(),
@@ -309,6 +310,7 @@ function clearPressureWarningConfirmation() {
 function openSettings() {
   if (state.activeScreen !== 'settings') state.settingsReturnScreen = state.activeScreen;
   state.settingsSession += 1;
+  state.settingsBeforeDraft = copySettings(state.settings);
   state.settingsDraft = copySettings(state.settings);
   clearPressureWarningConfirmation();
   resetPresetImportState();
@@ -547,6 +549,7 @@ function selectInventoryEquipmentPreset(select, collection) {
   recalculate();
 }
 
+
 function persistSettingsDraft() {
   const errors = validateSettings(state.settingsDraft);
   if (errors.length > 0) {
@@ -555,13 +558,6 @@ function persistSettingsDraft() {
   }
   const pressureLimitModeChanged = state.settings.pressureLimitMode !== state.settingsDraft.pressureLimitMode;
   const previousUnits = state.settings.units;
-  try {
-    saveSettings(state.settingsDraft, settingsStorage);
-  } catch (error) {
-    console.warn('Simplex blender settings were not saved.', error);
-    displaySettingsErrors(['Settings were not saved. Check that browser storage is enabled and has space, then try again.']);
-    return false;
-  }
   state.settings = copySettings(state.settingsDraft);
   if (pressureLimitModeChanged) invalidateCompareResult();
   convertDisplayedInputs(previousUnits, state.settings.units);
@@ -571,7 +567,6 @@ function persistSettingsDraft() {
   clearSettingsErrors();
   return true;
 }
-
 function updateSettingsDraft(input, eventType) {
   if (!state.settingsDraft) return;
   const collection = input.dataset.settingsCollection;
@@ -712,6 +707,7 @@ function saveSettingsDraft() {
   convertDisplayedInputs(previousUnits, state.settings.units);
   updateStorageWarning();
   state.settingsDraft = null;
+  state.settingsBeforeDraft = null;
   refreshPresetOptions(selectedCylinderName);
   recalculate();
   selectScreen(state.settingsReturnScreen);
@@ -767,6 +763,15 @@ function markGasPresetCustom(input) {
 function cancelSettings() {
   state.settingsSession += 1;
   clearPressureWarningConfirmation();
+  if (state.settingsBeforeDraft) {
+    state.settings = copySettings(state.settingsBeforeDraft);
+    try {
+      saveSettings(state.settings, settingsStorage);
+    } catch (error) {
+      console.warn('Simplex blender settings could not restore the canceled draft.', error);
+    }
+  }
+  state.settingsBeforeDraft = null;
   state.settingsDraft = null;
   clearSettingsErrors();
   selectScreen(state.settingsReturnScreen);

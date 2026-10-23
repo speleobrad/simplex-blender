@@ -162,8 +162,8 @@ test('renders equipment selectors and active values', () => {
   assert.deepEqual(compressor.children.map(option => option.textContent), ['Standard compressor', 'High flow']);
   assert.equal(compressor.value, 'Standard compressor');
   assert.equal(booster.value, 'Standard booster');
-  assert.equal(elements.get('settings-compressor-inlet-flow').value, '100');
-  assert.equal(elements.get('settings-booster-draining-rate').value, '5');
+  assert.equal(elements.get('settings-compressor-inlet-flow').value, '100.00');
+  assert.equal(elements.get('settings-booster-draining-rate').value, '5.00');
 });
 
 test('renders the selected physics model into the settings control', () => {
@@ -262,7 +262,7 @@ test('renders compact cylinder mass and pressure controls', () => {
   const massHeader = findElement(table, element => element.tagName === 'th'
     && element.textContent === 'Mass (kg)');
 
-  assert.equal(massInput.value, '14.3');
+  assert.equal(massInput.value, '14.30');
   assert.match(massInput.className, /\bpx-0\.5\b/);
   assert.match(massInput.className, /\bw-16\b/);
   assert.match(massHeader.className, /\bw-16\b/);
@@ -392,10 +392,10 @@ test('renders working pressure and an editable half-percent hot-overfill control
 
   assert.ok(pressureHeader);
   assert.ok(hotOverfillHeader);
-  assert.equal(hotOverfillInput.value, '2');
-  assert.equal(hotOverfillInput.min, '0');
-  assert.equal(hotOverfillInput.max, '5');
-  assert.equal(hotOverfillInput.step, '0.5');
+  assert.equal(hotOverfillInput.value, '2.00');
+  assert.equal(hotOverfillInput.min, '0.00');
+  assert.equal(hotOverfillInput.max, '5.00');
+  assert.equal(hotOverfillInput.step, '0.50');
 });
 test('renders working-pressure labels and bounds in selected imperial units', () => {
   const { document, elements } = createFakeDocument();
@@ -424,8 +424,8 @@ test('renders working-pressure labels and bounds in selected imperial units', ()
   assert.ok(header);
   assert.match(card.textContent, /Working pressure \(psi\)/);
   for (const input of [cardPressure, tablePressure]) {
-    assert.ok(Math.abs(Number(input.min) - 145.037738) < 1e-9);
-    assert.ok(Math.abs(Number(input.max) - 5076.32083) < 1e-9);
+    assert.ok(Math.abs(Number(input.min) - 145.04) < 1e-9);
+    assert.ok(Math.abs(Number(input.max) - 5076.32) < 1e-9);
     assert.match(input.attributes.get('aria-label'), /working pressure in psi/i);
   }
 });
