@@ -158,6 +158,56 @@ test('renders a collapsed interim measurement control between mixing steps', () 
   }
 });
 
+test('maps interim controls through scheduled measurement indices', () => {
+  const previousDocument = globalThis.document;
+  const document = createFakeDocument();
+  globalThis.document = document;
+
+  try {
+    renderResults({
+      feasible: true,
+      blend: {
+        retainedPressureBar: 50,
+        retainedPercent: 100,
+        ventedPressureBar: 0,
+        ventedGasLitres: 0,
+        heliumSalvagedLitres: 0,
+        finalPressureBar: 100,
+        finalOxygenPercent: 21,
+        finalHeliumPercent: 0
+      },
+      thermal: null,
+      protocolSteps: [
+        { type: 'keep', title: 'Step 1', resultingPressureBar: 50, _measurementIndex: 0 },
+        { type: 'wait', title: 'Automatic wait', resultingPressureBar: 50, _measurementIndex: null },
+        {
+          type: 'boost',
+          title: 'Step 2: Add oxygen',
+          resultingPressureBar: 100,
+          _measurementIndex: 0,
+          thermal: { measurementIndex: 0 }
+        }
+      ]
+    }, {
+      cylinder: { workingPressureBar: 100, hotOverfillPercent: 2 },
+      thermal: { interimMeasurements: [{ pressureBar: 50, temperatureC: 20 }] }
+    });
+
+    const children = document.elements.get('steps-container').children;
+    assert.equal(
+      findElement(children[1], element => element.tagName === 'button'
+        && element.attributes.get('data-action') === 'apply-interim-measurement'),
+      null
+    );
+    const apply = findElement(children[2], element => element.tagName === 'button'
+      && element.attributes.get('data-action') === 'apply-interim-measurement');
+    assert.ok(apply);
+    assert.equal(apply.attributes.get('data-measurement-index'), '0');
+  } finally {
+    globalThis.document = previousDocument;
+  }
+});
+
 
 test('places readings before the next transfer, not before a preserve step', () => {
   const previousDocument = globalThis.document;

@@ -569,10 +569,21 @@ function renderProtocol(protocolSteps, alertMessage = null, calculation = null, 
     const details = document.createElement('div');
     details.className = 'flex-1';
 
-    if (showInterimMeasurements && index > 0 && step.type !== 'keep') {
-      const measurement = calculation?.thermal?.interimMeasurements?.[index] ?? null;
+    const hasThermalMeasurementIndex = step.thermal
+      && Object.prototype.hasOwnProperty.call(step.thermal, 'measurementIndex');
+    const hasStepMeasurementIndex = Object.prototype.hasOwnProperty.call(step, '_measurementIndex');
+    const interimMeasurementIndex = hasThermalMeasurementIndex
+      ? step.thermal.measurementIndex
+      : hasStepMeasurementIndex
+        ? step._measurementIndex
+        : index;
+    if (showInterimMeasurements
+      && index > 0
+      && step.type !== 'keep'
+      && Number.isInteger(interimMeasurementIndex)) {
+      const measurement = calculation?.thermal?.interimMeasurements?.[interimMeasurementIndex] ?? null;
       details.append(renderInterimMeasurementControl(
-        index,
+        interimMeasurementIndex,
         step,
         measurement,
         calculation?.cylinder?.workingPressureBar,
