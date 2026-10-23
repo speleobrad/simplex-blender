@@ -8,9 +8,11 @@ const CUBIC_INCHES_PER_CUBIC_CENTIMETRE = 0.0610237441;
 
 const UNIT_DEFINITIONS = {
   pressureBar: { metric: ['bar', value => value], imperial: ['psi', value => value * PSI_PER_BAR, value => value / PSI_PER_BAR] },
+  pressureBarPerMin: { metric: ['bar/min', value => value], imperial: ['psi/min', value => value * PSI_PER_BAR, value => value / PSI_PER_BAR] },
   volumeL: { metric: ['L', value => value], imperial: ['cu ft', value => value / LITRES_PER_CUBIC_FOOT, value => value * LITRES_PER_CUBIC_FOOT] },
   massKg: { metric: ['kg', value => value], imperial: ['lb', value => value * POUNDS_PER_KILOGRAM, value => value / POUNDS_PER_KILOGRAM] },
   temperatureC: { metric: ['°C', value => value], imperial: ['°F', value => value * 9 / 5 + 32, value => (value - 32) * 5 / 9] },
+  temperatureDeltaC: { metric: ['°C', value => value], imperial: ['°F', value => value * 9 / 5, value => value * 5 / 9] },
   flowLPerMin: { metric: ['L/min', value => value], imperial: ['cu ft/min', value => value / LITRES_PER_CUBIC_FOOT, value => value * LITRES_PER_CUBIC_FOOT] },
   volumeCm3: { metric: ['cm³', value => value], imperial: ['in³', value => value * CUBIC_INCHES_PER_CUBIC_CENTIMETRE, value => value / CUBIC_INCHES_PER_CUBIC_CENTIMETRE] }
 };
@@ -32,6 +34,11 @@ export function normalizeUnits(units) {
 
 export function unitLabel(quantity, units) {
   return UNIT_DEFINITIONS[canonicalQuantity(quantity)]?.[normalizeUnits(units)]?.[0] ?? '';
+}
+export function materialLabel(material, units) {
+  if (material === 'aluminum') return units === IMPERIAL_UNITS ? 'Aluminum' : 'Aluminium';
+  if (material === 'steel') return 'Steel';
+  return material;
 }
 
 export const getUnitLabel = unitLabel;

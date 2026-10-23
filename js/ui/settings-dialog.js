@@ -1,7 +1,34 @@
 import { PRESET_IMPORT_DEFAULT_URLS } from '../preset-import.js';
 import { matchesPressureWarningUnlockPhrase, sortCylinderPresetEntries, sortGasPresetEntries } from '../settings.js';
-import { convertToDisplay, unitLabel } from '../units.js';
+import { convertToDisplay, materialLabel, unitLabel } from '../units.js';
 const CUSTOM_PRESET = 'custom';
+const EQUIPMENT_FIELD_QUANTITIES = {
+  'settings-booster-min-source-pressure': 'pressureBar',
+  'settings-booster-cylinder-volume': 'volumeCm3',
+  'settings-booster-oxygen-decant-rate': 'pressureBarPerMin',
+  'settings-booster-other-decant-rate': 'pressureBarPerMin',
+  'settings-booster-draining-rate': 'pressureBarPerMin',
+  'settings-compressor-inlet-flow': 'flowLPerMin',
+  'settings-compressor-max-pressure': 'pressureBar',
+  'settings-booster-max-output-pressure': 'pressureBar',
+  'settings-booster-temperature-modifier': 'temperatureDeltaC',
+  'settings-compressor-temperature-modifier': 'temperatureDeltaC'
+};
+const EQUIPMENT_FIELD_LIMITS = {
+  'settings-booster-min-source-pressure': [0, 100, 1],
+  'settings-booster-cylinder-volume': [0.1, 1000, 0.1],
+  'settings-booster-oxygen-decant-rate': [0.01, 1000, 0.01],
+  'settings-booster-other-decant-rate': [0.01, 1000, 0.01],
+  'settings-booster-draining-rate': [0.01, 1000, 0.01],
+  'settings-compressor-inlet-flow': [0.1, 10000, 0.1],
+  'settings-compressor-max-pressure': [10, 350, 1],
+  'settings-booster-max-output-pressure': [10, 350, 1],
+  'settings-booster-temperature-modifier': [-100, 100, 1],
+  'settings-compressor-temperature-modifier': [-100, 100, 1]
+};
+function formatSettingNumber(value) {
+  return Number.isFinite(Number(value)) ? Number(value).toFixed(2) : String(value);
+}
 
 function createPresetInput({ value, type, collection, index, field, label, min, max, step }) {
   const input = document.createElement('input');
@@ -91,10 +118,14 @@ function createCylinderNumberInput({ value, index, field, label, min, max, step,
   });
   input.className = input.className.replace('px-1', 'px-0.5');
   input.classList.add(...width.split(/\s+/).filter(Boolean));
+  if (min !== undefined) input.min = formatSettingNumber(min);
+  if (max !== undefined) input.max = formatSettingNumber(max);
+  if (step !== undefined) input.step = formatSettingNumber(step);
+  input.value = formatSettingNumber(value);
   return input;
 }
 
-function createMaterialSelect(preset, index) {
+function createMaterialSelect(preset, index, units) {
   const select = document.createElement('select');
   select.className = 'w-24 min-w-0 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 text-xs text-slate-100';
   select.dataset.settingsCollection = 'cylinderPresets';
@@ -104,7 +135,7 @@ function createMaterialSelect(preset, index) {
   for (const [value, label] of [['steel', 'Steel'], ['aluminum', 'Aluminum']]) {
     const option = document.createElement('option');
     option.value = value;
-    option.textContent = label;
+    option.textContent = materialLabel(value, units);
     select.append(option);
   }
   select.value = preset.material;
@@ -120,19 +151,20 @@ function createCylinderField(label, content) {
   field.append(labelElement, content);
   return field;
 }
-function cylinderDisplayValue(value, field, units) {
+const LITRES_PER_CU_FT_AT_ONE_BAR = 28.316846592 * 1.01325;
+
+function cylinderDisplayValue(preset, field, units) {
+  if (field === 'volumeL' && units === 'imperial') {
+    return preset.volumeL * preset.workingPressureBar / LITRES_PER_CU_FT_AT_ONE_BAR;
+  }
   const quantity = { volumeL: 'volumeL', massKg: 'massKg', workingPressureBar: 'pressureBar' }[field];
-  return quantity ? convertToDisplay(value, quantity, units) : value;
+  return quantity ? convertToDisplay(preset[field], quantity, units) : preset[field];
 }
 
 function cylinderUnitLabel(field, units) {
-  const labels = {
-    volumeL: 'litres',
-    massKg: 'kilograms'
-  };
-  return field === 'workingPressureBar'
-    ? unitLabel('pressureBar', units)
-    : labels[field] ?? '';
+  if (field === 'volumeL') return units === 'imperial' ? 'cu ft' : 'L';
+  if (field === 'massKg') return unitLabel('massKg', units);
+  return field === 'workingPressureBar' ? unitLabel('pressureBar', units) : '';
 }
 
 
@@ -154,9 +186,9 @@ function createCylinderCard(preset, index, presetCount, units) {
   const fields = document.createElement('div');
   fields.className = 'mt-3 grid grid-cols-2 gap-2';
   fields.append(
-    createCylinderField('Material', createMaterialSelect(preset, index)),
+    createCylinderField('Material', createMaterialSelect(preset, index, units)),
     createCylinderField(`Volume (${cylinderUnitLabel('volumeL', units)})`, createCylinderNumberInput({
-      value: cylinderDisplayValue(preset.volumeL, 'volumeL', units),
+      value: cylinderDisplayValue(preset, 'volumeL', units),
       index,
       field: 'volumeL',
       label: `${preset.name || 'Cylinder'} internal volume in ${cylinderUnitLabel('volumeL', units)}`,
@@ -164,7 +196,7 @@ function createCylinderCard(preset, index, presetCount, units) {
       step: 0.1
     })),
     createCylinderField(`Mass (${cylinderUnitLabel('massKg', units)})`, createCylinderNumberInput({
-      value: cylinderDisplayValue(preset.massKg, 'massKg', units),
+      value: cylinderDisplayValue(preset, 'massKg', units),
       index,
       field: 'massKg',
       label: `${preset.name || 'Cylinder'} mass in ${cylinderUnitLabel('massKg', units)}`,
@@ -172,12 +204,12 @@ function createCylinderCard(preset, index, presetCount, units) {
       step: 0.1
     })),
     createCylinderField(`Working pressure (${cylinderUnitLabel('workingPressureBar', units)})`, createCylinderNumberInput({
-      value: cylinderDisplayValue(preset.workingPressureBar, 'workingPressureBar', units),
+      value: cylinderDisplayValue(preset, 'workingPressureBar', units),
       index,
       field: 'workingPressureBar',
       label: `${preset.name || 'Cylinder'} working pressure in ${cylinderUnitLabel('workingPressureBar', units)}`,
-      min: cylinderDisplayValue(10, 'workingPressureBar', units),
-      max: cylinderDisplayValue(350, 'workingPressureBar', units),
+      min: convertToDisplay(10, 'pressureBar', units),
+      max: convertToDisplay(350, 'pressureBar', units),
       step: 1
     })),
     createCylinderField('Hot overfill (%)', createCylinderNumberInput({
@@ -221,8 +253,8 @@ function renderCylinderRows(presets, units) {
   for (const [label, ariaLabel] of [
     ['Name', undefined],
     ['Material', undefined],
-    ['Volume (L)', undefined],
-    ['Mass (kg)', undefined],
+    [`Volume (${cylinderUnitLabel('volumeL', units)})`, undefined],
+    [`Mass (${cylinderUnitLabel('massKg', units)})`, undefined],
     [`Working pressure (${cylinderUnitLabel('workingPressureBar', units)})`, undefined],
     ['Hot overfill (%)', undefined],
     ['', 'Actions']
@@ -252,7 +284,7 @@ function renderCylinderRows(presets, units) {
     });
     name.classList.add('w-full');
     const volume = createCylinderNumberInput({
-      value: cylinderDisplayValue(preset.volumeL, 'volumeL', units),
+      value: cylinderDisplayValue(preset, 'volumeL', units),
       index,
       field: 'volumeL',
       width: 'w-full',
@@ -261,7 +293,7 @@ function renderCylinderRows(presets, units) {
       step: 0.1
     });
     const mass = createCylinderNumberInput({
-      value: cylinderDisplayValue(preset.massKg, 'massKg', units),
+      value: cylinderDisplayValue(preset, 'massKg', units),
       index,
       field: 'massKg',
       width: 'w-full w-16',
@@ -270,13 +302,13 @@ function renderCylinderRows(presets, units) {
       step: 0.1
     });
     const workingPressure = createCylinderNumberInput({
-      value: cylinderDisplayValue(preset.workingPressureBar, 'workingPressureBar', units),
+      value: cylinderDisplayValue(preset, 'workingPressureBar', units),
       index,
       field: 'workingPressureBar',
       width: 'w-full',
       label: `${preset.name || 'Cylinder'} working pressure in ${cylinderUnitLabel('workingPressureBar', units)}`,
-      min: cylinderDisplayValue(10, 'workingPressureBar', units),
-      max: cylinderDisplayValue(350, 'workingPressureBar', units),
+      min: convertToDisplay(10, 'pressureBar', units),
+      max: convertToDisplay(350, 'pressureBar', units),
       step: 1
     });
     const hotOverfill = createCylinderNumberInput({
@@ -291,7 +323,7 @@ function renderCylinderRows(presets, units) {
     });
     row.append(
       name,
-      createMaterialSelect(preset, index),
+      createMaterialSelect(preset, index, units),
       volume,
       mass,
       workingPressure,
@@ -340,10 +372,10 @@ function boosterPresetMatchesActiveFields(booster, preset) {
 
 const PRESET_IMPORT_CATEGORIES = ['gas', 'cylinders', 'equipment'];
 
-function presetImportLabel(category, preset) {
+function presetImportLabel(category, preset, units) {
   if (category === 'gas') return `${preset.name} — ${preset.oxygenPercent}% O₂ / ${preset.heliumPercent}% He`;
   if (category === 'cylinders') {
-    return `${preset.name} — ${preset.volumeL} L / ${preset.material} / ${preset.workingPressureBar} bar`;
+    return `${preset.name} — ${preset.volumeL} L / ${materialLabel(preset.material, units)} / ${preset.workingPressureBar} bar`;
   }
   const kind = preset.inletFlowLPerMin === undefined ? 'Booster' : 'Compressor';
   return `${kind}: ${preset.name}`;
@@ -355,7 +387,7 @@ function candidateStatusLabel(candidate) {
   return 'New';
 }
 
-function renderPresetImportCandidates(importState) {
+function renderPresetImportCandidates(importState, units) {
   const container = document.getElementById('settings-preset-import-candidates');
   if (!container) return;
   const selectedIds = new Set(importState.selectedIds ?? []);
@@ -378,7 +410,7 @@ function renderPresetImportCandidates(importState) {
     details.className = 'min-w-0 flex-1';
     const title = document.createElement('span');
     title.className = 'block break-words text-slate-200';
-    title.textContent = presetImportLabel(importState.category, candidate.preset);
+    title.textContent = presetImportLabel(importState.category, candidate.preset, units);
     const status = document.createElement('span');
     status.className = 'mr-1 text-[10px] font-semibold uppercase tracking-wide';
     status.textContent = candidateStatusLabel(candidate);
@@ -408,7 +440,7 @@ export function renderPresetImport(settings, importState = {}) {
   status.classList.toggle('hidden', !status.textContent);
   status.classList.toggle('text-rose-300', Boolean(importState.error));
   status.classList.toggle('text-slate-400', !importState.error);
-  renderPresetImportCandidates(state);
+  renderPresetImportCandidates(state, settings.units);
   const selectedIds = new Set(importState.selectedIds ?? []);
   importButton.disabled = Boolean(importState.loading)
     || !(importState.candidates ?? []).some(candidate => (
@@ -464,12 +496,30 @@ export function renderSettingsDialog(settings, importState) {
     'settings-booster-temperature-modifier': settings.booster.boosterTemperatureModifierC,
     'settings-compressor-temperature-modifier': settings.booster.compressorTemperatureModifierC
   };
+  for (const unitElement of document.querySelectorAll('[data-settings-unit]')) {
+    unitElement.textContent = unitLabel(unitElement.dataset.settingsUnit, settings.units);
+  }
   for (const [id, value] of Object.entries(boosterFields)) {
     const input = document.getElementById(id);
     if (!input) continue;
-    input.value = ['settings-booster-temperature-modifier', 'settings-compressor-temperature-modifier'].includes(id)
-      ? `${Number(value) >= 0 ? '+' : ''}${value}`
-      : String(value);
+    const quantity = EQUIPMENT_FIELD_QUANTITIES[id];
+    const displayValue = quantity ? convertToDisplay(value, quantity, settings.units) : value;
+    const limits = EQUIPMENT_FIELD_LIMITS[id];
+    if (limits && quantity) {
+      input.min = String(convertToDisplay(limits[0], quantity, settings.units));
+      input.max = String(convertToDisplay(limits[1], quantity, settings.units));
+      input.step = String(convertToDisplay(limits[2], quantity, settings.units));
+    }
+    input.value = id.includes('temperature-modifier')
+      ? `${Number(displayValue) >= 0 ? '+' : ''}${formatSettingNumber(displayValue)}`
+      : formatSettingNumber(displayValue);
+    if (quantity) {
+      const currentLabel = input.getAttribute
+        ? input.getAttribute('aria-label')
+        : input.attributes?.get('aria-label');
+      const label = currentLabel?.replace(/ in .+$/i, '') ?? id;
+      input.setAttribute('aria-label', `${label} in ${unitLabel(quantity, settings.units)}`);
+    }
     if (id.includes('temperature-modifier')) {
       input.classList.toggle('text-orange-300', Number(value) > 0);
       input.classList.toggle('text-emerald-300', Number(value) < 0);
@@ -502,13 +552,16 @@ export function renderPresetOptions(settings, selectedCylinderName, units = 'met
 
   const select = document.getElementById('cylinder-preset');
   if (!select) return;
-  const displayValue = (value, quantity) => units === 'metric'
-    ? `${value} ${unitLabel(quantity, units)}`
-    : `${convertToDisplay(value, quantity, units).toFixed(1)} ${unitLabel(quantity, units)}`;
+  const displayValue = (value, quantity, preset) => {
+    const displayed = quantity === 'volumeL' && units === 'imperial'
+      ? preset.volumeL * preset.workingPressureBar / LITRES_PER_CU_FT_AT_ONE_BAR
+      : convertToDisplay(value, quantity, units);
+    return `${formatSettingNumber(displayed)} ${unitLabel(quantity, units)}`;
+  };
   const options = sortCylinderPresetEntries(settings.cylinderPresets)
     .map(({ preset }) => createOption(
       preset.name,
-      `${preset.name} — ${displayValue(preset.volumeL, 'volumeL')} / ${preset.material} / ${displayValue(preset.workingPressureBar, 'pressureBar')}`
+      `${preset.name} — ${displayValue(preset.volumeL, 'volumeL', preset)} / ${materialLabel(preset.material, units)} / ${displayValue(preset.workingPressureBar, 'pressureBar', preset)}`
     ));
   select.replaceChildren(...options);
   const requested = selectedCylinderName === undefined

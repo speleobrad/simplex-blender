@@ -22,7 +22,7 @@ import {
   selectEquipmentPreset,
   validateSettings
 } from './settings.js';
-import { convertFromDisplay, convertToDisplay, formatInputValue, METRIC_UNITS, unitLabel } from './units.js';
+import { convertFromDisplay, convertToDisplay, formatInputValue, materialLabel, METRIC_UNITS, unitLabel } from './units.js';
 import { resetApplicationState } from './factory-reset.js';
 import { analyzePresetSource, mergeSelectedPresets, PRESET_IMPORT_DEFAULT_URLS } from './preset-import.js';
 import { loadSupplyBanks, saveSupplyBanks } from './bank-storage.js';
@@ -111,6 +111,7 @@ let onboardingSettingsOpen = false;
 
 
 const DEFAULT_CYLINDER_PRESET_NAME = 'Catalina S80';
+const LITRES_PER_CU_FT_AT_ONE_BAR = 28.316846592 * 1.01325;
 
 function selectedCylinderPreset() {
   const selectedName = byId('cylinder-preset')?.value;
@@ -123,9 +124,13 @@ function updateCylinderRatingHint(preset, units = state.settings.units) {
   const hint = byId('cylinder-rating-hint');
   if (!hint || !preset) return;
   const equipmentValue = (value, quantity) => units === METRIC_UNITS
-    ? `${value} ${unitLabel(quantity, units)}`
-    : `${convertToDisplay(value, quantity, units).toFixed(1)} ${unitLabel(quantity, units)}`;
-  hint.textContent = `${equipmentValue(preset.volumeL, 'volumeL')} ${preset.material} cylinder, ${equipmentValue(preset.massKg, 'massKg')} empty assembly, rated to ${equipmentValue(preset.workingPressureBar, 'pressureBar')}.`;
+    ? `${value.toFixed(2)} ${unitLabel(quantity, units)}`
+    : `${convertToDisplay(value, quantity, units).toFixed(2)} ${unitLabel(quantity, units)}`;
+  const displayVolume = units === 'imperial'
+    ? preset.volumeL * preset.workingPressureBar / LITRES_PER_CU_FT_AT_ONE_BAR
+    : preset.volumeL;
+  const volumeText = `${displayVolume.toFixed(2)} ${unitLabel('volumeL', units)}`;
+  hint.textContent = `${volumeText} ${materialLabel(preset.material, units).toLowerCase()} cylinder, ${equipmentValue(preset.massKg, 'massKg')} empty assembly, rated to ${equipmentValue(preset.workingPressureBar, 'pressureBar')}.`;
 }
 
 function refreshPresetOptions(selectedCylinderName = null) {
@@ -567,17 +572,34 @@ function persistSettingsDraft() {
   return true;
 }
 
-function updateSettingsDraft(input) {
+function updateSettingsDraft(input, eventType) {
   if (!state.settingsDraft) return;
   const collection = input.dataset.settingsCollection;
   const index = Number(input.dataset.settingsIndex);
   const field = input.dataset.settingsField;
-  const quantity = { volumeL: 'volumeL', massKg: 'massKg', workingPressureBar: 'pressureBar' }[field];
+  const quantity = {
+    volumeL: 'volumeL',
+    massKg: 'massKg',
+    workingPressureBar: 'pressureBar',
+    compressorInletFlowLPerMin: 'flowLPerMin',
+    cylinderVolumeCm3: 'volumeCm3',
+    minimumSourcePressureBar: 'pressureBar',
+    oxygenDecantRateBarPerMin: 'pressureBarPerMin',
+    otherDecantRateBarPerMin: 'pressureBarPerMin',
+    drainingRateBarPerMin: 'pressureBarPerMin',
+    maxCompressorPressureBar: 'pressureBar',
+    maxBoosterOutputPressureBar: 'pressureBar',
+    boosterTemperatureModifierC: 'temperatureDeltaC',
+    compressorTemperatureModifierC: 'temperatureDeltaC'
+  }[field];
+  const numericValue = Number.parseFloat(input.value);
   const value = collection === 'physics' || collection === 'general' || collection === 'units' || field === 'name' || field === 'material'
     ? input.value
-    : quantity
-      ? convertFromDisplay(Number.parseFloat(input.value), quantity, state.settingsDraft.units)
-      : Number.parseFloat(input.value);
+    : collection === 'cylinderPresets' && field === 'volumeL' && state.settingsDraft.units === 'imperial'
+      ? numericValue * LITRES_PER_CU_FT_AT_ONE_BAR / state.settingsDraft.cylinderPresets[index].workingPressureBar
+      : quantity
+        ? convertFromDisplay(numericValue, quantity, state.settingsDraft.units)
+        : numericValue;
   if (collection === 'physics') state.settingsDraft.physics[field] = value;
   else if (field === 'pressureLimitMode') {
     state.settingsDraft.pressureLimitMode = value;
@@ -587,6 +609,14 @@ function updateSettingsDraft(input) {
   else if (collection === 'booster') state.settingsDraft.booster[field] = value;
   else state.settingsDraft.gasPresets[index][field] = value;
   persistSettingsDraft();
+  if (collection === 'units') {
+    renderSettingsDraft();
+    setSettingsCategory(state.settingsCategory);
+  } else if (eventType === 'change' && collection === 'cylinderPresets'
+    && ['volumeL', 'workingPressureBar'].includes(field)) {
+    renderSettingsDraft();
+    setSettingsCategory(state.settingsCategory);
+  }
 }
 
 function unlockPressureWarning() {
@@ -1454,7 +1484,7 @@ function handleInputOrChange(event) {
     return;
   }
   if ((event.type === 'input' || event.type === 'change') && target.dataset.settingsCollection) {
-    updateSettingsDraft(target);
+    updateSettingsDraft(target, event.type);
     return;
   }
 

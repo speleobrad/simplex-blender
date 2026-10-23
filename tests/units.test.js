@@ -5,6 +5,7 @@ import {
   convertToDisplay,
   formatUnitValue,
   formatInputValue,
+  materialLabel,
   IMPERIAL_UNITS,
   METRIC_UNITS
 } from '../js/units.js';
@@ -15,11 +16,18 @@ test('imperial conversions use scuba volume and pressure units', () => {
   assert.ok(Math.abs(convertToDisplay(200, 'pressureBar', IMPERIAL_UNITS) - 2900.75476) < 1e-5);
   assert.ok(Math.abs(convertFromDisplay(2900.75476, 'pressureBar', IMPERIAL_UNITS) - 200) < 1e-6);
 });
+test('material labels follow the selected unit system', () => {
+  assert.equal(materialLabel('aluminum', METRIC_UNITS), 'Aluminium');
+  assert.equal(materialLabel('aluminum', IMPERIAL_UNITS), 'Aluminum');
+  assert.equal(materialLabel('steel', METRIC_UNITS), 'Steel');
+});
 
 test('imperial conversions cover mass, temperature, flow, and small volume', () => {
   assert.ok(Math.abs(convertToDisplay(10, 'massKg', IMPERIAL_UNITS) - 22.0462262185) < 1e-9);
   assert.equal(convertToDisplay(25, 'temperatureC', IMPERIAL_UNITS), 77);
+  assert.equal(convertToDisplay(10, 'temperatureDeltaC', IMPERIAL_UNITS), 18);
   assert.ok(Math.abs(convertToDisplay(100, 'flowLPerMin', IMPERIAL_UNITS) - 3.53146667) < 1e-8);
+  assert.ok(Math.abs(convertToDisplay(5, 'pressureBarPerMin', IMPERIAL_UNITS) - 72.518869) < 1e-6);
   assert.ok(Math.abs(convertToDisplay(9, 'volumeCm3', IMPERIAL_UNITS) - 0.5492136969) < 1e-9);
 });
 
