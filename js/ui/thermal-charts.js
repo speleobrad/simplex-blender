@@ -16,9 +16,16 @@ function phaseLabel(phase) {
   if (phase === 'transfer-end') return 'transfer end';
   if (phase === 'settled') return 'ambient settled';
   if (phase === 'ambient-settled') return 'ambient-settled projection';
-  if (phase === 'in-water-projection') return 'in-water projection';
+  if (phase === 'in-water-projection') return 'explicit in-water projection';
+  if (phase === 'in-water-target') return 'in-water target projection';
   if (phase === 'measured-start') return 'measured start';
   return 'step start';
+}
+
+export function isThermalTerminalProjection(phase) {
+  return phase === 'ambient-settled'
+    || phase === 'in-water-target'
+    || phase === 'in-water-projection';
 }
 
 export function thermalCurveAttributes(color, style = 'estimated') {
@@ -210,11 +217,14 @@ export function buildThermalSeries(protocolSteps, initial = {}, terminalProjecti
     lineSegments.push({ style: 'estimated', samples: [terminalStart, terminalSample] });
     if (finite(terminalProjection.inWaterPressureBar)
       && finite(terminalProjection.inWaterTemperatureC)) {
+      const explicitInWater = terminalProjection.mode === 'what-if';
+      const inWaterPhase = explicitInWater ? 'in-water-projection' : 'in-water-target';
+      const inWaterLabel = explicitInWater ? 'In-water projection' : 'In-water target projection';
       const inWaterPoint = point(
         terminalPoint.step,
-        'in-water-projection',
-        'In-water projection',
-        'In-water projection',
+        inWaterPhase,
+        inWaterLabel,
+        inWaterLabel,
         undefined,
         undefined,
         terminalProjection.inWaterPressureBar,
@@ -311,10 +321,15 @@ const THERMAL_CONTAINER_IDS = [
   'thermal-chart-data'
 ];
 
-let thermalInteractionsBound = false;
-let thermalHoverPointSamples = [];
-let thermalHoverSamples = [];
-let thermalHoverReadout = null;
+const thermalStates = new WeakMap();
+const getThermalState = root => {
+  let state = thermalStates.get(root);
+  if (!state) {
+    state = { pointSamples: [], samples: [], readout: null };
+    thermalStates.set(root, state);
+  }
+  return state;
+};
 const THERMAL_HOVER_DEFAULT = 'Hover either graph to inspect time, temperature, and pressure.';
 
 
@@ -324,48 +339,34 @@ function pointDescription(pointValue) {
   return `${pointValue.label || pointValue.title}, ${phaseLabel(pointValue.phase)}, ${pointValue.elapsedMinutes.toFixed(1)} minutes, ${pointValue.temperatureC.toFixed(1)} ${temperatureUnit}, ${pointValue.pressureBar.toFixed(1)} ${pressureUnit}`;
 }
 
-function setActiveThermalPoint(index) {
-  for (const element of document.querySelectorAll('[data-thermal-point-index]')) {
-    element.classList.toggle('thermal-point-active', element.dataset.thermalPointIndex === String(index));
-  }
+function setActiveThermalPoint(index, root) {
+  for (const element of root.querySelectorAll?.('[data-thermal-point-index]') ?? []) element.classList.toggle('thermal-point-active', element.dataset.thermalPointIndex === String(index));
 }
-
-function clearActiveThermalPoint() {
-  for (const element of document.querySelectorAll('.thermal-point-active')) {
-    element.classList.remove('thermal-point-active');
-  }
+function clearActiveThermalPoint(root) {
+  for (const element of root.querySelectorAll?.('.thermal-point-active') ?? []) element.classList.remove('thermal-point-active');
 }
-
-function clearThermalHover() {
-  if (thermalHoverReadout) thermalHoverReadout.textContent = THERMAL_HOVER_DEFAULT;
-  for (const svg of document.querySelectorAll('.thermal-chart-svg')) {
+function clearThermalHover(root) {
+  const state = getThermalState(root);
+  if (state.readout) state.readout.textContent = THERMAL_HOVER_DEFAULT;
+  for (const svg of root.querySelectorAll?.('.thermal-chart-svg') ?? []) {
     svg.querySelector('[data-thermal-hover-line]')?.setAttribute('display', 'none');
     svg.querySelector('[data-thermal-hover-marker]')?.setAttribute('display', 'none');
   }
 }
-
-function updateThermalHover(sample) {
-  if (thermalHoverReadout) {
-    thermalHoverReadout.textContent = `Time: ${sample.elapsedMinutes.toFixed(1)} min · Temperature: ${sample.temperatureC.toFixed(1)} ${sample.temperatureUnit ?? '°C'} · Pressure: ${sample.pressureBar.toFixed(1)} ${sample.pressureUnit ?? 'bar'}`;
-  }
-  for (const svg of document.querySelectorAll('.thermal-chart-svg')) {
+function updateThermalHover(sample, root) {
+  const state = getThermalState(root);
+  if (state.readout) state.readout.textContent = `Time: ${sample.elapsedMinutes.toFixed(1)} min · Temperature: ${sample.temperatureC.toFixed(1)} ${sample.temperatureUnit ?? '°C'} · Pressure: ${sample.pressureBar.toFixed(1)} ${sample.pressureUnit ?? 'bar'}`;
+  for (const svg of root.querySelectorAll?.('.thermal-chart-svg') ?? []) {
     const maximumTime = Number(svg.dataset.thermalMaximumTime);
     const minimum = Number(svg.dataset.thermalMinimum);
     const maximum = Number(svg.dataset.thermalMaximum);
     const key = svg.dataset.thermalKey;
-    const x = CHART_MARGIN.left + (sample.elapsedMinutes / maximumTime)
-      * (CHART_WIDTH - CHART_MARGIN.left - CHART_MARGIN.right);
-    const value = sample[key];
-    const y = CHART_MARGIN.top + (1 - (value - minimum) / (maximum - minimum))
-      * (CHART_HEIGHT - CHART_MARGIN.top - CHART_MARGIN.bottom);
+    const x = CHART_MARGIN.left + (sample.elapsedMinutes / maximumTime) * (CHART_WIDTH - CHART_MARGIN.left - CHART_MARGIN.right);
+    const y = CHART_MARGIN.top + (1 - (sample[key] - minimum) / (maximum - minimum)) * (CHART_HEIGHT - CHART_MARGIN.top - CHART_MARGIN.bottom);
     const line = svg.querySelector('[data-thermal-hover-line]');
     const marker = svg.querySelector('[data-thermal-hover-marker]');
-    line?.setAttribute('x1', x);
-    line?.setAttribute('x2', x);
-    line?.setAttribute('display', 'inline');
-    marker?.setAttribute('cx', x);
-    marker?.setAttribute('cy', y);
-    marker?.setAttribute('display', 'inline');
+    line?.setAttribute('x1', x); line?.setAttribute('x2', x); line?.setAttribute('display', 'inline');
+    marker?.setAttribute('cx', x); marker?.setAttribute('cy', y); marker?.setAttribute('display', 'inline');
   }
 }
 
@@ -384,11 +385,12 @@ function eventThermalPoint(event) {
     : null;
 }
 
-function bindThermalInteractions() {
-  if (thermalInteractionsBound) return;
-  const containers = THERMAL_CONTAINER_IDS
-    .map(id => document.getElementById(id));
+function bindThermalInteractions(root = document) {
+  if (root.__thermalInteractionsBound) return;
+  const scoped = id => root?.querySelector?.(`[data-result-key="${id}"]`) ?? root?.querySelector?.(`#${id}`) ?? (root === document ? document.getElementById(id) : null);
+  const containers = THERMAL_CONTAINER_IDS.map(id => scoped(id));
   if (containers.some(container => !container)) return;
+  root.__thermalInteractionsBound = true;
 
   const handleEnter = event => {
     const point = eventThermalPoint(event);
@@ -397,9 +399,9 @@ function bindThermalInteractions() {
       ? event.relatedTarget.closest('[data-thermal-point-index]')
       : null;
     if (relatedPoint === point) return;
-    setActiveThermalPoint(point.dataset.thermalPointIndex);
-    const pointSample = thermalHoverPointSamples[Number(point.dataset.thermalPointIndex)];
-    if (pointSample) updateThermalHover(pointSample);
+    setActiveThermalPoint(point.dataset.thermalPointIndex, root);
+    const pointSample = getThermalState(root).pointSamples[Number(point.dataset.thermalPointIndex)];
+    if (pointSample) updateThermalHover(pointSample, root);
   };
 
   const handleLeave = event => {
@@ -409,7 +411,7 @@ function bindThermalInteractions() {
       ? event.relatedTarget.closest('[data-thermal-point-index]')
       : null;
     if (relatedPoint === point) return;
-    clearActiveThermalPoint();
+    clearActiveThermalPoint(root);
   };
 
   const handleChartMove = event => {
@@ -417,21 +419,21 @@ function bindThermalInteractions() {
     const svg = target && typeof target.closest === 'function'
       ? target.closest('.thermal-chart-svg')
       : null;
-    if (!svg || !thermalHoverSamples.length) {
-      clearThermalHover();
+    if (!svg || !getThermalState(root).samples.length) {
+      clearThermalHover(root);
       return;
     }
     const bounds = svg.getBoundingClientRect();
     const viewY = (event.clientY - bounds.top) / bounds.height * CHART_HEIGHT;
     const plotBottom = CHART_HEIGHT - CHART_MARGIN.bottom;
     if (viewY < CHART_MARGIN.top || viewY > plotBottom) {
-      clearThermalHover();
+      clearThermalHover(root);
       return;
     }
     const minutes = thermalHoverMinutes(event, svg);
-    updateThermalHover(interpolateThermalSample(thermalHoverSamples, minutes));
+    updateThermalHover(interpolateThermalSample(getThermalState(root).samples, minutes), root);
   };
-  const handleChartLeave = () => clearThermalHover();
+  const handleChartLeave = () => clearThermalHover(root);
 
   for (const container of containers) {
     container.addEventListener('mouseover', handleEnter);
@@ -443,7 +445,7 @@ function bindThermalInteractions() {
       container.addEventListener('pointerleave', handleChartLeave);
     }
   }
-  thermalInteractionsBound = true;
+  root.__thermalInteractionsBound = true;
 }
 
 function thermalPointAttributes(pointValue, index) {
@@ -703,8 +705,7 @@ function renderDataTable(container, points) {
   const body = document.createElement('tbody');
   for (let index = 0; index < points.length;) {
     const pointValue = points[index];
-    const isTerminalProjection = pointValue.phase === 'ambient-settled'
-      || pointValue.phase === 'in-water-projection';
+    const isTerminalProjection = isThermalTerminalProjection(pointValue.phase);
     const row = document.createElement('tr');
     const bandIndex = pointValue.step - 1;
     row.className = `thermal-band-${bandIndex % 2 === 0 ? 'even' : 'odd'} border-b border-ocean-800/60 last:border-0`;
@@ -748,26 +749,27 @@ function renderDataTable(container, points) {
 }
 
 function protocolForResult(result) {
-  if (result?.mode === 'compare') return result.compare?.protocolSteps;
+  if (result?.mode === 'compare' || result?.mode === 'what-if') return result.compare?.protocolSteps;
   if (result?.feasible) return result.protocolSteps;
   return result?.maximumPressure?.protocolSteps ?? result?.protocolSteps;
 }
 
-export function renderThermalCharts(result, input = {}, units = 'metric') {
-  const temperatureChart = document.getElementById('thermal-temperature-chart');
-  const pressureChart = document.getElementById('thermal-pressure-chart');
-  const dataTable = document.getElementById('thermal-chart-data');
-  const status = document.getElementById('thermal-chart-status');
-  if (!temperatureChart || !pressureChart || !dataTable) return;
-  bindThermalInteractions();
+export function renderThermalCharts(result, input = {}, units = 'metric', { root = document } = {}) {
+  const scoped = id => root?.querySelector?.(`[data-result-key="${id}"]`) ?? root?.querySelector?.(`#${id}`) ?? (root === document ? document.getElementById(id) : null);
+  const temperatureChart = scoped('thermal-temperature-chart');
+  const pressureChart = scoped('thermal-pressure-chart');
+  const dataTable = scoped('thermal-chart-data');
+  const status = scoped('thermal-chart-status');
+  bindThermalInteractions(root);
 
-  const terminalProjection = result?.mode === 'compare'
+  const terminalProjection = result?.mode === 'compare' || result?.mode === 'what-if'
     ? {
+      mode: result.mode,
       pressureBar: result.compare?.final?.ambientSettled?.pressureBar,
       temperatureC: result.compare?.final?.ambientSettled?.temperatureC,
       durationMinutes: result.compare?.final?.ambientSettledDurationMinutes,
-      inWaterPressureBar: result.compare?.final?.inWaterProjection?.pressureBar,
-      inWaterTemperatureC: result.compare?.final?.inWaterProjection?.temperatureC
+      inWaterPressureBar: result.compare?.final?.inWater?.pressureBar,
+      inWaterTemperatureC: result.compare?.final?.inWater?.temperatureC
     }
     : {
       pressureBar: result?.thermal?.finalAmbientPressureBar,
@@ -794,10 +796,11 @@ export function renderThermalCharts(result, input = {}, units = 'metric') {
     segments: series.segments.map(segment => ({ ...segment, samples: segment.samples.map(displayPoint) })),
     final: series.final ? displayPoint(series.final) : null
   };
-  thermalHoverPointSamples = displaySeries.points;
-  thermalHoverSamples = displaySeries.samples.filter(sample => sample.title !== 'In-water projection');
-  thermalHoverReadout = document.getElementById('thermal-chart-hover-readout');
-  clearThermalHover();
+  const state = getThermalState(root);
+  state.pointSamples = displaySeries.points;
+  state.samples = displaySeries.samples.filter(sample => !['In-water target projection', 'In-water projection'].includes(sample.title));
+  state.readout = scoped('thermal-chart-hover-readout');
+  clearThermalHover(root);
   const ambientTemperatureC = input.thermal?.ambientTemperatureC ?? input.physics?.temperatureC;
   renderChart(temperatureChart, {
     title: 'Temperature',
@@ -824,12 +827,15 @@ export function renderThermalCharts(result, input = {}, units = 'metric') {
   });
   renderDataTable(dataTable, displaySeries.points);
   if (status) {
-    const inWater = displaySeries.points.find(pointValue => pointValue.phase === 'in-water-projection');
+    const whatIf = result?.mode === 'what-if';
+    const inWater = displaySeries.points.find(pointValue =>
+      pointValue.phase === (whatIf ? 'in-water-projection' : 'in-water-target')
+    );
     const projection = inWater
-      ? ` In-water projection: ${inWater.pressureBar.toFixed(1)} ${getUnitLabel('pressure', units)} at ${inWater.temperatureC.toFixed(1)} ${getUnitLabel('temperature', units)}.`
+      ? ` ${whatIf ? 'Explicit in-water projection' : 'In-water target projection'}: ${inWater.pressureBar.toFixed(1)} ${getUnitLabel('pressure', units)} at ${inWater.temperatureC.toFixed(1)} ${getUnitLabel('temperature', units)}.`
       : '';
     status.textContent = displaySeries.final
-      ? `${displaySeries.final.step} ${result?.mode === 'compare' ? 'compare recipe' : 'blending'} step${displaySeries.final.step === 1 ? '' : 's'} shown over ${displaySeries.final.elapsedMinutes.toFixed(1)} minutes; final point is the ambient-settled tank state at ${displaySeries.final.pressureBar.toFixed(1)} ${getUnitLabel('pressure', units)} and ${displaySeries.final.temperatureC.toFixed(1)} ${getUnitLabel('temperature', units)}.${projection}`
+      ? `${displaySeries.final.step} ${whatIf ? 'What-if' : result?.mode === 'compare' ? 'compare recipe' : 'blending'} step${displaySeries.final.step === 1 ? '' : 's'} shown over ${displaySeries.final.elapsedMinutes.toFixed(1)} minutes; final point is the ambient-settled tank state at ${displaySeries.final.pressureBar.toFixed(1)} ${getUnitLabel('pressure', units)} and ${displaySeries.final.temperatureC.toFixed(1)} ${getUnitLabel('temperature', units)}.${projection}`
       : 'Chart data appears when a completed blend protocol is available.';
   }
 }

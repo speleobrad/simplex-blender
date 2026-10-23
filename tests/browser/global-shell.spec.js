@@ -20,8 +20,9 @@ test.describe('global shell', () => {
   test('primary surfaces exercise available user navigation boundaries', async ({ appPage }) => {
     const page = await appPage.goto('tourSeen');
     await selectPrimaryScreen(page, 'Blending');
-    await expect(page.locator('#tab-pane-recipe')).toBeVisible();
-    await expect(page.locator('#tab-btn-recipe')).toHaveClass(/bg-cyan/);
+    const blendingResults = page.locator('[data-result-host="blending"]');
+    await expect(blendingResults.locator('[data-result-key="tab-pane-recipe"]')).toBeVisible();
+    await expect(blendingResults.getByRole('tab', { name: 'Recipe', exact: true })).toHaveAttribute('aria-selected', 'true');
 
     await selectPrimaryScreen(page, 'Inventory');
     await expect(page.locator('#supply-banks-section')).toBeVisible();

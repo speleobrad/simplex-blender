@@ -6,8 +6,12 @@ import { formatUnitValue, convertToDisplay, unitLabel } from '../units.js';
 import { renderWaterPressurePane as renderPressurePaneImplementation } from './water-pressure.js';
 import { getCylinderPressureLimit } from '../pressure-limits.js';
 
+let activeRoot = globalThis.document;
+const resultElement = id => activeRoot?.querySelector?.(`[data-result-key="${id}"]`)
+  ?? activeRoot?.querySelector?.(`#${id}`)
+  ?? (activeRoot === globalThis.document ? globalThis.document?.getElementById?.(id) : null);
 function setText(id, value) {
-  const element = document.getElementById(id);
+  const element = resultElement(id);
   if (element) element.textContent = value;
 }
 
@@ -43,7 +47,7 @@ function oxygenCompressionRatioColor(ratio) {
 const SUMMARY_TOLERANCE = 1e-9;
 
 function setColor(id, color) {
-  const element = document.getElementById(id);
+  const element = resultElement(id);
   if (!element) return;
   element.className = `${element.className
     .replace(/\btext-(?:cyan|emerald|amber|rose|slate)-(?:200|300|400)\b/g, '')
@@ -250,7 +254,7 @@ function formatAutomaticWaitWarning(metadata, thermal, units = 'metric', stepTit
 }
 
 function renderWaterPressurePane(data) {
-  const container = document.getElementById('water-pressure-container');
+  const container = resultElement('water-pressure-container');
   if (!container) return;
   if (!data) {
     container.replaceChildren();
@@ -554,7 +558,7 @@ function renderProtocol(protocolSteps, alertMessage = null, calculation = null, 
   showInterimMeasurements = true,
   finalStepIncludesAmbientCoolOff = true
 } = {}) {
-  const container = document.getElementById('steps-container');
+  const container = resultElement('steps-container');
   if (!container) return;
 
   const cards = [];
@@ -637,7 +641,7 @@ function renderBlendSummary(blend, units = 'metric', requestedInWaterPressureBar
     ? SUMMARY_COLORS.benefit
     : SUMMARY_COLORS.neutral);
   setText('res-final-p', formatUnitValue(requestedInWaterPressureBar ?? blend.finalPressureBar, 'pressureBar', units));
-  setText('res-final-mix', `Tx ${blend.finalOxygenPercent}/${blend.finalHeliumPercent}`);
+  setText('res-final-mix', `${blend.finalOxygenPercent.toFixed(1)}/${blend.finalHeliumPercent.toFixed(1)}`);
   const targetOxygenPercent = targetMix?.oxygenPercent ?? targetMix?.targetOxygenPercent;
   const targetHeliumPercent = targetMix?.heliumPercent ?? targetMix?.targetHeliumPercent;
   const mixColor = Number.isFinite(targetOxygenPercent) && Number.isFinite(targetHeliumPercent)
@@ -699,8 +703,9 @@ function renderThermalSummary(
 }
 
 function renderBlendStatus(result, units = 'metric', pressureLimitMode = 'hard-stop') {
-  const status = document.getElementById('blend-status');
+  const status = resultElement('blend-status');
   if (!status) return;
+  status.hidden = false;
   if (result.feasible) {
     status.className = 'rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300';
     status.textContent = 'Feasible blend · target pressure is achievable with the current supply.';
@@ -727,9 +732,9 @@ function formatCompareState(state, units = 'metric') {
 }
 
 function renderCompareResults(compare, calculation) {
-  const summaryBanner = document.getElementById('summary-banner');
+  const summaryBanner = resultElement('summary-banner');
   if (summaryBanner) summaryBanner.hidden = true;
-  const compareSummary = document.getElementById('compare-summary');
+  const compareSummary = resultElement('compare-summary');
   if (compareSummary) compareSummary.hidden = false;
   for (const id of [
     'res-retained-p',
@@ -761,14 +766,129 @@ function renderCompareResults(compare, calculation) {
     finalStepIncludesAmbientCoolOff: false
   });
 }
+function clearOptimizerSummary() {
+  for (const id of [
+    'res-retained-p',
+    'res-retained-pct',
+    'res-vented-p',
+    'res-vented-litres',
+    'res-he-salvaged',
+    'res-final-p',
+    'res-final-mix'
+  ]) setText(id, '');
+}
 
-export function renderResults(result, calculation = null) {
+function renderWhatIfScenarioSummary(result, calculation) {
+  const compare = result.compare;
+  const units = calculation?.settings?.units ?? 'metric';
+  const pane = resultElement('scenario-summary-content');
+  if (!pane) return;
+  const stateText = value => formatCompareState(value, units);
+  const rows = [
+    ['Scenario start', stateText({
+      pressureBar: calculation?.cylinder?.initialPressureBar,
+      temperatureC: calculation?.physics?.temperatureC,
+      ...compare.initialMix
+    })]
+  ];
+  const summary = document.createElement('dl');
+  summary.className = 'grid gap-2 text-xs sm:grid-cols-2';
+  for (const [label, value] of rows) {
+    const item = document.createElement('div');
+    item.className = 'rounded-lg border border-ocean-800 bg-ocean-950/50 p-2';
+    const term = document.createElement('dt');
+    term.className = 'text-slate-400';
+    term.textContent = label;
+    const description = document.createElement('dd');
+    description.className = 'mt-1 font-mono text-slate-100';
+    description.textContent = value;
+    item.append(term, description);
+    summary.append(item);
+  }
+  const warningList = document.createElement('ul');
+  warningList.className = 'mt-4 space-y-1 text-xs text-amber-300';
+  for (const warning of result.pressureLimitWarnings ?? []) {
+    const item = document.createElement('li');
+    item.textContent = formatPressureWarning(warning, units);
+    warningList.append(item);
+  }
+  pane.replaceChildren(summary, ...(warningList.children.length ? [warningList] : []));
+}
+
+function renderWhatIfResults(result, calculation) {
+  const compare = result.compare;
+  const summaryBanner = resultElement('summary-banner');
+  if (summaryBanner) summaryBanner.hidden = false;
+  const compareSummary = resultElement('compare-summary');
+  if (compareSummary) compareSummary.hidden = true;
+  clearOptimizerSummary();
+  const lastThermal = compare.protocolSteps.at(-1)?.thermal ?? null;
+  const thermal = lastThermal
+    ? {
+      ...lastThermal,
+      finalTransferEndPressureBar: lastThermal.pressureAtTransferEndHotBar ?? lastThermal.pressureAtTransferEndBar,
+      finalTransferEndTemperatureC: lastThermal.temperatureAtTransferEndC,
+      finalAmbientPressureBar: compare.final.ambientSettled.pressureBar,
+      finalAmbientTemperatureC: compare.final.ambientSettled.temperatureC,
+      finalInWaterPressureBar: compare.final.inWater.pressureBar,
+      finalInWaterTemperatureC: compare.final.inWater.temperatureC,
+      finalAmbientCoolOffMinutes: compare.ambientSettledDurationMinutes
+    }
+    : null;
+  renderBlendSummary({
+    ...compare.summary,
+    finalPressureBar: compare.final.recipeEnd.pressureBar,
+    finalOxygenPercent: compare.final.recipeEnd.oxygenPercent,
+    finalHeliumPercent: compare.final.recipeEnd.heliumPercent
+  }, calculation?.settings?.units ?? 'metric');
+  renderThermalSummary(thermal, compare.protocolSteps, calculation?.settings?.units ?? 'metric', calculation?.cylinder?.workingPressureBar);
+  renderProtocol(compare.protocolSteps, null, calculation, {
+    units: calculation?.settings?.units ?? 'metric',
+    showResultingMix: true,
+    showInterimMeasurements: false,
+    finalStepIncludesAmbientCoolOff: false
+  });
+  renderWaterPressurePane({
+    thermal,
+    blend: {
+      finalPressureBar: compare.final.recipeEnd.pressureBar,
+      finalOxygenPercent: compare.final.recipeEnd.oxygenPercent,
+      finalHeliumPercent: compare.final.recipeEnd.heliumPercent
+    },
+    volumeL: calculation?.cylinder?.volumeL,
+    workingPressureBar: calculation?.cylinder?.workingPressureBar,
+    useVdw: calculation?.physics?.model === 'vdw',
+    units: calculation?.settings?.units ?? 'metric',
+    explicitInWater: compare.final.inWater
+  });
+  renderWhatIfScenarioSummary(result, calculation);
+}
+export function renderResults(result, calculation = null, { root = document, mode = 'optimize' } = {}) {
+  activeRoot = root;
   const units = calculation?.settings?.units ?? 'metric';
   renderBlendStatus(result, units, calculation?.settings?.pressureLimitMode);
   renderWaterPressurePane(null);
-  const summaryBanner = document.getElementById('summary-banner');
+  if (mode === 'what-if' || result?.mode === 'what-if') {
+    const status = resultElement('blend-status');
+    if (status) {
+      const warnings = renderPressureLimitWarnings(
+        result?.pressureLimitWarnings ?? [],
+        calculation?.settings?.pressureLimitMode,
+        units
+      );
+      status.className = warnings.length
+        ? 'rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200'
+        : '';
+      status.textContent = '';
+      status.replaceChildren(...warnings);
+      status.hidden = warnings.length === 0;
+    }
+    renderWhatIfResults(result, calculation);
+    return;
+  }
+  const summaryBanner = resultElement('summary-banner');
   if (summaryBanner) summaryBanner.hidden = result?.mode === 'compare';
-  const compareSummary = document.getElementById('compare-summary');
+  const compareSummary = resultElement('compare-summary');
   if (compareSummary) compareSummary.hidden = result?.mode !== 'compare';
   if (result?.mode === 'compare') {
     renderCompareResults(result.compare, calculation);

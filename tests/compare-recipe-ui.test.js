@@ -104,13 +104,45 @@ test('renders enabled supply-bank controls and synchronized pressure fields for 
     const target = findAll(container, element => hasAttribute(element, 'data-row-id', 'add-1') && hasAttribute(element, 'data-compare-field', 'targetPressureBar'))[0];
     assert.equal(added.attributes.get('data-pressure-input-mode'), 'added');
     assert.equal(target.attributes.get('data-pressure-input-mode'), 'target');
-    assert.equal(target.value, 100);
+    assert.equal(target.value, '100.00');
     assert.doesNotMatch(container.textContent, /Disabled bank|unnamed-bank/);
     assert.equal(findAll(container, element => element.tagName === 'option' && hasAttribute(element, 'value', 'unnamed-bank')).length, 0);
   } finally {
     globalThis.document = previousDocument;
   }
 });
+test('limits add pressure controls to two decimal places', () => {
+  const previousDocument = globalThis.document;
+  globalThis.document = createFakeDocument();
+  const container = new FakeElement();
+  const addRow = {
+    id: 'precise-add',
+    type: 'add',
+    bankId: 'helium-bank',
+    pressureAddedBar: 50.123,
+    targetPressureBar: 100.456,
+    pressureInputMode: 'added'
+  };
+
+  try {
+    renderCompareRecipe(container, {
+      rows: [addRow],
+      banks,
+      errors: [],
+      pressureStarts: { 'precise-add': 50 }
+    });
+    const controls = findAll(container, element => hasAttribute(element, 'data-row-id', 'precise-add'));
+    const added = controls.find(element => hasAttribute(element, 'data-compare-field', 'pressureAddedBar'));
+    const target = controls.find(element => hasAttribute(element, 'data-compare-field', 'targetPressureBar'));
+    assert.equal(added.attributes.get('step'), '0.01');
+    assert.equal(target.attributes.get('step'), '0.01');
+    assert.equal(added.value, '50.12');
+    assert.equal(target.value, '100.46');
+  } finally {
+    globalThis.document = previousDocument;
+  }
+});
+
 
 test('renders Compressor Air as an unlimited add source alongside finite banks', () => {
   const previousDocument = globalThis.document;

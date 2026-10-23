@@ -65,10 +65,10 @@ test('zoom controls change zoom within the diagram bounds', () => {
   assert.equal(getNextZoom(1.1, 3, -1), 1);
 });
 
-test('formats gas composition as O2/He without redundant decimal zeros', () => {
-  assert.equal(formatGasMix(21, 0), '21/0');
-  assert.equal(formatGasMix(0, 100), '0/100');
-  assert.equal(formatGasMix(19.46, 40.04), '19.5/40');
+test('formats gas composition as O2/He with one decimal place', () => {
+  assert.equal(formatGasMix(21, 0), '21.0/0.0');
+  assert.equal(formatGasMix(0, 100), '0.0/100.0');
+  assert.equal(formatGasMix(19.46, 40.04), '19.5/40.0');
 });
 
 test('compare accessible data keeps manual stages without supply banks', () => {

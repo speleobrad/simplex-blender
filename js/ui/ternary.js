@@ -21,7 +21,7 @@ const verticesByCanvas = new WeakMap();
 const maximumZoomByCanvas = new WeakMap();
 
 function formatPercent(value) {
-  return String(Number(value.toFixed(1)));
+  return value.toFixed(1);
 }
 
 export function formatGasMix(oxygenPercent, heliumPercent) {
@@ -153,10 +153,11 @@ function getChartPalette() {
   };
 }
 
-function attachPointerReadout(canvas) {
+function attachPointerReadout(canvas, root = document) {
   if (canvasesWithPointerReadout.has(canvas)) return;
-  const output = document.getElementById('ternary-coords-hover');
-  if (!output) return;
+  const output = root?.querySelector?.('[data-result-key="ternary-coords-hover"]')
+    ?? root?.querySelector?.('#ternary-coords-hover')
+    ?? (root === document ? document.getElementById('ternary-coords-hover') : null);
 
   const updateReadout = event => {
     if (!verticesByCanvas.has(canvas) && !canvas.getBoundingClientRect().width) return;
@@ -328,7 +329,7 @@ function drawTrajectory(ctx, trajectory, toPoint, width, palette) {
 
     ctx.save();
     ctx.font = 'bold 9px "JetBrains Mono"';
-    const label = `Step ${to.step}: ${to.oxygenPercent.toFixed(0)}/${to.heliumPercent.toFixed(0)}`;
+    const label = `Step ${to.step}: ${formatGasMix(to.oxygenPercent, to.heliumPercent)}`;
     const subLabel = `${to.pressureBar.toFixed(0)} bar`;
     const badgeWidth = ctx.measureText(label).width + 10;
     const badgeHeight = 22;
@@ -411,6 +412,14 @@ function trajectoryDataRow(label, mix, pressureBar) {
   return row;
 }
 
+function validSimplexMix(mix) {
+  return [mix?.oxygenPercent, mix?.heliumPercent, mix?.nitrogenPercent].every(Number.isFinite)
+    && mix.oxygenPercent >= 0
+    && mix.heliumPercent >= 0
+    && mix.nitrogenPercent >= 0
+    && Math.abs(mix.oxygenPercent + mix.heliumPercent + mix.nitrogenPercent - 100) < 1e-6;
+}
+
 export function buildAccessibleTernaryData({
   banks = [],
   initialMix,
@@ -419,10 +428,11 @@ export function buildAccessibleTernaryData({
   mode = 'optimizer'
 } = {}) {
   const isCompare = mode === 'compare';
+  const isWhatIf = mode === 'what-if';
   const mixRows = [
     { label: 'Air reference', mix: { oxygenPercent: 21, heliumPercent: 0 } },
     { label: 'Initial mix', mix: initialMix },
-    { label: isCompare ? 'Final mix' : 'Target mix', mix: targetMix }
+    { label: isCompare || isWhatIf ? 'Final mix' : 'Target mix', mix: targetMix }
   ];
   const sourcePressureByBankId = new Map(
     trajectory
@@ -437,7 +447,7 @@ export function buildAccessibleTernaryData({
       label: bank.name,
       mix: { oxygenPercent: bank.oxygenPercent, heliumPercent: bank.heliumPercent },
       startPressureBar: bank.pressureBar,
-      endPressureBar: sourcePressureByBankId.get(bank.id) ?? bank.pressureBar
+      endPressureBar: sourcePressureByBankId.get(bank.id) ?? bank.endPressureBar ?? bank.pressureBar
     });
   }
   const trajectoryRows = trajectory.map(point => ({
@@ -455,9 +465,10 @@ export function buildAccessibleTernaryData({
   };
 }
 
-function renderAccessibleChartData({ banks, initialMix, targetMix, trajectory, mode }) {
-  const mixesTable = document.getElementById('ternary-data-mixes');
-  const trajectoryTable = document.getElementById('ternary-data-trajectory');
+function renderAccessibleChartData({ banks, initialMix, targetMix, trajectory, mode }, root = document) {
+  const scoped = id => root?.querySelector?.(`[data-result-key="${id}"]`) ?? root?.querySelector?.(`#${id}`) ?? (root === document ? document.getElementById(id) : null);
+  const mixesTable = scoped('ternary-data-mixes');
+  const trajectoryTable = scoped('ternary-data-trajectory');
   if (!mixesTable || !trajectoryTable) return;
 
   const data = buildAccessibleTernaryData({ banks, initialMix, targetMix, trajectory, mode });
@@ -473,16 +484,33 @@ function renderAccessibleChartData({ banks, initialMix, targetMix, trajectory, m
     row.pressureBar
   )));
 
-  const status = document.getElementById('ternary-data-status');
+  const status = scoped('ternary-data-status');
   if (status) status.textContent = data.status;
 }
 
 
-export function renderTernaryDiagram(canvas, { banks, initialMix, targetMix, trajectory, mode = 'optimizer' }) {
+export function renderTernaryDiagram(canvas, { banks, initialMix, targetMix, trajectory, mode = 'optimizer' }, { root = document } = {}) {
   if (!canvas) return;
-  canvas.setAttribute('aria-label', 'Gas composition ternary diagram');
-  renderAccessibleChartData({ banks, initialMix, targetMix, trajectory, mode });
-  attachPointerReadout(canvas);
+  const validTrajectory = Array.isArray(trajectory)
+    && trajectory.length > 0
+    && trajectory.every(validSimplexMix);
+  if (!validSimplexMix(initialMix) || !validSimplexMix(targetMix) || !validTrajectory) {
+    const status = root?.querySelector?.('[data-result-key="ternary-data-status"]')
+      ?? root?.querySelector?.('#ternary-data-status')
+      ?? (root === document ? document.getElementById('ternary-data-status') : null);
+    if (status) status.textContent = 'Simplex diagram unavailable: the scenario trajectory has incomplete or invalid composition data.';
+    root?.querySelector?.('[data-result-key="ternary-data-mixes"]')?.replaceChildren();
+    root?.querySelector?.('[data-result-key="ternary-data-trajectory"]')?.replaceChildren();
+    const context = canvas.getContext?.('2d');
+    if (context) {
+      context.setTransform?.(1, 0, 0, 1, 0, 0);
+      context.clearRect?.(0, 0, canvas.width, canvas.height);
+    }
+    canvas.setAttribute('aria-label', 'Gas composition ternary diagram. Unavailable for this scenario.');
+    return;
+  }
+  renderAccessibleChartData({ banks, initialMix, targetMix, trajectory, mode }, root);
+  attachPointerReadout(canvas, root);
   activeCanvases.add(canvas);
   const rect = canvas.getBoundingClientRect();
   if (rect.width === 0 || rect.height === 0) return;
@@ -513,7 +541,7 @@ export function renderTernaryDiagram(canvas, { banks, initialMix, targetMix, tra
     air: toScreenPoint(baseVertices.air)
   };
   verticesByCanvas.set(canvas, vertices);
-  attachPointerReadout(canvas);
+  attachPointerReadout(canvas, root);
   activeCanvases.add(canvas);
 
   const palette = getChartPalette();
@@ -560,7 +588,7 @@ export function renderTernaryDiagram(canvas, { banks, initialMix, targetMix, tra
   context.font = '8px "JetBrains Mono"';
   context.fillStyle = palette.label;
   context.textAlign = 'right';
-  context.fillText('Air (21/0)', air.x - 6, air.y + 3);
+  context.fillText(`Air (${formatGasMix(21, 0)})`, air.x - 6, air.y + 3);
 
   drawBankPoints(context, banks, toPoint, palette);
   const start = toPoint(initialMix.oxygenPercent, initialMix.heliumPercent, initialMix.nitrogenPercent);
@@ -574,15 +602,15 @@ export function renderTernaryDiagram(canvas, { banks, initialMix, targetMix, tra
   context.stroke();
   context.setLineDash([]);
 
-  const summary = document.getElementById('ternary-steps-summary');
+  const summary = root?.querySelector?.('[data-result-key="ternary-steps-summary"]') ?? root?.querySelector?.('#ternary-steps-summary') ?? (root === document ? document.getElementById('ternary-steps-summary') : null);
   const boostCount = Math.max(0, trajectory.length - 1);
   if (summary) summary.textContent = `${boostCount} boost vector${boostCount === 1 ? '' : 's'}`;
   drawTrajectory(context, trajectory, toPoint, width, palette);
-  drawMixPoint(context, start, `Init (${initialMix.oxygenPercent}/${initialMix.heliumPercent})`, palette.initial, 6.5, 16, palette.markerOutline);
-  drawMixPoint(context, target, `Goal (${targetMix.oxygenPercent}/${targetMix.heliumPercent})`, palette.target, 7.5, -12, palette.markerOutline);
+  drawMixPoint(context, start, `Init (${formatGasMix(initialMix.oxygenPercent, initialMix.heliumPercent)})`, palette.initial, 6.5, 16, palette.markerOutline);
+  drawMixPoint(context, target, `${mode === 'what-if' ? 'Final' : 'Goal'} (${formatGasMix(targetMix.oxygenPercent, targetMix.heliumPercent)})`, palette.target, 7.5, -12, palette.markerOutline);
 }
 
-export function clearTernaryDiagram(canvas) {
+export function clearTernaryDiagram(canvas, root = document) {
   if (!canvas) return;
   activeCanvases.delete(canvas);
   verticesByCanvas.delete(canvas);
@@ -591,20 +619,23 @@ export function clearTernaryDiagram(canvas) {
   const context = canvas.getContext('2d');
   context.setTransform(1, 0, 0, 1, 0, 0);
   context.clearRect(0, 0, canvas.width, canvas.height);
-  const summary = document.getElementById('ternary-steps-summary');
+  const scoped = key => root?.querySelector?.(`[data-result-key="${key}"]`)
+    ?? root?.querySelector?.(`#${key}`)
+    ?? (root === document ? document.getElementById(key) : null);
+  const summary = scoped('ternary-steps-summary');
   if (summary) summary.textContent = 'No feasible blend';
-  const coordinates = document.getElementById('ternary-coords-hover');
+  const coordinates = scoped('ternary-coords-hover');
   if (coordinates) coordinates.textContent = 'No feasible blend';
-  document.getElementById('ternary-data-mixes')?.replaceChildren();
-  document.getElementById('ternary-data-trajectory')?.replaceChildren();
-  const dataStatus = document.getElementById('ternary-data-status');
+  scoped('ternary-data-mixes')?.replaceChildren();
+  scoped('ternary-data-trajectory')?.replaceChildren();
+  const dataStatus = scoped('ternary-data-status');
   if (dataStatus) dataStatus.textContent = 'No feasible blend data to display.';
   canvas.setAttribute('aria-label', 'Gas composition ternary diagram. No feasible blend.');
 }
 
-export function observeTernaryCanvas(canvas, redraw) {
+export function observeTernaryCanvas(canvas, redraw, root = document) {
   if (!canvas) return null;
-  attachPointerReadout(canvas);
+  attachPointerReadout(canvas, root);
   activeCanvases.add(canvas);
   attachWheelZoom(canvas, redraw);
   const observer = new ResizeObserver(redraw);

@@ -7,7 +7,7 @@
     "test": "node --test",
     "test:ui": "playwright test",
     "test:ui:core": "playwright test tests/browser/smoke.spec.js tests/browser/onboarding.spec.js tests/browser/global-shell.spec.js",
-    "test:ui:blending": "playwright test tests/browser/blending.spec.js",
+    "test:ui:blending": "playwright test tests/browser/blending.spec.js tests/browser/what-if.spec.js",
     "test:ui:settings": "playwright test tests/browser/settings.spec.js",
     "test:ui:results": "playwright test tests/browser/results.spec.js",
     "test:ui:data": "playwright test tests/browser/inventory.spec.js tests/browser/persistence.spec.js tests/browser/multi-session.spec.js",

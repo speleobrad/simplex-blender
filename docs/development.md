@@ -100,3 +100,7 @@ With valid working-tank, thermal, equipment, and Supply-bank values, switch from
 Run both a fixed-minute Wait and a target-temperature Wait; each must produce modeled output, with target-temperature pressure calculated after cooling. Enter a target below ambient or above the current transfer temperature and confirm an inline error while the previous successful result remains visible. Confirm the summary separates recipe-end and ambient-settled pressure, mix, and temperature. Thermal graphs, Diagram, and Tank summary must show the Compare trajectory. Switch back to Optimize and confirm its existing result, Supply-bank controls, target fields, and tabs still work. Confirm the browser console has no app module or runtime errors; the existing Tailwind CDN warning remains expected.
 
 See [Architecture](architecture.md) for runtime module responsibilities.
+
+### What-if browser acceptance
+
+Run `npx playwright test tests/browser/what-if.spec.js`. Verify snapshot edits leave Blending unchanged until Copy from Blending, drain/add/wait rows execute, all six result tabs are exclusive, Recipe has technical details without Record actual, and narrow keyboard navigation stays contained. Change or disable a shared bank after a run and verify the exact `Out of date — shared inputs changed` status; invalid reruns retain the prior valid summary. These checks cover current runtime inputs only and make no persistence or inventory-depletion claim.

@@ -944,10 +944,9 @@ test('compare transfer samples retain reference, ambient, and hot endpoint ident
     settings: { booster: { compressorInletFlowLPerMin: 100 } }
   });
   const thermal = result.protocolSteps[0].thermal;
-  assert.equal(thermal.pressureAtTransferEndReferenceBar, 95);
-  assert.equal(thermal.pressureAtTransferEndAmbientBar, 95);
-  assert.ok(thermal.pressureAtTransferEndHotBar > thermal.pressureAtTransferEndReferenceBar);
-  assert.equal(thermal.pressureAtTransferEndBar, thermal.pressureAtTransferEndHotBar);
+  assert.ok(thermal.pressureAtTransferEndReferenceBar < 95);
+  assert.ok(thermal.pressureAtTransferEndAmbientBar < 95);
+  assert.ok(Math.abs(thermal.pressureAtTransferEndHotBar - 95) < 1e-6);
   const finalSample = thermal.samples.at(-1);
   assert.equal(finalSample.pressureAtTransferEndReferenceBar, thermal.pressureAtTransferEndReferenceBar);
   assert.equal(finalSample.pressureAtTransferEndAmbientBar, thermal.pressureAtTransferEndAmbientBar);
@@ -971,12 +970,55 @@ test('compare simulation keeps a wait at fixed transfer pressure and projects a 
     protocolSteps: [{ type: 'add', method: 'decant', operation: 'Decant', receiverEndPressureBar: 100, resultingPressureBar: 100, resultingMix: { oxygenPercent: 32, heliumPercent: 0 }, sourceOxygenPercent: 32, sourceHeliumPercent: 0 }],
     cylinder: { initialPressureBar: 50, volumeL: 12 },
     physics: { model: 'ideal', temperatureC: 20 },
-    thermal: { tankMaterial: 'steel', coolingMedium: 'air', ambientTemperatureC: 20, inletTemperatureC: 20 },
+    thermal: { tankMaterial: 'steel', coolingMedium: 'air', ambientTemperatureC: 20, inletTemperatureC: 20, targetInWaterTemperatureC: 10 },
     settings: { booster: { otherDecantRateBarPerMin: 5 } }
   });
   assert.ok(transferResult.final.recipeEnd.temperatureC > 20);
   assert.ok(transferResult.final.ambientSettled.pressureBar < transferResult.final.recipeEnd.pressureBar);
   assert.equal(transferResult.final.ambientSettledDurationMinutes, 82.8);
+  assert.equal(transferResult.final.inWater.temperatureC, 10);
+  assert.ok(Number.isFinite(transferResult.final.inWater.pressureBar));
+  assert.equal('inWaterProjection' in transferResult.final, false);
+});
+
+test('What-if transfer targets are reached hot and settle below target pressure', () => {
+  const result = simulateCompareProtocol({
+    protocolSteps: [
+      {
+        type: 'drain',
+        operation: 'Drain',
+        receiverEndPressureBar: 0,
+        resultingPressureBar: 0,
+        resultingMix: { oxygenPercent: 21, heliumPercent: 0 }
+      },
+      {
+        type: 'wait',
+        operation: 'Wait',
+        resultingPressureBar: 0,
+        resultingMix: { oxygenPercent: 21, heliumPercent: 0 },
+        waitMinutes: 5
+      },
+      {
+        type: 'add',
+        method: 'decant',
+        operation: 'Decant',
+        receiverEndPressureBar: 100,
+        resultingPressureBar: 100,
+        resultingMix: { oxygenPercent: 100, heliumPercent: 0 },
+        sourceOxygenPercent: 100,
+        sourceHeliumPercent: 0
+      }
+    ],
+    cylinder: { initialPressureBar: 50, volumeL: 12 },
+    physics: { model: 'ideal', temperatureC: 20 },
+    thermal: { tankMaterial: 'steel', coolingMedium: 'air', ambientTemperatureC: 20, inletTemperatureC: 20 },
+    settings: { booster: { oxygenDecantRateBarPerMin: 5, drainingRateBarPerMin: 5 } }
+  });
+
+  const add = result.protocolSteps.at(-1).thermal;
+  assert.ok(Math.abs(add.pressureAtTransferEndBar - 100) < 1e-6);
+  assert.ok(add.pressureAtTransferEndReferenceBar < 100);
+  assert.ok(result.final.ambientSettled.pressureBar < 100);
 });
 
 test('compare simulation maps explicit decant, equalize, and boost stages', () => {

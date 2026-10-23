@@ -9,11 +9,11 @@ import { assertOnlyActivePanelsInteractive, assertVisibleFocus } from './asserti
 import { assertNoClippedText, assertRuntimeClean } from './assertions/runtime.js';
 
 const panels = [
-  '#tab-pane-recipe',
-  '#tab-pane-ternary',
-  '#tab-pane-thermal',
-  '#tab-pane-summary',
-  '#tab-pane-water-pressure'
+  '[data-result-host="blending"] [data-result-key="tab-pane-recipe"]',
+  '[data-result-host="blending"] [data-result-key="tab-pane-ternary"]',
+  '[data-result-host="blending"] [data-result-key="tab-pane-thermal"]',
+  '[data-result-host="blending"] [data-result-key="tab-pane-summary"]',
+  '[data-result-host="blending"] [data-result-key="tab-pane-water-pressure"]'
 ];
 
 async function loadApplication(appPage, { keepTour = false } = {}) {
@@ -34,17 +34,17 @@ test.describe('layout invariants', () => {
     const page = await loadApplication(appPage);
     await assertNoUnexpectedOverflow(page);
     await assertInsideViewport(page, page.locator('header'));
-    const firstTab = page.locator('#results-navigation [data-action="select-tab"]').first();
+    const firstTab = page.locator('[data-result-host="blending"] [role="tablist"]').first();
     await firstTab.scrollIntoViewIfNeeded();
     await assertInsideViewport(page, firstTab);
     await assertContained(page, page.locator('main > div').first(), page.locator('main'));
     await assertContained(page, page.locator('#working-tank-section'), page.locator('main'));
-    await assertContained(page, page.locator('#results-navigation'), page.locator('main'));
+    await assertContained(page, page.locator('[data-result-host="blending"]'), page.locator('main'));
   });
 
   test('visible cards do not unexpectedly overlap', async ({ appPage }) => {
     const page = await loadApplication(appPage);
-    const cards = page.locator('main > div > section, #results-navigation');
+    const cards = page.locator('main > div > section, [data-result-host="blending"]');
     await assertNoUnexpectedOverlap(page, cards, { allowContainment: false });
   });
   test('visible working-tank text and controls never overlap or clip in imperial units', async ({ appPage }) => {
@@ -58,7 +58,7 @@ test.describe('layout invariants', () => {
     await page.setViewportSize({ width: 694, height: 400 });
     await page.locator('#init-p').fill('50.00077979076461');
     await page.locator('#target-p').fill('200.00311921936164');
-    await expect(page.locator('#summary-banner')).toBeVisible();
+    await expect(page.locator('[data-result-host="blending"] [data-result-key="summary-banner"]')).toBeVisible();
     const artifactNodes = page.locator('#working-tank-section > div.grid > div:nth-child(-n+2) :is(label, span, input, select)');
     await assertNoUnexpectedOverlap(page, artifactNodes);
     await assertNoClippedText(page, artifactNodes, { includeNonControls: true });
@@ -68,7 +68,7 @@ test.describe('layout invariants', () => {
 
   test('visible controls have readable labels and focus remains visible', async ({ appPage }) => {
     const page = await loadApplication(appPage, { keepTour: true });
-    await assertNoClippedText(page, page.locator('#results-navigation [data-action="select-tab"]'));
+    await assertNoClippedText(page, page.locator('[data-result-host="blending"] [role="tab"]'));
     const skip = page.getByRole('button', { name: 'Skip' });
     await assertVisibleFocus(page, skip);
     await skip.click();
@@ -112,7 +112,7 @@ test.describe('layout invariants', () => {
   test('runtime capture remains clean for the factory state', async ({ appPage }) => {
     const page = await loadApplication(appPage);
     assertRuntimeClean(appPage.runtime);
-    await expect(page.locator('#tab-pane-recipe')).toBeVisible();
+    await expect(page.locator('[data-result-host="blending"] [data-result-key="tab-pane-recipe"]')).toBeVisible();
   });
 
   test('viewport-relative boxes stay correct after scrolling', async ({ appPage }) => {

@@ -142,6 +142,22 @@ function renderPressureTables(title, projections, workingPressureBar, units) {
 
 
 
+function renderExplicitInWaterProjection(projection, workingPressureBar, units) {
+  if (!projection || !finite(projection.pressureBar) || !finite(projection.temperatureC)) return null;
+  const section = document.createElement('section');
+  section.className = 'rounded-xl border border-cyan-500/50 bg-cyan-500/10 p-3';
+  const heading = document.createElement('h4');
+  heading.className = 'mb-1 text-xs font-bold uppercase tracking-wider text-cyan-200';
+  heading.textContent = 'Scenario in-water projection';
+  const details = document.createElement('p');
+  details.className = isPressureAboveWorkingPressure(projection.pressureBar, workingPressureBar)
+    ? 'font-mono text-sm font-semibold text-rose-300'
+    : 'font-mono text-sm font-semibold text-cyan-200';
+  details.textContent = `${convertToDisplay(projection.pressureBar, 'pressure', units).toFixed(1)} ${getUnitLabel('pressure', units)} at ${convertToDisplay(projection.temperatureC, 'temperature', units).toFixed(1)} ${getUnitLabel('temperature', units)}`;
+  section.append(heading, details);
+  return section;
+}
+
 export function renderWaterPressurePane({
   container,
   thermal,
@@ -149,7 +165,8 @@ export function renderWaterPressurePane({
   volumeL,
   workingPressureBar,
   useVdw,
-  units = 'metric'
+  units = 'metric',
+  explicitInWater = null
 }) {
   if (!container) return;
   container.replaceChildren();
@@ -164,7 +181,13 @@ export function renderWaterPressurePane({
       useVdw
     })
     : null;
-  if (!data) return;
+  if (!data && !explicitInWater) return;
+
+  const explicitSection = renderExplicitInWaterProjection(explicitInWater, workingPressureBar, units);
+  if (!data) {
+    if (explicitSection) container.append(explicitSection);
+    return;
+  }
 
   const waterTableSection = document.createElement('section');
   waterTableSection.className = 'rounded-xl border border-ocean-800 bg-ocean-950/60 p-3';
@@ -180,5 +203,5 @@ export function renderWaterPressurePane({
   carHeading.textContent = 'Car temperatures';
   carTableSection.append(carHeading, renderPressureTables('Car temperatures', data.car, workingPressureBar, units));
 
-  container.append(waterTableSection, carTableSection);
+  container.append(...(explicitSection ? [explicitSection, waterTableSection, carTableSection] : [waterTableSection, carTableSection]));
 }

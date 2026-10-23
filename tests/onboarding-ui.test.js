@@ -84,12 +84,30 @@ class FakeElement {
 function createFakeDocument() {
   const document = {
     elements: new Map(),
+    querySelectorCalls: [],
     activeElement: null,
     createElement(tagName) {
       return new FakeElement(tagName, document);
     },
     getElementById(id) {
       return document.elements.get(id) ?? null;
+    },
+    querySelector(selector) {
+      document.querySelectorCalls.push(selector);
+      const match = selector.match(/^\[data-result-host="([^"]+)"\] \[data-result-key="([^"]+)"\]$/);
+      if (!match) return null;
+      const find = (root, predicate) => {
+        if (predicate(root)) return root;
+        for (const child of root.children) {
+          const found = find(child, predicate);
+          if (found) return found;
+        }
+        return null;
+      };
+      const host = find(document.body, element => element.getAttribute('data-result-host') === match[1]);
+      return host
+        ? find(host, element => element.getAttribute('data-result-key') === match[2])
+        : null;
     }
   };
   document.defaultView = { driver: { js: {} } };
@@ -189,10 +207,30 @@ function createController(options = {}) {
   const storage = options.storage ?? memoryStorage();
   const launchButton = document.createElement('button');
   document.body.append(launchButton);
-  for (const id of ['primary-navigation', 'settings-launch', 'inventory-section', 'tab-btn-summary', 'tab-btn-water-pressure']) {
+  for (const id of ['primary-navigation', 'settings-launch', 'inventory-section']) {
     const target = document.createElement(id === 'inventory-section' ? 'section' : 'button');
     target.setAttribute('id', id);
     document.body.append(target);
+  }
+  const resultKeys = ['results-navigation', 'tab-btn-summary', 'tab-btn-water-pressure', 'tab-btn-ternary'];
+  if (options.resultLayout === 'ordinary') {
+    for (const key of resultKeys) {
+      const target = document.createElement('button');
+      target.setAttribute('id', key);
+      document.body.append(target);
+    }
+  } else {
+    for (const [hostName, idPrefix] of [['blending', 'blend'], ['what-if', 'what-if']]) {
+      const resultHost = document.createElement('section');
+      resultHost.setAttribute('data-result-host', hostName);
+      for (const key of resultKeys) {
+        const target = document.createElement('button');
+        target.setAttribute('id', `${idPrefix}-${key}`);
+        target.setAttribute('data-result-key', key);
+        resultHost.append(target);
+      }
+      document.body.append(resultHost);
+    }
   }
   const settingsDialog = document.createElement('dialog');
   settingsDialog.open = true;
@@ -232,6 +270,10 @@ function createController(options = {}) {
   };
 }
 
+function resultTarget(document, key, host = 'blending') {
+  return document.querySelector(`[data-result-host="${host}"] [data-result-key="${key}"]`);
+}
+
 function consentDialog(document) {
   return document.body.children.find(element => element.getAttribute('role') === 'dialog');
 }
@@ -269,6 +311,12 @@ test('opening an accepted user creates a Driver.js tour for the new layout', () 
   assert.equal(fixture.drivers[0].config.steps[0].element, '#primary-navigation');
   assert.equal(fixture.drivers[0].config.steps[0].popover.title, 'Welcome to Simplex Blender');
   assert.equal(fixture.drivers[0].config.steps[2].element, '#inventory-section');
+  assert.equal(fixture.drivers[0].config.steps[4].element, resultTarget(fixture.document, 'results-navigation'));
+  assert.equal(fixture.drivers[0].config.steps[5].element, resultTarget(fixture.document, 'results-navigation'));
+  assert.notEqual(
+    fixture.drivers[0].config.steps[4].element,
+    resultTarget(fixture.document, 'results-navigation', 'what-if')
+  );
   assert.equal(fixture.drivers[0].config.steps[6].element, '#settings-launch');
   assert.equal(fixture.drivers[0].config.steps[7].element, '#settings-pane-equipment');
   assert.equal(fixture.drivers[0].config.steps[7].popover.progressText, 'Step 7 of 8');
@@ -281,11 +329,47 @@ test('Summary and in-water pressure steps highlight their tab controls too', () 
 
   for (let index = 0; index < 4; index += 1) driver.clickNext();
 
-  assert.equal(fixture.document.getElementById('tab-btn-summary').classList.contains('onboarding-secondary-highlight'), true);
-  assert.equal(fixture.document.getElementById('tab-btn-water-pressure').classList.contains('onboarding-secondary-highlight'), false);
+  assert.equal(resultTarget(fixture.document, 'tab-btn-summary').classList.contains('onboarding-secondary-highlight'), true);
+  assert.equal(resultTarget(fixture.document, 'tab-btn-water-pressure').classList.contains('onboarding-secondary-highlight'), false);
   driver.clickNext();
-  assert.equal(fixture.document.getElementById('tab-btn-summary').classList.contains('onboarding-secondary-highlight'), false);
-  assert.equal(fixture.document.getElementById('tab-btn-water-pressure').classList.contains('onboarding-secondary-highlight'), true);
+  assert.equal(resultTarget(fixture.document, 'tab-btn-summary').classList.contains('onboarding-secondary-highlight'), false);
+  assert.equal(resultTarget(fixture.document, 'tab-btn-water-pressure').classList.contains('onboarding-secondary-highlight'), true);
+});
+
+test('result target popovers resolve through the scoped Blending selector', () => {
+  const fixture = createController();
+  fixture.controller.open();
+  const driver = fixture.drivers[0];
+
+  for (let index = 0; index < 4; index += 1) driver.clickNext();
+
+  const popover = fixture.document.createElement('div');
+  driver.config.onPopoverRender({ wrapper: popover }, { index: 4, driver });
+
+  assert.equal(
+    fixture.document.querySelectorCalls.includes('[data-result-host="blending"] [data-result-key="results-navigation"]'),
+    true
+  );
+  assert.equal(popover.parentNode, fixture.document.body);
+});
+
+test('result tour primary targets fall back to ordinary IDs', () => {
+  const fixture = createController({ resultLayout: 'ordinary' });
+  fixture.controller.open();
+  const driver = fixture.drivers[0];
+  const target = fixture.document.getElementById('results-navigation');
+
+  assert.equal(driver.config.steps[4].element, target);
+  for (let index = 0; index < 4; index += 1) driver.clickNext();
+
+  const popover = fixture.document.createElement('div');
+  driver.config.onPopoverRender({ wrapper: popover }, { index: 4, driver });
+
+  assert.equal(
+    fixture.document.querySelectorCalls.includes('[data-result-host="blending"] [data-result-key="results-navigation"]'),
+    true
+  );
+  assert.equal(popover.parentNode, fixture.document.body);
 });
 
 test('equipment tour popover moves into the native Settings dialog layer', () => {

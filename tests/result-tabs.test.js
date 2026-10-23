@@ -1,11 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { RESULT_TABS, setResultTab } from '../js/result-tabs.js';
+import { WHAT_IF_RESULT_TABS, setResultTabState } from '../js/ui/result-panel.js';
 
 function element() {
   const classes = new Set();
   return {
     hidden: false,
+    className: '',
+    tabIndex: 0,
     classList: {
       toggle(name, force) {
         if (force) classes.add(name);
@@ -20,9 +23,9 @@ function element() {
   };
 }
 
-function documentFixture() {
-  const panes = Object.fromEntries(RESULT_TABS.map(tab => [tab, element()]));
-  const buttons = Object.fromEntries(RESULT_TABS.map(tab => [tab, element()]));
+function documentFixture(tabs = RESULT_TABS) {
+  const panes = Object.fromEntries(tabs.map(tab => [tab, element()]));
+  const buttons = Object.fromEntries(tabs.map(tab => [tab, element()]));
   return {
     panes,
     buttons,
@@ -45,6 +48,27 @@ test('selecting a result tab exposes only its panel and marks the button selecte
     assert.equal(fixture.panes[tab].classList.contains('hidden'), !selected);
     assert.equal(fixture.buttons[tab].getAttribute('aria-selected'), String(selected));
     assert.equal(fixture.panes[tab].getAttribute('aria-labelledby'), `tab-btn-${tab}`);
+  }
+});
+
+test('initial What-if state shows Recipe with active styling', () => {
+  assert.deepEqual(WHAT_IF_RESULT_TABS, ['recipe', 'thermal', 'water-pressure', 'summary', 'ternary']);
+  const fixture = documentFixture(WHAT_IF_RESULT_TABS);
+
+  assert.equal(setResultTabState(fixture, 'recipe', WHAT_IF_RESULT_TABS), true);
+
+  for (const tab of WHAT_IF_RESULT_TABS) {
+    const selected = tab === 'recipe';
+    const pane = fixture.panes[tab];
+    const button = fixture.buttons[tab];
+    assert.equal(pane.hidden, !selected);
+    assert.equal(pane.classList.contains('hidden'), !selected);
+    assert.equal(pane.getAttribute('aria-hidden'), String(!selected));
+    assert.equal(pane.getAttribute('aria-labelledby'), `tab-btn-${tab}`);
+    assert.equal(button.className.includes(selected ? 'bg-cyan-500/20' : 'text-slate-400'), true);
+    assert.equal(button.getAttribute('aria-selected'), String(selected));
+    assert.equal(button.getAttribute('aria-controls'), `tab-pane-${tab}`);
+    assert.equal(button.tabIndex, selected ? 0 : -1);
   }
 });
 

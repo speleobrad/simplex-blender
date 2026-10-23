@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as compareRecipe from '../js/compare-recipe.js';
 import { calcMolarDensity } from '../js/physics.js';
+import { simulateCompareProtocol } from '../js/thermodynamics.js';
 const {
   buildCompareProtocol,
   createCompareRow,

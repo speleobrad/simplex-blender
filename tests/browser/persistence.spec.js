@@ -41,7 +41,7 @@ test.describe('persistence and failure states', () => {
     await expect(warning).toBeVisible();
     await expect(page.locator('#working-tank-section')).toBeVisible();
     await assertResultPanelExclusive(page, 'Recipe');
-    await expect(page.locator('#steps-container')).toContainText(/step|fill|compress|decant/i);
+    await expect(page.locator('[data-result-host="blending"] [data-result-key="steps-container"]')).toContainText(/step|fill|compress|decant/i);
     await expect(page.locator('#init-p')).toHaveValue('50');
     await expect(page.locator('#target-p')).toHaveValue('200');
   });
@@ -67,12 +67,12 @@ test.describe('persistence and failure states', () => {
 
   test('distinguishes feasible and infeasible result states', async ({ appPage }) => {
     const page = await appPage.goto('tourSeen');
-    await expect(page.locator('#steps-container')).toContainText(/step|fill|compress|decant/i);
+    await expect(page.locator('[data-result-host="blending"] [data-result-key="steps-container"]')).toContainText(/step|fill|compress|decant/i);
     await assertResultPanelExclusive(page, 'Recipe');
 
     await fillWorkingTank(page, { targetOxygen: 'not-a-number' });
-    await expect(page.locator('#steps-container')).toContainText(/no feasible|invalid|error|unable/i);
-    await expect(page.locator('#ternary-steps-summary')).toContainText(/ready|unavailable|invalid|no/i);
+    await expect(page.locator('[data-result-host="blending"] [data-result-key="steps-container"]')).toContainText(/no feasible|invalid|error|unable/i);
+    await expect(page.locator('[data-result-host="blending"] [data-result-key="ternary-steps-summary"]')).toContainText(/ready|unavailable|invalid|no/i);
   });
 
   test('loads valid checked-in local preset data and reports the import result', async ({ appPage }) => {

@@ -2149,6 +2149,25 @@ test('fixed-minute waits allow a hidden target temperature below ambient', () =>
 
   assert.equal(result.feasible, true);
 });
+test('excludes helium from an initial mix that is 98% helium or richer', () => {
+  const result = optimizeBlend({
+    cylinder: {
+      volumeL: 12,
+      initialPressureBar: 80,
+      initialOxygenPercent: 0,
+      initialHeliumPercent: 98,
+      targetPressureBar: 80,
+      targetOxygenPercent: 0,
+      targetHeliumPercent: 98
+    },
+    physics: { model: 'ideal', temperatureC: 20 },
+    banks: [],
+    settings: DEFAULT_SETTINGS
+  });
+
+  assert.equal(result.feasible, true);
+  assert.equal(result.blend.heliumSalvagedLitres, 0);
+});
 
 
 test('rejects invalid thermal inputs with the existing invalid result shape', () => {

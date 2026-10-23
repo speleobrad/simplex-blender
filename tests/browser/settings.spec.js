@@ -32,6 +32,48 @@ test.describe('settings categories and drafts', () => {
     await expect(model).toHaveValue('ideal');
     await cancelSettings(page);
   });
+  test('restores derived calculator state after canceling unit and cylinder drafts', async ({ appPage }) => {
+    const page = await appPage.goto('tourSeen');
+    const general = await openSettingsCategory(page, 'general');
+    await general.getByRole('combobox', { name: 'Units' }).selectOption('imperial');
+    await cancelSettings(page);
+    await expect(page.locator('#init-p')).toHaveAttribute('aria-label', /bar$/i);
+
+    const cylinderPane = await openSettingsCategory(page, 'cylinder-presets');
+    const pressure = cylinderPane.locator('[data-settings-index="0"][data-settings-field="workingPressureBar"]:visible').first();
+    await pressure.fill('100');
+    await pressure.blur();
+    await cancelSettings(page);
+    await expect(page.locator('#cylinder-rating-hint')).toContainText(/rated to 207\.00 bar/i);
+  });
+
+  test('updates every visible imperial volume when a cylinder pressure changes', async ({ appPage }) => {
+    const page = await appPage.goto('tourSeen');
+    const general = await openSettingsCategory(page, 'general');
+    await general.getByRole('combobox', { name: 'Units' }).selectOption('imperial');
+    await saveSettings(page);
+
+    const cylinderPane = await openSettingsCategory(page, 'cylinder-presets');
+    const pressure = cylinderPane.locator('[data-settings-index="0"][data-settings-field="workingPressureBar"]:visible').first();
+    const volumes = cylinderPane.locator('[data-settings-index="0"][data-settings-field="volumeL"]');
+    await expect(volumes).toHaveCount(2);
+    await pressure.fill('2000');
+    await pressure.blur();
+    for (const volume of await volumes.all()) await expect(volume).toHaveValue('14.42');
+    await cancelSettings(page);
+  });
+  test('restores the selected cylinder after canceling a preset rename', async ({ appPage }) => {
+    const page = await appPage.goto('tourSeen');
+    const cylinder = page.locator('#cylinder-preset');
+    await cylinder.selectOption('Catalina S80');
+    const originalName = await cylinder.inputValue();
+    const pane = await openSettingsCategory(page, 'cylinder-presets');
+    const name = pane.locator('[data-settings-index="1"][data-settings-field="name"]:visible').first();
+    await name.fill('Temporary renamed cylinder');
+    await name.blur();
+    await cancelSettings(page);
+    await expect(cylinder).toHaveValue(originalName);
+  });
 
   test('renders cylinder working pressure in imperial units with converted bounds', async ({ appPage }) => {
     const page = await appPage.goto('tourSeen');

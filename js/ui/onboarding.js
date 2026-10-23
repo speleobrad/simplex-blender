@@ -13,6 +13,28 @@ function createElement(document, tagName, { className, id, text, attributes } = 
   return element;
 }
 
+const BLENDING_RESULT_TARGETS = new Set([
+  'results-navigation',
+  'tab-btn-summary',
+  'tab-btn-water-pressure',
+  'tab-btn-ternary'
+]);
+
+function targetSelector(targetId, screen = 'blending') {
+  if (!targetId) return null;
+  if (screen === 'blending' && BLENDING_RESULT_TARGETS.has(targetId)) {
+    return `[data-result-host="blending"] [data-result-key="${targetId}"]`;
+  }
+  return `#${targetId}`;
+}
+
+function resolveTarget(document, targetId, screen = 'blending') {
+  if (!targetId) return null;
+  return document.querySelector?.(targetSelector(targetId, screen))
+    ?? document.getElementById?.(targetId)
+    ?? null;
+}
+
 function tourDestinations() {
   return WIZARD_STEPS.flatMap((step, stepIndex) => {
     const destinations = step.views ?? [step];
@@ -33,9 +55,16 @@ function tourDestinations() {
   });
 }
 
-function driverSteps(destinations) {
+function driverTarget(document, destination) {
+  if (!destination.targetId) return null;
+  const selector = targetSelector(destination.targetId, destination.screen);
+  if (destination.screen !== 'blending' || !BLENDING_RESULT_TARGETS.has(destination.targetId)) return selector;
+  return resolveTarget(document, destination.targetId, destination.screen) ?? selector;
+}
+
+function driverSteps(destinations, document) {
   return destinations.map(destination => ({
-    ...(destination.targetId ? { element: `#${destination.targetId}` } : {}),
+    ...(destination.targetId ? { element: driverTarget(document, destination) } : {}),
     popover: {
       title: destination.title,
       description: destination.body,
@@ -127,8 +156,9 @@ export function createOnboardingController({
 
   function highlightSecondaryTargets(index) {
     clearSecondaryHighlights();
-    for (const targetId of destinations[index]?.secondaryTargetIds ?? []) {
-      const element = document.getElementById(targetId);
+    const destination = destinations[index];
+    for (const targetId of destination?.secondaryTargetIds ?? []) {
+      const element = resolveTarget(document, targetId, destination.screen);
       if (!element) continue;
       element.classList?.add('onboarding-secondary-highlight');
       secondaryTargets.push(element);
@@ -137,7 +167,8 @@ export function createOnboardingController({
 
   function positionTourLayer(popover, options) {
     const index = options.index ?? options.driver?.getActiveIndex?.() ?? activeIndex;
-    const target = document.getElementById(destinations[index]?.targetId ?? '');
+    const destination = destinations[index];
+    const target = resolveTarget(document, destination?.targetId, destination?.screen);
     const host = target?.closest?.('dialog[open]') ?? document.body;
     const overlay = document.querySelector?.('.driver-overlay');
     host.append(...[overlay, popover.wrapper].filter(Boolean));
@@ -256,7 +287,7 @@ export function createOnboardingController({
 
   function startTour() {
     destinations = tourDestinations();
-    const steps = driverSteps(destinations);
+    const steps = driverSteps(destinations, document);
     activeIndex = 0;
     clearSecondaryHighlights();
     mode = 'wizard';

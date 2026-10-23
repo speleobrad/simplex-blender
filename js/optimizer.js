@@ -1,4 +1,4 @@
-import { GAS_CONSTANT, calcMolarDensity, calcPressure, calcZFromDensity, getMixParams } from './physics.js';
+import { GAS_CONSTANT, HELIUM_SALVAGE_MAX_PERCENT, calcMolarDensity, calcPressure, calcZFromDensity, getMixParams } from './physics.js';
 import { solveTwoPhaseSimplex } from './simplex.js';
 import { isValidGasComposition } from './gas-input.js';
 import { validateCalculatorInputs, validateSupplyBankInput } from './input-validation.js';
@@ -2160,9 +2160,11 @@ function optimizeBlendWithoutThermal(input) {
   const recipeBoosts = activeBoostsFor(recipeSolverResult, activeBanks, {
     airFirst: recipeTargetPressureBar > maxCompressorPressureBar
   });
-  const retainedHeliumMoles = retainedMoles * (initialHeliumPercent / 100);
+  const retainedHeliumMoles = initialHeliumPercent < HELIUM_SALVAGE_MAX_PERCENT
+    ? retainedMoles * (initialHeliumPercent / 100)
+    : 0;
   const salvagedSupplyHeliumMoles = recipeBoosts
-    .filter(({ bank }) => bank.heliumPercent < 100)
+    .filter(({ bank }) => bank.heliumPercent < HELIUM_SALVAGE_MAX_PERCENT)
     .reduce((total, { bank, addedMoles }) => total + addedMoles * (bank.heliumPercent / 100), 0);
   const heliumSalvagedLitres = (retainedHeliumMoles + salvagedSupplyHeliumMoles)
     * (GAS_CONSTANT * (temperatureC + 273.15));

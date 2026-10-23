@@ -51,7 +51,8 @@ export async function selectPrimaryScreen(page, name) {
 
   if (name === 'Blending') {
     const panel = await selectResultTab(page, 'Recipe');
-    await expect(page.locator('#tab-btn-recipe')).toHaveClass(/bg-cyan/);
+    await expect(page.locator('[data-result-host="blending"]').getByRole('tab', { name: 'Recipe', exact: true }))
+      .toHaveAttribute('aria-selected', 'true');
     return panel;
   }
 
@@ -83,24 +84,23 @@ export async function selectResultTab(page, name) {
   const tabId = RESULT_PANELS[name];
   if (!tabId) throw new RangeError(`Unknown result tab: ${name}`);
 
-  const tab = page.getByRole('tab', { name, exact: true }).or(
-    page.getByRole('button', { name, exact: true })
+  const host = page.locator('[data-result-host="blending"]');
+  const tab = host.getByRole('tab', { name, exact: true }).or(
+    host.getByRole('button', { name, exact: true })
   );
   await expect(tab).toBeVisible();
   await tab.click();
-
   const panelNames = Object.values(RESULT_PANELS);
-  const activePanel = page.locator(`#tab-pane-${tabId}`);
+  const activePanel = host.locator(`[data-result-key="tab-pane-${tabId}"]`);
   await expect(activePanel).toBeVisible();
   for (const panelName of panelNames) {
-    const panel = page.locator(`#tab-pane-${panelName}`);
-    if (panelName === tabId) continue;
-    await expect(panel).toBeHidden();
+    const panel = host.locator(`[data-result-key="tab-pane-${panelName}"]`);
+    if (panelName !== tabId) await expect(panel).toBeHidden();
   }
-
   const selected = await tab.getAttribute('aria-selected');
   if (selected !== null) await expect(tab).toHaveAttribute('aria-selected', 'true');
   return activePanel;
+
 }
 
 /** Toggle the visible theme action and return the root data-theme value. */
