@@ -749,7 +749,7 @@ function renderDataTable(container, points) {
 }
 
 function protocolForResult(result) {
-  if (result?.mode === 'compare') return result.compare?.protocolSteps;
+  if (result?.mode === 'compare' || result?.mode === 'what-if') return result.compare?.protocolSteps;
   if (result?.feasible) return result.protocolSteps;
   return result?.maximumPressure?.protocolSteps ?? result?.protocolSteps;
 }

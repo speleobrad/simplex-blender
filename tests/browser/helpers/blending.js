@@ -91,16 +91,14 @@ export async function setWhatIfRow(page, rowId, values = {}) {
 }
 
 export async function runWhatIf(page) {
-  const run = page.locator('#screen-what-if [data-action="run-what-if"]:visible');
-  await expect(run).toHaveCount(1);
-  await run.evaluate(button => button.click());
+  await expect(page.locator('#screen-what-if [data-action="run-what-if"]')).toHaveCount(0);
   const host = page.locator('#what-if-result-host');
   await expect(host).toBeVisible();
   await expect(host.getByRole('tab').first()).toBeVisible();
 }
 
 export async function assertWhatIfResultPanelExclusive(page, tabName) {
-  const ids = { 'Scenario summary': 'scenario-summary', Recipe: 'recipe', 'Simplex diagram': 'ternary', 'Thermal Graph': 'thermal', 'Tank summary': 'summary', 'In-water pressure': 'water-pressure' };
+  const ids = { Recipe: 'recipe', 'Simplex diagram': 'ternary', 'Thermal Graph': 'thermal', 'Tank summary': 'summary', 'In-water pressure': 'water-pressure' };
   const id = ids[tabName] ?? tabName;
   const host = page.locator('#what-if-result-host');
   const tab = host.getByRole('tab', { name: tabName, exact: true });

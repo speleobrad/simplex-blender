@@ -51,13 +51,14 @@ test('selecting a result tab exposes only its panel and marks the button selecte
   }
 });
 
-test('initial What-if state shows Scenario summary with active styling', () => {
+test('initial What-if state shows Recipe with active styling', () => {
+  assert.deepEqual(WHAT_IF_RESULT_TABS, ['recipe', 'thermal', 'water-pressure', 'summary', 'ternary']);
   const fixture = documentFixture(WHAT_IF_RESULT_TABS);
 
-  assert.equal(setResultTabState(fixture, 'scenario-summary', WHAT_IF_RESULT_TABS), true);
+  assert.equal(setResultTabState(fixture, 'recipe', WHAT_IF_RESULT_TABS), true);
 
   for (const tab of WHAT_IF_RESULT_TABS) {
-    const selected = tab === 'scenario-summary';
+    const selected = tab === 'recipe';
     const pane = fixture.panes[tab];
     const button = fixture.buttons[tab];
     assert.equal(pane.hidden, !selected);

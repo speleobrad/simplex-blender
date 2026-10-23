@@ -1,5 +1,5 @@
 export const OPTIMIZE_RESULT_TABS = Object.freeze(['recipe', 'thermal', 'water-pressure', 'summary', 'ternary']);
-export const WHAT_IF_RESULT_TABS = Object.freeze(['scenario-summary', 'recipe', 'thermal', 'water-pressure', 'summary', 'ternary']);
+export const WHAT_IF_RESULT_TABS = Object.freeze(['recipe', 'thermal', 'water-pressure', 'summary', 'ternary']);
 
 export function getResultTabs(mode = 'optimize') {
   return mode === 'what-if' ? WHAT_IF_RESULT_TABS : OPTIMIZE_RESULT_TABS;
@@ -49,6 +49,7 @@ export function createResultPanel(document, host, { mode = 'optimize', instanceP
   if (!root) return null;
   root.dataset.resultMode = mode;
   root.dataset.instancePrefix = instancePrefix;
+  if (mode !== 'what-if') root.querySelectorAll?.('[data-what-if-only]').forEach(element => element.remove());
   root.querySelectorAll?.('[id]').forEach(element => {
     const logical = element.id;
     element.dataset.resultKey ??= logical;
@@ -65,7 +66,7 @@ export function createResultPanel(document, host, { mode = 'optimize', instanceP
     if (!allowed.has(button.dataset.tab)) button.remove();
     else button.dataset.resultKey ??= `tab-btn-${button.dataset.tab}`;
   });
-  const initialTab = mode === 'what-if' ? 'scenario-summary' : 'recipe';
+  const initialTab = 'recipe';
   setResultTabState(root, initialTab, getResultTabs(mode));
   host.replaceChildren(root);
   return root;

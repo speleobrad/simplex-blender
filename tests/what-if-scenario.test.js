@@ -113,6 +113,37 @@ test('assembles the complete What-if result contract through an explicit wait', 
   assert.ok(Number.isFinite(result.compare.final.inWater.pressureBar));
   assert.ok(result.compare.sourceBanks.length >= 0);
 });
+test('excludes helium from a 98%-helium What-if source bank', () => {
+  const protocol = buildCompareProtocol([{
+    id: 'add-98-helium',
+    type: 'add',
+    bankId: 'bank-98-helium',
+    pressureInputMode: 'target',
+    pressureAddedBar: 50,
+    targetPressureBar: 100
+  }], {
+    cylinder: {
+      volumeL: 12,
+      workingPressureBar: 232,
+      initialPressureBar: 50,
+      initialOxygenPercent: 21,
+      initialHeliumPercent: 0
+    },
+    physics: { model: 'ideal', temperatureC: 20 },
+    banks: [{
+      id: 'bank-98-helium',
+      name: '98% helium',
+      volumeL: 50,
+      pressureBar: 200,
+      oxygenPercent: 0,
+      heliumPercent: 98,
+      enabled: true
+    }],
+    settings: {}
+  });
+
+  assert.equal(protocol.summary.heliumSalvagedLitres, 0);
+});
 test('invalid scenario rows preserve the prior result while reporting row errors', () => {
   const priorResult = { mode: 'what-if', compare: { final: {} } };
   const scenario = {

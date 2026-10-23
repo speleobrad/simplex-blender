@@ -36,7 +36,7 @@ test('What-if screen keeps an isolated editor host without optimizer controls', 
   assert.doesNotMatch(whatIf, /target-p|target-o2|target-he|global wait|Record actual/);
 });
 
-test('renders What-if controls and row run contract', () => {
+test('renders What-if controls without a manual run button', () => {
   const container = new FakeNode('div');
   renderWhatIfScenarioEditor(container, {
     scenario: { initialized: true, start: { pressureBar: 200, oxygenPercent: 21, heliumPercent: 0, ambientTemperatureC: 25, coolingMedium: 'air', inWaterTemperatureC: 20, cylinderPresetName: 'steel' }, rows: [] },
@@ -48,7 +48,7 @@ test('renders What-if controls and row run contract', () => {
   }
   assert.match(container.textContent, /psi/);
   assert.match(container.textContent, /Copy from Blending/);
-  assert.match(container.textContent, /Run scenario/);
+  assert.doesNotMatch(container.textContent, /Run scenario/);
   assert.doesNotMatch(container.textContent, /Record actual|global wait|target-p|target-o2|target-he/);
 });
 

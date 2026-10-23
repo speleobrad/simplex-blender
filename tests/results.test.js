@@ -1096,7 +1096,7 @@ test('replaces the previous recipe summary with the safety-limited target-temper
     assert.equal(document.elements.get('res-vented-p').textContent, '0.0 bar');
     assert.equal(document.elements.get('res-he-salvaged').textContent, '240 L');
     assert.equal(document.elements.get('res-final-p').textContent, '195.0 bar');
-    assert.equal(document.elements.get('res-final-mix').textContent, 'Tx 18/45');
+    assert.equal(document.elements.get('res-final-mix').textContent, '18.0/45.0');
     assert.equal(document.elements.get('res-in-water-pressure').textContent, '195.0 bar');
     assert.equal(document.elements.get('res-in-water-temperature').textContent, '10.0 °C');
     assert.match(document.elements.get('blend-status').textContent, /maximum safely achievable pressure is 195\.0 bar/i);

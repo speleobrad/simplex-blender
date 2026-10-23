@@ -8,6 +8,7 @@ import {
   applyWhatIfStartPatch,
   buildWhatIfInput,
   createWhatIfScenario,
+  expandWhatIfRows,
   projectWhatIfInWater,
   snapshotWhatIfFromBlending,
   whatIfSharedInputSignature
@@ -688,6 +689,19 @@ function selectCylinderPreset(select) {
   recalculate();
 }
 
+function applyWhatIfGasPreset(select) {
+  if (!select.value.startsWith('gas:')) return;
+  const preset = state.settings.gasPresets.find(candidate => candidate.name === select.value.slice(4));
+  if (!preset) return;
+  state.whatIfScenario = applyWhatIfStartPatch(state.whatIfScenario, {
+    oxygenPercent: preset.oxygenPercent,
+    heliumPercent: preset.heliumPercent
+  });
+  state.whatIfErrors = [];
+  renderWhatIfEditor();
+  renderWhatIfResult();
+}
+
 function handleGasShortcut(event) {
   if (event.key !== '/' || event.target.dataset.gasInput !== 'oxygen') return;
   event.preventDefault();
@@ -886,17 +900,19 @@ function renderWhatIfEditor() {
   if (!container) return;
   const input = scenarioInputForCurrentDraft();
   const pressureStarts = state.whatIfScenario.start
-    ? comparePressureStarts(input, state.whatIfScenario.rows)
+    ? comparePressureStarts(input, expandWhatIfRows(state.whatIfScenario.rows))
     : {};
   renderWhatIfScenarioEditor(container, {
     scenario: state.whatIfScenario,
     cylinderPresets: state.settings.cylinderPresets,
+    gasPresets: state.settings.gasPresets,
     units: state.settings.units,
-    errors: state.whatIfErrors,
     sharedInputChanged: whatIfResultIsStale()
       && state.whatIfScenario.sharedInputSignature !== whatIfCurrentSharedSignature(),
     banks: state.banks,
-    pressureStarts
+    pressureStarts,
+    rowsContainer: byId('compare-recipe-editor'),
+    statusContainer: byId('what-if-scenario-status'),
   });
 }
 
@@ -946,10 +962,7 @@ function copyWhatIfFromBlending() {
   };
   state.whatIfErrors = [];
   state.whatIfHasRun = Boolean(copied.result);
-  renderWhatIfEditor();
-  renderWhatIfErrors();
-  updateWhatIfStatus('Copied current Blending starting state.');
-  renderWhatIfResult();
+  runWhatIf();
 }
 
 function renderCompareEditor() {
@@ -1238,15 +1251,15 @@ function renderWhatIfResult() {
     staleStatus.hidden = !stale;
     staleStatus.textContent = stale
       ? (state.whatIfScenario.sharedInputSignature !== whatIfCurrentSharedSignature()
-        ? 'Out of date — shared inputs changed. Run scenario again.'
-        : 'Out of date — scenario draft changed. Run scenario again.')
+        ? 'Out of date — shared inputs changed. Update the scenario inputs.'
+        : 'Out of date — scenario draft changed. Update the scenario inputs.')
       : '';
   }
   if (stale) {
     const status = root.querySelector?.('[data-result-key="blend-status"]');
     if (status) {
       status.className = 'rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200';
-      status.textContent = 'Scenario result is out of date. Run scenario again.';
+      status.textContent = 'Scenario result is out of date. Update the scenario inputs.';
     }
   }
 }
@@ -1310,12 +1323,13 @@ function scenarioSimulationError(error, rows) {
 }
 
 
-function runWhatIf() {
+function runWhatIf({ renderEditor = true } = {}) {
   const scenario = state.whatIfScenario;
   const input = scenarioInputForCurrentDraft();
+  const rows = expandWhatIfRows(scenario.rows);
   const sharedErrors = scenarioSharedInputErrors(input);
-  const waitStates = compareWaitStates(input, scenario.rows);
-  const validation = validateCompareRecipe(scenario.rows, {
+  const waitStates = compareWaitStates(input, rows);
+  const validation = validateCompareRecipe(rows, {
     cylinder: input.cylinder,
     banks: input.banks,
     physics: input.physics,
@@ -1327,10 +1341,10 @@ function runWhatIf() {
     ...validation.errors
   ];
   renderWhatIfErrors();
-  renderWhatIfEditor();
+  if (renderEditor) renderWhatIfEditor();
   if (state.whatIfErrors.length > 0) {
     state.whatIfHasRun = true;
-    updateWhatIfStatus('Correct the highlighted scenario inputs before running.');
+    updateWhatIfStatus('Correct the highlighted scenario inputs before updating the scenario.');
     renderWhatIfResult();
     return;
   }
@@ -1374,15 +1388,15 @@ function runWhatIf() {
     state.whatIfErrors = [];
     state.whatIfHasRun = true;
     renderWhatIfErrors();
-    renderWhatIfEditor();
-    updateWhatIfStatus('Scenario run complete.');
+    if (renderEditor) renderWhatIfEditor();
+    updateWhatIfStatus('Scenario updated.');
     renderWhatIfResult();
   } catch (error) {
     state.whatIfErrors = [scenarioSimulationError(error, scenario.rows)];
     state.whatIfHasRun = true;
     renderWhatIfErrors();
-    renderWhatIfEditor();
-    updateWhatIfStatus('Correct the highlighted scenario inputs before running.');
+    if (renderEditor) renderWhatIfEditor();
+    updateWhatIfStatus('Correct the highlighted scenario inputs before updating the scenario.');
     renderWhatIfResult();
   }
 }
@@ -1452,9 +1466,7 @@ function recalculate() {
   renderSupplyBanks(state.banks, state.settings.gasPresets);
   renderEquipmentSummary(state.settings);
   if (state.activeScreen === 'what-if') {
-    renderWhatIfEditor();
-    renderWhatIfErrors();
-    renderWhatIfResult();
+    runWhatIf();
     return;
   }
 
@@ -1502,9 +1514,7 @@ function selectScreen(screenId) {
   state.activeScreen = screenId;
   if (screenId === 'what-if') {
     initializeWhatIfScenario();
-    renderWhatIfEditor();
-    renderWhatIfErrors();
-    renderWhatIfResult();
+    runWhatIf();
   }
 }
 
@@ -1678,18 +1688,19 @@ function updateWhatIfField(input, rerender) {
   }
   state.whatIfScenario = applyWhatIfStartPatch(state.whatIfScenario, { [field]: value });
   state.whatIfErrors = [];
-  if (rerender) {
-    renderWhatIfEditor();
-    renderWhatIfErrors();
-    renderWhatIfResult();
-  }
+  runWhatIf({ renderEditor: rerender });
 }
 
 function updateWhatIfRow(input, rerender) {
-  const index = state.whatIfScenario.rows.findIndex(row => row.id === input.dataset.rowId);
+  const rowId = input.dataset.rowId;
+  const field = input.dataset.compareField;
+  let index = state.whatIfScenario.rows.findIndex(row => row.id === rowId);
+  const isAutomaticWait = index < 0 && input.dataset.compareField === 'waitMinutes' && rowId.endsWith('-wait');
+  if (isAutomaticWait) {
+    index = state.whatIfScenario.rows.findIndex(row => `${row.id}-wait` === rowId);
+  }
   if (index < 0) return;
   const row = state.whatIfScenario.rows[index];
-  const field = input.dataset.compareField;
   let value = input.value;
   if (['pressureAddedBar', 'targetPressureBar'].includes(field)) {
     value = convertFromDisplay(Number.parseFloat(value), 'pressureBar', state.settings.units);
@@ -1699,11 +1710,12 @@ function updateWhatIfRow(input, rerender) {
     value = Number.parseFloat(value);
   }
   let updatedRow;
-  if (field === 'type') updatedRow = createCompareRow(value, row.id);
-  else if (field === 'bankId') updatedRow = { ...row, bankId: value || null };
+  if (field === 'type') {
+    updatedRow = { ...createCompareRow(value, row.id), waitMinutes: row.waitMinutes ?? 0 };
+  } else if (field === 'bankId') updatedRow = { ...row, bankId: value || null };
   else if (field === 'pressureAddedBar' || (field === 'targetPressureBar' && row.type === 'add')) {
     const inputState = scenarioInputForCurrentDraft();
-    const pressureStart = comparePressureStarts(inputState, state.whatIfScenario.rows)[row.id];
+    const pressureStart = comparePressureStarts(inputState, expandWhatIfRows(state.whatIfScenario.rows))[row.id];
     updatedRow = normalizeComparePressureFields({
       ...row,
       [field]: value,
@@ -1718,11 +1730,7 @@ function updateWhatIfRow(input, rerender) {
     draftRevision: state.whatIfScenario.draftRevision + 1
   };
   state.whatIfErrors = [];
-  if (rerender) {
-    renderWhatIfEditor();
-    renderWhatIfErrors();
-    renderWhatIfResult();
-  }
+  runWhatIf({ renderEditor: rerender });
 }
 
 function updateCompareRow(input, rerender) {
@@ -1820,6 +1828,10 @@ function handleInputOrChange(event) {
     applyCylinderGasPreset(target);
     return;
   }
+  if (event.type === 'change' && target.dataset.action === 'select-what-if-gas') {
+    applyWhatIfGasPreset(target);
+    return;
+  }
   if (event.type === 'change' && target.dataset.action === 'select-cylinder-preset') {
     selectCylinderPreset(target);
     return;
@@ -1908,9 +1920,7 @@ function updateWhatIfRows(rows) {
     draftRevision: state.whatIfScenario.draftRevision + 1
   };
   state.whatIfErrors = [];
-  renderWhatIfEditor();
-  renderWhatIfErrors();
-  renderWhatIfResult();
+  runWhatIf();
 }
 
 function moveWhatIfRow(rowId, offset) {
@@ -1922,6 +1932,36 @@ function moveWhatIfRow(rowId, offset) {
   updateWhatIfRows(rows);
 }
 
+function handleDragStart(event) {
+  const handle = event.target.closest?.('[data-action="drag-compare-row"]');
+  if (!handle || state.activeScreen !== 'what-if' || !event.dataTransfer) return;
+  event.dataTransfer.effectAllowed = 'move';
+  event.dataTransfer.setData('text/plain', handle.dataset.rowId);
+}
+
+function handleDragOver(event) {
+  if (state.activeScreen !== 'what-if' || !event.target.closest?.('#compare-recipe-editor fieldset[data-row-id]')) return;
+  event.preventDefault();
+  if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+}
+
+function handleDrop(event) {
+  if (state.activeScreen !== 'what-if') return;
+  const target = event.target.closest?.('#compare-recipe-editor fieldset[data-row-id]');
+  if (!target || !event.dataTransfer) return;
+  event.preventDefault();
+  const sourceId = event.dataTransfer.getData('text/plain');
+  const targetId = target.dataset.rowId;
+  if (!sourceId || sourceId === targetId) return;
+  const rows = state.whatIfScenario.rows.slice();
+  const sourceIndex = rows.findIndex(row => row.id === sourceId);
+  const targetIndex = rows.findIndex(row => row.id === targetId);
+  if (sourceIndex < 0 || targetIndex < 0) return;
+  const [row] = rows.splice(sourceIndex, 1);
+  rows.splice(targetIndex, 0, row);
+  updateWhatIfRows(rows);
+}
+
 function handleClick(event) {
   const actionElement = event.target.closest('[data-action]');
   if (!actionElement || actionElement.disabled) return;
@@ -1929,10 +1969,9 @@ function handleClick(event) {
   switch (actionElement.dataset.action) {
     case 'add-compare-row':
       if (state.activeScreen === 'what-if') {
-        updateWhatIfRows([
-          ...state.whatIfScenario.rows,
-          createCompareRow('drain', `compare-row-${nextCompareRowNumber++}`)
-        ]);
+        const row = createCompareRow('drain', `compare-row-${nextCompareRowNumber++}`);
+        row.waitMinutes = 0;
+        updateWhatIfRows([...state.whatIfScenario.rows, row]);
       } else {
         state.compareRows.push(createCompareRow('drain', `compare-row-${nextCompareRowNumber++}`));
         state.compareErrors = [];
@@ -1960,9 +1999,6 @@ function handleClick(event) {
       break;
     case 'run-compare':
       runCompare();
-      break;
-    case 'run-what-if':
-      runWhatIf();
       break;
     case 'copy-what-if-from-blending':
       copyWhatIfFromBlending();
@@ -2058,6 +2094,9 @@ function initialize() {
   document.addEventListener('keydown', handleGasShortcut);
   document.addEventListener('keydown', handleResultTabKeydown);
   document.addEventListener('paste', handleGasPaste);
+  document.addEventListener('dragstart', handleDragStart);
+  document.addEventListener('dragover', handleDragOver);
+  document.addEventListener('drop', handleDrop);
   applyTheme(state.theme);
   convertDisplayedInputs(METRIC_UNITS, state.settings.units);
   setPrimaryScreen(document, state.activeScreen);

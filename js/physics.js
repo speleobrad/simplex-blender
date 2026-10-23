@@ -1,4 +1,5 @@
 export const GAS_CONSTANT = 0.083144626;
+export const HELIUM_SALVAGE_MAX_PERCENT = 98;
 
 const GAS_PARAMETERS = {
   helium: { a: 0.0346, b: 0.0238 },

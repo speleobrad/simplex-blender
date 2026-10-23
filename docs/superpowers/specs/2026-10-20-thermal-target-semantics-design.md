@@ -164,14 +164,14 @@ The existing in-water tab continues to use the shared pressure-at-temperature pr
 
 ## Compare mode
 
-Compare row pressure semantics remain unchanged. Compare target-temperature waits use `targetMediumTemperatureC` terminology and the same constraints:
+Compare row pressure semantics use the entered pressure as the pressure reached at the end of the transfer, at the modeled hot transfer temperature. The simulator solves the lower reference-temperature pressure needed to reach that endpoint, then reports the pressure after the configured wait and ambient settling. Compare target-temperature waits use `targetMediumTemperatureC` terminology and the same constraints:
 
 - target medium temperature: 5–40°C;
 - target medium temperature >= ambient;
 - ambient: 5–40°C;
 - inlet gas temperature: 5–40°C.
 
-The Optimize in-water pressure conversion does not alter Compare row target pressures.
+The Optimize in-water pressure conversion does not alter Compare row pressure targets.
 
 ## Validation and errors
 

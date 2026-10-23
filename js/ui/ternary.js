@@ -21,7 +21,7 @@ const verticesByCanvas = new WeakMap();
 const maximumZoomByCanvas = new WeakMap();
 
 function formatPercent(value) {
-  return String(Number(value.toFixed(1)));
+  return value.toFixed(1);
 }
 
 export function formatGasMix(oxygenPercent, heliumPercent) {
@@ -329,7 +329,7 @@ function drawTrajectory(ctx, trajectory, toPoint, width, palette) {
 
     ctx.save();
     ctx.font = 'bold 9px "JetBrains Mono"';
-    const label = `Step ${to.step}: ${to.oxygenPercent.toFixed(0)}/${to.heliumPercent.toFixed(0)}`;
+    const label = `Step ${to.step}: ${formatGasMix(to.oxygenPercent, to.heliumPercent)}`;
     const subLabel = `${to.pressureBar.toFixed(0)} bar`;
     const badgeWidth = ctx.measureText(label).width + 10;
     const badgeHeight = 22;
@@ -588,7 +588,7 @@ export function renderTernaryDiagram(canvas, { banks, initialMix, targetMix, tra
   context.font = '8px "JetBrains Mono"';
   context.fillStyle = palette.label;
   context.textAlign = 'right';
-  context.fillText('Air (21/0)', air.x - 6, air.y + 3);
+  context.fillText(`Air (${formatGasMix(21, 0)})`, air.x - 6, air.y + 3);
 
   drawBankPoints(context, banks, toPoint, palette);
   const start = toPoint(initialMix.oxygenPercent, initialMix.heliumPercent, initialMix.nitrogenPercent);
@@ -606,8 +606,8 @@ export function renderTernaryDiagram(canvas, { banks, initialMix, targetMix, tra
   const boostCount = Math.max(0, trajectory.length - 1);
   if (summary) summary.textContent = `${boostCount} boost vector${boostCount === 1 ? '' : 's'}`;
   drawTrajectory(context, trajectory, toPoint, width, palette);
-  drawMixPoint(context, start, `Init (${initialMix.oxygenPercent}/${initialMix.heliumPercent})`, palette.initial, 6.5, 16, palette.markerOutline);
-  drawMixPoint(context, target, `${mode === 'what-if' ? 'Final' : 'Goal'} (${targetMix.oxygenPercent}/${targetMix.heliumPercent})`, palette.target, 7.5, -12, palette.markerOutline);
+  drawMixPoint(context, start, `Init (${formatGasMix(initialMix.oxygenPercent, initialMix.heliumPercent)})`, palette.initial, 6.5, 16, palette.markerOutline);
+  drawMixPoint(context, target, `${mode === 'what-if' ? 'Final' : 'Goal'} (${formatGasMix(targetMix.oxygenPercent, targetMix.heliumPercent)})`, palette.target, 7.5, -12, palette.markerOutline);
 }
 
 export function clearTernaryDiagram(canvas, root = document) {

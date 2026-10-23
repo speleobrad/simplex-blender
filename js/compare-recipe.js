@@ -1,5 +1,5 @@
 import { isValidGasComposition } from './gas-input.js';
-import { calcMolarDensity, calcPressure } from './physics.js';
+import { GAS_CONSTANT, HELIUM_SALVAGE_MAX_PERCENT, calcMolarDensity, calcPressure } from './physics.js';
 import { calculateBoosterFillRate } from './thermodynamics.js';
 
 export const COMPARE_ROW_TYPES = [
@@ -666,6 +666,11 @@ export function buildCompareProtocol(rows, { cylinder, physics, banks = [], sett
     mix: initialMix,
     pressureBar: initialPressureBar
   };
+  let retainedInitialMoles = initialMoles;
+  let addedHeliumMoles = 0;
+  const salvagedHeliumFrom = (moles, heliumPercent) => heliumPercent < HELIUM_SALVAGE_MAX_PERCENT
+    ? moles * (heliumPercent / 100)
+    : 0;
   const protocolSteps = [];
   const sourceSummaries = new Map();
   const recordCompressorSummary = (sourceBank) => {
@@ -716,6 +721,10 @@ export function buildCompareProtocol(rows, { cylinder, physics, banks = [], sett
         temperatureC,
         useVdw
       );
+      const retainedFraction = receiver.totalMoles > 0
+        ? receiverFinal.totalMoles / receiver.totalMoles
+        : 0;
+      retainedInitialMoles *= retainedFraction;
       const step = passiveStep(row, receiverStart);
       step.receiverEndPressureBar = receiverFinal.pressureBar;
       step.resultingPressureBar = receiverFinal.pressureBar;
@@ -767,6 +776,7 @@ export function buildCompareProtocol(rows, { cylinder, physics, banks = [], sett
         temperatureC,
         useVdw
       );
+      addedHeliumMoles += salvagedHeliumFrom(requiredMoles, sourceBank.heliumPercent);
       const receiverStart = receiver;
       const receiverFinal = receiverAfterAddedMoles(
         receiver,
@@ -794,6 +804,7 @@ export function buildCompareProtocol(rows, { cylinder, physics, banks = [], sett
       temperatureC,
       useVdw
     );
+    addedHeliumMoles += salvagedHeliumFrom(requiredMoles, sourceBank.heliumPercent);
     const sourceMinimumMoles = calcMolarDensity(
       limits.minimumSourcePressureBar,
       sourceBank.oxygenPercent,
@@ -916,5 +927,23 @@ export function buildCompareProtocol(rows, { cylinder, physics, banks = [], sett
     receiver = receiverFinal;
   }
 
-  return { protocolSteps, trajectory, initialMix, sourceBanks: [...sourceSummaries.values()] };
+  const retainedPressureBar = calcPressure(
+    retainedInitialMoles / volumeL,
+    initialMix.oxygenPercent,
+    initialMix.heliumPercent,
+    temperatureC,
+    useVdw
+  );
+  const ventedMoles = Math.max(0, initialMoles - retainedInitialMoles);
+  const gasMolarVolumeL = GAS_CONSTANT * (temperatureC + 273.15);
+  const summary = {
+    retainedPressureBar,
+    retainedPercent: initialMoles > 0 ? (retainedInitialMoles / initialMoles) * 100 : 0,
+    ventedPressureBar: Math.max(0, initialPressureBar - retainedPressureBar),
+    ventedGasLitres: ventedMoles * gasMolarVolumeL,
+    heliumSalvagedLitres: (
+      salvagedHeliumFrom(retainedInitialMoles, initialMix.heliumPercent) + addedHeliumMoles
+    ) * gasMolarVolumeL
+  };
+  return { protocolSteps, trajectory, initialMix, sourceBanks: [...sourceSummaries.values()], summary };
 }

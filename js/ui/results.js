@@ -641,7 +641,7 @@ function renderBlendSummary(blend, units = 'metric', requestedInWaterPressureBar
     ? SUMMARY_COLORS.benefit
     : SUMMARY_COLORS.neutral);
   setText('res-final-p', formatUnitValue(requestedInWaterPressureBar ?? blend.finalPressureBar, 'pressureBar', units));
-  setText('res-final-mix', `Tx ${blend.finalOxygenPercent}/${blend.finalHeliumPercent}`);
+  setText('res-final-mix', `${blend.finalOxygenPercent.toFixed(1)}/${blend.finalHeliumPercent.toFixed(1)}`);
   const targetOxygenPercent = targetMix?.oxygenPercent ?? targetMix?.targetOxygenPercent;
   const targetHeliumPercent = targetMix?.heliumPercent ?? targetMix?.targetHeliumPercent;
   const mixColor = Number.isFinite(targetOxygenPercent) && Number.isFinite(targetHeliumPercent)
@@ -705,6 +705,7 @@ function renderThermalSummary(
 function renderBlendStatus(result, units = 'metric', pressureLimitMode = 'hard-stop') {
   const status = resultElement('blend-status');
   if (!status) return;
+  status.hidden = false;
   if (result.feasible) {
     status.className = 'rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300';
     status.textContent = 'Feasible blend · target pressure is achievable with the current supply.';
@@ -783,28 +784,12 @@ function renderWhatIfScenarioSummary(result, calculation) {
   const pane = resultElement('scenario-summary-content');
   if (!pane) return;
   const stateText = value => formatCompareState(value, units);
-  const thermalSteps = (compare.protocolSteps ?? []).map(step => step.thermal).filter(Boolean);
-  const totalDurationMinutes = thermalSteps.reduce(
-    (total, thermal) => total + (Number.isFinite(thermal.durationMinutes) ? thermal.durationMinutes : 0)
-      + (Number.isFinite(thermal.waitMinutes) ? thermal.waitMinutes : 0),
-    0
-  );
-  const temperatures = thermalSteps.flatMap(thermal => [
-    thermal.temperatureStartC,
-    thermal.temperatureAtTransferEndC,
-    thermal.temperatureAfterWaitC
-  ]).filter(Number.isFinite);
   const rows = [
     ['Scenario start', stateText({
       pressureBar: calculation?.cylinder?.initialPressureBar,
       temperatureC: calculation?.physics?.temperatureC,
       ...compare.initialMix
-    })],
-    ['Recipe end', stateText(compare.final.recipeEnd)],
-    ['Ambient settled', stateText(compare.final.ambientSettled)],
-    ['In-water projection', stateText(compare.final.inWater)],
-    ['Total transfer and wait', `${totalDurationMinutes.toFixed(1)} min`],
-    ['Maximum modeled temperature', temperatures.length ? formatUnitValue(Math.max(...temperatures), 'temperatureC', units) : '—']
+    })]
   ];
   const summary = document.createElement('dl');
   summary.className = 'grid gap-2 text-xs sm:grid-cols-2';
@@ -820,25 +805,6 @@ function renderWhatIfScenarioSummary(result, calculation) {
     item.append(term, description);
     summary.append(item);
   }
-  const sourceHeading = document.createElement('h4');
-  sourceHeading.className = 'mt-4 text-xs font-semibold text-slate-300';
-  sourceHeading.textContent = 'Source banks (modeled copy; inventory not changed)';
-  const sourceList = document.createElement('ul');
-  sourceList.className = 'mt-2 space-y-1 text-xs';
-  for (const source of compare.sourceBanks ?? []) {
-    const item = document.createElement('li');
-    item.className = 'rounded border border-ocean-800 bg-ocean-950/50 p-2 font-mono';
-    const startPressure = source.initial?.pressureBar;
-    const endPressure = source.final?.pressureBar;
-    const startText = Number.isFinite(startPressure)
-      ? formatUnitValue(startPressure, 'pressureBar', units)
-      : 'unlimited';
-    const endText = Number.isFinite(endPressure)
-      ? formatUnitValue(endPressure, 'pressureBar', units)
-      : 'unlimited';
-    item.textContent = `${source.name}: ${startText} → ${endText}`;
-    sourceList.append(item);
-  }
   const warningList = document.createElement('ul');
   warningList.className = 'mt-4 space-y-1 text-xs text-amber-300';
   for (const warning of result.pressureLimitWarnings ?? []) {
@@ -846,13 +812,13 @@ function renderWhatIfScenarioSummary(result, calculation) {
     item.textContent = formatPressureWarning(warning, units);
     warningList.append(item);
   }
-  pane.replaceChildren(summary, sourceHeading, sourceList, ...(warningList.children.length ? [warningList] : []));
+  pane.replaceChildren(summary, ...(warningList.children.length ? [warningList] : []));
 }
 
 function renderWhatIfResults(result, calculation) {
   const compare = result.compare;
   const summaryBanner = resultElement('summary-banner');
-  if (summaryBanner) summaryBanner.hidden = true;
+  if (summaryBanner) summaryBanner.hidden = false;
   const compareSummary = resultElement('compare-summary');
   if (compareSummary) compareSummary.hidden = true;
   clearOptimizerSummary();
@@ -869,6 +835,12 @@ function renderWhatIfResults(result, calculation) {
       finalAmbientCoolOffMinutes: compare.ambientSettledDurationMinutes
     }
     : null;
+  renderBlendSummary({
+    ...compare.summary,
+    finalPressureBar: compare.final.recipeEnd.pressureBar,
+    finalOxygenPercent: compare.final.recipeEnd.oxygenPercent,
+    finalHeliumPercent: compare.final.recipeEnd.heliumPercent
+  }, calculation?.settings?.units ?? 'metric');
   renderThermalSummary(thermal, compare.protocolSteps, calculation?.settings?.units ?? 'metric', calculation?.cylinder?.workingPressureBar);
   renderProtocol(compare.protocolSteps, null, calculation, {
     units: calculation?.settings?.units ?? 'metric',
@@ -899,13 +871,17 @@ export function renderResults(result, calculation = null, { root = document, mod
   if (mode === 'what-if' || result?.mode === 'what-if') {
     const status = resultElement('blend-status');
     if (status) {
-      status.className = 'rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300';
-      status.textContent = 'Scenario complete · manual recipe modeled with current shared inputs.';
-      status.append(...renderPressureLimitWarnings(
+      const warnings = renderPressureLimitWarnings(
         result?.pressureLimitWarnings ?? [],
         calculation?.settings?.pressureLimitMode,
         units
-      ));
+      );
+      status.className = warnings.length
+        ? 'rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200'
+        : '';
+      status.textContent = '';
+      status.replaceChildren(...warnings);
+      status.hidden = warnings.length === 0;
     }
     renderWhatIfResults(result, calculation);
     return;

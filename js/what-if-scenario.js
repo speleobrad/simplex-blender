@@ -13,6 +13,16 @@ export function createWhatIfScenario() {
   return { initialized: false, start: null, rows: [createCompareRow('drain', 'compare-row-1')], result: null, draftRevision: 0, resultRevision: -1, sharedInputSignature: null };
 }
 
+export function expandWhatIfRows(rows = []) {
+  const operations = rows.filter(row => row?.type === 'drain' || row?.type === 'add');
+  return operations.flatMap((row, index) => {
+    if (index === operations.length - 1) return [clone(row)];
+    const wait = createCompareRow('wait', `${row.id}-wait`);
+    wait.waitMinutes = Number.isFinite(row.waitMinutes) ? row.waitMinutes : 0;
+    return [clone(row), wait];
+  });
+}
+
 export function snapshotWhatIfFromBlending(input) {
   const { cylinder = {}, thermal = {} } = input ?? {};
   return {

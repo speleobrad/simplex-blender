@@ -82,7 +82,7 @@ test('exposes semantic result tabs and panels in the requested order', () => {
     assert.match(markup, new RegExp(`id="tab-btn-${tab}"[^>]*aria-controls="tab-pane-${tab}"`));
     assert.match(markup, new RegExp(`id="tab-pane-${tab}"[^>]*role="tabpanel"[^>]*aria-labelledby="tab-btn-${tab}"`));
   }
-  assert.match(markup, /id="tab-pane-scenario-summary"[^>]*role="tabpanel"[^>]*aria-labelledby="tab-btn-scenario-summary"/);
+  assert.doesNotMatch(markup, /tab-(?:btn|pane)-scenario-summary/);
 });
 
 test('merges Model and Units into the General settings pane', () => {
