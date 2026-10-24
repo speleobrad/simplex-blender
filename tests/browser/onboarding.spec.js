@@ -37,38 +37,43 @@ test.describe('consent and guided tour', () => {
     });
 
     await acceptConsent(page);
-    await expect(page.locator('.driver-popover-title')).toHaveText('Welcome to Simplex Blender');
+    await expect(page.locator('.driver-popover-title')).toHaveText('Main menu');
+    await expect(page.locator('#primary-navigation')).toBeVisible();
 
     await nextTourStep(page);
-    await expect(page.locator('.driver-popover-title')).toHaveText('Set up your working tank');
-    await nextTourStep(page);
-    await expect(page.locator('.driver-popover-title')).toHaveText('Manage your inventory');
-    await nextTourStep(page);
-    await expect(page.locator('.driver-popover-title')).toHaveText('Follow the mixing steps');
+    await expect(page.locator('.driver-popover-title')).toHaveText('Define the gases you have');
+    await expect(page.locator('#screen-inventory')).toBeVisible();
+    await expect(page.locator('#supply-banks-section')).toBeVisible();
 
     await nextTourStep(page);
-    await expect(page.locator('.driver-popover-title')).toHaveText('Review the tank summary');
-    const blendingResults = page.locator('[data-result-host="blending"]');
-    await expect(blendingResults.locator('[data-result-key="tab-pane-summary"]')).toBeVisible();
-    await expect(blendingResults.getByRole('tab', { name: 'Tank summary', exact: true })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('.driver-popover-title')).toHaveText('Check your equipment');
+    await expect(page.locator('#equipment-section')).toBeVisible();
 
     await nextTourStep(page);
-    await expect(page.locator('.driver-popover-title')).toHaveText('Check in-water pressure');
-    await expect(blendingResults.locator('[data-result-key="tab-pane-water-pressure"]')).toBeVisible();
-
-    await nextTourStep(page);
-    await expect(page.locator('.driver-popover-title')).toHaveText('Find Settings');
-    await expect(page.locator('#settings-launch')).toBeVisible();
-
-    await nextTourStep(page);
-    await expect(page.locator('.driver-popover-title')).toHaveText('Configure your equipment');
+    await expect(page.locator('.driver-popover-title')).toHaveText('Add missing equipment');
     await expect(page.locator('#settings-dialog')).toBeVisible();
     await expect(page.locator('#settings-category-equipment')).toHaveAttribute('aria-selected', 'true');
     await expect(page.locator('#settings-pane-equipment')).toBeVisible();
 
     await nextTourStep(page);
-    await expect(page.locator('.driver-popover-title')).toHaveText('Explore and stay safe');
-    await expect(blendingResults.locator('[data-result-key="tab-pane-ternary"]')).toBeVisible();
+    await expect(page.locator('.driver-popover-title')).toHaveText('Define your mix');
+    await expect(page.locator('#settings-dialog')).not.toBeVisible();
+    await expect(page.locator('#working-tank-section')).toBeVisible();
+
+    await nextTourStep(page);
+    await expect(page.locator('.driver-popover-title')).toHaveText('Set the temperatures');
+    await expect(page.locator('#ambient-temperature')).toBeVisible();
+    await expect(page.locator('#target-temperature')).toBeVisible();
+
+    await nextTourStep(page);
+    await expect(page.locator('.driver-popover-title')).toHaveText('Follow the recipe');
+    const blendingResults = page.locator('[data-result-host="blending"]');
+    await expect(blendingResults.getByRole('tab', { name: 'Recipe', exact: true })).toHaveAttribute('aria-selected', 'true');
+    await expect(blendingResults.locator('[data-result-key="mixing-steps-section"]')).toBeVisible();
+
+    await nextTourStep(page);
+    await expect(page.locator('.driver-popover-title')).toHaveText('Explore other options');
+    await expect(blendingResults.locator('[data-result-key="results-tablist"]')).toBeVisible();
     await expect(page.locator('#settings-dialog')).not.toBeVisible();
     expect(analyticsRequests.length).toBeGreaterThan(0);
 
@@ -86,26 +91,23 @@ test.describe('consent and guided tour', () => {
     });
   });
 
-  test('tour backtracks destinations, Skip and Escape persist seen state, and the wand reopens Welcome', async ({ appPage }) => {
+  test('tour backtracks destinations, Skip and Escape persist seen state, and the wand reopens the tour', async ({ appPage }) => {
     const page = await appPage.goto('factory');
     await acceptConsent(page);
 
+    for (let step = 0; step < 5; step += 1) await nextTourStep(page);
+    await expect(page.locator('.driver-popover-title')).toHaveText('Set the temperatures');
     await nextTourStep(page);
-    await nextTourStep(page);
-    await nextTourStep(page);
-    await nextTourStep(page);
-    await expect(page.locator('.driver-popover-title')).toHaveText('Review the tank summary');
-    await nextTourStep(page);
-    await expect(page.locator('.driver-popover-title')).toHaveText('Check in-water pressure');
+    await expect(page.locator('.driver-popover-title')).toHaveText('Follow the recipe');
     await page.locator('.driver-popover-prev-btn').click();
-    await expect(page.locator('.driver-popover-title')).toHaveText('Review the tank summary');
-    await expect(page.locator('[data-result-host="blending"] [data-result-key="tab-pane-summary"]')).toBeVisible();
+    await expect(page.locator('.driver-popover-title')).toHaveText('Set the temperatures');
+    await expect(page.locator('#ambient-temperature')).toBeVisible();
 
     await completeOrExitTour(page, 'Skip');
     await expect(page.getByRole('dialog', { name: 'Analytics consent' })).toHaveCount(0);
 
     await page.getByRole('button', { name: 'Show the guided tour', exact: true }).click();
-    await expect(page.locator('.driver-popover-title')).toHaveText('Welcome to Simplex Blender');
+    await expect(page.locator('.driver-popover-title')).toHaveText('Main menu');
     await completeOrExitTour(page, 'Escape');
     await expect(page.getByRole('dialog', { name: 'Analytics consent' })).toHaveCount(0);
   });

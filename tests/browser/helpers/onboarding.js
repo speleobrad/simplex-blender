@@ -17,7 +17,7 @@ export async function acceptConsent(page) {
   await expect(consent).toHaveCount(0);
   await expect(page.locator('.driver-overlay')).toBeVisible();
   await expect(page.locator('.driver-popover')).toBeVisible();
-  await expect(page.locator('.driver-popover-title')).toHaveText('Welcome to Simplex Blender');
+  await expect(page.locator('.driver-popover-title')).toHaveText('Main menu');
   await expect.poll(() => savedState(page)).toMatchObject({
     consentAccepted: true,
     wizardSeen: false

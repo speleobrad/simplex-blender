@@ -58,40 +58,32 @@ test('invalid onboarding state is rejected before replacing saved data', () => {
   assert.deepEqual(loadOnboardingState(storage), { consentAccepted: true, wizardSeen: false });
 });
 
-test('wizard steps cover the ordered tour destinations', () => {
+test('wizard steps walk a new user from the main menu to the result tabs', () => {
   assert.deepEqual(WIZARD_STEPS.map(step => step.id), [
-    'welcome', 'working-tank', 'inventory', 'mixing-steps',
-    'tank-summary', 'water-pressure', 'equipment', 'diagram'
+    'main-menu', 'inventory-gases', 'inventory-equipment', 'settings-equipment',
+    'working-tank', 'temperatures', 'recipe', 'explore-options'
   ]);
   assert.equal(WIZARD_STEPS[0].targetId, 'primary-navigation');
-  assert.deepEqual(
-    WIZARD_STEPS.slice(1, 4).map(step => step.targetId),
-    ['working-tank-section', 'inventory-section', 'mixing-steps-section']
-  );
-  const summary = WIZARD_STEPS.find(step => step.id === 'tank-summary');
-  assert.deepEqual(summary.spotlights, [
-    { targetId: 'results-navigation' },
-    { targetId: 'tab-btn-summary', variant: 'control' }
+  const gases = WIZARD_STEPS.find(step => step.id === 'inventory-gases');
+  assert.equal(gases.targetId, 'supply-banks-section');
+  assert.equal(gases.screen, 'inventory');
+  const equipment = WIZARD_STEPS.find(step => step.id === 'inventory-equipment');
+  assert.equal(equipment.targetId, 'equipment-section');
+  assert.equal(equipment.screen, 'inventory');
+  const settings = WIZARD_STEPS.find(step => step.id === 'settings-equipment');
+  assert.equal(settings.settingsCategory, 'equipment');
+  assert.deepEqual(settings.spotlights.map(spotlight => spotlight.targetId), [
+    'settings-pane-equipment',
+    'settings-category-equipment'
   ]);
-  assert.equal(summary.tab, 'summary');
-  const waterPressure = WIZARD_STEPS.find(step => step.id === 'water-pressure');
-  assert.deepEqual(waterPressure.spotlights, [
-    { targetId: 'results-navigation' },
-    { targetId: 'tab-btn-water-pressure', variant: 'control' }
+  assert.equal(WIZARD_STEPS.find(step => step.id === 'working-tank').targetId, 'working-tank-section');
+  const temperatures = WIZARD_STEPS.find(step => step.id === 'temperatures');
+  assert.deepEqual(temperatures.spotlights.map(spotlight => spotlight.targetId), [
+    'ambient-temperature',
+    'target-temperature'
   ]);
-  assert.equal(waterPressure.tab, 'water-pressure');
-  const equipment = WIZARD_STEPS.find(step => step.id === 'equipment');
-  assert.equal(equipment.views.length, 2);
-  assert.equal(equipment.views[0].targetId, 'settings-launch');
-  assert.deepEqual(equipment.views[1].spotlights, [
-    { targetId: 'settings-pane-equipment' },
-    { targetId: 'settings-category-equipment', variant: 'control' }
-  ]);
-  assert.equal(equipment.views[1].settingsCategory, 'equipment');
-  const diagram = WIZARD_STEPS.find(step => step.id === 'diagram');
-  assert.deepEqual(diagram.spotlights, [
-    { targetId: 'results-navigation' },
-    { targetId: 'tab-btn-ternary', variant: 'control' }
-  ]);
-  assert.equal(diagram.tab, 'ternary');
+  const recipe = WIZARD_STEPS.find(step => step.id === 'recipe');
+  assert.equal(recipe.targetId, 'mixing-steps-section');
+  assert.equal(recipe.tab, 'recipe');
+  assert.equal(WIZARD_STEPS.find(step => step.id === 'explore-options').targetId, 'results-tablist');
 });

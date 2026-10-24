@@ -24,7 +24,7 @@ test.describe('continued browser sessions', () => {
     await expect(sessionB.page.getByRole('dialog', { name: 'Analytics consent', exact: true })).toHaveCount(0);
     await expect(sessionB.page.locator('.driver-popover')).toHaveCount(0);
     await sessionB.page.getByRole('button', { name: 'Show the guided tour', exact: true }).click();
-    await expect(sessionB.page.locator('.driver-popover-title')).toHaveText('Welcome to Simplex Blender');
+    await expect(sessionB.page.locator('.driver-popover-title')).toHaveText('Main menu');
     await completeOrExitTour(sessionB.page, 'Escape');
     await closeSession(sessionB);
   });

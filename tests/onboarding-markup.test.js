@@ -6,19 +6,15 @@ const markup = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
 const TOUR_TARGET_IDS = [
   'primary-navigation',
-  'settings-launch',
+  'supply-banks-section',
+  'equipment-section',
+  'settings-pane-equipment',
   'settings-category-equipment',
   'working-tank-section',
-  'inventory-section',
+  'ambient-temperature',
+  'target-temperature',
   'mixing-steps-section',
-  'equipment-section',
-  'results-navigation',
-  'tab-btn-ternary',
-  'tab-btn-summary',
-  'tab-pane-summary',
-  'tab-btn-water-pressure',
-  'tab-pane-water-pressure',
-  'tab-pane-ternary'
+  'results-tablist'
 ];
 
 test('provides the primary navigation labels and guided-tour targets', () => {

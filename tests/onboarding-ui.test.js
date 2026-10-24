@@ -207,12 +207,12 @@ function createController(options = {}) {
   const storage = options.storage ?? memoryStorage();
   const launchButton = document.createElement('button');
   document.body.append(launchButton);
-  for (const id of ['primary-navigation', 'settings-launch', 'inventory-section']) {
-    const target = document.createElement(id === 'inventory-section' ? 'section' : 'button');
+  for (const id of ['primary-navigation', 'supply-banks-section', 'equipment-section', 'ambient-temperature', 'target-temperature']) {
+    const target = document.createElement(id.endsWith('-section') ? 'section' : 'button');
     target.setAttribute('id', id);
     document.body.append(target);
   }
-  const resultKeys = ['results-navigation', 'tab-btn-summary', 'tab-btn-water-pressure', 'tab-btn-ternary'];
+  const resultKeys = ['mixing-steps-section', 'results-tablist'];
   if (options.resultLayout === 'ordinary') {
     for (const key of resultKeys) {
       const target = document.createElement('button');
@@ -308,32 +308,31 @@ test('opening an accepted user creates a Driver.js tour for the new layout', () 
   assert.equal(fixture.drivers[0].active, true);
   assert.equal(fixture.drivers[0].index, 0);
   assert.equal(fixture.drivers[0].config.animate, false);
-  assert.equal(fixture.drivers[0].config.steps[0].element, '#primary-navigation');
-  assert.equal(fixture.drivers[0].config.steps[0].popover.title, 'Welcome to Simplex Blender');
-  assert.equal(fixture.drivers[0].config.steps[2].element, '#inventory-section');
-  assert.equal(fixture.drivers[0].config.steps[4].element, resultTarget(fixture.document, 'results-navigation'));
-  assert.equal(fixture.drivers[0].config.steps[5].element, resultTarget(fixture.document, 'results-navigation'));
-  assert.notEqual(
-    fixture.drivers[0].config.steps[4].element,
-    resultTarget(fixture.document, 'results-navigation', 'what-if')
-  );
-  assert.equal(fixture.drivers[0].config.steps[6].element, '#settings-launch');
-  assert.equal(fixture.drivers[0].config.steps[7].element, '#settings-pane-equipment');
-  assert.equal(fixture.drivers[0].config.steps[7].popover.progressText, 'Step 7 of 8');
+  const steps = fixture.drivers[0].config.steps;
+  assert.equal(steps.length, 8);
+  assert.equal(steps[0].element, '#primary-navigation');
+  assert.equal(steps[0].popover.title, 'Main menu');
+  assert.equal(steps[1].element, '#supply-banks-section');
+  assert.equal(steps[2].element, '#equipment-section');
+  assert.equal(steps[3].element, '#settings-pane-equipment');
+  assert.equal(steps[4].element, '#working-tank-section');
+  assert.equal(steps[5].element, '#ambient-temperature');
+  assert.equal(steps[6].element, resultTarget(fixture.document, 'mixing-steps-section'));
+  assert.notEqual(steps[6].element, resultTarget(fixture.document, 'mixing-steps-section', 'what-if'));
+  assert.equal(steps[7].element, resultTarget(fixture.document, 'results-tablist'));
+  assert.equal(steps[7].popover.progressText, 'Step 8 of 8');
 });
 
-test('Summary and in-water pressure steps highlight their tab controls too', () => {
+test('temperatures step highlights the in-water target beside the ambient input', () => {
   const fixture = createController();
   fixture.controller.open();
   const driver = fixture.drivers[0];
+  const targetInput = fixture.document.getElementById('target-temperature');
 
-  for (let index = 0; index < 4; index += 1) driver.clickNext();
-
-  assert.equal(resultTarget(fixture.document, 'tab-btn-summary').classList.contains('onboarding-secondary-highlight'), true);
-  assert.equal(resultTarget(fixture.document, 'tab-btn-water-pressure').classList.contains('onboarding-secondary-highlight'), false);
+  for (let index = 0; index < 5; index += 1) driver.clickNext();
+  assert.equal(targetInput.classList.contains('onboarding-secondary-highlight'), true);
   driver.clickNext();
-  assert.equal(resultTarget(fixture.document, 'tab-btn-summary').classList.contains('onboarding-secondary-highlight'), false);
-  assert.equal(resultTarget(fixture.document, 'tab-btn-water-pressure').classList.contains('onboarding-secondary-highlight'), true);
+  assert.equal(targetInput.classList.contains('onboarding-secondary-highlight'), false);
 });
 
 test('result target popovers resolve through the scoped Blending selector', () => {
@@ -341,13 +340,13 @@ test('result target popovers resolve through the scoped Blending selector', () =
   fixture.controller.open();
   const driver = fixture.drivers[0];
 
-  for (let index = 0; index < 4; index += 1) driver.clickNext();
+  for (let index = 0; index < 6; index += 1) driver.clickNext();
 
   const popover = fixture.document.createElement('div');
-  driver.config.onPopoverRender({ wrapper: popover }, { index: 4, driver });
+  driver.config.onPopoverRender({ wrapper: popover }, { index: 6, driver });
 
   assert.equal(
-    fixture.document.querySelectorCalls.includes('[data-result-host="blending"] [data-result-key="results-navigation"]'),
+    fixture.document.querySelectorCalls.includes('[data-result-host="blending"] [data-result-key="mixing-steps-section"]'),
     true
   );
   assert.equal(popover.parentNode, fixture.document.body);
@@ -357,16 +356,16 @@ test('result tour primary targets fall back to ordinary IDs', () => {
   const fixture = createController({ resultLayout: 'ordinary' });
   fixture.controller.open();
   const driver = fixture.drivers[0];
-  const target = fixture.document.getElementById('results-navigation');
+  const target = fixture.document.getElementById('mixing-steps-section');
 
-  assert.equal(driver.config.steps[4].element, target);
-  for (let index = 0; index < 4; index += 1) driver.clickNext();
+  assert.equal(driver.config.steps[6].element, target);
+  for (let index = 0; index < 6; index += 1) driver.clickNext();
 
   const popover = fixture.document.createElement('div');
-  driver.config.onPopoverRender({ wrapper: popover }, { index: 4, driver });
+  driver.config.onPopoverRender({ wrapper: popover }, { index: 6, driver });
 
   assert.equal(
-    fixture.document.querySelectorCalls.includes('[data-result-host="blending"] [data-result-key="results-navigation"]'),
+    fixture.document.querySelectorCalls.includes('[data-result-host="blending"] [data-result-key="mixing-steps-section"]'),
     true
   );
   assert.equal(popover.parentNode, fixture.document.body);
@@ -377,13 +376,13 @@ test('equipment tour popover moves into the native Settings dialog layer', () =>
   fixture.controller.open();
   const driver = fixture.drivers[0];
 
-  for (let index = 0; index < 7; index += 1) driver.clickNext();
+  for (let index = 0; index < 3; index += 1) driver.clickNext();
 
   const popover = fixture.document.createElement('div');
   const footer = fixture.document.createElement('div');
   driver.config.onPopoverRender(
     { wrapper: popover, footerButtons: footer },
-    { index: 7, driver }
+    { index: 3, driver }
   );
 
   assert.equal(popover.parentNode.tagName, 'dialog');
@@ -394,24 +393,21 @@ test('Driver navigation selects the screen needed by each destination', () => {
   fixture.controller.open();
   const driver = fixture.drivers[0];
 
-  driver.clickNext();
-  driver.clickNext();
-  driver.clickNext();
-  driver.clickNext();
-
-  assert.deepEqual(fixture.navigations.slice(-4), [
+  const expected = [
     { screen: 'blending', tab: null, settingsCategory: null },
     { screen: 'inventory', tab: null, settingsCategory: null },
+    { screen: 'inventory', tab: null, settingsCategory: null },
+    { screen: 'blending', tab: null, settingsCategory: 'equipment' },
     { screen: 'blending', tab: null, settingsCategory: null },
-    { screen: 'blending', tab: 'summary', settingsCategory: null }
-  ]);
-
-  driver.clickNext();
-  driver.clickNext();
-  assert.deepEqual(fixture.navigations.at(-2), { screen: 'blending', tab: 'water-pressure', settingsCategory: null });
-  assert.deepEqual(fixture.navigations.at(-1), { screen: 'blending', tab: null, settingsCategory: null });
-  driver.clickNext();
-  assert.deepEqual(fixture.navigations.at(-1), { screen: 'blending', tab: null, settingsCategory: 'equipment' });
+    { screen: 'blending', tab: null, settingsCategory: null },
+    { screen: 'blending', tab: 'recipe', settingsCategory: null },
+    { screen: 'blending', tab: null, settingsCategory: null }
+  ];
+  assert.deepEqual(fixture.navigations.at(-1), expected[0]);
+  for (let index = 1; index < expected.length; index += 1) {
+    driver.clickNext();
+    assert.deepEqual(fixture.navigations.at(-1), expected[index]);
+  }
 });
 
 test('public next and back methods move the Driver.js tour', () => {

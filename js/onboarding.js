@@ -7,88 +7,68 @@ export const DEFAULT_ONBOARDING_STATE = Object.freeze({
 
 export const WIZARD_STEPS = Object.freeze([
   Object.freeze({
-    id: 'welcome',
-    title: 'Welcome to Simplex Blender',
-    body: 'Use the navigation to move between Blending, Inventory, and Settings. This tour introduces the controls and results that turn your target mix into a practical blending recipe.',
+    id: 'main-menu',
+    title: 'Main menu',
+    body: 'Use the main menu to navigate between Blending, Inventory, and few other options. Inventory is where you define your available gases and equipment, and Blending is where you get a recipe for your fill.',
     targetId: 'primary-navigation',
     screen: 'blending'
   }),
   Object.freeze({
+    id: 'inventory-gases',
+    title: 'Define the gases you have',
+    body: 'You would start here: define the inventory of gases you have available as ingredients. Add each gas bank with its pressure and mix. Compressor with air is assumed to exist, so don\'t bother adding Air',
+    targetId: 'supply-banks-section',
+    screen: 'inventory'
+  }),
+  Object.freeze({
+    id: 'inventory-equipment',
+    title: 'Check your equipment',
+    body: 'Select your compressor and booster from the list. Their properties will determine speed of transfering gases.',
+    targetId: 'equipment-section',
+    screen: 'inventory'
+  }),
+  Object.freeze({
+    id: 'settings-equipment',
+    title: 'Add missing equipment',
+    body: 'If your compressor or booster is not listed, you can add it here with New compressor or New booster.',
+    spotlights: Object.freeze([
+      Object.freeze({ targetId: 'settings-pane-equipment' }),
+      Object.freeze({ targetId: 'settings-category-equipment' })
+    ]),
+    screen: 'blending',
+    settingsCategory: 'equipment'
+  }),
+  Object.freeze({
     id: 'working-tank',
-    title: 'Set up your working tank',
-    body: 'This is where you define your working tank: enter what you already have and the mix you want to make, choose the tank type, make, and model, and describe the environment where blending will happen. Temperature matters—set and respect the waiting times so the tank can cool and avoid thermal stress.',
+    title: 'Define your mix',
+    body: 'Once your equipment and inventory are set, configure the working tank by defining its current pressure and gas mix. Then set the target pressure and mix you want to reach.',
     targetId: 'working-tank-section',
     screen: 'blending'
   }),
   Object.freeze({
-    id: 'inventory',
-    title: 'Manage your inventory',
-    body: 'Inventory lists the source gases available to you. Compressor air is always assumed to be available. Add your gases, edit their pressures and mixes, then disable any you want to preserve instead of using as ingredients.',
-    targetId: 'inventory-section',
-    screen: 'inventory'
-  }),
-  Object.freeze({
-    id: 'mixing-steps',
-    title: 'Follow the mixing steps',
-    body: 'Your mixing recipe is here, with full details for every step: how long it takes, the tank temperature at transfer end, and the temperature after the cooling wait. Check the interim mix too if you want to analyze the blend as it develops.',
-    targetId: 'mixing-steps-section',
+    id: 'temperatures',
+    title: 'Set the temperatures',
+    body: 'Pay close attention to two temperatures: the ambient temperature of environment where you fill, and the dive site\'s water temperature, entered as the target in-water temperature.',
+    spotlights: Object.freeze([
+      Object.freeze({ targetId: 'ambient-temperature' }),
+      Object.freeze({ targetId: 'target-temperature' })
+    ]),
     screen: 'blending'
   }),
   Object.freeze({
-    id: 'tank-summary',
-    title: 'Review the tank summary',
-    body: 'Tank summary gives you a quick readout of the final mix and every inventory tank, including the pressure left in each one.',
-    spotlights: Object.freeze([
-      Object.freeze({ targetId: 'results-navigation' }),
-      Object.freeze({ targetId: 'tab-btn-summary', variant: 'control' })
-    ]),
+    id: 'recipe',
+    title: 'Follow the recipe',
+    body: 'The recipe shows how to get there, step by step. It will not allow unsafe fills, and it gives you more gas now so you have exactly what you need at the dive site when tanks cool off.',
+    targetId: 'mixing-steps-section',
     screen: 'blending',
-    tab: 'summary'
+    tab: 'recipe'
   }),
   Object.freeze({
-    id: 'water-pressure',
-    title: 'Check in-water pressure',
-    body: 'Check the pressure your SPG may show once the tank is in the water or during transport. Avoid overheating tanks during transport: pressure can rise above their working rating.',
-    spotlights: Object.freeze([
-      Object.freeze({ targetId: 'results-navigation' }),
-      Object.freeze({ targetId: 'tab-btn-water-pressure', variant: 'control' })
-    ]),
-    screen: 'blending',
-    tab: 'water-pressure'
-  }),
-  Object.freeze({
-    id: 'equipment',
-    title: 'Configure your equipment',
-    body: 'Your tanks and filling equipment behave differently, so choose the presets that match what you have—or define your own. Use Preset management to load the latest list of tanks, compressors, and boosters.',
-    views: Object.freeze([
-      Object.freeze({
-        title: 'Find Settings',
-        body: 'This is where you can change the app settings and define your preset gear. Remember that all configuration is stored locally and is not shared. Continue to open Settings and choose Equipment.',
-        targetId: 'settings-launch',
-        screen: 'blending',
-        tab: null,
-        settingsCategory: null
-      }),
-      Object.freeze({
-        spotlights: Object.freeze([
-          Object.freeze({ targetId: 'settings-pane-equipment' }),
-          Object.freeze({ targetId: 'settings-category-equipment', variant: 'control' })
-        ]),
-        screen: 'blending',
-        tab: null,
-        settingsCategory: 'equipment'
-      })
-    ])
-  }),
-  Object.freeze({
-    id: 'diagram',
-    title: 'Explore and stay safe',
-    body: 'This is the big picture: explore the visual diagram to see how your starting mix is transformed into the target. You can also inspect the graphs for expected tank temperature and pressure over time. Enjoy exploring—and stay safe.',
-    spotlights: Object.freeze([
-      Object.freeze({ targetId: 'results-navigation' }),
-      Object.freeze({ targetId: 'tab-btn-ternary', variant: 'control' })
-    ]),
-    tab: 'ternary'
+    id: 'explore-options',
+    title: 'Explore other options',
+    body: 'Use the result tabs on the right to explore other views: Thermal Graph that will show you how temperature changes as you will, In-water pressures that can show you pressures in other water temperatures, but also if it\'s safe to drive around in a hot summer day, Tanks summary that will tell you what you are left with after the mix, and Simplex diagram to show you visual path you will be making as you move from starting to target mix.',
+    targetId: 'results-tablist',
+    screen: 'blending'
   })
 ]);
 

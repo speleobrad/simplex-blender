@@ -14,10 +14,8 @@ function createElement(document, tagName, { className, id, text, attributes } = 
 }
 
 const BLENDING_RESULT_TARGETS = new Set([
-  'results-navigation',
-  'tab-btn-summary',
-  'tab-btn-water-pressure',
-  'tab-btn-ternary'
+  'mixing-steps-section',
+  'results-tablist'
 ]);
 
 function targetSelector(targetId, screen = 'blending') {
@@ -36,22 +34,19 @@ function resolveTarget(document, targetId, screen = 'blending') {
 }
 
 function tourDestinations() {
-  return WIZARD_STEPS.flatMap((step, stepIndex) => {
-    const destinations = step.views ?? [step];
-    return destinations.map((destination, viewIndex) => {
-      const targetIds = destination.spotlights?.map(spotlight => spotlight.targetId)
-        ?? (destination.targetId ? [destination.targetId] : step.targetId ? [step.targetId] : []);
-      return {
-        stepIndex,
-        title: destination.title ?? step.title,
-        body: destination.body ?? step.body,
-        targetId: targetIds[0] ?? null,
-        secondaryTargetIds: targetIds.slice(1),
-        screen: destination.screen ?? step.screen ?? 'blending',
-        tab: destination.tab ?? step.tab ?? null,
-        settingsCategory: destination.settingsCategory ?? null
-      };
-    });
+  return WIZARD_STEPS.map((step, stepIndex) => {
+    const targetIds = step.spotlights?.map(spotlight => spotlight.targetId)
+      ?? (step.targetId ? [step.targetId] : []);
+    return {
+      stepIndex,
+      title: step.title,
+      body: step.body,
+      targetId: targetIds[0] ?? null,
+      secondaryTargetIds: targetIds.slice(1),
+      screen: step.screen ?? 'blending',
+      tab: step.tab ?? null,
+      settingsCategory: step.settingsCategory ?? null
+    };
   });
 }
 
