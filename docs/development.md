@@ -46,7 +46,7 @@ npm run test:ui -- --debug
 
 On failure, Playwright retains traces, screenshots, and videos in `test-results/` and writes the HTML report to `playwright-report/`. Approved screenshot baselines are checked in under `tests/browser/screenshots.spec.js-snapshots/`; do not update them unless a deliberate visual change has been reviewed.
 
-The Node and browser suites are independent: run `npm test` for the Node suite, and `npm run test:ui` for browser coverage. CI installs Chromium with its system dependencies before running both commands.
+The Node and browser suites are independent: run `npm test` for the Node suite, and `npm run test:ui` for browser coverage. CI installs Chromium with its system dependencies before running both commands. To reproduce CI results exactly (Ubuntu container, fonts, screenshot baselines), see `docs/ci-reproduction.md`.
 
 ## Priority invariant
 
