@@ -33,7 +33,7 @@ async function uploadFixture(page, path) {
 }
 
 test.describe('persistence and failure states', () => {
-  test('surfaces invalid saved data while retaining usable defaults', async ({ appPage }) => {
+  test('surfaces invalid saved data and still renders a Blending recipe', async ({ appPage }) => {
     const page = await appPage.goto('invalidSavedData');
     await dismissFreshConsent(page);
 
@@ -42,8 +42,8 @@ test.describe('persistence and failure states', () => {
     await expect(page.locator('#working-tank-section')).toBeVisible();
     await assertResultPanelExclusive(page, 'Recipe');
     await expect(page.locator('[data-result-host="blending"] [data-result-key="steps-container"]')).toContainText(/step|fill|compress|decant/i);
-    await expect(page.locator('#init-p')).toHaveValue('50');
-    await expect(page.locator('#target-p')).toHaveValue('200');
+    await expect(page.locator('#init-p')).toHaveValue('45');
+    await expect(page.locator('#target-p')).toHaveValue('195');
   });
 
   test('reports a settings write failure and recovers after the API is restored', async ({ appPage }) => {

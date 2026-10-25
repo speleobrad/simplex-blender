@@ -10,7 +10,8 @@ function stable(value) {
 }
 
 export function createWhatIfScenario() {
-  return { initialized: false, start: null, rows: [createCompareRow('drain', 'compare-row-1')], result: null, draftRevision: 0, resultRevision: -1, sharedInputSignature: null };
+  const defaultAddRow = { ...createCompareRow('add', 'compare-row-1'), bankId: 'bank-oxygen', pressureAddedBar: 15, targetPressureBar: 60, pressureInputMode: 'target' };
+  return { initialized: false, start: null, rows: [defaultAddRow], result: null, draftRevision: 0, resultRevision: -1, sharedInputSignature: null };
 }
 
 export function expandWhatIfRows(rows = []) {

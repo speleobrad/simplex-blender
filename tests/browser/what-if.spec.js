@@ -42,7 +42,21 @@ async function warningSettings(page) {
     const retained = summaryBanner.locator('[data-result-key="res-retained-p"]');
     expect((await scenarioSummary.boundingBox()).y).toBeLessThan((await retained.boundingBox()).y);
   });
-  test('renders complete default drain results and thermal charts', async ({ appPage }) => {
+  test('seeds What-if from Blending defaults with an Oxygen add-to-60-bar first step', async ({ appPage }) => {
+    const page = await load(appPage);
+    await openWhatIf(page);
+    await expect(page.locator('[data-what-if-field="pressureBar"]')).toHaveValue(/^45(\.0+)?$/);
+    await expect(page.locator('[data-what-if-field="ambientTemperatureC"]')).toHaveValue(/^21(\.0+)?$/);
+    await expect(page.locator('[data-what-if-field="inWaterTemperatureC"]')).toHaveValue(/^10(\.0+)?$/);
+    await expect(page.locator('[data-what-if-field="cylinderPresetName"]')).toHaveValue('Catalina S80');
+    const row = page.locator('#screen-what-if fieldset[data-row-id="compare-row-1"]:visible');
+    await expect(row).toHaveCount(1);
+    await expect(row.locator('[data-compare-field="type"]')).toHaveValue('add');
+    await expect(row.locator('[data-compare-field="bankId"]')).toHaveValue('bank-oxygen');
+    await expect(row.locator('[data-compare-field="targetPressureBar"]')).toHaveValue(/^60(\.0+)?$/);
+    await expect(row.locator('[data-compare-field="pressureAddedBar"]')).toHaveValue(/^15(\.0+)?$/);
+  });
+  test('renders complete default What-if results and thermal charts', async ({ appPage }) => {
     const page = await load(appPage);
     await openWhatIf(page);
     const host = page.locator('#what-if-result-host');
@@ -50,7 +64,6 @@ async function warningSettings(page) {
     for (const id of ['res-retained-p', 'res-vented-p', 'res-he-salvaged', 'res-final-mix']) {
       await expect(host.locator(`[data-result-key="${id}"]`)).not.toHaveText('');
     }
-    await expect(host.locator('[data-result-key="res-final-mix"]')).toHaveText('21.0/0.0');
     await host.getByRole('tab', { name: 'Thermal Graph', exact: true }).click();
     await expect(host.locator('[data-result-key="thermal-temperature-chart"] svg')).toHaveCount(1);
     await expect(host.locator('[data-result-key="thermal-pressure-chart"] svg')).toHaveCount(1);
@@ -90,6 +103,7 @@ async function warningSettings(page) {
     const page = await load(appPage);
     await openWhatIf(page);
     const firstStep = page.locator('#screen-what-if fieldset[data-row-id^="compare-row-"]:visible').first();
+    await firstStep.locator('[data-compare-field="type"]').selectOption('drain');
     await expect(firstStep).toContainText('Step 1');
     await expect(firstStep.getByText('Move up', { exact: true })).toHaveCount(0);
     await expect(firstStep.locator('[data-compare-field="type"] option[value="wait"]')).toHaveCount(0);

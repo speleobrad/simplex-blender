@@ -20,6 +20,18 @@ async function configureWarningMode(page, { workingPressure = 100, hotOverfill =
 }
 
 test.describe('working tank blending inputs', () => {
+  test('loads the working tank first-load defaults', async ({ appPage }) => {
+    const page = await load(appPage);
+    await expect(page.locator('#init-p')).toHaveValue(/^45(\.0+)?$/);
+    await expect(page.locator('#target-p')).toHaveValue(/^195(\.0+)?$/);
+    await expect(page.locator('#ambient-temperature')).toHaveValue(/^21(\.0+)?$/);
+    await expect(page.locator('#target-temperature')).toHaveValue(/^10(\.0+)?$/);
+    await expect(page.locator('#wait-minutes')).toHaveValue(/^5(\.0+)?$/);
+    await expect(page.locator('#cylinder-preset')).toHaveValue('Catalina S80');
+    await expect(page.locator('#cooling-medium')).toHaveValue('air');
+    await expect(page.locator('#target-o2')).toHaveValue(/^18(\.0+)?$/);
+    await expect(page.locator('#target-he')).toHaveValue(/^45(\.0+)?$/);
+  });
   test('selects gas presets and edits custom oxygen/helium values', async ({ appPage }) => {
     const page = await load(appPage);
     const preset = page.locator('#target-gas-preset option').filter({ hasText: 'Tx 18/45' }).first();

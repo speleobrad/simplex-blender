@@ -34,7 +34,7 @@ test.describe('result tabs', () => {
   });
   test('keeps partial recipe data in the diagram and tank summary', async ({ appPage }) => {
     const page = await appPage.goto('tourSeen');
-    await openRecipeScenario(page, { values: { targetInWaterTemperature: 10 } });
+    await openRecipeScenario(page, { values: { targetPressure: 207 } });
     const results = page.locator('[data-result-host="blending"]');
     await expect(results.locator('[data-result-key="blend-status"]')).toContainText(/target pressure limited/i);
 

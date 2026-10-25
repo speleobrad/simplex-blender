@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildCompareProtocol, validateCompareRecipe } from '../js/compare-recipe.js';
+import { buildCompareProtocol, normalizeComparePressureFields, validateCompareRecipe } from '../js/compare-recipe.js';
 import { simulateCompareProtocol } from '../js/thermodynamics.js';
 import { isThermalTerminalProjection } from '../js/ui/thermal-charts.js';
 import {
@@ -30,6 +30,15 @@ test('scenario patches are independent and advance the draft revision', () => {
   const initialized = { ...first, initialized: true, start: snapshotWhatIfFromBlending(blendingInput) };
   const updated = applyWhatIfStartPatch(initialized, { pressureBar: 80 });
   assert.equal(updated.start.pressureBar, 80); assert.equal(initialized.start.pressureBar, 50); assert.equal(updated.draftRevision, initialized.draftRevision + 1); assert.notEqual(updated.rows, initialized.rows);
+});
+test('default What-if step adds Oxygen up to 60 bar from a 45 bar start', () => {
+  const [step] = createWhatIfScenario().rows;
+  assert.equal(step.type, 'add');
+  assert.equal(step.bankId, 'bank-oxygen');
+  assert.equal(step.pressureInputMode, 'target');
+  const normalized = normalizeComparePressureFields(step, 45);
+  assert.equal(normalized.targetPressureBar, 60);
+  assert.equal(normalized.pressureAddedBar, 15);
 });
 test('scenario input resolves the selected shared cylinder but retains independent start values', () => {
   const scenario = { ...createWhatIfScenario(), initialized: true, start: { ...snapshotWhatIfFromBlending(blendingInput), pressureBar: 80 } };
