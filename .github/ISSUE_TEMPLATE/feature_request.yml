@@ -1,0 +1,97 @@
+name: Feature request
+description: Suggest a new capability, workflow change, or improvement
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a feature. Please use this form for new behavior or improvements. If something is broken or produces wrong results, use the **Bug report** form instead.
+
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+      description: One line describing the feature.
+      placeholder: "Allow custom cylinder volume in Settings"
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What are you trying to do today, and what gets in the way? Describe the situation rather than the solution.
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: How you would like the app to behave. Describe the expected user-visible result, including any inputs, outputs, or labels involved.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Observable outcomes that show the feature works, for example "Changing X updates Y in the Recipe tab" or "Value persists after reload". Optional, but it helps when reviewing a pull request.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of the app would this change?
+      options:
+        - Optimize recipe
+        - Compare recipe
+        - What-if scenario
+        - Thermal graphs
+        - Diagram / ternary chart
+        - Tank summary / In water pressure
+        - Inventory and supply banks
+        - Settings and presets
+        - Onboarding and guided tour
+        - Theme or layout
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Workarounds you use now, or other designs you considered.
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: References, related standards or equipment documentation, mockups, or screenshots. Drag and drop images here.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: contribute
+    attributes:
+      label: Would you like to implement this?
+      options:
+        - "Yes, I can open a pull request"
+        - "Maybe, with guidance"
+        - "No"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and did not find a duplicate.
+          required: true
