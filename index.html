@@ -29,6 +29,7 @@
           <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
             <h1 class="text-base font-bold text-slate-100 tracking-tight">Simplex blender</h1>
           </div>
+          <p class="text-[11px] leading-tight text-slate-400">by <a href="https://github.com/speleobrad" target="_blank" rel="noopener noreferrer" class="text-cyan-400 hover:underline">speleobrad</a></p>
       </div>
       </div>
 
@@ -49,6 +50,9 @@
         <span id="theme-save-status" class="sr-only" aria-live="polite"></span>
         <button type="button" id="wizard-launch" data-action="open-wizard" aria-label="Show the guided tour" title="Show the guided tour" class="inline-flex items-center rounded-lg border border-ocean-600/70 bg-ocean-800 px-2.5 py-1.5 text-xs text-cyan-300 transition hover:bg-ocean-700">
           <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
+        </button>
+        <button type="button" id="primary-tab-about" data-action="select-screen" data-screen="about" data-nav-icon aria-controls="screen-about" aria-current="false" aria-label="About" title="About" class="inline-flex items-center rounded-lg border border-ocean-600/70 bg-ocean-800 px-2.5 py-1.5 text-xs text-slate-300 transition hover:bg-ocean-700">
+          <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
         </button>
       </div>
     </div>
@@ -714,7 +718,47 @@
       </section>
       </div>
     </div>
+    <div id="screen-about" data-primary-screen="about" role="tabpanel" aria-labelledby="primary-tab-about" hidden class="mx-auto w-full max-w-3xl min-w-0 flex flex-col gap-6">
+      <section class="bg-ocean-900/90 border border-ocean-800 rounded-2xl p-5 shadow-xl">
+        <h2 class="text-base font-bold text-slate-100">About Simplex blender</h2>
+        <p class="mt-3 text-sm text-slate-300">Made with curiosity by Speleobrad.</p>
+        <p class="mt-2 text-xs text-slate-400">Simplex blender plans gas fills around your leftover cylinders and the pressure you need in the water rather than a mixing station's menu, treating temperature as a blending parameter as important as composition, so you can see what the tank goes through while filling and reduce its thermal stress.</p>
+        <ul class="mt-3 flex flex-wrap gap-3 text-xs font-semibold">
+          <li><a href="https://github.com/speleobrad" target="_blank" rel="noopener noreferrer" class="text-cyan-400 hover:underline"><i class="fa-brands fa-github" aria-hidden="true"></i> GitHub</a></li>
+          <li><a href="https://www.instagram.com/speleobrad" target="_blank" rel="noopener noreferrer" class="text-cyan-400 hover:underline"><i class="fa-brands fa-instagram" aria-hidden="true"></i> Instagram</a></li>
+          <li><a href="https://www.facebook.com/speleobrad" target="_blank" rel="noopener noreferrer" class="text-cyan-400 hover:underline"><i class="fa-brands fa-facebook" aria-hidden="true"></i> Facebook</a></li>
+        </ul>
+      </section>
+      <section id="about-feedback" class="bg-ocean-900/90 border border-ocean-800 rounded-2xl p-5 shadow-xl">
+        <h3 class="text-sm font-bold text-slate-100">Bugs and feature requests</h3>
+        <ul class="mt-3 list-disc pl-5 text-xs text-slate-300 space-y-1">
+          <li><a href="https://github.com/speleobrad/simplex-blender/issues/new?labels=bug" target="_blank" rel="noopener noreferrer" class="text-cyan-400 hover:underline">Report a bug</a></li>
+          <li><a href="https://github.com/speleobrad/simplex-blender/issues/new?labels=enhancement" target="_blank" rel="noopener noreferrer" class="text-cyan-400 hover:underline">Request a feature</a></li>
+          <li><a href="https://github.com/speleobrad/simplex-blender/issues" target="_blank" rel="noopener noreferrer" class="text-cyan-400 hover:underline">Browse open issues</a></li>
+        </ul>
+      </section>
+      <section id="about-sbom" class="bg-ocean-900/90 border border-ocean-800 rounded-2xl p-5 shadow-xl">
+        <h3 class="text-sm font-bold text-slate-100">Software bill of materials</h3>
+        <p class="mt-1 text-xs text-slate-400">Third-party components loaded by this page at runtime. Simplex blender itself is GPL-3.0-only.</p>
+        <div class="mt-3 overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="text-slate-400"><tr><th class="py-1 pr-3">Component</th><th class="py-1 pr-3">Version</th><th class="py-1 pr-3">Use</th><th class="py-1">License</th></tr></thead>
+            <tbody class="divide-y divide-ocean-800/60 text-slate-300">
+              <tr><td class="py-1.5 pr-3"><a href="https://tailwindcss.com" target="_blank" rel="noopener noreferrer" class="text-cyan-400 hover:underline">Tailwind CSS (Play CDN)</a></td><td class="pr-3">Unpinned (served by CDN)</td><td class="pr-3">Styling</td><td>MIT</td></tr>
+              <tr><td class="py-1.5 pr-3"><a href="https://driverjs.com" target="_blank" rel="noopener noreferrer" class="text-cyan-400 hover:underline">driver.js</a></td><td class="pr-3">1.9.0</td><td class="pr-3">Guided tour</td><td>MIT</td></tr>
+              <tr><td class="py-1.5 pr-3"><a href="https://fontawesome.com" target="_blank" rel="noopener noreferrer" class="text-cyan-400 hover:underline">Font Awesome Free</a></td><td class="pr-3">6.4.0</td><td class="pr-3">Icons</td><td>Icons CC BY 4.0; fonts SIL OFL 1.1; code MIT</td></tr>
+              <tr><td class="py-1.5 pr-3"><a href="https://github.com/JetBrains/JetBrainsMono" target="_blank" rel="noopener noreferrer" class="text-cyan-400 hover:underline">JetBrains Mono</a></td><td class="pr-3">Google Fonts</td><td class="pr-3">Monospace font</td><td>SIL OFL 1.1</td></tr>
+              <tr><td class="py-1.5 pr-3"><a href="https://github.com/tokotype/PlusJakartaSans" target="_blank" rel="noopener noreferrer" class="text-cyan-400 hover:underline">Plus Jakarta Sans</a></td><td class="pr-3">Google Fonts</td><td class="pr-3">UI font</td><td>SIL OFL 1.1</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="mt-3 text-[10px] text-slate-500">Google Analytics is loaded only after you accept consent; it is a hosted service, not a bundled component. Development-only: Playwright (Apache-2.0).</p>
+      </section>
+    </div>
   </main>
+  <footer id="app-footer" class="border-t border-ocean-800 px-4 py-3 text-center text-[11px] text-slate-500">
+    Simplex blender is free software, licensed under <a href="LICENSE" target="_blank" rel="noopener noreferrer" class="text-cyan-400 hover:underline">GPL-3.0-only</a>.
+  </footer>
 
   <script type="module" src="js/main.js"></script>
 </body>
