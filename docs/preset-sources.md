@@ -108,4 +108,3 @@ Values are as each source publishes them, converted to bar and cm³ only where t
 | GBT30/100 | 100:1 / 100:1 | 1030 / 830 | 192 at 40 / 192 at 40 |
 
 - The outlet formulas (for example, 16 × drive + 2.5 × inlet) also differ between A and B on several models. Table A's maximum inlet is printed as a multiple of drive pressure; its numeric reading is not used here.
-
