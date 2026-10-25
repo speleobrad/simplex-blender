@@ -2,7 +2,7 @@
 
 ## Runtime assets
 
-`index.html` owns the page markup, including the primary Blending/Inventory/Settings navigation, screen panes, static Settings controls, and relative asset references. `css/app.css` contains theme color variables for both appearances and custom table/scrollbar rules. The page loads Tailwind from its existing CDN, then `js/tailwind-config.js` maps utility colors to those variables, followed by the native-module entry `js/main.js`.
+`index.html` owns the page markup, including the primary Blending/What-if/Inventory/Settings/About navigation, screen panes, static Settings controls, the static About pane (credits, issue-tracker links, and the runtime third-party SBOM table; update it when CDN assets in `<head>` change), and relative asset references. `css/app.css` contains theme color variables for both appearances and custom table/scrollbar rules. The page loads Tailwind from its existing CDN, then `js/tailwind-config.js` maps utility colors to those variables, followed by the native-module entry `js/main.js`.
 
 ## JavaScript boundaries
 
