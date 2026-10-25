@@ -25,7 +25,7 @@
     {
       "name": "Haskel AG-15",
       "minimumSourcePressureBar": 3.5,
-      "cylinderVolumeCm3": 6.2,
+      "cylinderVolumeCm3": 101.6,
       "oxygenBoostBpm": 30,
       "otherBoostBpm": 45,
       "oxygenDecantRateBarPerMin": 5,

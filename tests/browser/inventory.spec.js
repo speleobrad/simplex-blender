@@ -139,8 +139,8 @@ test.describe('inventory supply banks', () => {
     await page.getByRole('tab', { name: 'Inventory', exact: true }).click();
     const compressor = page.locator('#inventory-compressor-preset');
     const booster = page.locator('#inventory-booster-preset');
-    await expect(compressor.locator('option')).toHaveCount(2);
-    await expect(booster.locator('option')).toHaveCount(2);
+    await expect(compressor.locator('option')).toHaveCount(8);
+    await expect(booster.locator('option')).toHaveCount(4);
     await compressor.selectOption({ label: 'Bauer Oceanus 300bar' });
     await booster.selectOption({ label: 'Maximator ROB22' });
     await expect(page.locator('#equipment-summary')).toContainText('Bauer Oceanus 300bar');

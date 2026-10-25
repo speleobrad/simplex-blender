@@ -52,6 +52,42 @@ export const DEFAULT_SETTINGS = Object.freeze({
       inletFlowLPerMin: 140,
       maxPressureBar: 300,
       temperatureModifierC: 7
+    }),
+    Object.freeze({
+      name: 'Bauer Junior 2 225 bar',
+      inletFlowLPerMin: 100,
+      maxPressureBar: 225,
+      temperatureModifierC: 5
+    }),
+    Object.freeze({
+      name: 'Bauer Junior 2 330 bar',
+      inletFlowLPerMin: 100,
+      maxPressureBar: 330,
+      temperatureModifierC: 5
+    }),
+    Object.freeze({
+      name: 'Bauer Oceanus 230 bar',
+      inletFlowLPerMin: 140,
+      maxPressureBar: 230,
+      temperatureModifierC: 7
+    }),
+    Object.freeze({
+      name: 'Coltri MCH 6 232 bar',
+      inletFlowLPerMin: 100,
+      maxPressureBar: 232,
+      temperatureModifierC: 5
+    }),
+    Object.freeze({
+      name: 'Coltri MCH 13 225 bar',
+      inletFlowLPerMin: 235,
+      maxPressureBar: 225,
+      temperatureModifierC: 5
+    }),
+    Object.freeze({
+      name: 'Coltri MCH 13 330 bar',
+      inletFlowLPerMin: 235,
+      maxPressureBar: 330,
+      temperatureModifierC: 5
     })
   ]),
   boosterPresets: Object.freeze([
@@ -76,6 +112,30 @@ export const DEFAULT_SETTINGS = Object.freeze({
       oxygenDecantRateBarPerMin: 5,
       otherDecantRateBarPerMin: 10,
       maxOutputPressureBar: 280,
+      temperatureModifierC: 0,
+      drainingRateBarPerMin: 15
+    }),
+    Object.freeze({
+      name: 'Maximator ROB 32D',
+      minimumSourcePressureBar: 50,
+      cylinderVolumeCm3: 11.6,
+      oxygenBoostBpm: 45,
+      otherBoostBpm: 70,
+      oxygenDecantRateBarPerMin: 6,
+      otherDecantRateBarPerMin: 12,
+      maxOutputPressureBar: 300,
+      temperatureModifierC: 0,
+      drainingRateBarPerMin: 15
+    }),
+    Object.freeze({
+      name: 'Haskel AG-15',
+      minimumSourcePressureBar: 3.5,
+      cylinderVolumeCm3: 101.6,
+      oxygenBoostBpm: 30,
+      otherBoostBpm: 45,
+      oxygenDecantRateBarPerMin: 5,
+      otherDecantRateBarPerMin: 10,
+      maxOutputPressureBar: 155,
       temperatureModifierC: 0,
       drainingRateBarPerMin: 15
     })
