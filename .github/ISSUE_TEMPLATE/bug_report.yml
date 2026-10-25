@@ -1,0 +1,144 @@
+name: Bug report
+description: Something works incorrectly, crashes, or renders wrongly
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please use this form only for behavior that differs from what the app should do. For new behavior or improvements, use the **Feature request** form instead.
+
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+      description: One line describing the problem.
+      placeholder: "Recipe shows 0.00 bar drain for a 12 L cylinder at 10.4 bar"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Where in the app does the problem occur?
+      options:
+        - Optimize recipe
+        - Compare recipe
+        - What-if scenario
+        - Thermal graphs
+        - Diagram / ternary chart
+        - Tank summary / In water pressure
+        - Inventory and supply banks
+        - Settings and presets
+        - Onboarding and guided tour
+        - Theme or layout
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Numbered steps starting from the page state you used (for example, a fresh load or a specific preset).
+      placeholder: |
+        1. Open the app at http://127.0.0.1:8000/
+        2. Set working cylinder to ...
+        3. Click ...
+        4. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What you expected to happen, and why (for example, a physical or documented constraint).
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What happened instead. Include the exact values shown on screen if relevant.
+    validations:
+      required: true
+
+  - type: textarea
+    id: inputs
+    attributes:
+      label: Inputs
+      description: |
+        The values needed to reproduce the result: cylinder volume, working pressure, start and target gas mixes and pressures, temperatures, Wait settings, Supply banks, and the selected physics model. A preset export or screenshot of the Settings panel is also helpful.
+        Remove anything you consider private before posting.
+      render: text
+    validations:
+      required: false
+
+  - type: dropdown
+    id: model
+    attributes:
+      label: Physics model
+      options:
+        - Ideal gas
+        - Van der Waals
+        - Not sure / not applicable
+    validations:
+      required: true
+
+  - type: dropdown
+    id: viewport
+    attributes:
+      label: Viewport
+      options:
+        - Desktop
+        - Tablet
+        - Mobile
+        - Not applicable
+    validations:
+      required: true
+
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and version
+      placeholder: "Firefox 140.0, Chromium 138.0"
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: "Fedora 44, Windows 11, macOS 15"
+    validations:
+      required: true
+
+  - type: textarea
+    id: console
+    attributes:
+      label: Browser console output
+      description: Open developer tools (F12), reproduce the problem, and paste any errors or warnings. The Tailwind CDN production warning is expected and can be omitted.
+      render: text
+    validations:
+      required: false
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots or recordings
+      description: Drag and drop images or short recordings here.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and did not find a duplicate.
+          required: true
+        - label: I can reproduce the problem with the steps above.
+          required: true
