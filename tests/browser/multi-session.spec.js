@@ -169,7 +169,7 @@ test.describe('continued browser sessions', () => {
       inputs.some(input => input.value === 'Continued Session Gas')
     ))).toBe(false);
     const cylindersC = await openSettingsCategory(sessionC.page, 'cylinder-presets');
-    await expect(cylindersC.getByRole('textbox', { name: 'Cylinder preset name' }).first()).toHaveValue('Faber 3L');
+    await expect(cylindersC.locator('[data-settings-index="0"][data-settings-field="name"]:visible')).toHaveValue('Faber 3L');
     await expect(cylindersC.locator('[data-settings-index="0"][data-settings-field="volumeL"]:visible')).toHaveValue('3.00');
     await expect(cylindersC.locator('[data-settings-index="0"][data-settings-field="workingPressureBar"]:visible')).toHaveValue('232.00');
     const equipmentC = await openSettingsCategory(sessionC.page, 'equipment');

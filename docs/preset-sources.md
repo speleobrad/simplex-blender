@@ -8,6 +8,11 @@ The repository fixtures under `presets/` are practical starting points, not equi
 - [Luxfer specification tables](https://www.luxfercylinders.com/specifications/) publishes the L19J, L45M, L65G, and L87C capacities, masses, materials, and 310 bar service pressure used in the samples.
 - [Eurocylinder Systems](https://www.eurocylinders.de/en/) documents its seamless steel-cylinder range, including 0.74–80 L volumes and 200–300 bar filling pressures.
 - The [Tecline Eurocylinder listings](https://tecline.be/tanks-kranen/) identify the 3 L 230/300 bar and 12 L 232 bar diving products. The 12 L listing publishes a 14.1 kg mass. The 3 L sample mass is an approximate value because the listing does not publish the cylinder mass; verify it against the individual cylinder.
+- Catalina S13 ([Catalina product page](https://www.catalinacylinders.com/product/s13)): 1.9 L, 2.6 kg, 207 bar.
+- Luxfer S40 (P3403V) and S80 (P3404V) ([Luxfer EU SCUBA L6X table](https://www.luxfercylinders.com/specifications/)): 5.7 L / 7.2 kg / 207 bar and 10.6 L / 13.7 kg / 217 bar. The Luxfer S80 is the EU PED cylinder and differs from the Catalina S80 sample (11.1 L, 207 bar).
+- Additional Luxfer named rows: S100 (P3413V; 13.2 L, 19.25 kg, 220 bar) from the EU SCUBA table, and the NA hoop-wrap S106W (11.1 L, 15.3 kg, 300 bar). The unnamed EU part-number row P3258V is not included.
+- Additional Catalina product pages ([S45](https://www.catalinacylinders.com/product/s45), [C60](https://www.catalinacylinders.com/product/c60), [C80](https://www.catalinacylinders.com/product/c80), [C100](https://www.catalinacylinders.com/product/c100)) publish water capacity, cylinder weight, and service pressure: S45 6.4 L / 9.2 kg / 207 bar; C60 7.9 L / 12.4 kg / 228 bar; C80 10.3 L / 15.7 kg / 228 bar; C100 13.2 L / 17.9 kg / 228 bar.
+- Luxfer L23B/L23C, Luxfer S19, Faber FX12/FX18/FX50, Luxfer/Catalina AL50, and the Faber 12 L 300 bar Tall/Standard variants are not included: no manufacturer table or datasheet found publishes them under those names.
 
 The application accepts `steel` and `aluminum` as material values. Eurocylinder stainless-steel products are represented as `steel` for this existing schema.
 

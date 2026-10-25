@@ -38,6 +38,9 @@ export const DEFAULT_SETTINGS = Object.freeze({
   ]),
   cylinderPresets: Object.freeze([
     Object.freeze({ name: 'Faber 3L', volumeL: 3, material: 'steel', massKg: 4.4, workingPressureBar: 232, hotOverfillPercent: DEFAULT_HOT_OVERFILL_PERCENT }),
+    Object.freeze({ name: 'Catalina S13', volumeL: 1.9, material: 'aluminum', massKg: 2.6, workingPressureBar: 207, hotOverfillPercent: DEFAULT_HOT_OVERFILL_PERCENT }),
+    Object.freeze({ name: 'Luxfer S40', volumeL: 5.7, material: 'aluminum', massKg: 7.2, workingPressureBar: 207, hotOverfillPercent: DEFAULT_HOT_OVERFILL_PERCENT }),
+    Object.freeze({ name: 'Luxfer S80', volumeL: 10.6, material: 'aluminum', massKg: 13.7, workingPressureBar: 217, hotOverfillPercent: DEFAULT_HOT_OVERFILL_PERCENT }),
     Object.freeze({ name: 'Catalina S80', volumeL: 11.1, material: 'aluminum', massKg: 14.3, workingPressureBar: 207, hotOverfillPercent: DEFAULT_HOT_OVERFILL_PERCENT })
   ]),
   compressorPresets: Object.freeze([

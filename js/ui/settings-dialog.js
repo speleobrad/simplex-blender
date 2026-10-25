@@ -553,17 +553,8 @@ export function renderPresetOptions(settings, selectedCylinderName, units = 'met
 
   const select = document.getElementById('cylinder-preset');
   if (!select) return;
-  const displayValue = (value, quantity, preset) => {
-    const displayed = quantity === 'volumeL' && units === 'imperial'
-      ? preset.volumeL * preset.workingPressureBar / LITRES_PER_CU_FT_AT_ONE_BAR
-      : convertToDisplay(value, quantity, units);
-    return `${formatSettingNumber(displayed)} ${unitLabel(quantity, units)}`;
-  };
   const options = sortCylinderPresetEntries(settings.cylinderPresets)
-    .map(({ preset }) => createOption(
-      preset.name,
-      `${preset.name} — ${displayValue(preset.volumeL, 'volumeL', preset)} / ${materialLabel(preset.material, units)} / ${displayValue(preset.workingPressureBar, 'pressureBar', preset)}`
-    ));
+    .map(({ preset }) => createOption(preset.name, preset.name));
   select.replaceChildren(...options);
   const requested = selectedCylinderName === undefined
     ? settings.cylinderPresets.find(preset => preset.name === 'Catalina S80')

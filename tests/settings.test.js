@@ -66,6 +66,9 @@ test('built-in settings match the requested diving equipment defaults', () => {
   ]);
   assert.deepEqual(DEFAULT_SETTINGS.cylinderPresets, [
     { name: 'Faber 3L', volumeL: 3, material: 'steel', massKg: 4.4, workingPressureBar: 232, hotOverfillPercent: 2 },
+    { name: 'Catalina S13', volumeL: 1.9, material: 'aluminum', massKg: 2.6, workingPressureBar: 207, hotOverfillPercent: 2 },
+    { name: 'Luxfer S40', volumeL: 5.7, material: 'aluminum', massKg: 7.2, workingPressureBar: 207, hotOverfillPercent: 2 },
+    { name: 'Luxfer S80', volumeL: 10.6, material: 'aluminum', massKg: 13.7, workingPressureBar: 217, hotOverfillPercent: 2 },
     { name: 'Catalina S80', volumeL: 11.1, material: 'aluminum', massKg: 14.3, workingPressureBar: 207, hotOverfillPercent: 2 }
   ]);
   assert.deepEqual(DEFAULT_SETTINGS.compressorPresets, [
@@ -868,7 +871,7 @@ test('saved cylinder presets without hot overfill migrate to the two-percent def
 
   const loaded = loadSettings(storage);
 
-  assert.deepEqual(loaded.cylinderPresets.map(preset => preset.hotOverfillPercent), [2, 2]);
+  assert.deepEqual(loaded.cylinderPresets.map(preset => preset.hotOverfillPercent), DEFAULT_SETTINGS.cylinderPresets.map(() => 2));
 });
 
 test('cylinder hot overfill accepts only zero to five percent in half-percent steps', () => {

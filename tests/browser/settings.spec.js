@@ -47,6 +47,14 @@ test.describe('settings categories and drafts', () => {
     await expect(page.locator('#cylinder-rating-hint')).toContainText(/rated to 207\.00 bar/i);
   });
 
+  test('lists cylinders by name only and shows details below the selection', async ({ appPage }) => {
+    const page = await appPage.goto('tourSeen');
+    const cylinder = page.locator('#cylinder-preset');
+    await cylinder.selectOption('Catalina S80');
+    await expect(cylinder.locator('option:checked')).toHaveText('Catalina S80');
+    await expect(page.locator('#cylinder-rating-hint')).toContainText(/11\.10 L alumini?um cylinder.*14\.30 kg.*207\.00 bar/i);
+  });
+
   test('updates every visible imperial volume when a cylinder pressure changes', async ({ appPage }) => {
     const page = await appPage.goto('tourSeen');
     const general = await openSettingsCategory(page, 'general');
@@ -83,7 +91,7 @@ test.describe('settings categories and drafts', () => {
 
     const pane = await openSettingsCategory(page, 'cylinder-presets');
     const pressureInputs = pane.locator('input[aria-label*="working pressure in psi"]:visible');
-    await expect(pressureInputs).toHaveCount(2);
+    await expect(pressureInputs).toHaveCount(5);
     for (const input of await pressureInputs.all()) {
       await expect(input).toHaveAttribute('min', '145.04');
       await expect(input).toHaveAttribute('max', '5076.32');

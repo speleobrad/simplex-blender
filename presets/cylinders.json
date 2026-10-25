@@ -13,5 +13,14 @@
   { "name": "Faber 7L", "volumeL": 7, "material": "steel", "massKg": 8.8, "workingPressureBar": 232, "hotOverfillPercent": 2 },
   { "name": "Luxfer L87C", "volumeL": 9, "material": "aluminum", "massKg": 5.3, "workingPressureBar": 310, "hotOverfillPercent": 2 },
   { "name": "Eurocylinder 12L 232 bar", "volumeL": 12, "material": "steel", "massKg": 14.1, "workingPressureBar": 232, "hotOverfillPercent": 2 },
+  { "name": "Catalina S13", "volumeL": 1.9, "material": "aluminum", "massKg": 2.6, "workingPressureBar": 207, "hotOverfillPercent": 2 },
+  { "name": "Luxfer S40", "volumeL": 5.7, "material": "aluminum", "massKg": 7.2, "workingPressureBar": 207, "hotOverfillPercent": 2 },
+  { "name": "Luxfer S80", "volumeL": 10.6, "material": "aluminum", "massKg": 13.7, "workingPressureBar": 217, "hotOverfillPercent": 2 },
+  { "name": "Luxfer S100", "volumeL": 13.2, "material": "aluminum", "massKg": 19.25, "workingPressureBar": 220, "hotOverfillPercent": 2 },
+  { "name": "Luxfer S106W", "volumeL": 11.1, "material": "aluminum", "massKg": 15.3, "workingPressureBar": 300, "hotOverfillPercent": 2 },
+  { "name": "Catalina S45", "volumeL": 6.4, "material": "aluminum", "massKg": 9.2, "workingPressureBar": 207, "hotOverfillPercent": 2 },
+  { "name": "Catalina C60", "volumeL": 7.9, "material": "aluminum", "massKg": 12.4, "workingPressureBar": 228, "hotOverfillPercent": 2 },
+  { "name": "Catalina C80", "volumeL": 10.3, "material": "aluminum", "massKg": 15.7, "workingPressureBar": 228, "hotOverfillPercent": 2 },
+  { "name": "Catalina C100", "volumeL": 13.2, "material": "aluminum", "massKg": 17.9, "workingPressureBar": 228, "hotOverfillPercent": 2 },
   { "name": "Catalina S80", "volumeL": 11.1, "material": "aluminum", "massKg": 14.3, "workingPressureBar": 207, "hotOverfillPercent": 2 }
 ]
