@@ -34,12 +34,12 @@ flowchart TD
 ```
 
 1. Run the static solver on the original banks at the ambient-settled target pressure. If it does not drain (`drainPressure` at floating-point roundoff), salvage is skipped.
-2. Compute the capped transfer to each eligible receiver (see Transfer limits). Rank receivers by the delta in attractiveness at that capped transfer, best first. Variants are the vent baseline plus cascades of the first k receivers, for k = 1…N. This is N+1 static solves, not an exponential subset search.
+2. Compute the capped transfer to each eligible receiver (see Transfer limits). Rank receivers by the delta in attractiveness of the receiving bank's state immediately after that transfer, best first; this ordering is a cheap heuristic only, and the gates below judge the post-recipe states. Variants are the vent baseline plus cascades of the first k receivers, for k = 1…N. This is N+1 static solves, not an exponential subset search.
 3. For each variant, mutate copies of the receiving banks (moles added, composition, pressure under the selected gas model), re-run the static solver, and compute the final leftover state of every bank after the recipe's draws.
 4. Apply, in order:
    1. **Feasible:** the re-solved surplus `S'` is at least the salvaged moles. Otherwise the variant is discarded.
    2. **Attractiveness gate:** for each bank, `score(final state in variant) − score(final state in baseline)` is at least −2.0.
-   3. **Value gate:** value kept is at least `SALVAGE_MIN_VALUE = 1.0` virtual unit. Value kept is the litres of He and O₂ moved into banks times their fixed prices.
+   3. **Value gate:** net value kept is at least `SALVAGE_MIN_VALUE = 1.0` virtual unit. Net value kept is **post-recipe**: for every enabled bank, take its final He and O₂ free-gas litres after the recipe's draws (the same final states used for the attractiveness gate), price them with the fixed prices, sum across banks, and subtract the same sum for the vent baseline. Gas moved into a bank and then drawn by the recipe therefore counts only through the draws it displaces from other banks, never gross. The working tank's end state is identical in every variant (same target), so any change in how much the cylinder retains shows up as a change in bank stock.
    4. **Rank:** highest value kept, then highest Σ delta attractiveness, then lowest LP cost.
 5. The winner (or the baseline if none qualifies) is passed to the existing thermal search unchanged. The thermal bisection (about 40 static solves) runs once, not per variant.
 
@@ -47,12 +47,17 @@ The retention coefficient is unchanged: the optimizer still prefers keeping gas 
 
 ## Attractiveness score
 
-`js/leftover-attractiveness.js` exports a pure `leftoverAttractiveness({ oxygenPercent, heliumPercent, pressureBar, volumeL, maxPressureBar })` returning 0–100+. It adapts the user's reference function with these corrections:
+`js/leftover-attractiveness.js` exports a pure `leftoverAttractiveness({ oxygenPercent, heliumPercent, pressureBar, volumeL, maxPressureBar })` returning a score on a **0–100 scale**, defined as
 
-- **Line proximity:** `exp(-15 · d_perp)` with `d_perp = |3.077·f_O₂ + f_He − 1| / √(3.077² + 1)`. 21/35, 18/45, 15/55, 12/65, 10/70 all lie within 0.02 of the line.
+`score = 100 · (0.4 · s_line + 0.4 · s_versatility + 0.2 · s_energy)`
+
+where each term below lies in [0, 1], so the score is in [0, 100]. The −2.0 gate is therefore two points on this scale. It adapts the user's reference function with these corrections:
+
+- **Line proximity:** `s_line = exp(-15 · d_perp)` with `d_perp = |3.077·f_O₂ + f_He − 1| / √(3.077² + 1)`. For the five standard targets the residual `|3.077·f_O₂ + f_He − 1|` is at most 0.02, so `d_perp` is at most about 0.006 and `s_line` is at least about 0.91.
 - **Versatility:** for each standard target (21/35, 18/45, 15/55, 12/65, 10/70), the bank counts as reachable when it can be topped up to the target by adding gas only, within its max pressure. For gas fractions `f_x` and target fractions `t_x` (O₂, He, N₂), that is `P_bank · max_x(f_x / t_x) ≤ maxPressureBar` (components with `t_x = 0` need `f_x = 0`). The reference implementation checked only N₂, which wrongly scored pure O₂ as reaching every target.
 - **Energy:** a helium-amount term, `min(1, heliumLitres / 1000)`, where `heliumLitres = bank free-gas litres × f_He` (free-gas litres use the same convention as `ventedGasLitres`). This replaces `(P/100)·f_He`, which ignored volume and exceeded 1 above 100 bar. The 1000 L reference is a named constant `SCORE_REFERENCE_HELIUM_LITRES`, so the default Sample scrap bank (12 L, 45 bar, 19/40) scores about 0.2 on this term.
-- **Weights and thresholds:** 0.4 / 0.4 / 0.2, gate −2.0, kept from the reference. Tests pin the intended behavior, for example that dumping a 12/65 mix into a 21/35 scrap bank is refused.
+- **Weights and thresholds:** 0.4 / 0.4 / 0.2 and the −2.0 gate are kept from the reference (the gate is "variant minus baseline" for the same bank's post-recipe state). A bank with invalid fractions (negative, or O₂ + He above 100%) scores 0. Tests pin the intended behavior, for example that dumping a 12/65 mix into a 21/35 scrap bank is refused.
+- **`s_versatility`** is `reachableCount / 5`.
 
 ## Transfer limits
 
