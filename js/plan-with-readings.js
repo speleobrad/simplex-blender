@@ -262,7 +262,10 @@ function applyReading(plan, input, readingsInput, index, reading) {
     return fail(suffix.error ?? 'No plan reaches the target from this reading.');
   }
   const suffixSteps = suffix.logicalPlan.protocolSteps.slice(firstIndex)
-    .map((candidate, offset) => renumberStep(candidate, index + offset));
+    .map((candidate, offset) => renumberStep(candidate, index + offset))
+    .map(step => step.costOperationId
+      ? { ...step, costOperationId: `r${index}-${step.costOperationId}` }
+      : step);
   if (suffixSteps.length === 0) return fail('No steps remain to plan from this reading.');
   const mergedSteps = [...prefix, ...suffixSteps];
 

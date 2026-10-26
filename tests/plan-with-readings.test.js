@@ -165,3 +165,75 @@ test('recalculating from a reading keeps vented helium as the helium share of th
   assert.ok(Math.abs(plan.blend.heliumVentedLitres - planned.blend.heliumVentedLitres) < 1e-6);
   assert.ok(Math.abs(plan.blend.heliumVentedLitres - plan.blend.ventedGasLitres * 0.2) < 1e-6);
 });
+
+test('merged plans keep one operation id per operation and consumed moles on every transfer', () => {
+  const plan = planWithReadings(withReadings({ [scrapIndex]: { pressureBar: 54, temperatureC: 22 } }));
+  const transfers = plan.protocolSteps.filter(s => s.costOperationId);
+  const logical = transfers.filter(s => !/safe stage/.test(s.title ?? ''));
+  assert.equal(new Set(logical.map(s => s.costOperationId)).size, logical.length);
+  for (const step of transfers) assert.ok(Number.isFinite(step.sourceConsumedMoles));
+});
+
+test('a second chained reading never collides', () => {
+  const first = { [scrapIndex]: { pressureBar: 54, temperatureC: 22 } };
+  const afterFirst = planWithReadings(withReadings(first));
+  const laterIndex = afterFirst.protocolSteps.at(-2)._measurementIndex;
+  const laterPlanned = stepAt(afterFirst, laterIndex).thermal;
+  const both = { ...first, [laterIndex]: {
+    pressureBar: laterPlanned.plannedStartPressureBar - 2,
+    temperatureC: laterPlanned.plannedStartTemperatureC + 0.3
+  } };
+  const afterBoth = planWithReadings(withReadings(both));
+  assert.equal(afterBoth.interimReadings.error, null);
+  assert.equal(afterBoth.interimReadings.count, 2);
+  assertNumbersFollowIndices(afterBoth);
+
+  // Steps before the later reading are exactly the recipe with only the first reading.
+  const beforeLater = plan => plan.protocolSteps.filter(step => (step._measurementIndex ?? -1) < laterIndex);
+  assert.deepEqual(beforeLater(afterBoth).map(step => step.title), beforeLater(afterFirst).map(step => step.title));
+  assert.equal(stepAt(afterBoth, laterIndex).thermal.pressureStartBar, laterPlanned.plannedStartPressureBar - 2);
+  assert.equal(stepAt(afterBoth, scrapIndex).thermal.pressureStartBar, 54);
+
+  const logical = afterBoth.protocolSteps.filter(s => s.costOperationId && !/safe stage/.test(s.title ?? ''));
+  assert.equal(new Set(logical.map(s => s.costOperationId)).size, logical.length);
+  for (const step of afterBoth.protocolSteps.filter(s => s.costOperationId)) {
+    assert.ok(Number.isFinite(step.sourceConsumedMoles));
+  }
+});
+
+test('a reading after the scrap boost splits its operations into distinct prefix and suffix ids', () => {
+  const transferIndices = base.protocolSteps.filter(s => s.sourceBankId).map(s => s._measurementIndex);
+  const index = transferIndices[transferIndices.indexOf(scrapIndex) + 1];
+  const planned = stepAt(base, index).thermal;
+  const plan = planWithReadings(withReadings({ [index]: {
+    pressureBar: planned.plannedStartPressureBar - 2,
+    temperatureC: planned.plannedStartTemperatureC + 0.3
+  } }));
+  assert.equal(plan.interimReadings.error, null);
+
+  // The re-solved scrap boost keeps its own operation.
+  assert.equal(stepAt(plan, scrapIndex).costOperationId, 'op-2');
+  assert.equal(stepAt(plan, scrapIndex).costOperation, 'boost');
+  assert.ok(Number.isFinite(stepAt(plan, scrapIndex).sourceConsumedMoles));
+
+  const transfers = plan.protocolSteps.filter(s => s.costOperationId && !/safe stage/.test(s.title ?? ''));
+  const prefix = transfers.filter(s => s._measurementIndex < index);
+  const suffix = transfers.filter(s => s._measurementIndex >= index);
+  assert.ok(prefix.length > 0 && suffix.length > 0);
+  for (const step of prefix) assert.match(step.costOperationId, /^op-\d+$/);
+  for (const step of suffix) assert.match(step.costOperationId, new RegExp(`^r${index}-op-\\d+$`));
+  assert.equal(new Set(transfers.map(s => s.costOperationId)).size, transfers.length);
+  for (const step of plan.protocolSteps.filter(s => s.costOperationId)) {
+    assert.ok(Number.isFinite(step.sourceConsumedMoles));
+  }
+});
+
+test('a fallback plan keeps unique operation ids and finite consumed moles on every transfer', () => {
+  const plan = planWithReadings(withReadings({ [scrapIndex]: { pressureBar: 40, temperatureC: 21 } }));
+  assert.match(plan.interimReadings.error, /cannot be derived/);
+  const transfers = plan.protocolSteps.filter(s => s.costOperationId && !/safe stage/.test(s.title ?? ''));
+  assert.equal(new Set(transfers.map(s => s.costOperationId)).size, transfers.length);
+  for (const step of plan.protocolSteps.filter(s => s.costOperationId)) {
+    assert.ok(Number.isFinite(step.sourceConsumedMoles));
+  }
+});
