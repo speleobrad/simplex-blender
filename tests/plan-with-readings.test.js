@@ -140,3 +140,28 @@ test('a later reading at the exact planned state of the re-planned recipe leaves
     assert.deepEqual(titles(again), titles(afterFirst), `reading at step ${index}`);
   }
 });
+
+test('recalculating from a reading keeps vented helium as the helium share of the vented original mix', () => {
+  const heliumStart = {
+    ...input,
+    cylinder: { ...input.cylinder, initialPressureBar: 100, initialOxygenPercent: 40, initialHeliumPercent: 20 }
+  };
+  const planned = optimizeBlend(heliumStart);
+  assert.ok(planned.blend.ventedGasLitres > 100);
+  const transfer = planned.protocolSteps.find(step => step.sourceBankId && step.thermal);
+  const plan = planWithReadings({
+    ...heliumStart,
+    thermal: {
+      ...heliumStart.thermal,
+      interimMeasurements: Object.assign([], {
+        [transfer._measurementIndex]: {
+          pressureBar: transfer.thermal.plannedStartPressureBar,
+          temperatureC: transfer.thermal.plannedStartTemperatureC
+        }
+      })
+    }
+  });
+  assert.equal(plan.interimReadings.error, null);
+  assert.ok(Math.abs(plan.blend.heliumVentedLitres - planned.blend.heliumVentedLitres) < 1e-6);
+  assert.ok(Math.abs(plan.blend.heliumVentedLitres - plan.blend.ventedGasLitres * 0.2) < 1e-6);
+});

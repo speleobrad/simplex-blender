@@ -944,6 +944,7 @@ export function buildCompareProtocol(rows, { cylinder, physics, banks = [], sett
     retainedPercent: initialMoles > 0 ? (retainedInitialMoles / initialMoles) * 100 : 0,
     ventedPressureBar: Math.max(0, initialPressureBar - retainedPressureBar),
     ventedGasLitres: ventedMoles * gasMolarVolumeL,
+    heliumVentedLitres: ventedMoles * (initialMix.heliumPercent / 100) * gasMolarVolumeL,
     heliumSalvagedLitres: (
       salvagedHeliumFrom(retainedInitialMoles, initialMix.heliumPercent) + addedHeliumMoles
     ) * gasMolarVolumeL

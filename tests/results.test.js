@@ -96,6 +96,7 @@ test('marks an exhausted transfer source before its source-end pressure', () => 
         retainedPercent: 0,
         ventedPressureBar: 0,
         ventedGasLitres: 0,
+        heliumVentedLitres: 0,
         heliumSalvagedLitres: 0,
         finalPressureBar: 100,
         finalOxygenPercent: 21,
@@ -132,6 +133,7 @@ test('renders a collapsed interim measurement control between mixing steps', () 
         retainedPercent: 100,
         ventedPressureBar: 0,
         ventedGasLitres: 0,
+        heliumVentedLitres: 0,
         heliumSalvagedLitres: 0,
         finalPressureBar: 100,
         finalOxygenPercent: 21,
@@ -171,6 +173,7 @@ test('maps interim controls through scheduled measurement indices', () => {
         retainedPercent: 100,
         ventedPressureBar: 0,
         ventedGasLitres: 0,
+        heliumVentedLitres: 0,
         heliumSalvagedLitres: 0,
         finalPressureBar: 100,
         finalOxygenPercent: 21,
@@ -221,6 +224,7 @@ test('locks earlier interim readings and allows Clear only on the latest one', (
         retainedPercent: 100,
         ventedPressureBar: 0,
         ventedGasLitres: 0,
+        heliumVentedLitres: 0,
         heliumSalvagedLitres: 0,
         finalPressureBar: 80,
         finalOxygenPercent: 21,
@@ -276,6 +280,7 @@ test('locks an empty interim slot before the latest reading', () => {
         retainedPercent: 100,
         ventedPressureBar: 0,
         ventedGasLitres: 0,
+        heliumVentedLitres: 0,
         heliumSalvagedLitres: 0,
         finalPressureBar: 60,
         finalOxygenPercent: 21,
@@ -324,6 +329,7 @@ test('places readings before the next transfer, not before a preserve step', () 
         retainedPercent: 100,
         ventedPressureBar: 0,
         ventedGasLitres: 0,
+        heliumVentedLitres: 0,
         heliumSalvagedLitres: 0,
         finalPressureBar: 100,
         finalOxygenPercent: 21,
@@ -361,6 +367,7 @@ test('announces feasibility and keeps thermal details behind an explicit disclos
         retainedPercent: 100,
         ventedPressureBar: 0,
         ventedGasLitres: 0,
+        heliumVentedLitres: 0,
         heliumSalvagedLitres: 0,
         finalPressureBar: 100,
         finalOxygenPercent: 21,
@@ -405,6 +412,7 @@ test('renders recipe aggregates and normalized technical details', () => {
         retainedPercent: 80,
         ventedPressureBar: 20,
         ventedGasLitres: 40,
+        heliumVentedLitres: 10,
         heliumSalvagedLitres: 12,
         finalPressureBar: 200,
         finalOxygenPercent: 18,
@@ -513,6 +521,7 @@ test('highlights technical details at source, cooloff, and pressure limits and s
         retainedPercent: 100,
         ventedPressureBar: 0,
         ventedGasLitres: 0,
+        heliumVentedLitres: 0,
         heliumSalvagedLitres: 0,
         finalPressureBar: 200,
         finalOxygenPercent: 18,
@@ -592,6 +601,7 @@ test('highlights oxygen boost ratios above 3.5:1 and 3.8:1', () => {
           retainedPercent: 100,
           ventedPressureBar: 0,
           ventedGasLitres: 0,
+          heliumVentedLitres: 0,
           heliumSalvagedLitres: 0,
           finalPressureBar: 200,
           finalOxygenPercent: 50,
@@ -645,6 +655,7 @@ test('shows planned start readings struck out beside manually recorded readings'
         retainedPercent: 100,
         ventedPressureBar: 0,
         ventedGasLitres: 0,
+        heliumVentedLitres: 0,
         heliumSalvagedLitres: 0,
         finalPressureBar: 200,
         finalOxygenPercent: 18,
@@ -725,7 +736,7 @@ function renderNotice(interimReadings) {
     renderResults({
       feasible: true,
       blend: {
-        retainedPressureBar: 100, retainedPercent: 100, ventedPressureBar: 0, ventedGasLitres: 0,
+        retainedPressureBar: 100, retainedPercent: 100, ventedPressureBar: 0, ventedGasLitres: 0, heliumVentedLitres: 0,
         heliumSalvagedLitres: 0, finalPressureBar: 200, finalOxygenPercent: 18, finalHeliumPercent: 45
       },
       thermal: {
@@ -797,6 +808,7 @@ test('classifies summary metrics at zero, full, partial, and over-limit boundari
       retainedPercent,
       ventedPressureBar,
       ventedGasLitres: ventedPressureBar,
+      heliumVentedLitres: 0,
       heliumSalvagedLitres,
       finalPressureBar: ambientPressureBar,
       finalOxygenPercent,
@@ -872,7 +884,7 @@ test('keeps wait-only technical details in a uniform single-column grid', () => 
       feasible: true,
       blend: {
         retainedPressureBar: 50, retainedPercent: 100, ventedPressureBar: 0,
-        ventedGasLitres: 0, heliumSalvagedLitres: 0, finalPressureBar: 100,
+        ventedGasLitres: 0, heliumVentedLitres: 0, heliumSalvagedLitres: 0, finalPressureBar: 100,
         finalOxygenPercent: 21, finalHeliumPercent: 0
       },
       protocolSteps: [{
@@ -922,7 +934,7 @@ test('keeps step numbering singular and places actual readings inside the next s
       feasible: true,
       blend: {
         retainedPressureBar: 50, retainedPercent: 100, ventedPressureBar: 0,
-        ventedGasLitres: 0, heliumSalvagedLitres: 0, finalPressureBar: 100,
+        ventedGasLitres: 0, heliumVentedLitres: 0, heliumSalvagedLitres: 0, finalPressureBar: 100,
         finalOxygenPercent: 21, finalHeliumPercent: 0
       },
       protocolSteps: [
@@ -962,7 +974,7 @@ test('uses the thermal receiver endpoint for the visible step result', () => {
       feasible: true,
       blend: {
         retainedPressureBar: 50, retainedPercent: 100, ventedPressureBar: 0,
-        ventedGasLitres: 0, heliumSalvagedLitres: 0, finalPressureBar: 100,
+        ventedGasLitres: 0, heliumVentedLitres: 0, heliumSalvagedLitres: 0, finalPressureBar: 100,
         finalOxygenPercent: 21, finalHeliumPercent: 0
       },
       protocolSteps: [{
@@ -1003,7 +1015,7 @@ test('places readings before the next step and omits them before preserve steps'
       feasible: true,
       blend: {
         retainedPressureBar: 50, retainedPercent: 100, ventedPressureBar: 0,
-        ventedGasLitres: 0, heliumSalvagedLitres: 0, finalPressureBar: 100,
+        ventedGasLitres: 0, heliumVentedLitres: 0, heliumSalvagedLitres: 0, finalPressureBar: 100,
         finalOxygenPercent: 21, finalHeliumPercent: 0
       },
       protocolSteps: [
@@ -1038,7 +1050,7 @@ test('renders explicit thermal states and one adjusted cooloff warning in the st
   try {
     renderResults({
       feasible: true,
-      blend: { retainedPressureBar: 1, retainedPercent: 1, ventedPressureBar: 0, ventedGasLitres: 0, heliumSalvagedLitres: 0, finalPressureBar: 200, finalOxygenPercent: 18, finalHeliumPercent: 45 },
+      blend: { retainedPressureBar: 1, retainedPercent: 1, ventedPressureBar: 0, ventedGasLitres: 0, heliumVentedLitres: 0, heliumSalvagedLitres: 0, finalPressureBar: 200, finalOxygenPercent: 18, finalHeliumPercent: 45 },
       thermal: { finalInWaterPressureBar: 188.6, finalInWaterTemperatureC: 10, finalTransferEndPressureBar: 204.8, finalTransferEndTemperatureC: 40, finalAmbientPressureBar: 200, finalAmbientTemperatureC: 25 },
       protocolSteps: [{
         title: 'Step 4: Boost Helium to 192.5 bar',
@@ -1081,7 +1093,7 @@ test('renders Warning mode pressure exceedances with measured limit and step', (
       feasible: true,
       blend: {
         retainedPressureBar: 50, retainedPercent: 100, ventedPressureBar: 0,
-        ventedGasLitres: 0, heliumSalvagedLitres: 0, finalPressureBar: 100,
+        ventedGasLitres: 0, heliumVentedLitres: 0, heliumSalvagedLitres: 0, finalPressureBar: 100,
         finalOxygenPercent: 21, finalHeliumPercent: 0
       },
       protocolSteps: [{ title: 'Transfer 2', description: 'Transfer gas.', resultingPressureBar: 100 }],
@@ -1113,7 +1125,7 @@ test('renders only the Warning mode policy notice when no limit is exceeded', ()
       feasible: true,
       blend: {
         retainedPressureBar: 50, retainedPercent: 100, ventedPressureBar: 0,
-        ventedGasLitres: 0, heliumSalvagedLitres: 0, finalPressureBar: 100,
+        ventedGasLitres: 0, heliumVentedLitres: 0, heliumSalvagedLitres: 0, finalPressureBar: 100,
         finalOxygenPercent: 21, finalHeliumPercent: 0
       },
       protocolSteps: [{ title: 'Transfer 2', description: 'Transfer gas.', resultingPressureBar: 100 }],
@@ -1137,7 +1149,7 @@ test('keeps Warning notices separate from the adjusted cooloff box', () => {
     renderResults({
       feasible: true,
       blend: {
-        retainedPressureBar: 50, retainedPercent: 100, ventedPressureBar: 0, ventedGasLitres: 0, heliumSalvagedLitres: 0, finalPressureBar: 100,
+        retainedPressureBar: 50, retainedPercent: 100, ventedPressureBar: 0, ventedGasLitres: 0, heliumVentedLitres: 0, heliumSalvagedLitres: 0, finalPressureBar: 100,
         finalOxygenPercent: 21, finalHeliumPercent: 0
       },
       thermal: {
@@ -1204,6 +1216,7 @@ test('qualifies Warning-mode maximum pressure by the active non-cylinder constra
           retainedPercent: 100,
           ventedPressureBar: 0,
           ventedGasLitres: 0,
+          heliumVentedLitres: 0,
           heliumSalvagedLitres: 0,
           finalPressureBar: 150,
           finalOxygenPercent: 21,
@@ -1239,6 +1252,7 @@ test('replaces the previous recipe summary with the safety-limited target-temper
         retainedPercent: 40,
         ventedPressureBar: 30,
         ventedGasLitres: 360,
+        heliumVentedLitres: 90,
         heliumSalvagedLitres: 120,
         finalPressureBar: 200,
         finalOxygenPercent: 18,
@@ -1256,6 +1270,8 @@ test('replaces the previous recipe summary with the safety-limited target-temper
         requestedInWaterTemperatureC: 25
       }
     }, { settings: { pressureLimitMode: 'hard-stop', units: 'metric' } });
+    assert.equal(document.elements.get('res-vented-p').textContent, '90 L');
+    assert.equal(document.elements.get('res-vented-litres').textContent, 'of 30.0 bar vented gas');
 
     renderResults({
       feasible: false,
@@ -1275,6 +1291,7 @@ test('replaces the previous recipe summary with the safety-limited target-temper
           retainedPercent: 100,
           ventedPressureBar: 0,
           ventedGasLitres: 0,
+          heliumVentedLitres: 0,
           heliumSalvagedLitres: 240,
           finalPressureBar: 207,
           finalOxygenPercent: 18,
@@ -1299,7 +1316,7 @@ test('replaces the previous recipe summary with the safety-limited target-temper
     });
 
     assert.equal(document.elements.get('res-retained-p').textContent, '80.0 bar');
-    assert.equal(document.elements.get('res-vented-p').textContent, '0.0 bar');
+    assert.equal(document.elements.get('res-vented-p').textContent, '0 L');
     assert.equal(document.elements.get('res-he-salvaged').textContent, '240 L');
     assert.equal(document.elements.get('res-final-p').textContent, '195.0 bar');
     assert.equal(document.elements.get('res-final-mix').textContent, '18.0/45.0');
@@ -1343,6 +1360,7 @@ test('explains an unavailable EAN50 target with its oxygen-ratio limit', () => {
           retainedPercent: 100,
           ventedPressureBar: 0,
           ventedGasLitres: 0,
+          heliumVentedLitres: 0,
           heliumSalvagedLitres: 0,
           finalPressureBar: 112,
           finalOxygenPercent: 50,
@@ -1403,6 +1421,7 @@ test('renders working-pressure and source-shortage reasons in unavailable-mix su
             retainedPercent: 100,
             ventedPressureBar: 0,
             ventedGasLitres: 0,
+            heliumVentedLitres: 0,
             heliumSalvagedLitres: 0,
             finalPressureBar: 150,
             finalOxygenPercent: 32,
@@ -1490,7 +1509,7 @@ test('Warning mode keeps interim pressure input within the supported range', () 
       feasible: true,
       blend: {
         retainedPressureBar: 50, retainedPercent: 100, ventedPressureBar: 0,
-        ventedGasLitres: 0, heliumSalvagedLitres: 0, finalPressureBar: 150,
+        ventedGasLitres: 0, heliumVentedLitres: 0, heliumSalvagedLitres: 0, finalPressureBar: 150,
         finalOxygenPercent: 21, finalHeliumPercent: 0
       },
       protocolSteps: [

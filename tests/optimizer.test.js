@@ -347,6 +347,36 @@ test('counts helium from non-pure supply gas as salvaged helium', () => {
   assert.ok(Math.abs(result.blend.heliumSalvagedLitres - 500) < 1e-9);
 });
 
+test('reports vented helium as the helium share of the drained original mix', () => {
+  const base = {
+    physics: { model: 'ideal', temperatureC: 20 },
+    settings: { booster: { minimumSourcePressureBar: 0 } },
+    banks: []
+  };
+  const drained = optimizeBlend({
+    ...base,
+    cylinder: {
+      volumeL: 10,
+      initialPressureBar: 100,
+      initialOxygenPercent: 21,
+      initialHeliumPercent: 30,
+      targetPressureBar: 60,
+      targetOxygenPercent: 21,
+      targetHeliumPercent: 30
+    }
+  });
+  assert.equal(drained.feasible, true);
+  assert.ok(Math.abs(drained.blend.ventedGasLitres - 400) < 1e-6);
+  assert.ok(Math.abs(drained.blend.heliumVentedLitres - 120) < 1e-6);
+
+  const kept = optimizeBlend({
+    ...base,
+    cylinder: { volumeL: 10, initialPressureBar: 100, initialOxygenPercent: 21, initialHeliumPercent: 30, targetPressureBar: 100, targetOxygenPercent: 21, targetHeliumPercent: 30 }
+  });
+  assert.equal(kept.feasible, true);
+  assert.ok(kept.blend.heliumVentedLitres < 1e-6);
+});
+
 test('splits a transfer into decant and boost stages when source pressure crosses receiver pressure', () => {
   const result = optimizeBlend(equalGasTransferInput({
     initialPressureBar: 100,

@@ -660,8 +660,8 @@ function renderBlendSummary(blend, units = 'metric', requestedInWaterPressureBar
   setText('res-retained-pct', `${blend.retainedPercent.toFixed(0)}% kept`);
   setColor('res-retained-p', retainedGasColor(blend.retainedPercent));
   setColor('res-retained-pct', retainedGasColor(blend.retainedPercent));
-  setText('res-vented-p', formatUnitValue(blend.ventedPressureBar, 'pressureBar', units));
-  setText('res-vented-litres', `${formatUnitValue(blend.ventedGasLitres, 'volumeL', units)} lost`);
+  setText('res-vented-p', formatUnitValue(blend.heliumVentedLitres, 'volumeL', units, 0));
+  setText('res-vented-litres', `of ${formatUnitValue(blend.ventedPressureBar, 'pressureBar', units)} vented gas`);
   setColor('res-vented-p', ventedGasColor(blend.retainedPercent));
   setColor('res-vented-litres', ventedGasColor(blend.retainedPercent));
   setText('res-he-salvaged', formatUnitValue(blend.heliumSalvagedLitres, 'volumeL', units, 0));

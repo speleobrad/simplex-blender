@@ -158,6 +158,7 @@ function blendFromLedger({ input, template, steps, trajectory, retainedFraction,
     ventedPressureBar: Math.max(0, cylinder.initialPressureBar - retainedPressureBar),
     ventedMoles,
     ventedGasLitres: ventedMoles * litresPerMole,
+    heliumVentedLitres: ventedMoles * (cylinder.initialHeliumPercent / 100) * litresPerMole,
     heliumSalvagedLitres: (retainedHeliumMoles + suppliedSalvagedHeliumMoles(steps, trajectory)) * litresPerMole
   };
 }

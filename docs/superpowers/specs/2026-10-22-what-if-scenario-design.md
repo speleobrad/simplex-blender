@@ -186,7 +186,7 @@ Summary reports:
 - in-water projection and temperature;
 - total transfer/wait duration;
 - maximum modeled temperature;
-- manual gas accounting for retained gas, vented gas, helium salvaged, and achieved mix;
+- manual gas accounting for retained gas, helium vented, helium salvaged, and achieved mix;
 - pressure-limit and shared-input warnings.
 
 What-if gas accounting is derived from the manually defined protocol. Optimizer-only values such as target match and target-pressure feasibility are not shown.
