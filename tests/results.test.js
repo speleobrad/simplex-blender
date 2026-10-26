@@ -1271,7 +1271,7 @@ test('replaces the previous recipe summary with the safety-limited target-temper
       }
     }, { settings: { pressureLimitMode: 'hard-stop', units: 'metric' } });
     assert.equal(document.elements.get('res-vented-p').textContent, '90 L');
-    assert.equal(document.elements.get('res-vented-litres').textContent, 'of 30.0 bar vented gas');
+    assert.equal(document.elements.get('res-vented-litres').textContent, 'of 30.0 bar');
 
     renderResults({
       feasible: false,
