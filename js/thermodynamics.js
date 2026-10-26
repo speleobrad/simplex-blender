@@ -5,6 +5,7 @@ import {
   calcZ
 } from './physics.js';
 
+import { materialThermal } from './materials.js';
 const ATMOSPHERIC_PRESSURE_BAR = 1.01325;
 const GAUGE_PRESSURE_OFFSET_BAR = 1;
 const CLEARANCE_RATIO = 0.05;
@@ -247,11 +248,11 @@ function estimateTransferTemperatureSamples({
   const cpKg = cpMolar / averageMolarMassKg;
   const specificGasConstant = 8.314 / averageMolarMassKg;
 
-  const isSteel = tankMaterial !== 'aluminum';
-  const defaultTankMassKg = isSteel ? 14 : 14.2;
+  const materialThermalParams = materialThermal(tankMaterial);
+  const defaultTankMassKg = materialThermalParams.defaultTankMassKg;
   const tankMassKg = Math.max(0.1, Number(configuredTankMassKg) || defaultTankMassKg);
-  const metalSpecificHeat = isSteel ? 490 : 900;
-  const areaM2 = isSteel ? 0.45 : 0.48;
+  const metalSpecificHeat = materialThermalParams.specificHeatJPerKgK;
+  const areaM2 = materialThermalParams.areaM2;
   const wetFraction = wetSurfaceFraction(waterSubmersionPercent);
   const heatTransferCoefficient = coolingMedium === 'water'
     ? wetFraction * HEAT_TRANSFER_WATER_W_PER_M2K
@@ -355,9 +356,10 @@ export function coolingTimeConstantMinutes(
   coolingMedium,
   waterSubmersionPercent = DEFAULT_WATER_SUBMERSION_PERCENT
 ) {
-  const airTauMinutes = tankMaterial === 'aluminum' ? 25 : 18;
+  const materialThermalParams = materialThermal(tankMaterial);
+  const airTauMinutes = materialThermalParams.airTauMinutes;
   if (coolingMedium !== 'water') return airTauMinutes;
-  const waterTauMinutes = tankMaterial === 'aluminum' ? 5 : 3.5;
+  const waterTauMinutes = materialThermalParams.waterTauMinutes;
   const wetFraction = wetSurfaceFraction(waterSubmersionPercent);
   return 1 / (wetFraction / waterTauMinutes + (1 - wetFraction) / airTauMinutes);
 }

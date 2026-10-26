@@ -205,7 +205,7 @@ Shows editable gas preset rows with name and gas composition fields, remove cont
 
 ### Cylinder presets
 
-Shows editable cylinder cards with name, volume, material, empty assembly mass, **Working pressure**, and **Hot overfill** (default 2%; 0–5% in 0.5% steps). Existing and imported presets without the new field default to 2%. Each row has a remove control; **Add cylinder** creates another preset.
+Shows editable cylinder cards with name, volume, material (Steel, Aluminium, or Fero-carbon for steel-lined carbon-wrapped cylinders), empty assembly mass, **Working pressure**, and **Hot overfill** (default 2%; 0–5% in 0.5% steps). Existing and imported presets without the new field default to 2%. Each row has a remove control; **Add cylinder** creates another preset.
 
 ### Equipment
 
