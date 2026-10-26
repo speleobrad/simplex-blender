@@ -17,6 +17,19 @@ const settingsWith = (mutate = () => {}) => {
   return s;
 };
 const bank = (over) => ({ id: 'real', name: 'Real', volumeL: 12, pressureBar: 150, oxygenPercent: 100, heliumPercent: 0, enabled: true, ...over });
+const MIN_SOURCE_BAR = DEFAULT_SETTINGS.booster.minimumSourcePressureBar;
+// Hand-computed virtual source count for one gas, independent of js/bank-pricing.js sizing:
+//   needMoles    = calcMolarDensity(bankP, O2%, He%, 20 C, vdw) × volumeL × (that gas's percent / 100)
+//   perBankMoles = (calcMolarDensity(200 bar, pure gas) − calcMolarDensity(minSourceBar, pure gas)) × 200 L
+//   count        = ceil(2 × needMoles / perBankMoles), or 0 when needMoles is 0
+function gasCount(gas, { volumeL, pressureBar, oxygenPercent, heliumPercent }) {
+  const [pureO2, pureHe] = gas === 'O2' ? [100, 0] : [0, 100];
+  const percent = gas === 'O2' ? oxygenPercent : heliumPercent;
+  const needMoles = calcMolarDensity(pressureBar, oxygenPercent, heliumPercent, 20, true) * volumeL * percent / 100;
+  if (!(needMoles > 0)) return 0;
+  const perBankMoles = (calcMolarDensity(200, pureO2, pureHe, 20, true) - calcMolarDensity(MIN_SOURCE_BAR, pureO2, pureHe, 20, true)) * 200;
+  return Math.ceil(2 * needMoles / perBankMoles);
+}
 
 test('virtualBankCount is 0 for an absent gas and 2x margin otherwise', () => {
   assert.equal(virtualBankCount({ needMoles: 0, perBankMoles: 1000 }), 0);
@@ -158,6 +171,41 @@ for (const [label, composition] of [['O2', { oxygenPercent: 100, heliumPercent: 
       physics
     });
     assert.equal(raised.ok, true, raised.reason);
+    assert.equal(raised.sourceCount, 4, 'hand check: ceil(2 × need / perBank) = 4 for 200 L at 350 bar');
+    assert.equal(raised.sourceCount, gasCount(label, big));
     assert.ok(raised.exhaustedSources < raised.sourceCount, 'supply must not be the binding limit');
   });
 }
+
+test('12 L pure O2 at 150 bar needs one O2 virtual bank and no He banks', () => {
+  const b = bank();
+  const result = priceBankByRecipe({ bank: b, costs: costs(), settings: settingsWith(), physics });
+  assert.equal(result.ok, true, result.reason);
+  // needMoles ≈ 82.9 mol; perBank ≈ 1795 mol at the 5 bar minimum, so ceil(2 × 82.9 / 1795) = 1.
+  // A perBank computed with bank.volumeL (12 L) would give ceil(2 × 82.9 / 107.7) = 2.
+  assert.equal(result.sourceCount, 1);
+  assert.equal(gasCount('He', b), 0);
+  assert.equal(result.sourceCount, gasCount('O2', b));
+});
+
+test('pure He 200 L at 350 bar: sourceCount is the He count alone, 4 with a 350 bar booster', () => {
+  const b = bank({ oxygenPercent: 0, heliumPercent: 100, volumeL: 200, pressureBar: 350 });
+  const result = priceBankByRecipe({
+    bank: b,
+    costs: costs(),
+    settings: settingsWith(s => { s.booster.maxBoosterOutputPressureBar = 350; }),
+    physics
+  });
+  assert.equal(result.ok, true, result.reason);
+  assert.equal(gasCount('O2', b), 0);
+  assert.equal(result.sourceCount, gasCount('He', b));
+  assert.equal(result.sourceCount, 4);
+});
+
+test('Tx21/35 at 150 bar: sourceCount is the O2 count plus the He count', () => {
+  const b = bank({ oxygenPercent: 21, heliumPercent: 35, pressureBar: 150 });
+  const result = priceBankByRecipe({ bank: b, costs: costs(), settings: settingsWith(), physics });
+  assert.equal(result.ok, true, result.reason);
+  assert.ok(gasCount('O2', b) > 0 && gasCount('He', b) > 0);
+  assert.equal(result.sourceCount, gasCount('O2', b) + gasCount('He', b));
+});
