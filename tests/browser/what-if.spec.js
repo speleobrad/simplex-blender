@@ -183,6 +183,27 @@ async function warningSettings(page) {
     await page.locator('#screen-what-if [data-action="copy-what-if-from-blending"]:visible').evaluate(button => button.click());
     for (const [field, value] of Object.entries(values)) await expect(page.locator(`#screen-what-if [data-what-if-field="${field}"]:visible`)).toHaveValue(value);
   });
+  test('shows What-if tank submersion only for Water, copies it from Blending, and changes the result', async ({ appPage }) => {
+    const page = await load(appPage);
+    await page.locator('#cooling-medium').selectOption('water');
+    await page.locator('#water-submersion').selectOption('40');
+    await openWhatIf(page);
+    const field = page.locator('#screen-what-if [data-what-if-field="waterSubmersionPercent"]:visible');
+    await page.locator('#screen-what-if [data-action="copy-what-if-from-blending"]:visible').evaluate(button => button.click());
+    await expect(field).toHaveValue('40');
+    const medium = page.locator('#screen-what-if [data-what-if-field="coolingMedium"]:visible');
+    await medium.selectOption('air');
+    await expect(field).toHaveCount(0);
+    await medium.selectOption('water');
+    await expect(field).toHaveValue('40');
+    const hot = page.locator('#what-if-result-host [data-result-key="res-hot-temperature"]');
+    await field.selectOption('80');
+    const wet = await hot.first().innerText();
+    await field.selectOption('20');
+    await expect(hot.first()).not.toHaveText(wet);
+    await expect(page.locator('#cooling-medium')).toHaveValue('water');
+    await expect(page.locator('#water-submersion')).toHaveValue('40');
+  });
 
   test('runs drain, add-gas, and an automatic wait and exposes every result panel', async ({ appPage }) => {
     const page = await load(appPage);

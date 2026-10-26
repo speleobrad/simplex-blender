@@ -16,12 +16,12 @@ import {
 const blendingInput = {
   cylinder: { presetName: 'Catalina S80', volumeL: 11.1, workingPressureBar: 207, hotOverfillPercent: 2, initialPressureBar: 50, initialOxygenPercent: 21, initialHeliumPercent: 0, targetPressureBar: 200, targetOxygenPercent: 18, targetHeliumPercent: 45 },
   physics: { model: 'vdw', temperatureC: 25 },
-  thermal: { tankMaterial: 'aluminum', tankMassKg: 14.3, coolingMedium: 'water', ambientTemperatureC: 25, targetInWaterTemperatureC: 10, inletTemperatureC: 25, waitMode: 'minutes', waitMinutes: 7 }
+  thermal: { tankMaterial: 'aluminum', tankMassKg: 14.3, coolingMedium: 'water', waterSubmersionPercent: 40, ambientTemperatureC: 25, targetInWaterTemperatureC: 10, inletTemperatureC: 25, waitMode: 'minutes', waitMinutes: 7 }
 };
 
 test('snapshots only What-if starting fields and omits all targets', () => {
   const start = snapshotWhatIfFromBlending(blendingInput);
-  assert.deepEqual(start, { pressureBar: 50, oxygenPercent: 21, heliumPercent: 0, ambientTemperatureC: 25, cylinderPresetName: 'Catalina S80', coolingMedium: 'water', inWaterTemperatureC: 10 });
+  assert.deepEqual(start, { pressureBar: 50, oxygenPercent: 21, heliumPercent: 0, ambientTemperatureC: 25, cylinderPresetName: 'Catalina S80', coolingMedium: 'water', waterSubmersionPercent: 40, inWaterTemperatureC: 10 });
   assert.equal('targetPressureBar' in start, false);
   assert.equal('targetOxygenPercent' in start, false);
 });
@@ -44,7 +44,7 @@ test('scenario input resolves the selected shared cylinder but retains independe
   const scenario = { ...createWhatIfScenario(), initialized: true, start: { ...snapshotWhatIfFromBlending(blendingInput), pressureBar: 80 } };
   const settings = { physics: { model: 'ideal' }, cylinderPresets: [{ name: 'Catalina S80', volumeL: 11.1, material: 'aluminum', massKg: 14.3, workingPressureBar: 207, hotOverfillPercent: 2 }] };
   const input = buildWhatIfInput(scenario, { settings, banks: [], inletTemperatureC: 33 });
-  assert.equal(input.cylinder.initialPressureBar, 80); assert.equal(input.cylinder.targetPressureBar, undefined); assert.equal(input.thermal.targetInWaterTemperatureC, undefined); assert.equal(input.thermal.inWaterTemperatureC, 10); assert.equal(input.thermal.inletTemperatureC, 33); assert.equal(input.thermal.waitMinutes, undefined);
+  assert.equal(input.cylinder.initialPressureBar, 80); assert.equal(input.cylinder.targetPressureBar, undefined); assert.equal(input.thermal.targetInWaterTemperatureC, undefined); assert.equal(input.thermal.inWaterTemperatureC, 10); assert.equal(input.thermal.waterSubmersionPercent, 40); assert.equal(input.thermal.inletTemperatureC, 33); assert.equal(input.thermal.waitMinutes, undefined);
 });
 test('in-water projection uses the explicit scenario temperature', () => {
   const projection = projectWhatIfInWater({ pressureBar: 200, temperatureC: 25, oxygenPercent: 18, heliumPercent: 45 }, { inWaterTemperatureC: 10, volumeL: 11.1, useVdw: false });

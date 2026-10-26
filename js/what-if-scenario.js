@@ -1,7 +1,7 @@
 import { createCompareRow } from './compare-recipe.js';
 import { calculatePressureAtTemperature } from './thermodynamics.js';
 
-const START_FIELDS = ['pressureBar', 'oxygenPercent', 'heliumPercent', 'ambientTemperatureC', 'cylinderPresetName', 'coolingMedium', 'inWaterTemperatureC'];
+const START_FIELDS = ['pressureBar', 'oxygenPercent', 'heliumPercent', 'ambientTemperatureC', 'cylinderPresetName', 'coolingMedium', 'waterSubmersionPercent', 'inWaterTemperatureC'];
 const clone = value => value === undefined ? undefined : JSON.parse(JSON.stringify(value));
 function stable(value) {
   if (Array.isArray(value)) return `[${value.map(stable).join(',')}]`;
@@ -33,6 +33,7 @@ export function snapshotWhatIfFromBlending(input) {
     ambientTemperatureC: thermal.ambientTemperatureC,
     cylinderPresetName: cylinder.presetName,
     coolingMedium: thermal.coolingMedium,
+    waterSubmersionPercent: thermal.waterSubmersionPercent,
     inWaterTemperatureC: thermal.targetInWaterTemperatureC
   };
 }
@@ -69,7 +70,7 @@ export function buildWhatIfInput(scenario, { settings, banks, inletTemperatureC 
   return {
     cylinder,
     physics: { model: sharedPhysics.model ?? 'ideal', temperatureC: start.ambientTemperatureC },
-    thermal: { tankMaterial: preset.material, tankMassKg: preset.massKg, coolingMedium: start.coolingMedium, ambientTemperatureC: start.ambientTemperatureC, inletTemperatureC: sharedInletTemperatureC, inWaterTemperatureC: start.inWaterTemperatureC },
+    thermal: { tankMaterial: preset.material, tankMassKg: preset.massKg, coolingMedium: start.coolingMedium, waterSubmersionPercent: start.waterSubmersionPercent, ambientTemperatureC: start.ambientTemperatureC, inletTemperatureC: sharedInletTemperatureC, inWaterTemperatureC: start.inWaterTemperatureC },
     banks: clone(banks ?? []),
     settings: clone(settings)
   };

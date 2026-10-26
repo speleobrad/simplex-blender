@@ -1,11 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  DEFAULT_WATER_SUBMERSION_PERCENT,
+  WATER_SUBMERSION_PERCENT_OPTIONS,
   calculateBoosterFillRate,
   calculateCompressorFillRate,
   calculateCoolingTime,
   calculatePressureAtTemperature,
   calculateTemperatureAfterWait,
+  coolingTimeConstantMinutes,
   estimateTransferTemperature,
   projectPressureAtTemperatures,
   simulateCompareProtocol,
@@ -1162,4 +1165,74 @@ test('equal target medium and ambient produces finite convergence', () => {
   });
   assert.ok(Number.isFinite(simulation.protocolSteps[0].thermal.waitMinutes));
   assert.equal(simulation.protocolSteps[0].thermal.temperatureAfterWaitC, 20);
+});
+
+test('water submersion options are 20% steps up to 80% with a 60% default', () => {
+  assert.deepEqual([...WATER_SUBMERSION_PERCENT_OPTIONS], [20, 40, 60, 80]);
+  assert.equal(DEFAULT_WATER_SUBMERSION_PERCENT, 60);
+});
+
+test('cooling time constant falls strictly between air and full-water values as submersion grows', () => {
+  for (const material of ['steel', 'aluminum']) {
+    const air = coolingTimeConstantMinutes(material, 'air');
+    const fullWater = material === 'steel' ? 3.5 : 5;
+    let previous = air;
+    for (const percent of WATER_SUBMERSION_PERCENT_OPTIONS) {
+      const tau = coolingTimeConstantMinutes(material, 'water', percent);
+      assert.ok(tau < previous, `${material} ${percent}% must cool faster than the previous step`);
+      assert.ok(tau > fullWater, `${material} ${percent}% must be slower than full submersion`);
+      previous = tau;
+    }
+  }
+});
+
+test('cooling time constant combines wet and dry conductances in parallel', () => {
+  const expected = 1 / (0.6 / 3.5 + 0.4 / 18);
+  assert.ok(Math.abs(coolingTimeConstantMinutes('steel', 'water', 60) - expected) < 1e-12);
+});
+
+test('submersion percentage never changes the air path', () => {
+  for (const percent of [20, 60, 80, undefined]) {
+    assert.equal(coolingTimeConstantMinutes('steel', 'air', percent), 18);
+    assert.equal(coolingTimeConstantMinutes('aluminum', 'air', percent), 25);
+  }
+  const transfer = coolingMedium => waterSubmersionPercent => estimateTransferTemperature({
+    startTemperatureC: 20, addedPressureBar: 100, fillTimeMinutes: 10, volumeL: 12,
+    heliumFraction: 0, tankMaterial: 'steel', coolingMedium, waterSubmersionPercent
+  });
+  assert.equal(transfer('air')(20), transfer('air')(80));
+  assert.equal(transfer('air')(20), transfer('air')(undefined));
+});
+
+test('lower submersion leaves the tank hotter after a transfer and monotonic in percentage', () => {
+  const transfer = waterSubmersionPercent => estimateTransferTemperature({
+    startTemperatureC: 20, addedPressureBar: 150, fillTimeMinutes: 10, volumeL: 12,
+    heliumFraction: 0, tankMaterial: 'steel', coolingMedium: 'water', waterSubmersionPercent
+  });
+  const air = estimateTransferTemperature({
+    startTemperatureC: 20, addedPressureBar: 150, fillTimeMinutes: 10, volumeL: 12,
+    heliumFraction: 0, tankMaterial: 'steel', coolingMedium: 'air'
+  });
+  let previous = air;
+  for (const percent of WATER_SUBMERSION_PERCENT_OPTIONS) {
+    const end = transfer(percent);
+    assert.ok(end < previous, `${percent}% must end cooler than the previous step`);
+    previous = end;
+  }
+  assert.equal(transfer(undefined), transfer(DEFAULT_WATER_SUBMERSION_PERCENT));
+});
+
+test('final ambient-settle wait lengthens as submersion drops and uses the parallel time constant', () => {
+  const settle = waterSubmersionPercent => simulateThermalProtocol({
+    protocolSteps: [
+      { type: 'boost', operation: 'Boost', receiverStartPressureBar: 50, receiverEndPressureBar: 150, resultingPressureBar: 150, resultingMix: { oxygenPercent: 21, heliumPercent: 0 }, sourceOxygenPercent: 21, sourceHeliumPercent: 0, sourcePressureBar: 200 }
+    ],
+    cylinder: { initialPressureBar: 50, volumeL: 12 },
+    physics: { model: 'ideal', temperatureC: 20 },
+    thermal: { tankMaterial: 'steel', coolingMedium: 'water', waterSubmersionPercent, ambientTemperatureC: 20, inletTemperatureC: 20, waitMode: 'minutes', waitMinutes: 0 },
+    settings: { booster: { otherBoostBpm: 50 } }
+  }).protocolSteps.at(-1).thermal.waitMinutes;
+  assert.ok(settle(60) > settle(80));
+  assert.ok(settle(20) > settle(60));
+  assert.ok(Math.abs(settle(60) - 4.6 * coolingTimeConstantMinutes('steel', 'water', 60)) < 1e-9);
 });

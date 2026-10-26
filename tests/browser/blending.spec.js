@@ -32,6 +32,23 @@ test.describe('working tank blending inputs', () => {
     await expect(page.locator('#target-o2')).toHaveValue(/^18(\.0+)?$/);
     await expect(page.locator('#target-he')).toHaveValue(/^45(\.0+)?$/);
   });
+  test('shows tank submersion only for water and lower submersion leaves a hotter mix', async ({ appPage }) => {
+    const page = await load(appPage);
+    const submersion = page.locator('#water-submersion');
+    const hotTemperature = page.locator('[data-result-host="blending"] [data-result-key="res-hot-temperature"]');
+    await expect(submersion).toBeHidden();
+    await page.locator('#cooling-medium').selectOption('water');
+    await expect(submersion).toBeVisible();
+    await expect(submersion).toHaveValue('60');
+    await submersion.selectOption('80');
+    const wet = await hotTemperature.innerText();
+    await submersion.selectOption('20');
+    await expect(hotTemperature).not.toHaveText(wet);
+    const parse = text => Number.parseFloat(text.replace(/[^0-9.\-]/g, ''));
+    expect(parse(await hotTemperature.innerText())).toBeGreaterThan(parse(wet));
+    await page.locator('#cooling-medium').selectOption('air');
+    await expect(submersion).toBeHidden();
+  });
   test('selects gas presets and edits custom oxygen/helium values', async ({ appPage }) => {
     const page = await load(appPage);
     const preset = page.locator('#target-gas-preset option').filter({ hasText: 'Tx 18/45' }).first();

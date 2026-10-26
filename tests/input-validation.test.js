@@ -124,6 +124,24 @@ test('rejects target-medium below ambient regardless of cooling medium', () => {
   assert.match(errors.join(' '), /target-medium temperature cannot be below ambient/i);
 });
 
+test('accepts only 20% steps up to 80% for water submersion and ignores it for air', () => {
+  const run = (coolingMedium, waterSubmersionPercent) => validateCalculatorInputs(
+    { volumeL: 12, initialPressureBar: 50, targetPressureBar: 200 },
+    { temperatureC: 25 },
+    {
+      tankMaterial: 'steel', coolingMedium, waterSubmersionPercent, ambientTemperatureC: 25,
+      inletTemperatureC: 25, targetMediumTemperatureC: 25, targetInWaterTemperatureC: 15,
+      waitMode: 'minutes', waitMinutes: 10
+    }
+  );
+  for (const percent of [20, 40, 60, 80, undefined]) assert.deepEqual(run('water', percent), []);
+  for (const percent of [0, 10, 50, 70, 100, 'abc', null]) {
+    assert.match(run('water', percent).join(' '), /submersion.*20, 40, 60, or 80/i);
+  }
+  assert.deepEqual(run('air', 100), []);
+  assert.deepEqual(run('air', undefined), []);
+});
+
 test('rejects a settled temperature below ambient for air cooling', () => {
   const errors = validateCalculatorInputs(
     { volumeL: 12, initialPressureBar: 50, targetPressureBar: 200 },

@@ -415,6 +415,15 @@
                 <option value="water">Water</option>
               </select>
             </div>
+            <div id="water-submersion-field" hidden>
+              <label for="water-submersion" class="mb-1 block text-slate-400 font-medium">Tank submerged</label>
+              <select id="water-submersion" data-recalculate="change" class="w-40 rounded-lg border border-ocean-700 bg-ocean-900 px-2.5 py-1.5 text-slate-100 focus:border-cyan-400 focus:outline-none">
+                <option value="20">20%</option>
+                <option value="40">40%</option>
+                <option value="60" selected>60%</option>
+                <option value="80">80%</option>
+              </select>
+            </div>
             <div>
               <label for="wait-mode" class="mb-1 block text-slate-400 font-medium">Wait between fills</label>
               <select id="wait-mode" data-recalculate="change" class="w-40 rounded-lg border border-ocean-700 bg-ocean-900 px-2.5 py-1.5 text-slate-100 focus:border-cyan-400 focus:outline-none">

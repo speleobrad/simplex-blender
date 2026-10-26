@@ -199,6 +199,18 @@ export function projectPressureAtTemperatures({
   }));
 }
 
+export const WATER_SUBMERSION_PERCENT_OPTIONS = Object.freeze([20, 40, 60, 80]);
+export const DEFAULT_WATER_SUBMERSION_PERCENT = 60;
+const HEAT_TRANSFER_AIR_W_PER_M2K = 12;
+const HEAT_TRANSFER_WATER_W_PER_M2K = 250;
+
+// Wet and dry surface areas exchange heat in parallel, so conductance (and 1/tau)
+// is linear in the wetted fraction while temperature responses are not.
+function wetSurfaceFraction(waterSubmersionPercent) {
+  const percent = waterSubmersionPercent ?? DEFAULT_WATER_SUBMERSION_PERCENT;
+  return Math.min(100, Math.max(0, Number(percent) || 0)) / 100;
+}
+
 function estimateTransferTemperatureSamples({
   startTemperatureC,
   startPressureBar = 0,
@@ -209,6 +221,7 @@ function estimateTransferTemperatureSamples({
   oxygenFraction = 0.21,
   tankMaterial,
   coolingMedium,
+  waterSubmersionPercent,
   tankMassKg: configuredTankMassKg,
   ambientTemperatureC = startTemperatureC,
   inletTemperatureC = ambientTemperatureC
@@ -239,7 +252,11 @@ function estimateTransferTemperatureSamples({
   const tankMassKg = Math.max(0.1, Number(configuredTankMassKg) || defaultTankMassKg);
   const metalSpecificHeat = isSteel ? 490 : 900;
   const areaM2 = isSteel ? 0.45 : 0.48;
-  const heatTransferCoefficient = coolingMedium === 'water' ? 250 : 12;
+  const wetFraction = wetSurfaceFraction(waterSubmersionPercent);
+  const heatTransferCoefficient = coolingMedium === 'water'
+    ? wetFraction * HEAT_TRANSFER_WATER_W_PER_M2K
+      + (1 - wetFraction) * HEAT_TRANSFER_AIR_W_PER_M2K
+    : HEAT_TRANSFER_AIR_W_PER_M2K;
   const heatTransferArea = heatTransferCoefficient * areaM2;
   const volumeM3 = tankVolumeL * 0.001;
   const initialPressureBar = Math.max(0, Number(startPressureBar) || 0);
@@ -299,6 +316,7 @@ export function estimateTransferTemperature({
   oxygenFraction = 0.21,
   tankMaterial,
   coolingMedium,
+  waterSubmersionPercent,
   tankMassKg: configuredTankMassKg,
   ambientTemperatureC = startTemperatureC,
   inletTemperatureC = ambientTemperatureC
@@ -313,6 +331,7 @@ export function estimateTransferTemperature({
     oxygenFraction,
     tankMaterial,
     coolingMedium,
+    waterSubmersionPercent,
     tankMassKg: configuredTankMassKg,
     ambientTemperatureC,
     inletTemperatureC
@@ -331,9 +350,16 @@ const DEFAULT_BOOSTER_SETTINGS = {
   compressorTemperatureModifierC: 0
 };
 
-export function coolingTimeConstantMinutes(tankMaterial, coolingMedium) {
-  if (coolingMedium === 'water') return tankMaterial === 'aluminum' ? 5 : 3.5;
-  return tankMaterial === 'aluminum' ? 25 : 18;
+export function coolingTimeConstantMinutes(
+  tankMaterial,
+  coolingMedium,
+  waterSubmersionPercent = DEFAULT_WATER_SUBMERSION_PERCENT
+) {
+  const airTauMinutes = tankMaterial === 'aluminum' ? 25 : 18;
+  if (coolingMedium !== 'water') return airTauMinutes;
+  const waterTauMinutes = tankMaterial === 'aluminum' ? 5 : 3.5;
+  const wetFraction = wetSurfaceFraction(waterSubmersionPercent);
+  return 1 / (wetFraction / waterTauMinutes + (1 - wetFraction) / airTauMinutes);
 }
 
 function thermalBoosterSettings(settings) {
@@ -585,7 +611,7 @@ function buildThermalStepSamples({
           waitMinutes: elapsedMinutes,
           tauMinutes: Number.isFinite(tauMinutes)
             ? tauMinutes
-            : coolingTimeConstantMinutes(thermal.tankMaterial, thermal.coolingMedium)
+            : coolingTimeConstantMinutes(thermal.tankMaterial, thermal.coolingMedium, thermal.waterSubmersionPercent)
         });
     const pressureBar = elapsedMinutes >= waitMinutes
       ? pressureAfterWaitBar
@@ -642,7 +668,7 @@ export function simulateThermalProtocol({
   settings
 }) {
   const booster = thermalBoosterSettings(settings);
-  const tauMinutes = coolingTimeConstantMinutes(thermal.tankMaterial, thermal.coolingMedium);
+  const tauMinutes = coolingTimeConstantMinutes(thermal.tankMaterial, thermal.coolingMedium, thermal.waterSubmersionPercent);
   const finalSettledTemperatureC = thermal.ambientTemperatureC;
   const intermediateTargetTemperatureC = thermal.targetMediumTemperatureC
     ?? thermal.targetTemperatureC;
@@ -770,6 +796,7 @@ export function simulateThermalProtocol({
         oxygenFraction: (step.sourceOxygenPercent ?? receiverMix.oxygenPercent) / 100,
         tankMaterial: thermal.tankMaterial,
         coolingMedium: thermal.coolingMedium,
+        waterSubmersionPercent: thermal.waterSubmersionPercent,
         tankMassKg: thermal.tankMassKg,
         ambientTemperatureC: thermal.ambientTemperatureC,
         inletTemperatureC
@@ -947,7 +974,7 @@ export function simulateCompareProtocol({
   settings
 }) {
   const booster = thermalBoosterSettings(settings);
-  const tauMinutes = coolingTimeConstantMinutes(thermal.tankMaterial, thermal.coolingMedium);
+  const tauMinutes = coolingTimeConstantMinutes(thermal.tankMaterial, thermal.coolingMedium, thermal.waterSubmersionPercent);
   const useVdw = physics.model === 'vdw';
   let currentPressureBar = Math.max(0, cylinder.initialPressureBar
     ?? protocolSteps[0]?.receiverStartPressureBar
@@ -1032,6 +1059,7 @@ export function simulateCompareProtocol({
           oxygenFraction: (step.sourceOxygenPercent ?? receiverMix.oxygenPercent) / 100,
           tankMaterial: thermal.tankMaterial,
           coolingMedium: thermal.coolingMedium,
+          waterSubmersionPercent: thermal.waterSubmersionPercent,
           tankMassKg: thermal.tankMassKg,
           ambientTemperatureC: thermal.ambientTemperatureC,
           inletTemperatureC

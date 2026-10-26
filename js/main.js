@@ -832,6 +832,7 @@ function cancelSettings() {
         : null
     );
     updateWaitModeFields();
+    updateWaterSubmersionField();
     recalculate();
   }
   state.settingsBeforeDraft = null;
@@ -846,6 +847,10 @@ function updateWaitModeFields() {
   const isMinutesMode = byId('wait-mode').value === 'minutes';
   byId('wait-minutes-field').hidden = !isMinutesMode;
   byId('wait-target-temperature-field').hidden = isMinutesMode;
+}
+
+function updateWaterSubmersionField() {
+  byId('water-submersion-field').hidden = byId('cooling-medium').value !== 'water';
 }
 
 
@@ -872,6 +877,7 @@ function readInput() {
       tankMaterial: cylinderPreset.material,
       tankMassKg: cylinderPreset.massKg,
       coolingMedium: byId('cooling-medium').value,
+      waterSubmersionPercent: Number.parseInt(byId('water-submersion').value, 10),
       ambientTemperatureC: canonicalNumberValue('ambient-temperature', 'temperatureC'),
       targetInWaterTemperatureC: canonicalNumberValue('target-temperature', 'temperatureC'),
       targetMediumTemperatureC: canonicalNumberValue('wait-target-temperature', 'temperatureC'),
@@ -1400,6 +1406,8 @@ function scenarioSharedInputErrors(input) {
           ? 'inWaterTemperatureC'
           : message.startsWith('Thermal cooling medium')
             ? 'coolingMedium'
+            : message.startsWith('Thermal water submersion')
+              ? 'waterSubmersionPercent'
             : null;
     if (field) errors.push(scenarioError(field, message));
     else errors.push(scenarioError('scenario', message));
@@ -1787,6 +1795,8 @@ function updateWhatIfField(input, rerender) {
     );
   } else if (['oxygenPercent', 'heliumPercent'].includes(field)) {
     value = Number.parseFloat(value);
+  } else if (field === 'waterSubmersionPercent') {
+    value = Number.parseInt(value, 10);
   }
   state.whatIfScenario = applyWhatIfStartPatch(state.whatIfScenario, { [field]: value });
   state.whatIfErrors = [];
@@ -1949,6 +1959,7 @@ function handleInputOrChange(event) {
     }
     markGasPresetCustom(target);
     if (target.id === 'wait-mode') updateWaitModeFields();
+    if (target.id === 'cooling-medium') updateWaterSubmersionField();
     recalculate();
     return;
   }
@@ -2247,6 +2258,7 @@ function initialize() {
   updateStorageWarning();
   refreshPresetOptions();
   updateWaitModeFields();
+  updateWaterSubmersionField();
   observeTernaryCanvas(document.querySelector('[data-result-host="blending"] [data-result-key="ternary-canvas"]'), renderTernary);
   const whatIfResultRoot = byId('what-if-result-host')?.querySelector?.('[data-result-panel]')
     ?? byId('what-if-result-host');

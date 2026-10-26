@@ -590,7 +590,8 @@ function splitTransferAtSafeHotEndpoint({
       ?? ambientTemperatureC;
     const tauMinutes = coolingTimeConstantMinutes(
       options.thermal.tankMaterial,
-      options.thermal.coolingMedium
+      options.thermal.coolingMedium,
+      options.thermal.waterSubmersionPercent
     );
     const splitWaitMinutes = Math.abs(targetTemperatureC - ambientTemperatureC) < 1e-9
       ? 4.6 * tauMinutes

@@ -59,6 +59,7 @@ Gas percentage fields accept decimal text input and are paired for gas validatio
 
 - **Cylinder** selector. The rating hint reports that volume, material, mass, and working pressure come from the selected cylinder preset.
 - **Surrounding medium**: Air or Water. It affects transfer heating/cooling behavior and the cooling time constant; ordinary waits converge to ambient.
+- **Tank submerged** (visible only for Water): 20%, 40%, 60% (default), or 80% of the tank surface in the water bath; the rest, including the valve area, is exposed to air. Wet and dry areas exchange heat in parallel, so heat-transfer conductance and 1/τ are linear in the submerged fraction while temperatures are not: a tank at 50% would not land halfway between dry and fully submerged results. Water and the air above it share the ambient temperature; bath warm-up during a fill is not modeled. Lower submersion leaves the tank hotter after a transfer and cools it more slowly. Full (100%) submersion is not selectable.
 - **Ambient temperature** in the CURRENT panel. This is the mixing temperature and the temperature ordinary cooling waits converge toward, for both air and water.
 - **Target pressure** is requested at the **target in-water temperature**, not at ambient. The target in-water temperature is independent and may be colder than ambient.
 - **Target in-water temperature** in the TARGET panel. The optimizer converts the requested in-water pressure to its equivalent ambient-settled target, then projects the completed result back to this temperature.

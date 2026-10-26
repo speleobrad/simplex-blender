@@ -1,5 +1,6 @@
 import { convertToDisplay, formatInputValue, unitLabel } from '../units.js';
 import { renderCompareRecipe } from './compare-recipe.js';
+import { DEFAULT_WATER_SUBMERSION_PERCENT, WATER_SUBMERSION_PERCENT_OPTIONS } from '../thermodynamics.js';
 
 const inputClass = 'w-full min-w-0 bg-ocean-900 border border-ocean-700 rounded px-2 py-1 font-mono text-slate-100 text-xs';
 const selectClass = 'w-full min-w-0 bg-ocean-900 border border-ocean-700 rounded px-2 py-1 text-xs text-slate-200';
@@ -131,9 +132,13 @@ function renderScenarioStart(container, { scenario = {}, cylinderPresets = [], g
   const medium = el('select', { class: selectClass, 'data-what-if-field': 'coolingMedium' });
   for (const value of ['air', 'water']) medium.append(el('option', { value, selected: value === start.coolingMedium ? '' : undefined }, value === 'air' ? 'Air' : 'Water'));
   const inWater = fieldInput('inWaterTemperatureC', start, units, errors, { quantity: 'temperatureC' });
+  const submersion = el('select', { class: selectClass, 'data-what-if-field': 'waterSubmersionPercent' });
+  const selectedSubmersion = start.waterSubmersionPercent ?? DEFAULT_WATER_SUBMERSION_PERCENT;
+  for (const value of WATER_SUBMERSION_PERCENT_OPTIONS) submersion.append(el('option', { value: String(value), selected: value === selectedSubmersion ? '' : undefined }, `${value}%`));
   scenarioGrid.append(
     copyWrap,
     renderScenarioControl('coolingMedium', 'Surrounding medium', medium, units, errors),
+    ...(start.coolingMedium === 'water' ? [renderScenarioControl('waterSubmersionPercent', 'Tank submerged', submersion, units, errors)] : []),
     renderScenarioControl('inWaterTemperatureC', 'Target in-water temperature', inWater, units, errors, 'temperatureC')
   );
   scenarioCard.append(scenarioGrid);
