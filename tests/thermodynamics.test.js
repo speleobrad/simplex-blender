@@ -921,6 +921,28 @@ test('compare simulation maps drain, decant, boost, and compressor transfer rate
   assert.equal(compressor.rateSource, 'compressor');
   assert.ok(compressor.rateBarPerMin > 0);
 });
+test('compare simulation preserves cost operation fields through equalize and compressor rewrites', () => {
+  const result = simulateCompareProtocol({
+    protocolSteps: [
+      { type: 'equalize', method: 'decant', operation: 'Equalize', receiverEndPressureBar: 100, resultingPressureBar: 100, resultingMix: { oxygenPercent: 21, heliumPercent: 0 }, sourceOxygenPercent: 21, sourceHeliumPercent: 0, costOperation: 'equalize', costOperationId: 'op-1', sourceConsumedMoles: 0.5 },
+      { type: 'add', method: 'compressor', operation: 'Top-up', receiverEndPressureBar: 120, resultingPressureBar: 120, resultingMix: { oxygenPercent: 21, heliumPercent: 0 }, sourceOxygenPercent: 21, sourceHeliumPercent: 0, costOperation: 'topUp', costOperationId: 'op-2', sourceConsumedMoles: 0.75 }
+    ],
+    cylinder: { initialPressureBar: 80, volumeL: 12 },
+    physics: { model: 'ideal', temperatureC: 40 },
+    thermal: { tankMaterial: 'steel', coolingMedium: 'air', ambientTemperatureC: 20, inletTemperatureC: 20 },
+    settings: { booster: { cylinderVolumeCm3: 9, otherBoostBpm: 50, otherDecantRateBarPerMin: 5, drainingRateBarPerMin: 10, compressorInletFlowLPerMin: 100 } }
+  });
+
+  const [equalize, compressor] = result.protocolSteps;
+  assert.equal(equalize.thermal.rateSource, 'decant-rate');
+  assert.equal(equalize.costOperation, 'equalize');
+  assert.equal(equalize.costOperationId, 'op-1');
+  assert.equal(equalize.sourceConsumedMoles, 0.5);
+  assert.equal(compressor.thermal.rateSource, 'compressor');
+  assert.equal(compressor.costOperation, 'topUp');
+  assert.equal(compressor.costOperationId, 'op-2');
+  assert.equal(compressor.sourceConsumedMoles, 0.75);
+});
 test('compare transfer samples retain reference, ambient, and hot endpoint identities', () => {
   const result = simulateCompareProtocol({
     protocolSteps: [{

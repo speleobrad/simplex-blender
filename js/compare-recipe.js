@@ -526,6 +526,9 @@ function plannedCompressorStep(row, receiverStart, receiverEnd) {
   };
 }
 
+function withCostFields(step, costOperation, sourceConsumedMoles, costOperationId) {
+  return { ...step, costOperation, sourceConsumedMoles, costOperationId };
+}
 
 function passiveStep(row, receiver) {
   const operation = row.type === 'wait' ? 'Wait' : row.type === 'drain' ? 'Drain' : 'Keep';
@@ -673,6 +676,8 @@ export function buildCompareProtocol(rows, { cylinder, physics, banks = [], sett
     ? moles * (heliumPercent / 100)
     : 0;
   const protocolSteps = [];
+  let costOperationCounter = 0;
+  const nextCostOperationId = () => `op-${++costOperationCounter}`;
   const sourceSummaries = new Map();
   const recordCompressorSummary = (sourceBank) => {
     if (!sourceSummaries.has(sourceBank.id)) {
@@ -790,7 +795,7 @@ export function buildCompareProtocol(rows, { cylinder, physics, banks = [], sett
       );
       receiverFinal.pressureBar = targetPressureBar;
 
-      const step = plannedCompressorStep(row, receiverStart, receiverFinal);
+      const step = withCostFields(plannedCompressorStep(row, receiverStart, receiverFinal), 'topUp', requiredMoles, nextCostOperationId());
       protocolSteps.push(step);
       trajectoryStep = addTrajectoryPoint(trajectory, step, trajectoryStep);
       receiver = receiverFinal;
@@ -834,7 +839,7 @@ export function buildCompareProtocol(rows, { cylinder, physics, banks = [], sett
     recordFiniteSummary(sourceBank, sourceStart, sourceFinal);
 
     if (sourceFinal.pressureBar >= targetPressureBar - PRESSURE_TOLERANCE_BAR) {
-      const step = plannedTransferStep(
+      const step = withCostFields(plannedTransferStep(
         'decant',
         row,
         sourceStart,
@@ -845,7 +850,7 @@ export function buildCompareProtocol(rows, { cylinder, physics, banks = [], sett
         volumeL,
         temperatureC,
         useVdw
-      );
+      ), 'decant', requiredMoles, nextCostOperationId());
       protocolSteps.push(step);
       trajectoryStep = addTrajectoryPoint(trajectory, step, trajectoryStep);
     } else {
@@ -880,7 +885,7 @@ export function buildCompareProtocol(rows, { cylinder, physics, banks = [], sett
           useVdw
         );
         receiverEqualized.pressureBar = sourceEqualized.pressureBar;
-        const equalizeStep = plannedTransferStep(
+        const equalizeStep = withCostFields(plannedTransferStep(
           'equalize',
           row,
           sourceStart,
@@ -891,10 +896,10 @@ export function buildCompareProtocol(rows, { cylinder, physics, banks = [], sett
           volumeL,
           temperatureC,
           useVdw
-        );
+        ), 'equalize', equalizationMoles, nextCostOperationId());
         protocolSteps.push(equalizeStep);
         trajectoryStep = addTrajectoryPoint(trajectory, equalizeStep, trajectoryStep);
-        const boostStep = plannedTransferStep(
+        const boostStep = withCostFields(plannedTransferStep(
           'boost',
           row,
           sourceEqualized,
@@ -905,11 +910,11 @@ export function buildCompareProtocol(rows, { cylinder, physics, banks = [], sett
           volumeL,
           temperatureC,
           useVdw
-        );
+        ), 'boost', requiredMoles - equalizationMoles, nextCostOperationId());
         protocolSteps.push(boostStep);
         trajectoryStep = addTrajectoryPoint(trajectory, boostStep, trajectoryStep);
       } else {
-        const boostStep = plannedTransferStep(
+        const boostStep = withCostFields(plannedTransferStep(
           'boost',
           row,
           sourceStart,
@@ -920,7 +925,7 @@ export function buildCompareProtocol(rows, { cylinder, physics, banks = [], sett
           volumeL,
           temperatureC,
           useVdw
-        );
+        ), 'boost', requiredMoles, nextCostOperationId());
         protocolSteps.push(boostStep);
         trajectoryStep = addTrajectoryPoint(trajectory, boostStep, trajectoryStep);
       }
