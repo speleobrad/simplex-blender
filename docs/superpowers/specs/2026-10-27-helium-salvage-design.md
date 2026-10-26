@@ -13,7 +13,7 @@ When the Optimize recipe must drain the working tank, decide whether the surplus
 ## Approved decisions
 
 - **Receivers:** any enabled bank that is not a pure gas (not 100% O₂, not 100% He) and has a `maxPressureBar`. There is no scrap flag.
-- **New bank field:** `maxPressureBar` (1–350 bar, at least the bank's current `pressureBar`). Existing banks without it migrate to 200 bar (the booster max-output default). The default Sample scrap bank ships with 200. The field is editable in Inventory.
+- **New bank field:** `maxPressureBar` (1–350 bar, at least the bank's current `pressureBar`). Existing banks without it migrate to `Math.max(200, pressureBar)`, where 200 is the booster max-output default, so a stored bank above 200 bar stays valid. A bank edit that lowers the max below the current pressure, or raises the pressure above the max, is rejected by the existing bank-edit validation path with a message. The default Sample scrap bank ships with 200. The field is editable in Inventory.
 - **Approach:** variant search with re-solve. Receiver and source may be the same bank; the planner models that case.
 - **Transfer:** the working tank is the source. Decant until pressures equalize, then the booster (allowed) down to the booster minimum source pressure.
 - **Prices:** independent constants `SALVAGE_HE_PRICE_PER_LITRE = 0.075` and `SALVAGE_O2_PRICE_PER_LITRE = 0.007` (virtual units per free-gas litre), defined in `js/salvage.js`. Salvage never reads Settings or the #3 cost data, so #3 stays display-only and unchanged.
