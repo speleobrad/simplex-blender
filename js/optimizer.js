@@ -2298,6 +2298,7 @@ function optimizeBlendWithoutThermal(input) {
         recipeLabel: `${operation} ${bank.name}`,
         recipeAction: operation,
         recipeGas: bank.name,
+        sourceBankId: bank.id,
         description: descriptionParts.join(' '),
         pressureDeltaBar: pressureDelta,
         pressureReferenceTemperatureC: temperatureC,
@@ -2524,6 +2525,11 @@ function thermalResult(candidate, requestedInWaterPressureBar = candidate.candid
   return {
     ...candidate.result,
     gas: candidate.result.gas && { ...candidate.result.gas, targetPressureBar: requestedInWaterPressureBar },
+    logicalPlan: candidate.result.logicalPlan ?? {
+      protocolSteps: candidate.result.protocolSteps,
+      trajectory: candidate.result.trajectory,
+      targetPressureBar: candidate.candidateInput.cylinder.targetPressureBar
+    },
     protocolSteps: candidate.simulation.protocolSteps,
     trajectory: trajectoryWithThermalEndpoints(
       candidate.result.trajectory,
@@ -2531,6 +2537,39 @@ function thermalResult(candidate, requestedInWaterPressureBar = candidate.candid
     ),
     thermal
   };
+}
+
+// Finalizes a plan whose logical steps were composed from several optimizer runs
+// (see plan-with-readings.js): one safety schedule and one thermal simulation run
+// over the merged steps, with every stored reading applied at its logical step.
+// `template` supplies the non-thermal result fields; returns null when the merged
+// protocol cannot be scheduled within the cylinder limits.
+export function finalizeComposedPlan({ input, template, protocolSteps, trajectory, targetPressureBar }) {
+  const candidateInput = {
+    ...input,
+    [INTERNAL_THERMAL_TARGET]: true,
+    _requestedInWaterPressureBar: input.cylinder.targetPressureBar,
+    _ambientSettledTargetPressureBar: normalizeInWaterTarget(input),
+    cylinder: { ...input.cylinder, targetPressureBar }
+  };
+  const scheduled = scheduleSafeThermalProtocol({
+    protocolSteps,
+    cylinder: candidateInput.cylinder,
+    physics: candidateInput.physics,
+    thermal: candidateInput.thermal,
+    settings: candidateInput.settings
+  });
+  if (scheduled.unsafe) return null;
+  return thermalResult({
+    candidateInput,
+    result: {
+      ...template,
+      protocolSteps,
+      trajectory,
+      logicalPlan: { protocolSteps, trajectory, targetPressureBar }
+    },
+    simulation: scheduled.simulation
+  });
 }
 
 function thermalizedMaximumResult(candidate, requestedInWaterPressureBar, requestedInWaterTemperatureC, ambientSettledTargetPressureBar) {

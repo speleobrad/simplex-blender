@@ -180,7 +180,7 @@ test.describe('working tank blending inputs', () => {
     await expect(page.locator('[data-result-host="blending"] [data-result-key="steps-container"]')).not.toContainText(/automatic wait: cylinder pressure limit/i);
     await expect(page.locator('[data-result-host="blending"] [data-result-key="steps-container"]')).not.toContainText(/recorded input/i);
   });
-  test('Warning mode accepts interim readings above hot overfill within the supported range', async ({ appPage }) => {
+  test('Warning mode still rejects interim readings outside the plan tolerance', async ({ appPage }) => {
     test.setTimeout(90_000);
     const page = await appPage.goto('settings');
     await configureWarningMode(page, { workingPressure: 100, hotOverfill: 0 });
@@ -192,14 +192,82 @@ test.describe('working tank blending inputs', () => {
     await form.locator('xpath=..').locator('summary').click();
     await expect(form).toBeVisible();
     const pressure = form.locator('[name="pressureBar"]');
-    await expect(pressure).toHaveAttribute('max', '350');
     await pressure.fill('103');
     await form.locator('[name="temperatureC"]').fill('40');
     await form.locator('[data-action="apply-interim-measurement"]').click();
 
-    await expect(page.locator('[data-result-host="blending"] [data-result-key="blend-status"]')).toContainText(/Transient hot-overfill limit exceeded/i);
-    await expect(page.locator('[data-result-host="blending"] [data-result-key="blend-status"]')).toContainText(/103\.0 bar > 100\.0 bar/i);
+    await expect(form.locator('[data-interim-error]')).toContainText(/outside ±3% of the planned/i);
+    await expect(page.locator('[data-result-host="blending"] [data-result-key="interim-notice"]')).toBeHidden();
+    await expect(page.locator('[data-result-host="blending"] [data-result-key="blend-status"]')).toContainText(/warning mode/i);
   });
+  test('rejects a below-ambient interim reading on the default page and accepts the planned start', async ({ appPage }) => {
+    test.setTimeout(90_000);
+    const page = await load(appPage);
+    const steps = page.locator('[data-result-host="blending"] [data-result-key="steps-container"]');
+    const form = steps.locator('form').first();
+    await form.locator('xpath=..').locator('summary').click();
+    await expect(form).toBeVisible();
+
+    await form.locator('[name="pressureBar"]').fill('30');
+    await form.locator('[name="temperatureC"]').fill('15');
+    await form.locator('[data-action="apply-interim-measurement"]').click();
+    await expect(form.locator('[data-interim-error]')).toContainText(/below ambient 21\.0 °C/i);
+    await expect(form.locator('[data-interim-error]')).toContainText(/pressure-lowering drain/i);
+    await expect(steps).not.toContainText(/Measured start for step 1/);
+
+    await form.locator('[name="pressureBar"]').fill('45');
+    await form.locator('[name="temperatureC"]').fill('21');
+    await form.locator('[data-action="apply-interim-measurement"]').click();
+    await expect(steps).toContainText(/Measured start for step 1: 45\.0 bar · 21\.0 °C/);
+    await expect(page.locator('[data-interim-error]')).toHaveCount(0);
+  });
+  test('recalculates the cards after an accepted changed reading and shows one notice', async ({ appPage }) => {
+    test.setTimeout(120_000);
+    const page = await load(appPage);
+    const steps = page.locator('[data-result-host="blending"] [data-result-key="steps-container"]');
+    const notice = page.locator('[data-result-host="blending"] [data-result-key="interim-notice"]');
+    await expect(notice).toBeHidden();
+
+    const form = steps.locator('form').nth(3);
+    await form.locator('xpath=..').locator('summary').click();
+    await expect(form).toBeVisible();
+    await form.locator('[name="pressureBar"]').fill('146');
+    await form.locator('[name="temperatureC"]').fill('29.6');
+    await form.locator('[data-action="apply-interim-measurement"]').click();
+    await expect(page.locator('[data-interim-error]')).toHaveCount(0);
+    await expect(notice).toBeVisible();
+    await expect(notice).toHaveText('This recipe is a mix of planned steps and your interim manual readings.');
+    await expect(steps).toContainText(/Measured start for step 4: 146\.0 bar · 29\.6 °C/);
+  });
+  test('recalculates the steps after a reading below the planned start instead of failing on the scrap bank', async ({ appPage }) => {
+    test.setTimeout(120_000);
+    const page = await load(appPage);
+    const steps = page.locator('[data-result-host="blending"] [data-result-key="steps-container"]');
+    const notice = page.locator('[data-result-host="blending"] [data-result-key="interim-notice"]');
+
+    const form = steps.locator('form').nth(1);
+    await form.locator('xpath=..').locator('summary').click();
+    await form.locator('[name="pressureBar"]').fill('54');
+    await form.locator('[name="temperatureC"]').fill('22');
+    await form.locator('[data-action="apply-interim-measurement"]').click();
+    await expect(page.locator('[data-interim-error]')).toHaveCount(0);
+
+    await expect(notice).toHaveText('This recipe is a mix of planned steps and your interim manual readings.');
+    await expect(notice.locator('[role="alert"]')).toHaveCount(0);
+    const heading = text => steps.locator('h4', { hasText: text });
+    await expect(heading(/^Step 2: Decant Oxygen/)).toHaveCount(1);
+    await expect(heading(/^Step 3: Boost Sample scrap/)).toHaveCount(1);
+    await expect(heading(/^Step 6: Top-up Compressor Air/)).toHaveCount(1);
+    await expect(heading(/^Step 7:/)).toHaveCount(0);
+
+    const card = heading(/^Step 2: Decant Oxygen/).locator('xpath=..');
+    await card.locator('summary', { hasText: 'Technical details' }).click();
+    const start = card.locator('s');
+    await expect(start.nth(0)).toHaveText(/55\.[56]\d* bar/);
+    await expect(start.nth(1)).toHaveText(/21\.7/);
+  });
+
+
 
 
   test('enforces thermal boundaries and rejects target medium below ambient', async ({ appPage }) => {

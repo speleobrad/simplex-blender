@@ -115,6 +115,11 @@
                   <button id="settings-pressure-warning-unlock-button" type="button" data-action="unlock-pressure-warning" class="rounded border border-amber-500/50 px-2 py-1 text-xs text-amber-300 hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-40" disabled>Unlock warning mode</button>
                 </div>
               </div>
+              <div>
+                <label for="settings-interim-pressure-tolerance" class="block text-xs text-slate-400">Interim pressure tolerance (%)</label>
+                <input id="settings-interim-pressure-tolerance" type="number" min="0.5" max="10" step="0.5" data-settings-collection="general" data-settings-field="interimPressureTolerancePercent" aria-label="Interim pressure tolerance percent" aria-describedby="settings-interim-pressure-tolerance-help" class="mt-1 w-24 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 font-mono text-xs text-slate-100">
+                <p id="settings-interim-pressure-tolerance-help" class="mt-1 text-[10px] text-slate-500">A recorded interim pressure must be within this percentage of the planned pressure at the recorded temperature. Applies to Optimize readings only.</p>
+              </div>
             </div>
           </section>
 
@@ -466,6 +471,7 @@
 
         <div id="tab-pane-recipe" role="tabpanel" aria-labelledby="tab-btn-recipe" aria-live="polite" class="pt-4 flex flex-col gap-4">
           <div id="blend-status" role="status" aria-live="polite" class="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300"></div>
+          <section id="interim-notice" data-result-key="interim-notice" aria-label="Interim readings" class="rounded-lg border border-ocean-700/80 bg-ocean-900/60 px-3 py-2 text-xs text-ocean-100" hidden></section>
           <!-- Summary Banner -->
           <div id="summary-banner" class="p-4 rounded-xl bg-gradient-to-r from-ocean-850 to-ocean-900 border border-ocean-700/80 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-4 lg:gap-y-3 lg:grid-rows-[auto_auto]">
             <div id="scenario-summary-content" data-result-key="scenario-summary-content" data-what-if-only class="col-span-full border-b border-ocean-800 pb-3"></div>

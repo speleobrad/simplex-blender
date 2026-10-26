@@ -23,6 +23,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   units: 'metric',
   pressureLimitMode: 'hard-stop',
   pressureWarningUnlocked: false,
+  interimPressureTolerancePercent: 3,
   physics: Object.freeze({ model: 'vdw' }),
   gasPresets: Object.freeze([
     Object.freeze({ name: 'Air', oxygenPercent: 21, heliumPercent: 0 }),
@@ -164,6 +165,7 @@ export function copySettings(settings) {
     units: settings.units === 'imperial' ? 'imperial' : 'metric',
     pressureLimitMode: settings.pressureLimitMode,
     pressureWarningUnlocked: settings.pressureWarningUnlocked,
+    interimPressureTolerancePercent: settings.interimPressureTolerancePercent,
     physics: { model: settings.physics.model },
     gasPresets: settings.gasPresets.map(preset => ({ ...preset })),
     compressorPresets: settings.compressorPresets.map(preset => ({ ...preset })),
@@ -245,6 +247,15 @@ function addDefaultPressureLimitPolicy(settings) {
   };
 }
 
+function addDefaultInterimPressureTolerance(settings) {
+  return {
+    ...settings,
+    interimPressureTolerancePercent: Object.hasOwn(settings ?? {}, 'interimPressureTolerancePercent')
+      ? settings.interimPressureTolerancePercent
+      : DEFAULT_SETTINGS.interimPressureTolerancePercent
+  };
+}
+
 function addDefaultPhysics(settings) {
   const physics = settings?.physics && typeof settings.physics === 'object'
     ? settings.physics
@@ -277,6 +288,11 @@ export function validateSettings(settings) {
   }
   if (settings.pressureLimitMode === 'warning' && settings.pressureWarningUnlocked !== true) {
     errors.push('Pressure warning mode requires an unlock.');
+  }
+  if (!Number.isFinite(settings.interimPressureTolerancePercent)
+    || settings.interimPressureTolerancePercent < 0.5
+    || settings.interimPressureTolerancePercent > 10) {
+    errors.push('Interim pressure tolerance must be between 0.5 and 10%.');
   }
   if (settings.cylinderPresets.length === 0) {
     errors.push('At least one cylinder preset is required.');
@@ -443,7 +459,7 @@ export function loadSettings(storage, onFallback = () => {}) {
     return copySettings(DEFAULT_SETTINGS);
   }
 
-  const normalized = addDefaultEquipmentPresets(addDefaultCylinderPresets(addDefaultPhysics(addDefaultPressureLimitPolicy(addDefaultUnits(addDefaultBooster(saved))))));
+  const normalized = addDefaultInterimPressureTolerance(addDefaultEquipmentPresets(addDefaultCylinderPresets(addDefaultPhysics(addDefaultPressureLimitPolicy(addDefaultUnits(addDefaultBooster(saved)))))));
   const errors = validateSettings(normalized);
   if (errors.length > 0) {
     onFallback(new RangeError(errors.join(' ')));
@@ -453,7 +469,7 @@ export function loadSettings(storage, onFallback = () => {}) {
 }
 
 export function saveSettings(settings, storage) {
-  const normalized = addDefaultEquipmentPresets(addDefaultCylinderPresets(addDefaultPhysics(addDefaultPressureLimitPolicy(addDefaultUnits(addDefaultBooster(settings))))));
+  const normalized = addDefaultInterimPressureTolerance(addDefaultEquipmentPresets(addDefaultCylinderPresets(addDefaultPhysics(addDefaultPressureLimitPolicy(addDefaultUnits(addDefaultBooster(settings)))))));
   const errors = validateSettings(normalized);
   if (errors.length > 0) throw new RangeError(errors.join(' '));
   storage.setItem(STORAGE_KEY, JSON.stringify(copySettings(normalized)));

@@ -208,6 +208,108 @@ test('maps interim controls through scheduled measurement indices', () => {
   }
 });
 
+test('locks earlier interim readings and allows Clear only on the latest one', () => {
+  const previousDocument = globalThis.document;
+  const document = createFakeDocument();
+  globalThis.document = document;
+
+  try {
+    renderResults({
+      feasible: true,
+      blend: {
+        retainedPressureBar: 50,
+        retainedPercent: 100,
+        ventedPressureBar: 0,
+        ventedGasLitres: 0,
+        heliumSalvagedLitres: 0,
+        finalPressureBar: 80,
+        finalOxygenPercent: 21,
+        finalHeliumPercent: 0
+      },
+      thermal: null,
+      protocolSteps: [
+        { type: 'keep', title: 'Step 1', resultingPressureBar: 50, _measurementIndex: 0 },
+        { type: 'boost', title: 'Step 2: Add oxygen', resultingPressureBar: 60, _measurementIndex: 1, thermal: { measurementIndex: 1 } },
+        { type: 'boost', title: 'Step 3: Add oxygen', resultingPressureBar: 70, _measurementIndex: 2, thermal: { measurementIndex: 2 } },
+        { type: 'boost', title: 'Step 4: Add helium', resultingPressureBar: 80, _measurementIndex: 3, thermal: { measurementIndex: 3 } }
+      ]
+    }, {
+      cylinder: { workingPressureBar: 100, hotOverfillPercent: 2 },
+      thermal: {
+        interimMeasurements: [
+          { pressureBar: 50, temperatureC: 20 },
+          { pressureBar: 60, temperatureC: 21 },
+          { pressureBar: 70, temperatureC: 22 }
+        ]
+      }
+    });
+
+    const children = document.elements.get('steps-container').children;
+    const buttonFor = (card, action, index) => findElement(card, element => element.tagName === 'button'
+      && element.attributes.get('data-action') === action
+      && element.attributes.get('data-measurement-index') === String(index));
+
+    assert.equal(buttonFor(children[1], 'apply-interim-measurement', 1), null);
+    assert.equal(buttonFor(children[1], 'clear-interim-measurement', 1), null);
+    assert.match(children[1].textContent, /Locked: only the latest reading can be changed or cleared/);
+
+    assert.ok(buttonFor(children[2], 'apply-interim-measurement', 2));
+    assert.ok(buttonFor(children[2], 'clear-interim-measurement', 2));
+
+    assert.ok(buttonFor(children[3], 'apply-interim-measurement', 3));
+    assert.equal(buttonFor(children[3], 'clear-interim-measurement', 3), null);
+  } finally {
+    globalThis.document = previousDocument;
+  }
+});
+
+test('locks an empty interim slot before the latest reading', () => {
+  const previousDocument = globalThis.document;
+  const document = createFakeDocument();
+  globalThis.document = document;
+
+  try {
+    renderResults({
+      feasible: true,
+      blend: {
+        retainedPressureBar: 50,
+        retainedPercent: 100,
+        ventedPressureBar: 0,
+        ventedGasLitres: 0,
+        heliumSalvagedLitres: 0,
+        finalPressureBar: 60,
+        finalOxygenPercent: 21,
+        finalHeliumPercent: 0
+      },
+      thermal: null,
+      protocolSteps: [
+        { type: 'keep', title: 'Step 1', resultingPressureBar: 50, _measurementIndex: 0 },
+        { type: 'boost', title: 'Step 2: Add oxygen', resultingPressureBar: 60, _measurementIndex: 1, thermal: { measurementIndex: 1 } },
+        { type: 'boost', title: 'Step 3: Add oxygen', resultingPressureBar: 70, _measurementIndex: 2, thermal: { measurementIndex: 2 } }
+      ]
+    }, {
+      cylinder: { workingPressureBar: 100, hotOverfillPercent: 2 },
+      thermal: {
+        interimMeasurements: [null, null, { pressureBar: 70, temperatureC: 21 }]
+      }
+    });
+
+    const children = document.elements.get('steps-container').children;
+    const buttonFor = (card, action, index) => findElement(card, element => element.tagName === 'button'
+      && element.attributes.get('data-action') === action
+      && element.attributes.get('data-measurement-index') === String(index));
+
+    assert.match(children[1].textContent, /No reading recorded before Step 2/);
+    assert.match(children[1].textContent, /Locked: only the latest reading can be changed or cleared/);
+    assert.equal(buttonFor(children[1], 'apply-interim-measurement', 1), null);
+    assert.equal(buttonFor(children[1], 'clear-interim-measurement', 1), null);
+
+    assert.ok(buttonFor(children[2], 'clear-interim-measurement', 2));
+  } finally {
+    globalThis.document = previousDocument;
+  }
+});
+
 
 test('places readings before the next transfer, not before a preserve step', () => {
   const previousDocument = globalThis.document;
@@ -613,6 +715,59 @@ test('shows planned start readings struck out beside manually recorded readings'
   }
 });
 
+function renderNotice(interimReadings) {
+  const previousDocument = globalThis.document;
+  const document = createFakeDocument();
+  const section = new FakeElement();
+  document.elements.set('interim-notice', section);
+  globalThis.document = document;
+  try {
+    renderResults({
+      feasible: true,
+      blend: {
+        retainedPressureBar: 100, retainedPercent: 100, ventedPressureBar: 0, ventedGasLitres: 0,
+        heliumSalvagedLitres: 0, finalPressureBar: 200, finalOxygenPercent: 18, finalHeliumPercent: 45
+      },
+      thermal: {
+        finalTransferEndPressureBar: 200, finalTransferEndTemperatureC: 40,
+        finalAmbientPressureBar: 198, finalAmbientTemperatureC: 25,
+        finalInWaterPressureBar: 200, finalInWaterTemperatureC: 10, interimMeasurements: []
+      },
+      protocolSteps: [],
+      interimReadings
+    }, {
+      cylinder: { workingPressureBar: 232, targetPressureBar: 200, targetOxygenPercent: 18, targetHeliumPercent: 45 },
+      thermal: { interimMeasurements: [] },
+      settings: { units: 'metric' }
+    });
+    return { text: section.textContent, hidden: section.hidden, role: section.children[0]?.attributes.get('role') ?? null };
+  } finally {
+    globalThis.document = previousDocument;
+  }
+}
+
+test('shows one plain notice when the recipe combines planned steps with readings', () => {
+  const { text, hidden, role } = renderNotice({ count: 1, error: null });
+  assert.equal(hidden, false);
+  assert.equal(text, 'This recipe is a mix of planned steps and your interim manual readings.');
+  assert.equal(role, null);
+});
+
+test('shows the reason as an alert when the recipe could not be recalculated from a reading', () => {
+  const { text, role } = renderNotice({
+    count: 1,
+    error: 'The measured 40 bar at 21 °C implies the tank holds no more gas than before the previous step, so the amount it added cannot be derived. Recheck the reading.'
+  });
+  assert.match(text, /^Your reading is recorded, but the recipe could not be recalculated from it, so the planned steps are shown: The measured 40 bar/);
+  assert.equal(role, 'alert');
+  assert.doesNotMatch(text, /undefined|NaN/);
+});
+
+test('hides the notice when there are no interim readings', () => {
+  const { text, hidden } = renderNotice(undefined);
+  assert.equal(hidden, true);
+  assert.equal(text, '');
+});
 
 test('classifies summary metrics at zero, full, partial, and over-limit boundaries', () => {
   const previousDocument = globalThis.document;

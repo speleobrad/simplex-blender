@@ -462,6 +462,8 @@ export function renderSettingsDialog(settings, importState) {
     const warningOption = pressureMode.querySelector('option[value="warning"]');
     if (warningOption) warningOption.disabled = !warningUnlocked;
   }
+  const interimTolerance = document.getElementById('settings-interim-pressure-tolerance');
+  if (interimTolerance) interimTolerance.value = String(settings.interimPressureTolerancePercent);
   const confirmation = document.getElementById('settings-pressure-limit-confirmation');
   const unlock = document.getElementById('settings-pressure-warning-unlock-button');
   if (unlock) unlock.disabled = warningUnlocked

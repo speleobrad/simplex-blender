@@ -1,5 +1,10 @@
-import { calculatorInputSignature, signatureAfterClearingMeasurement } from './interim-measurements.js';
-import { optimizeBlend } from './optimizer.js';
+import {
+  calculatorInputSignature,
+  interimMeasurementLockMessage,
+  signatureAfterClearingMeasurement
+} from './interim-measurements.js';
+import { verifyInterimMeasurement } from './interim-check.js';
+import { planWithReadings } from './plan-with-readings.js';
 import { isValidGasComposition, parseNumericInput, splitGasInput } from './gas-input.js';
 import { validateCalculatorInputs, validateSupplyBankInput } from './input-validation.js';
 import { DEFAULT_HOT_OVERFILL_PERCENT } from './preset-validation.js';
@@ -615,6 +620,7 @@ function updateSettingsDraft(input, eventType) {
         ? convertFromDisplay(numericValue, quantity, state.settingsDraft.units)
         : numericValue;
   if (collection === 'physics') state.settingsDraft.physics[field] = value;
+  else if (field === 'interimPressureTolerancePercent') state.settingsDraft.interimPressureTolerancePercent = numericValue;
   else if (field === 'pressureLimitMode') {
     state.settingsDraft.pressureLimitMode = value;
     byId('settings-pressure-warning-notice')?.classList.toggle('hidden', value !== 'warning');
@@ -1581,7 +1587,7 @@ function recalculate() {
     input.thermal,
     { pressureLimitMode: state.settings.pressureLimitMode }
   );
-  const result = inputErrors.length > 0 ? invalidInputResult(inputErrors) : optimizeBlend(input);
+  const result = inputErrors.length > 0 ? invalidInputResult(inputErrors) : planWithReadings(input);
   const resultWithWarnings = {
     ...result,
     pressureLimitWarnings: collectPressureWarnings(
@@ -1600,7 +1606,6 @@ function recalculate() {
   if (ternaryData()) renderTernary();
   else clearTernaryDiagram(document.querySelector('[data-result-host="blending"] [data-result-key="ternary-canvas"]'));
 }
-
 
 function selectScreen(screenId) {
   if (screenId === 'settings' && state.settingsDraft === null) {
@@ -1965,30 +1970,72 @@ function handleInputOrChange(event) {
   if (target.matches('[data-bank-field]')) updateBankFromInput(target);
 }
 
+function showInterimError(form, message) {
+  let alert = form.querySelector('[data-interim-error]');
+  if (!alert) {
+    alert = document.createElement('p');
+    alert.className = 'text-[11px] font-semibold text-rose-300 sm:col-span-3';
+    alert.setAttribute('role', 'alert');
+    alert.setAttribute('data-interim-error', '');
+    form.append(alert);
+  }
+  alert.textContent = message;
+}
+
 function applyInterimMeasurement(actionElement) {
   const index = Number(actionElement.dataset.measurementIndex);
   const form = actionElement.closest('form');
   if (!Number.isInteger(index) || !form) return;
   if (typeof form.reportValidity === 'function' && !form.reportValidity()) return;
 
+  const lockMessage = interimMeasurementLockMessage(state.interimMeasurements, index, 'apply');
+  if (lockMessage) {
+    showInterimError(form, lockMessage);
+    return;
+  }
+
   const pressureInput = form.querySelector('[name="pressureBar"]');
   const temperatureInput = form.querySelector('[name="temperatureC"]');
-  const interimMeasurements = state.interimMeasurements.slice();
-  interimMeasurements[index] = {
+  const measurement = {
     pressureBar: convertFromDisplay(Number(pressureInput.value), 'pressureBar', state.settings.units),
     temperatureC: convertFromDisplay(Number(temperatureInput.value), 'temperatureC', state.settings.units)
   };
-  state.interimMeasurementSignature = calculatorInputSignature({
-    ...readInput(),
-    settings: state.settings
+  const input = { ...readInput(), settings: state.settings };
+  const interimMeasurements = state.interimMeasurements.slice();
+  interimMeasurements[index] = measurement;
+  const candidateInput = { ...input, thermal: { ...input.thermal, interimMeasurements } };
+  const inputErrors = validateCalculatorInputs(
+    candidateInput.cylinder,
+    candidateInput.physics,
+    candidateInput.thermal,
+    { pressureLimitMode: state.settings.pressureLimitMode }
+  );
+  if (inputErrors.length > 0) {
+    showInterimError(form, inputErrors.join(' '));
+    return;
+  }
+  const verdict = verifyInterimMeasurement(candidateInput, index, measurement, {
+    tolerancePercent: state.settings.interimPressureTolerancePercent,
+    units: state.settings.units
   });
+  if (!verdict.ok) {
+    showInterimError(form, verdict.error);
+    return;
+  }
+  state.interimMeasurementSignature = calculatorInputSignature(input);
   state.interimMeasurements = interimMeasurements;
   recalculate();
 }
 
 function clearInterimMeasurement(actionElement) {
   const index = Number(actionElement.dataset.measurementIndex);
+  const form = actionElement.closest('form');
   if (!Number.isInteger(index)) return;
+  const lockMessage = interimMeasurementLockMessage(state.interimMeasurements, index, 'clear');
+  if (lockMessage) {
+    if (form) showInterimError(form, lockMessage);
+    return;
+  }
   const interimMeasurements = state.interimMeasurements.slice();
   interimMeasurements[index] = null;
   state.interimMeasurements = interimMeasurements;

@@ -3,6 +3,11 @@ import {
   isValidHotOverfillPercent
 } from '../preset-validation.js';
 import { formatUnitValue, convertToDisplay, unitLabel } from '../units.js';
+import {
+  interimMeasurementLockMessage,
+  latestInterimMeasurementIndex,
+  protocolStepNumber
+} from '../interim-measurements.js';
 import { renderWaterPressurePane as renderPressurePaneImplementation } from './water-pressure.js';
 import { getCylinderPressureLimit } from '../pressure-limits.js';
 
@@ -449,12 +454,22 @@ function renderThermalDetails(
   return details;
 }
 
-function protocolStepNumber(step, index) {
-  const match = String(step?.title ?? '').match(/^Step[ ]+([0-9]+)/i);
-  return match ? Number(match[1]) : index + 1;
-}
-
-function renderInterimMeasurementControl(stepIndex, nextStep, measurement, workingPressureBar, hotOverfillPercent, pressureLimitMode = 'hard-stop', units = 'metric') {
+function renderInterimMeasurementControl(stepIndex, nextStep, measurement, measurements, workingPressureBar, hotOverfillPercent, pressureLimitMode = 'hard-stop', units = 'metric') {
+  if (interimMeasurementLockMessage(measurements, stepIndex, 'apply') !== null) {
+    const locked = document.createElement('div');
+    locked.className = 'rounded-lg border border-ocean-800/80 bg-ocean-950/50 px-3 py-2';
+    const lockedText = document.createElement('p');
+    lockedText.className = 'text-[11px] font-semibold text-slate-400';
+    const lockedStepNumber = protocolStepNumber(nextStep, stepIndex);
+    lockedText.textContent = measurement
+      ? `Measured start for step ${lockedStepNumber}: ${formatUnitValue(measurement.pressureBar, 'pressureBar', units)} · ${formatUnitValue(measurement.temperatureC, 'temperatureC', units)}`
+      : `No reading recorded before Step ${lockedStepNumber}`;
+    const lockedNote = document.createElement('p');
+    lockedNote.className = 'text-[10px] text-slate-500';
+    lockedNote.textContent = 'Locked: only the latest reading can be changed or cleared.';
+    locked.append(lockedText, lockedNote);
+    return locked;
+  }
   const details = document.createElement('details');
   details.className = 'rounded-lg border border-ocean-800/80 bg-ocean-950/50 px-3 py-2';
 
@@ -522,7 +537,7 @@ function renderInterimMeasurementControl(stepIndex, nextStep, measurement, worki
   apply.setAttribute('data-action', 'apply-interim-measurement');
   apply.setAttribute('data-measurement-index', String(stepIndex));
   actions.append(apply);
-  if (measurement) {
+  if (measurement && stepIndex === latestInterimMeasurementIndex(measurements)) {
     const clear = document.createElement('button');
     clear.type = 'button';
     clear.className = 'rounded border border-slate-700 px-2 py-1 text-[10px] text-slate-400 hover:bg-ocean-800';
@@ -581,11 +596,13 @@ function renderProtocol(protocolSteps, alertMessage = null, calculation = null, 
       && index > 0
       && step.type !== 'keep'
       && Number.isInteger(interimMeasurementIndex)) {
-      const measurement = calculation?.thermal?.interimMeasurements?.[interimMeasurementIndex] ?? null;
+      const measurements = calculation?.thermal?.interimMeasurements ?? [];
+      const measurement = measurements[interimMeasurementIndex] ?? null;
       details.append(renderInterimMeasurementControl(
         interimMeasurementIndex,
         step,
         measurement,
+        measurements,
         calculation?.cylinder?.workingPressureBar,
         calculation?.cylinder?.hotOverfillPercent,
         calculation?.settings?.pressureLimitMode,
@@ -874,10 +891,32 @@ function renderWhatIfResults(result, calculation) {
   });
   renderWhatIfScenarioSummary(result, calculation);
 }
+
+// One notice that the recipe combines planned steps with the user's interim readings.
+// A reading the planner could not recalculate from shows its reason, and the planned
+// recipe stays on screen.
+function renderInterimNotice(readings) {
+  const section = resultElement('interim-notice');
+  if (!section) return;
+  section.replaceChildren();
+  section.hidden = !readings;
+  if (!readings) return;
+  const message = document.createElement('p');
+  if (readings.error) {
+    message.className = 'text-amber-300';
+    message.setAttribute('role', 'alert');
+    message.textContent = `Your reading is recorded, but the recipe could not be recalculated from it, so the planned steps are shown: ${readings.error}`;
+  } else {
+    message.textContent = 'This recipe is a mix of planned steps and your interim manual readings.';
+  }
+  section.append(message);
+}
+
 export function renderResults(result, calculation = null, { root = document, mode = 'optimize' } = {}) {
   activeRoot = root;
   const units = calculation?.settings?.units ?? 'metric';
   renderBlendStatus(result, units, calculation?.settings?.pressureLimitMode);
+  renderInterimNotice(result?.interimReadings);
   renderWaterPressurePane(null);
   if (mode === 'what-if' || result?.mode === 'what-if') {
     const status = resultElement('blend-status');

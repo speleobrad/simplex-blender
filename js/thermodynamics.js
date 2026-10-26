@@ -690,6 +690,8 @@ export function simulateThermalProtocol({
     const measuredStart = measurementIndex === null
       ? undefined
       : thermal.interimMeasurements?.[measurementIndex];
+    const plannedStartPressureBar = currentPressureBar;
+    const plannedStartTemperatureC = currentTemperatureC;
     const measurementApplied = step._applyInterimMeasurement !== false;
     if (measurementApplied && Number.isFinite(measuredStart?.pressureBar)) {
       currentPressureBar = Math.max(0, measuredStart.pressureBar);
@@ -703,8 +705,6 @@ export function simulateThermalProtocol({
       measuredTemperatureC: measuredStart?.temperatureC,
       tauMinutes
     });
-    const plannedStartPressureBar = currentPressureBar;
-    const plannedStartTemperatureC = currentTemperatureC;
     const pressureStartBar = currentPressureBar;
     const temperatureStartC = currentTemperatureC;
     const pressureReferenceTemperatureC = Number.isFinite(step.pressureReferenceTemperatureC)

@@ -556,6 +556,7 @@ test('saved gas and cylinder presets survive a load/save round trip', () => {
     physics: { model: 'vdw' },
     pressureLimitMode: 'hard-stop',
     pressureWarningUnlocked: false,
+    interimPressureTolerancePercent: 3,
     gasPresets: [{ name: 'Tx 16/50', oxygenPercent: 16, heliumPercent: 50 }],
     cylinderPresets: [{
       name: 'Custom 11 L',
@@ -580,6 +581,7 @@ test('saved settings preserve the shared booster minimum source pressure', () =>
     physics: { model: 'vdw' },
     pressureLimitMode: 'hard-stop',
     pressureWarningUnlocked: false,
+    interimPressureTolerancePercent: 3,
     gasPresets: [{ name: 'Tx 16/50', oxygenPercent: 16, heliumPercent: 50 }],
     cylinderPresets: [{
       name: '11 L Steel',
@@ -907,5 +909,31 @@ test('matches the Warning unlock phrase case-insensitively and accepts quote var
     null
   ]) {
     assert.equal(matchesPressureWarningUnlockPhrase(value), false, String(value));
+  }
+});
+
+test('interim pressure tolerance defaults to three percent and migrates when missing', () => {
+  assert.equal(DEFAULT_SETTINGS.interimPressureTolerancePercent, 3);
+  assert.equal(copySettings(DEFAULT_SETTINGS).interimPressureTolerancePercent, 3);
+
+  const legacy = copySettings(DEFAULT_SETTINGS);
+  delete legacy.interimPressureTolerancePercent;
+  const storage = memoryStorage([[
+    'simplex-gas-remixer-settings', JSON.stringify(legacy)
+  ]]);
+  assert.equal(loadSettings(storage).interimPressureTolerancePercent, 3);
+});
+
+test('interim pressure tolerance round-trips through storage and validates its bounds', () => {
+  const storage = memoryStorage();
+  saveSettings({ ...DEFAULT_SETTINGS, interimPressureTolerancePercent: 5 }, storage);
+  assert.equal(loadSettings(storage).interimPressureTolerancePercent, 5);
+
+  for (const value of [0.4, 10.5, Number.NaN, '3']) {
+    const invalid = { ...DEFAULT_SETTINGS, interimPressureTolerancePercent: value };
+    assert.match(validateSettings(invalid).join(' '), /interim pressure tolerance/i);
+  }
+  for (const value of [0.5, 10]) {
+    assert.deepEqual(validateSettings({ ...DEFAULT_SETTINGS, interimPressureTolerancePercent: value }), []);
   }
 });
