@@ -7,6 +7,28 @@ import { isValidGasComposition } from './gas-input.js';
 import { WATER_SUBMERSION_PERCENT_OPTIONS } from './thermodynamics.js';
 import { getCylinderPressureExceedance } from './pressure-limits.js';
 
+const MAX_COST_PRICE = 1_000_000;
+const priceOk = value => Number.isFinite(value) && value >= 0 && value <= MAX_COST_PRICE;
+
+export function validateCostSettings(costs) {
+  if (!costs || typeof costs !== 'object') return ['Cost settings are missing.'];
+  const errors = [];
+  if (typeof costs.currencySymbol !== 'string' || costs.currencySymbol.trim().length > 8) {
+    errors.push('Currency symbol must be text of at most 8 characters.');
+  }
+  const prices = [
+    costs.pricePerLitre?.oxygen, costs.pricePerLitre?.helium,
+    costs.operationPrices?.boostPerLitre, costs.operationPrices?.decantPerLitre,
+    costs.operationPrices?.equalizePerLitre, costs.operationPrices?.topUpPerOperation
+  ];
+  if (!prices.every(priceOk)) errors.push('Prices must be numbers from 0 to 1,000,000.');
+  if (!Number.isFinite(costs.leftoverDiscountPercent)
+    || costs.leftoverDiscountPercent < 0 || costs.leftoverDiscountPercent > 100) {
+    errors.push('Leftover discount must be between 0 and 100%.');
+  }
+  return errors;
+}
+
 export function validateCalculatorInputs(cylinder, physics, thermal, options = {}) {
   const pressureLimitMode = options?.pressureLimitMode ?? 'hard-stop';
   const errors = [];

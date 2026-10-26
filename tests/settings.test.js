@@ -554,6 +554,7 @@ test('saved gas and cylinder presets survive a load/save round trip', () => {
   const settings = {
     units: 'metric',
     physics: { model: 'vdw' },
+    costs: copySettings(DEFAULT_SETTINGS).costs,
     pressureLimitMode: 'hard-stop',
     pressureWarningUnlocked: false,
     interimPressureTolerancePercent: 3,
@@ -582,6 +583,7 @@ test('saved settings preserve the shared booster minimum source pressure', () =>
     pressureLimitMode: 'hard-stop',
     pressureWarningUnlocked: false,
     interimPressureTolerancePercent: 3,
+    costs: copySettings(DEFAULT_SETTINGS).costs,
     gasPresets: [{ name: 'Tx 16/50', oxygenPercent: 16, heliumPercent: 50 }],
     cylinderPresets: [{
       name: '11 L Steel',
@@ -936,4 +938,28 @@ test('interim pressure tolerance round-trips through storage and validates its b
   for (const value of [0.5, 10]) {
     assert.deepEqual(validateSettings({ ...DEFAULT_SETTINGS, interimPressureTolerancePercent: value }), []);
   }
+});
+
+test('settings default costs to zero prices and survive save, load and copy', () => {
+  assert.equal(DEFAULT_SETTINGS.costs.pricePerLitre.oxygen, 0);
+  assert.equal(DEFAULT_SETTINGS.costs.currencySymbol, '');
+  const storage = memoryStorage();
+  const settings = copySettings(DEFAULT_SETTINGS);
+  settings.costs.pricePerLitre.helium = 0.07;
+  settings.costs.operationPrices.topUpPerOperation = 4.5;
+  saveSettings(settings, storage);
+  const loaded = loadSettings(storage);
+  assert.equal(loaded.costs.pricePerLitre.helium, 0.07);
+  assert.equal(loaded.costs.operationPrices.topUpPerOperation, 4.5);
+  const copy = copySettings(loaded); copy.costs.pricePerLitre.helium = 9;
+  assert.equal(loaded.costs.pricePerLitre.helium, 0.07);
+});
+test('legacy saved settings without costs load with zero-price defaults', () => {
+  const legacy = copySettings(DEFAULT_SETTINGS); delete legacy.costs;
+  const storage = memoryStorage([['simplex-gas-remixer-settings', JSON.stringify(legacy)]]);
+  assert.deepEqual(loadSettings(storage).costs, DEFAULT_SETTINGS.costs);
+});
+test('saving settings with invalid costs throws', () => {
+  const settings = copySettings(DEFAULT_SETTINGS); settings.costs.leftoverDiscountPercent = -1;
+  assert.throws(() => saveSettings(settings, memoryStorage()), RangeError);
 });

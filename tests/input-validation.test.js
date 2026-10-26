@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateCalculatorInputs, validateSupplyBankInput } from '../js/input-validation.js';
+import { validateCalculatorInputs, validateCostSettings, validateSupplyBankInput } from '../js/input-validation.js';
 
 const defaultCylinder = {
   volumeL: 12,
@@ -337,4 +337,25 @@ test('Warning mode bypasses only cylinder ceilings, not supported calculator inp
   );
   assert.match(warningInvalidHotErrors.join(' '), /hot overfill/i);
   assert.doesNotMatch(warningInvalidHotErrors.join(' '), /measured.*hot overfill/i);
+});
+
+const validCosts = () => ({
+  currencySymbol: '€',
+  pricePerLitre: { oxygen: 0.01, helium: 0.05 },
+  leftoverDiscountPercent: 20,
+  operationPrices: { boostPerLitre: 0.002, decantPerLitre: 0, equalizePerLitre: 0, topUpPerOperation: 5 }
+});
+test('valid cost settings pass', () => assert.deepEqual(validateCostSettings(validCosts()), []));
+test('cost settings reject negative, non-finite, oversized prices and bad discount', () => {
+  for (const mutate of [
+    c => { c.pricePerLitre.oxygen = -1; },
+    c => { c.pricePerLitre.helium = NaN; },
+    c => { c.operationPrices.topUpPerOperation = 1e7; },
+    c => { c.leftoverDiscountPercent = 101; },
+    c => { c.currencySymbol = 'WAYTOOLONGSYMBOL'; },
+    c => { c.currencySymbol = 5; }
+  ]) {
+    const c = validCosts(); mutate(c);
+    assert.ok(validateCostSettings(c).length > 0);
+  }
 });

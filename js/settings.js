@@ -5,6 +5,7 @@ import {
   validateCylinderPreset,
   validateGasPreset
 } from './preset-validation.js';
+import { validateCostSettings } from './input-validation.js';
 const STORAGE_KEY = 'simplex-gas-remixer-settings';
 
 export function normalizePresetName(name) {
@@ -24,6 +25,12 @@ export const DEFAULT_SETTINGS = Object.freeze({
   pressureLimitMode: 'hard-stop',
   pressureWarningUnlocked: false,
   interimPressureTolerancePercent: 3,
+  costs: Object.freeze({
+    currencySymbol: '',
+    pricePerLitre: Object.freeze({ oxygen: 0, helium: 0 }),
+    leftoverDiscountPercent: 0,
+    operationPrices: Object.freeze({ boostPerLitre: 0, decantPerLitre: 0, equalizePerLitre: 0, topUpPerOperation: 0 })
+  }),
   physics: Object.freeze({ model: 'vdw' }),
   gasPresets: Object.freeze([
     Object.freeze({ name: 'Air', oxygenPercent: 21, heliumPercent: 0 }),
@@ -166,6 +173,7 @@ export function copySettings(settings) {
     pressureLimitMode: settings.pressureLimitMode,
     pressureWarningUnlocked: settings.pressureWarningUnlocked,
     interimPressureTolerancePercent: settings.interimPressureTolerancePercent,
+    costs: copyCosts(settings.costs),
     physics: { model: settings.physics.model },
     gasPresets: settings.gasPresets.map(preset => ({ ...preset })),
     compressorPresets: settings.compressorPresets.map(preset => ({ ...preset })),
@@ -253,6 +261,30 @@ function addDefaultInterimPressureTolerance(settings) {
     interimPressureTolerancePercent: Object.hasOwn(settings ?? {}, 'interimPressureTolerancePercent')
       ? settings.interimPressureTolerancePercent
       : DEFAULT_SETTINGS.interimPressureTolerancePercent
+  };
+}
+
+export function addDefaultCosts(settings) {
+  return {
+    ...settings,
+    costs: copyCosts(settings?.costs ?? DEFAULT_SETTINGS.costs)
+  };
+}
+
+function copyCosts(costs) {
+  return {
+    currencySymbol: typeof costs?.currencySymbol === 'string' ? costs.currencySymbol.trim() : costs?.currencySymbol,
+    pricePerLitre: {
+      oxygen: costs?.pricePerLitre?.oxygen,
+      helium: costs?.pricePerLitre?.helium
+    },
+    leftoverDiscountPercent: costs?.leftoverDiscountPercent,
+    operationPrices: {
+      boostPerLitre: costs?.operationPrices?.boostPerLitre,
+      decantPerLitre: costs?.operationPrices?.decantPerLitre,
+      equalizePerLitre: costs?.operationPrices?.equalizePerLitre,
+      topUpPerOperation: costs?.operationPrices?.topUpPerOperation
+    }
   };
 }
 
@@ -388,6 +420,7 @@ export function validateSettings(settings) {
     cylinderNames.add(normalizedName);
     errors.push(...presetErrors);
   }
+  errors.push(...validateCostSettings(settings.costs));
   return errors;
 }
 
@@ -459,7 +492,7 @@ export function loadSettings(storage, onFallback = () => {}) {
     return copySettings(DEFAULT_SETTINGS);
   }
 
-  const normalized = addDefaultInterimPressureTolerance(addDefaultEquipmentPresets(addDefaultCylinderPresets(addDefaultPhysics(addDefaultPressureLimitPolicy(addDefaultUnits(addDefaultBooster(saved)))))));
+  const normalized = addDefaultCosts(addDefaultInterimPressureTolerance(addDefaultEquipmentPresets(addDefaultCylinderPresets(addDefaultPhysics(addDefaultPressureLimitPolicy(addDefaultUnits(addDefaultBooster(saved))))))));
   const errors = validateSettings(normalized);
   if (errors.length > 0) {
     onFallback(new RangeError(errors.join(' ')));
@@ -469,7 +502,7 @@ export function loadSettings(storage, onFallback = () => {}) {
 }
 
 export function saveSettings(settings, storage) {
-  const normalized = addDefaultInterimPressureTolerance(addDefaultEquipmentPresets(addDefaultCylinderPresets(addDefaultPhysics(addDefaultPressureLimitPolicy(addDefaultUnits(addDefaultBooster(settings)))))));
+  const normalized = addDefaultCosts(addDefaultInterimPressureTolerance(addDefaultEquipmentPresets(addDefaultCylinderPresets(addDefaultPhysics(addDefaultPressureLimitPolicy(addDefaultUnits(addDefaultBooster(settings))))))));
   const errors = validateSettings(normalized);
   if (errors.length > 0) throw new RangeError(errors.join(' '));
   storage.setItem(STORAGE_KEY, JSON.stringify(copySettings(normalized)));
