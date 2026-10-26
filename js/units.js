@@ -1,3 +1,4 @@
+import { MATERIALS } from './materials.js';
 export const METRIC_UNITS = 'metric';
 export const IMPERIAL_UNITS = 'imperial';
 
@@ -36,9 +37,9 @@ export function unitLabel(quantity, units) {
   return UNIT_DEFINITIONS[canonicalQuantity(quantity)]?.[normalizeUnits(units)]?.[0] ?? '';
 }
 export function materialLabel(material, units) {
-  if (material === 'aluminum') return units === IMPERIAL_UNITS ? 'Aluminum' : 'Aluminium';
-  if (material === 'steel') return 'Steel';
-  return material;
+  const definition = MATERIALS[material];
+  if (!definition) return material;
+  return units === IMPERIAL_UNITS && definition.labelImperial ? definition.labelImperial : definition.label;
 }
 
 export const getUnitLabel = unitLabel;

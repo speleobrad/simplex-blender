@@ -1,4 +1,5 @@
 import { isValidGasComposition } from './gas-input.js';
+import { isValidMaterial, materialListText } from './materials.js';
 export const DEFAULT_HOT_OVERFILL_PERCENT = 2;
 
 export function isValidHotOverfillPercent(value) {
@@ -30,8 +31,8 @@ export function validateCylinderPreset(preset) {
   if (!preset || !Number.isFinite(preset.volumeL) || preset.volumeL < 0.1) {
     errors.push(`Cylinder preset “${preset?.name ?? ''}” volume must be at least 0.1 L.`);
   }
-  if (!preset || !['steel', 'aluminum'].includes(preset.material)) {
-    errors.push(`Cylinder preset “${preset?.name ?? ''}” material must be steel or aluminum.`);
+  if (!preset || !isValidMaterial(preset.material)) {
+    errors.push(`Cylinder preset “${preset?.name ?? ''}” material must be ${materialListText()}.`);
   }
   if (!preset || !Number.isFinite(preset.massKg) || preset.massKg <= 0) {
     errors.push(`Cylinder preset “${preset?.name ?? ''}” mass must be greater than 0 kg.`);

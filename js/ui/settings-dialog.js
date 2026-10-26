@@ -1,6 +1,7 @@
 import { PRESET_IMPORT_DEFAULT_URLS } from '../preset-import.js';
 import { matchesPressureWarningUnlockPhrase, sortCylinderPresetEntries, sortGasPresetEntries } from '../settings.js';
 import { convertToDisplay, materialLabel, unitLabel } from '../units.js';
+import { MATERIAL_VALUES } from '../materials.js';
 const CUSTOM_PRESET = 'custom';
 const EQUIPMENT_FIELD_QUANTITIES = {
   'settings-booster-min-source-pressure': 'pressureBar',
@@ -132,7 +133,7 @@ function createMaterialSelect(preset, index, units) {
   select.dataset.settingsIndex = String(index);
   select.dataset.settingsField = 'material';
   select.setAttribute('aria-label', `${preset.name || 'Cylinder'} material`);
-  for (const [value, label] of [['steel', 'Steel'], ['aluminum', 'Aluminum']]) {
+  for (const value of MATERIAL_VALUES) {
     const option = document.createElement('option');
     option.value = value;
     option.textContent = materialLabel(value, units);

@@ -2,6 +2,7 @@ import {
   DEFAULT_HOT_OVERFILL_PERCENT,
   isValidHotOverfillPercent
 } from './preset-validation.js';
+import { isValidMaterial, materialListText } from './materials.js';
 import { isValidGasComposition } from './gas-input.js';
 import { WATER_SUBMERSION_PERCENT_OPTIONS } from './thermodynamics.js';
 import { getCylinderPressureExceedance } from './pressure-limits.js';
@@ -60,8 +61,8 @@ export function validateCalculatorInputs(cylinder, physics, thermal, options = {
     errors.push('Thermal input must be an object.');
     return errors;
   }
-  if (!['steel', 'aluminum'].includes(thermal.tankMaterial)) {
-    errors.push('Thermal tank material must be steel or aluminum.');
+  if (!isValidMaterial(thermal.tankMaterial)) {
+    errors.push(`Thermal tank material must be ${materialListText()}.`);
   }
   if (!['air', 'water'].includes(thermal.coolingMedium)) {
     errors.push('Thermal cooling medium must be air or water.');

@@ -22,5 +22,7 @@
   { "name": "Catalina C60", "volumeL": 7.9, "material": "aluminum", "massKg": 12.4, "workingPressureBar": 228, "hotOverfillPercent": 2 },
   { "name": "Catalina C80", "volumeL": 10.3, "material": "aluminum", "massKg": 15.7, "workingPressureBar": 228, "hotOverfillPercent": 2 },
   { "name": "Catalina C100", "volumeL": 13.2, "material": "aluminum", "massKg": 17.9, "workingPressureBar": 228, "hotOverfillPercent": 2 },
-  { "name": "Catalina S80", "volumeL": 11.1, "material": "aluminum", "massKg": 14.3, "workingPressureBar": 207, "hotOverfillPercent": 2 }
+  { "name": "Catalina S80", "volumeL": 11.1, "material": "aluminum", "massKg": 14.3, "workingPressureBar": 207, "hotOverfillPercent": 2 },
+  { "name": "Worthington Carbondive 6.8L 300 bar", "volumeL": 6.8, "material": "carbon-wrapped-steel", "massKg": 6.25, "workingPressureBar": 300, "hotOverfillPercent": 2 },
+  { "name": "Worthington Carbondive 12L 300 bar", "volumeL": 12, "material": "carbon-wrapped-steel", "massKg": 10.9, "workingPressureBar": 300, "hotOverfillPercent": 2 }
 ]

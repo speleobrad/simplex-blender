@@ -1,4 +1,4 @@
-import { convertToDisplay, formatInputValue, unitLabel } from '../units.js';
+import { convertToDisplay, formatInputValue, materialLabel, unitLabel } from '../units.js';
 import { renderCompareRecipe } from './compare-recipe.js';
 import { DEFAULT_WATER_SUBMERSION_PERCENT, WATER_SUBMERSION_PERCENT_OPTIONS } from '../thermodynamics.js';
 
@@ -149,7 +149,7 @@ function renderScenarioStart(container, { scenario = {}, cylinderPresets = [], g
   cylinder.append(labelled('cylinderPresetName', 'Cylinder', cylinderControl, null, units, errors, 'block text-slate-400 font-medium mb-1'));
   const selected = cylinderPresets.find(item => item.name === start.cylinderPresetName);
   if (selected) {
-    const hint = `${convertToDisplay(selected.volumeL, 'volumeL', units)} ${unitLabel('volumeL', units)} · ${selected.material ?? ''} · ${convertToDisplay(selected.massKg, 'massKg', units)} ${unitLabel('massKg', units)} · ${convertToDisplay(selected.workingPressureBar, 'pressureBar', units)} ${unitLabel('pressureBar', units)} working pressure`;
+    const hint = `${convertToDisplay(selected.volumeL, 'volumeL', units)} ${unitLabel('volumeL', units)} · ${materialLabel(selected.material, units)} · ${convertToDisplay(selected.massKg, 'massKg', units)} ${unitLabel('massKg', units)} · ${convertToDisplay(selected.workingPressureBar, 'pressureBar', units)} ${unitLabel('pressureBar', units)} working pressure`;
     cylinder.append(el('p', { class: 'mt-1 text-[10px] text-slate-500', 'data-cylinder-hint': '' }, hint));
   }
 
