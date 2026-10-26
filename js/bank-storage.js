@@ -14,13 +14,14 @@ const LEGACY_DEFAULT_BANKS = Object.freeze([
   Object.freeze({ id: 'bank-o2', name: 'Pure Oxygen', volumeL: 40, pressureBar: 180, oxygenPercent: 100, heliumPercent: 0, enabled: true })
 ]);
 
-const BANK_FIELDS = ['id', 'name', 'volumeL', 'pressureBar', 'oxygenPercent', 'heliumPercent', 'enabled'];
+const LEGACY_BANK_FIELDS = ['id', 'name', 'volumeL', 'pressureBar', 'oxygenPercent', 'heliumPercent', 'enabled'];
+const BANK_FIELDS = [...LEGACY_BANK_FIELDS, 'pricePerLitre'];
 
 function isLegacyDefaultBanks(banks) {
   return Array.isArray(banks)
     && banks.length === LEGACY_DEFAULT_BANKS.length
     && banks.every((bank, index) => (
-      Object.keys(bank).length === BANK_FIELDS.length
+      Object.keys(bank).length === LEGACY_BANK_FIELDS.length
       && BANK_FIELDS.every(field => bank[field] === LEGACY_DEFAULT_BANKS[index][field])
     ));
 }

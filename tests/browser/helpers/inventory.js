@@ -5,8 +5,14 @@ const FIELD_NAMES = {
   volumeL: /volume in (?:litres|L)$/i,
   pressureBar: /pressure in bar$/i,
   oxygenPercent: /oxygen percentage$/i,
-  heliumPercent: /helium percentage$/i
+  heliumPercent: /helium percentage$/i,
+  pricePerLitre: /price per \/(?:L|cu ft)$/i
 };
+
+/** The per-row price input, labelled in the display unit. */
+export function bankPrice(row) {
+  return row.getByRole('spinbutton', { name: FIELD_NAMES.pricePerLitre });
+}
 
 function bankPanel(page) {
   return page.locator('#supply-banks-section');

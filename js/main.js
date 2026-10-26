@@ -40,6 +40,7 @@ import { convertFromDisplay, convertToDisplay, formatInputValue, materialLabel, 
 import { resetApplicationState } from './factory-reset.js';
 import { analyzePresetSource, mergeSelectedPresets, PRESET_IMPORT_DEFAULT_URLS } from './preset-import.js';
 import { loadSupplyBanks, saveSupplyBanks } from './bank-storage.js';
+import { priceBankByRecipe } from './bank-pricing.js';
 import { loadTheme, saveTheme } from './theme.js';
 import { setPrimaryScreen } from './navigation.js';
 import { setResultTab } from './result-tabs.js';
@@ -50,7 +51,7 @@ import { renderCompareRecipe } from './ui/compare-recipe.js';
 import { renderPressureLimitWarnings, renderResults } from './ui/results.js';
 import { renderSettingsDialog, renderPresetOptions, costFieldToStored, setCostField } from './ui/settings-dialog.js';
 import { renderEquipmentSummary } from './ui/equipment-summary.js';
-import { renderSupplyBanks } from './ui/supply-banks.js';
+import { formatBankPrice, renderSupplyBanks } from './ui/supply-banks.js';
 import { renderStorageWarning } from './ui/storage-warning.js';
 import { renderThermalCharts } from './ui/thermal-charts.js';
 import { changeTernaryZoom, clearTernaryDiagram, observeTernaryCanvas, renderTernaryDiagram } from './ui/ternary.js';
@@ -110,6 +111,7 @@ const state = {
   banksLoadFailure,
   bankSaveFailure: null,
   bankInputFailure: null,
+  bankSuggestions: {},
   activeScreen: 'blending',
   activeTab: 'recipe',
   interimMeasurements: [],
@@ -271,6 +273,117 @@ function persistSupplyBanks() {
     state.bankSaveFailure = error;
   }
   updateStorageWarning();
+}
+
+function currentPhysicsForBanks() {
+  return {
+    model: state.settings.physics.model,
+    temperatureC: canonicalNumberValue('ambient-temperature', 'temperatureC')
+  };
+}
+
+function bankPricingSignature(bank) {
+  return JSON.stringify({
+    volumeL: bank.volumeL,
+    pressureBar: bank.pressureBar,
+    oxygenPercent: bank.oxygenPercent,
+    heliumPercent: bank.heliumPercent,
+    costs: state.settings.costs,
+    booster: state.settings.booster,
+    pressureLimitMode: state.settings.pressureLimitMode,
+    physics: currentPhysicsForBanks()
+  });
+}
+
+function bankSuggestionFor(bank) {
+  const suggestion = state.bankSuggestions[bank.id];
+  if (!suggestion) return null;
+  if (suggestion.signature === bankPricingSignature(bank)) return suggestion;
+  delete state.bankSuggestions[bank.id];
+  return null;
+}
+
+function renderBankTable() {
+  const suggestions = {};
+  for (const bank of state.banks) {
+    const suggestion = bankSuggestionFor(bank);
+    if (suggestion) suggestions[bank.id] = suggestion;
+  }
+  for (const bankId of Object.keys(state.bankSuggestions)) {
+    if (!state.banks.some(bank => bank.id === bankId)) delete state.bankSuggestions[bankId];
+  }
+  renderSupplyBanks(state.banks, state.settings.gasPresets, state.settings.units, {
+    suggestions,
+    currencySymbol: state.settings.costs.currencySymbol
+  });
+}
+
+function rejectBankEdit(bank, message) {
+  state.bankInputFailure = { bankId: bank.id, message: `${bank.name}: ${message}` };
+  updateStorageWarning();
+}
+
+function commitBankUpdate(bank, updatedBank) {
+  if (updatedBank.oxygenPercent === 21 && updatedBank.heliumPercent === 0) {
+    return 'Air is supplied by the compressor and cannot be a finite supply bank.';
+  }
+  const errors = validateSupplyBankInput(updatedBank);
+  if (errors.length > 0) return errors[0];
+  clearBankInputFailure(bank.id);
+  Object.assign(bank, updatedBank);
+  delete state.bankSuggestions[bank.id];
+  persistSupplyBanks();
+  recalculate();
+  return null;
+}
+
+function calculateBankPrice(bankId) {
+  const bank = state.banks.find(candidate => candidate.id === bankId);
+  if (!bank) return;
+  state.bankSuggestions[bank.id] = { status: 'calculating', signature: bankPricingSignature(bank) };
+  renderBankTable();
+  setTimeout(() => finishBankPriceCalculation(bank.id), 0);
+}
+
+function finishBankPriceCalculation(bankId) {
+  const pending = state.bankSuggestions[bankId];
+  const bank = state.banks.find(candidate => candidate.id === bankId);
+  if (!bank || pending?.status !== 'calculating') return;
+  const signature = bankPricingSignature(bank);
+  if (pending.signature !== signature) {
+    delete state.bankSuggestions[bankId];
+    renderBankTable();
+    return;
+  }
+  let result;
+  try {
+    result = priceBankByRecipe({
+      bank,
+      costs: state.settings.costs,
+      settings: state.settings,
+      physics: currentPhysicsForBanks()
+    });
+  } catch (error) {
+    delete state.bankSuggestions[bankId];
+    renderBankTable();
+    throw error;
+  }
+  state.bankSuggestions[bankId] = result.ok
+    ? { status: 'ok', pricePerLitre: result.pricePerLitre, recipeCost: result.recipeCost, litres: result.litres, signature }
+    : { status: 'failed', reason: result.reason, signature };
+  renderBankTable();
+}
+
+function applyBankPrice(bankId) {
+  const bank = state.banks.find(candidate => candidate.id === bankId);
+  if (!bank) return;
+  const suggestion = bankSuggestionFor(bank);
+  if (suggestion?.status !== 'ok') {
+    renderBankTable();
+    return;
+  }
+  const error = commitBankUpdate(bank, { ...bank, pricePerLitre: suggestion.pricePerLitre });
+  if (error) rejectBankEdit(bank, error);
 }
 
 function applyTheme(theme) {
@@ -1579,7 +1692,7 @@ function runCompare() {
 }
 
 function recalculate() {
-  renderSupplyBanks(state.banks, state.settings.gasPresets);
+  renderBankTable();
   renderEquipmentSummary(state.settings);
   if (state.activeScreen === 'what-if') {
     runWhatIf();
@@ -1611,7 +1724,7 @@ function recalculate() {
   state.lastInput = input;
   state.lastResult = resultWithWarnings;
 
-  renderSupplyBanks(state.banks, state.settings.gasPresets, state.settings.units);
+  renderBankTable();
   renderEquipmentSummary(state.settings, state.settings.units);
   renderResults(resultWithWarnings, input);
 
@@ -1691,6 +1804,7 @@ function removeBank(bankId) {
   const index = state.banks.findIndex(bank => bank.id === bankId);
   if (index < 0) return;
   clearBankInputFailure(bankId);
+  delete state.bankSuggestions[bankId];
   state.banks.splice(index, 1);
   persistSupplyBanks();
   recalculate();
@@ -1729,6 +1843,7 @@ function selectBankGasPreset(select) {
   applyGasPresetToBank(bank, preset);
   bank.gasPresetName = preset.name;
   clearBankInputFailure(bank.id);
+  delete state.bankSuggestions[bank.id];
   persistSupplyBanks();
   recalculate();
 }
@@ -1736,6 +1851,10 @@ function selectBankGasPreset(select) {
 
 function restoreBankInputValue(input, bank) {
   const { bankField } = input.dataset;
+  if (bankField === 'pricePerLitre') {
+    input.value = formatBankPrice(bank.pricePerLitre, state.settings.units);
+    return;
+  }
   const quantity = bankField === 'volumeL' ? 'volumeL' : bankField === 'pressureBar' ? 'pressureBar' : null;
   const value = quantity
     ? convertToDisplay(bank[bankField], quantity, state.settings.units)
@@ -1751,6 +1870,18 @@ function updateBankFromInput(input) {
   const updatedBank = { ...bank };
   if (bankField === 'name') {
     updatedBank.name = input.value;
+  } else if (bankField === 'pricePerLitre') {
+    if (input.value.trim() === '') {
+      updatedBank.pricePerLitre = null;
+    } else {
+      const value = Number.parseFloat(input.value);
+      if (!Number.isFinite(value)) {
+        restoreBankInputValue(input, bank);
+        clearBankInputFailure(bank.id);
+        return;
+      }
+      updatedBank.pricePerLitre = convertFromDisplay(value, 'pricePerVolumeL', state.settings.units);
+    }
   } else {
     const value = Number.parseFloat(input.value);
     if (!Number.isFinite(value)) {
@@ -1765,27 +1896,11 @@ function updateBankFromInput(input) {
     if (bankField === 'oxygenPercent' || bankField === 'heliumPercent') updatedBank.gasPresetName = null;
   }
 
-  if (updatedBank.oxygenPercent === 21 && updatedBank.heliumPercent === 0) {
+  const error = commitBankUpdate(bank, updatedBank);
+  if (error) {
     restoreBankInputValue(input, bank);
-    state.bankInputFailure = {
-      bankId: bank.id,
-      message: `${bank.name}: Air is supplied by the compressor and cannot be a finite supply bank.`
-    };
-    updateStorageWarning();
-    return;
+    rejectBankEdit(bank, error);
   }
-
-  const errors = validateSupplyBankInput(updatedBank);
-  if (errors.length > 0) {
-    restoreBankInputValue(input, bank);
-    state.bankInputFailure = { bankId: bank.id, message: `${bank.name}: ${errors[0]}` };
-    updateStorageWarning();
-    return;
-  }
-  clearBankInputFailure(bank.id);
-  Object.assign(bank, updatedBank);
-  persistSupplyBanks();
-  recalculate();
 }
 
 function updateWhatIfField(input, rerender) {
@@ -1978,6 +2093,7 @@ function handleInputOrChange(event) {
     const bank = state.banks.find(candidate => candidate.id === target.dataset.bankId);
     if (bank) {
       bank.enabled = target.checked;
+      delete state.bankSuggestions[bank.id];
       persistSupplyBanks();
       recalculate();
     }
@@ -2168,6 +2284,12 @@ function handleClick(event) {
       break;
     case 'remove-bank':
       removeBank(actionElement.dataset.bankId);
+      break;
+    case 'calculate-bank-price':
+      calculateBankPrice(actionElement.dataset.bankId);
+      break;
+    case 'apply-bank-price':
+      applyBankPrice(actionElement.dataset.bankId);
       break;
     case 'open-settings':
       openSettings();

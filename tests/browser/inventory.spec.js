@@ -2,7 +2,8 @@ import { test, expect } from './fixtures/app-fixtures.js';
 import { assertContained, assertInsideViewport, assertNoUnexpectedOverlap } from './assertions/layout.js';
 import { fillWorkingTank, assertResultPanelExclusive } from './helpers/blending.js';
 import { selectResultTab } from './helpers/navigation.js';
-import { addBank, bankRows, editBank, removeBank } from './helpers/inventory.js';
+import { addBank, bankPrice, bankRows, editBank, removeBank } from './helpers/inventory.js';
+import { openSettingsCategory, saveSettings } from './helpers/settings.js';
 
 async function assertNoFiniteAir(page) {
   const rows = bankRows(page);
@@ -145,5 +146,114 @@ test.describe('inventory supply banks', () => {
     await booster.selectOption({ label: 'Maximator ROB22' });
     await expect(page.locator('#equipment-summary')).toContainText('Bauer Oceanus 300bar');
     await expect(page.locator('#equipment-summary')).toContainText('Maximator ROB22');
+  });
+
+  test.describe('bank price suggestions', () => {
+    async function setSettingsPrices(page, { oxygen, helium }) {
+      const costs = await openSettingsCategory(page, 'costs');
+      await costs.getByRole('spinbutton', { name: 'Oxygen price (/L)', exact: true }).fill(String(oxygen));
+      await costs.getByRole('spinbutton', { name: 'Helium price (/L)', exact: true }).fill(String(helium));
+      await saveSettings(page);
+      await page.getByRole('tab', { name: 'Inventory', exact: true }).click();
+    }
+
+    async function createBank(page, values) {
+      const index = await bankRows(page).count();
+      await addBank(page);
+      await editBank(page, index, { name: 'Priced reserve', volumeL: 12, pressureBar: 200, oxygenPercent: 18, heliumPercent: 45, ...values });
+      return index;
+    }
+
+    async function reloadInventory(page) {
+      await page.evaluate(() => { window.name = '__skipStorageSeed'; });
+      await page.reload();
+      await page.getByRole('tab', { name: 'Inventory', exact: true }).click();
+    }
+
+    test('stores a typed bank price, rejects a negative price, and clears when emptied', async ({ appPage }) => {
+      const page = await appPage.goto('tourSeen');
+      const index = await createBank(page, { pricePerLitre: 0.025 });
+      await expect(bankPrice(bankRows(page).nth(index))).toHaveValue('0.025');
+
+      await reloadInventory(page);
+      await expect(bankPrice(bankRows(page).nth(index))).toHaveValue('0.025');
+
+      await editBank(page, index, { pricePerLitre: -1 });
+      await expect(page.getByRole('alert')).toContainText('Inventory edit rejected');
+      await expect(bankPrice(bankRows(page).nth(index))).toHaveValue('0.025');
+
+      await editBank(page, index, { pricePerLitre: '' });
+      await expect(page.getByRole('alert')).toBeHidden();
+      await expect(bankPrice(bankRows(page).nth(index))).toHaveValue('');
+    });
+
+    test('calculates a suggestion without touching the price, and Apply stores it across reload', async ({ appPage }) => {
+      const page = await appPage.goto('tourSeen');
+      await setSettingsPrices(page, { oxygen: 0.01, helium: 0.02 });
+      const index = await createBank(page, {});
+      const row = bankRows(page).nth(index);
+      await row.getByRole('button', { name: /^Calculate price for /i }).click();
+      await expect(row.locator('[data-bank-note]')).toContainText('Indicative price');
+      await expect(bankPrice(row)).toHaveValue('');
+
+      await row.getByRole('button', { name: /^Apply suggested price for /i }).click();
+      const applied = await bankPrice(bankRows(page).nth(index)).inputValue();
+      expect(applied).toMatch(/^\d/);
+      await expect(bankRows(page).nth(index).locator('[data-bank-note]')).toBeEmpty();
+
+      await reloadInventory(page);
+      await expect(bankPrice(bankRows(page).nth(index))).toHaveValue(applied);
+    });
+
+    test('offers Replace for a bank that already has a price', async ({ appPage }) => {
+      const page = await appPage.goto('tourSeen');
+      await setSettingsPrices(page, { oxygen: 0.01, helium: 0.02 });
+      const index = await createBank(page, { pricePerLitre: 0.03 });
+      const row = bankRows(page).nth(index);
+      await row.getByRole('button', { name: /^Calculate price for /i }).click();
+      await expect(row.locator('[data-bank-note]')).toContainText('Current price');
+      await expect(row.getByRole('button', { name: /^Replace suggested price for /i })).toBeVisible();
+      await expect(row.getByRole('button', { name: /^Apply suggested price for /i })).toHaveCount(0);
+    });
+
+    test('discards a pending suggestion when the bank is edited', async ({ appPage }) => {
+      const page = await appPage.goto('tourSeen');
+      await setSettingsPrices(page, { oxygen: 0.01, helium: 0.02 });
+      const index = await createBank(page, {});
+      const row = bankRows(page).nth(index);
+      await row.getByRole('button', { name: /^Calculate price for /i }).click();
+      await expect(row.locator('[data-bank-note]')).toContainText('Indicative price');
+
+      await editBank(page, index, { volumeL: 14 });
+      await expect(row.locator('[data-bank-note]')).toBeEmpty();
+      await expect(row.getByRole('button', { name: /suggested price for /i })).toHaveCount(0);
+    });
+
+    test('discards a pending suggestion when Settings prices change and keeps the stored price', async ({ appPage }) => {
+      const page = await appPage.goto('tourSeen');
+      await setSettingsPrices(page, { oxygen: 0.01, helium: 0.02 });
+      const index = await createBank(page, { pricePerLitre: 0.03 });
+      const row = bankRows(page).nth(index);
+      await row.getByRole('button', { name: /^Calculate price for /i }).click();
+      await expect(row.locator('[data-bank-note]')).toContainText('Indicative price');
+
+      await setSettingsPrices(page, { oxygen: 0.05, helium: 0.06 });
+      await expect(row.locator('[data-bank-note]')).toBeEmpty();
+      await expect(row.getByRole('button', { name: /suggested price for /i })).toHaveCount(0);
+      await expect(bankPrice(row)).toHaveValue('0.03');
+      await reloadInventory(page);
+      await expect(bankPrice(bankRows(page).nth(index))).toHaveValue('0.03');
+    });
+
+    test('shows the pricer reason for a bank below 10 bar and keeps its stored price', async ({ appPage }) => {
+      const page = await appPage.goto('tourSeen');
+      await setSettingsPrices(page, { oxygen: 0.01, helium: 0.02 });
+      const index = await createBank(page, { pricePerLitre: 0.03, pressureBar: 8 });
+      const row = bankRows(page).nth(index);
+      await row.getByRole('button', { name: /^Calculate price for /i }).click();
+      await expect(row.locator('[data-bank-note]')).toContainText('Banks below 10 bar cannot be priced by recipe');
+      await expect(row.getByRole('button', { name: /suggested price for /i })).toHaveCount(0);
+      await expect(bankPrice(row)).toHaveValue('0.03');
+    });
   });
 });
