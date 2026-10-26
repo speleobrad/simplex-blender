@@ -135,3 +135,11 @@ test('rejects out-of-range banks and falls back when invalid saved records are l
   }), DEFAULT_BANKS);
   assert.ok(reportedFailure instanceof RangeError);
 });
+test('bank price per litre persists and legacy banks stay unpriced', () => {
+  const storage = memoryStorage();
+  const banks = loadSupplyBanks(storage);
+  banks[0].pricePerLitre = 0.0123;
+  saveSupplyBanks(banks, storage);
+  assert.equal(loadSupplyBanks(storage)[0].pricePerLitre, 0.0123);
+  assert.equal('pricePerLitre' in loadSupplyBanks(memoryStorage())[0], false);
+});

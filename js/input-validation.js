@@ -188,5 +188,9 @@ export function validateSupplyBankInput(bank) {
   if (bank.gasPresetName !== undefined && bank.gasPresetName !== null && typeof bank.gasPresetName !== 'string') {
     return ['Supply bank preset names must be text.'];
   }
+  if (bank.pricePerLitre !== undefined && bank.pricePerLitre !== null
+    && !(Number.isFinite(bank.pricePerLitre) && bank.pricePerLitre >= 0 && bank.pricePerLitre <= 1_000_000)) {
+    return ['Supply bank price must be a number from 0 to 1,000,000.'];
+  }
   return [];
 }

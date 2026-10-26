@@ -41,6 +41,7 @@ function copyBanks(banks) {
       enabled: bank.enabled
     };
     if (bank.gasPresetName !== undefined) copy.gasPresetName = bank.gasPresetName;
+    if (bank.pricePerLitre !== undefined) copy.pricePerLitre = bank.pricePerLitre;
     return copy;
   });
 }

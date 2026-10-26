@@ -359,3 +359,11 @@ test('cost settings reject negative, non-finite, oversized prices and bad discou
     assert.ok(validateCostSettings(c).length > 0);
   }
 });
+
+test('supply bank price must be a non-negative finite number or null', () => {
+  const bank = { id: 'b', name: 'B', volumeL: 10, pressureBar: 100, oxygenPercent: 100, heliumPercent: 0, enabled: true };
+  assert.deepEqual(validateSupplyBankInput({ ...bank, pricePerLitre: 0.5 }), []);
+  assert.deepEqual(validateSupplyBankInput({ ...bank, pricePerLitre: null }), []);
+  assert.ok(validateSupplyBankInput({ ...bank, pricePerLitre: -1 }).length > 0);
+  assert.ok(validateSupplyBankInput({ ...bank, pricePerLitre: 'x' }).length > 0);
+});
