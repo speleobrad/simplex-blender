@@ -71,7 +71,7 @@ All quantities use moles and the selected gas model, not bar·L. Receivers casca
 
 ## Protocol and thermal model
 
-- `drain` stays the vent step; its pressure drop is only the vented remainder. Salvage adds protocol steps of type `salvage` (stage `decant` or `boost`), each carrying `receiverBankId`, `receiverBankName`, `movedMoles`, `movedHeliumLitres`, and the receiving bank's before and after pressure and mix.
+- Salvage steps come first, in cascade order, each lowering the working tank by its moved moles; the `drain` vent step follows and drops the tank from its post-salvage pressure to the retained pressure, so its drop is only the vented remainder (omitted if none). Salvage adds protocol steps of type `salvage` (stage `decant` or `boost`), each carrying `receiverBankId`, `receiverBankName`, `movedMoles`, `movedHeliumLitres`, and the receiving bank's before and after pressure and mix.
 - A salvage step has no trajectory point (the working tank's mix is unchanged) and no interim-reading slot, like drain.
 - `js/thermodynamics.js` models a salvage step as a drain-type, cooling step on the working tank. A decant stage uses the configured decant rate selected by the working tank mix; a boost stage uses the booster fill-rate model with the bank as receiver. The tank-side pressure rate follows from moles conservation. The bank's own temperature is not modeled (assumed at ambient).
 - Helium vented is reduced by the helium moved into banks. The existing "Helium salvaged" tile keeps its present meaning (helium retained in the cylinder or supplied). Salvage details appear in the protocol cards only.
