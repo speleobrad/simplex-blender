@@ -237,7 +237,7 @@ test('supply bank price must be a non-negative finite number or null', () => {
 
 ```js
 test('optimizer steps carry cost contract fields', () => {
-  const result = optimizeBlend(defaultExampleInput()); // existing fixture helper; adapt the name
+  const result = optimizeBlend(defaultRecipeInput);
   const transfers = result.protocolSteps.filter(s => s.type === 'boost' || s.type === 'decant');
   assert.ok(transfers.length > 0);
   for (const step of transfers) {
@@ -248,18 +248,21 @@ test('optimizer steps carry cost contract fields', () => {
   }
 });
 test('a thermally split transfer shares one operation id and its moles sum to the whole', () => {
-  const result = optimizeBlend(thermalSplitInput()); // fixture whose plan contains '(safe stage' titles; find one in the existing tests
-  const split = result.protocolSteps.filter(s => /safe stage/.test(s.title ?? ''));
-  assert.ok(split.length >= 2);
-  assert.equal(new Set(split.map(s => s.costOperationId)).size, 1);
+  const result = optimizeBlend(schedulerSplitInput);
+  const stages = result.protocolSteps.filter(s => s._thermalSplit);
+  assert.equal(stages.length, 4);
+  assert.equal(stages[0].costOperationId, stages[1].costOperationId);
+  assert.equal(stages[2].costOperationId, stages[3].costOperationId);
+  assert.notEqual(stages[0].costOperationId, stages[2].costOperationId);
+  assert.ok(stages.every(s => s.sourceConsumedMoles > 0));
 });
 test('operation ids are unique per operation', () => {
-  const ids = optimizeBlend(defaultExampleInput()).protocolSteps.filter(s => s.costOperationId)
+  const ids = optimizeBlend(defaultRecipeInput).protocolSteps.filter(s => s.costOperationId)
     .filter(s => !/safe stage/.test(s.title ?? '')).map(s => s.costOperationId);
   assert.equal(new Set(ids).size, ids.length);
 });
 ```
-If no existing fixture produces a safe-stage split, build one from the pressure-limit tests (search `safe stage` in `tests/optimizer.test.js`).
+Fixtures, both in `tests/optimizer.test.js`: `defaultRecipeInput` is the object literal at `tests/plan-with-readings.test.js:9-24` (45 bar Air at 21 °C to 195 bar 18/45, `DEFAULT_BANKS`, `DEFAULT_SETTINGS`), copied to a top-level `const` with `import { DEFAULT_BANKS } from '../js/bank-storage.js'` and `import { DEFAULT_SETTINGS } from '../js/settings.js'` (add the imports if absent). `schedulerSplitInput` is the object literal currently inlined in the test `two scheduler-split transfers preserve stage order, inventories, and thermal safety` (`tests/optimizer.test.js:1898`, literal at 1901–1956, which yields four `_thermalSplit` stages titled `safe stage 1/2` for Oxygen then Helium); move it into a top-level `const schedulerSplitInput = {…}` and make that existing test call `optimizeBlend(schedulerSplitInput)`.
 
 - [ ] **Step 2:** FAIL (fields missing).
 - [ ] **Step 3: Implement.** Before the `for (const { bank, addedMoles } of recipeBoosts)` loop (line 2228) add `let costOperationCounter = 0;`. Inside `for (const stage of transferStages)` after `stepNumber++;` add `const costOperationId = \`op-${++costOperationCounter}\`;`. In the `protocolSteps.push({...})` at 2298 add:
@@ -288,7 +291,7 @@ If no existing fixture produces a safe-stage split, build one from the pressure-
 
 ```js
 test('compare steps carry cost fields; compressor add is topUp', () => {
-  const protocol = buildCompareProtocol(rowsWithCompressorAndFiniteBank(), compareContext());
+  const protocol = planCompare([compressorRow]);
   const byKind = Object.groupBy(protocol.protocolSteps.filter(s => s.costOperation), s => s.costOperation);
   assert.equal(byKind.topUp.length, 1);
   for (const step of protocol.protocolSteps.filter(s => s.costOperation)) {
@@ -297,15 +300,32 @@ test('compare steps carry cost fields; compressor add is topUp', () => {
   }
 });
 test('equalize then boost are two operations whose moles sum to the required moles', () => {
-  const protocol = buildCompareProtocol(rowNeedingEqualizeThenBoost(), compareContext());
+  const protocol = planCompare([heliumRow]);
   const [equalize, boost] = protocol.protocolSteps.filter(s => s.costOperation);
   assert.equal(equalize.costOperation, 'equalize');
   assert.equal(boost.costOperation, 'boost');
   assert.notEqual(equalize.costOperationId, boost.costOperationId);
 });
-test('source consumed moles match the finite source pressure drop', () => { /* sum steps per bank; compare with calcMolarDensity(start)-calcMolarDensity(end) × volume */ });
+test('source consumed moles match the finite source pressure drop', () => {
+  const protocol = planCompare([heliumRow]);
+  const consumed = protocol.protocolSteps.filter(s => s.costOperation).reduce((sum, s) => sum + s.sourceConsumedMoles, 0);
+  const bankStart = calcMolarDensity(200, 0, 100, physics.temperatureC, false) * 40;
+  const bankEnd = calcMolarDensity(protocol.protocolSteps.at(-1).sourceEndPressureBar, 0, 100, physics.temperatureC, false) * 40;
+  assert.ok(Math.abs(consumed - (bankStart - bankEnd)) < 1e-6);
+});
 ```
-Write the helper fixtures from the existing equalize test in `tests/compare-recipe.test.js` (search `equalize`). In `tests/thermodynamics.test.js` add a test that `simulateCompareProtocol` output steps still carry the three fields after the `equalize→decant` and compressor `→boost` rewrites at `thermodynamics.js:1017-1027`. In `tests/what-if-scenario.test.js` add the same assertion for a What-if run (find how `runWhatIf` builds its protocol in `main.js`/`what-if-scenario.js`; if it calls `buildCompareProtocol`, one assertion on its result suffices).
+Shared fixtures at the top of the new tests in `tests/compare-recipe.test.js` (which already defines `cylinder`, `physics` (ideal, 20 °C), `settings` and `banks` including `he-bank` at lines 13–53; add `import { calcMolarDensity } from '../js/physics.js'` if absent):
+
+```js
+const planCompare = rows => buildCompareProtocol(
+  validateCompareRecipe(rows, { cylinder, banks, physics, settings }).normalizedRows,
+  { cylinder, banks, physics, settings }
+);
+const compressorRow = { id: 'air', type: 'add', bankId: 'compressor-air', pressureAddedBar: 150, targetPressureBar: 200, pressureInputMode: 'target' };
+const heliumRow = { id: 'add', type: 'add', bankId: 'he-bank', pressureAddedBar: 150, targetPressureBar: 200, pressureInputMode: 'target' };
+```
+
+`heliumRow` is the row of the existing test `plans decant equalize and boost stages without mutating bank inventory` (line 232), which already yields `['equalize', 'boost']`; `compressorRow` is the row of `accepts unlimited compressor Air…` (line 76). In `tests/thermodynamics.test.js` add, next to `compare simulation maps drain, decant, boost, and compressor transfer rates` (line 882), a test that calls `simulateCompareProtocol` with an `equalize` step and a compressor `add` step that each carry `costOperation`, `costOperationId` and `sourceConsumedMoles` (copy that test's `cylinder`/`physics`/`thermal`/`settings` arguments) and asserts the returned `protocolSteps` still carry the same three values after the `equalize`→`decant` and compressor→`boost` rewrites. In `tests/what-if-scenario.test.js` add, next to the test at line 90 that runs `buildCompareProtocol` then `simulateCompareProtocol` on a What-if scenario's rows, the same assertion on that simulation's `protocolSteps`.
 
 - [ ] **Step 2:** FAIL.
 - [ ] **Step 3: Implement.** Add near `plannedCompressorStep`:
@@ -338,17 +358,31 @@ At the top of `buildCompareProtocol` (after `const protocolSteps = [];`): `let c
 - Consumes: Task 4 fields on `optimizeBlend` steps.
 - Produces: merged plans in which no two distinct operations share a `costOperationId`. Suffix IDs become `r<index>-op-N`; prefix IDs are unchanged. The re-solved previous step (line 220) keeps its `costOperationId` through its spread.
 
-- [ ] **Step 1: Failing test** (reuse the default-recipe reading fixture in the existing file, e.g. the 54 bar at 22 °C reading on step 2)
+- [ ] **Step 1: Failing test** (in `tests/plan-with-readings.test.js`, using its existing `input`, `withReadings`, `scrapIndex`, `base`)
 
 ```js
 test('merged plans keep one operation id per operation and consumed moles on every transfer', () => {
-  const plan = planWithReadings(inputWithReading());
+  const plan = planWithReadings(withReadings({ [scrapIndex]: { pressureBar: 54, temperatureC: 22 } }));
   const transfers = plan.protocolSteps.filter(s => s.costOperationId);
   const logical = transfers.filter(s => !/safe stage/.test(s.title ?? ''));
   assert.equal(new Set(logical.map(s => s.costOperationId)).size, logical.length);
   for (const step of transfers) assert.ok(Number.isFinite(step.sourceConsumedMoles));
 });
-test('two readings never collide', () => { /* inputWithTwoReadings(): same uniqueness assertion */ });
+test('a second chained reading never collides', () => {
+  const first = { [scrapIndex]: { pressureBar: 54, temperatureC: 22 } };
+  const afterFirst = planWithReadings(withReadings(first));
+  const laterIndex = afterFirst.protocolSteps.at(-2)._measurementIndex;
+  const laterPlanned = stepAt(afterFirst, laterIndex).thermal;
+  const afterBoth = planWithReadings(withReadings({ ...first, [laterIndex]: {
+    pressureBar: laterPlanned.plannedStartPressureBar - 2,
+    temperatureC: laterPlanned.plannedStartTemperatureC + 0.3
+  } }));
+  const logical = afterBoth.protocolSteps.filter(s => s.costOperationId && !/safe stage/.test(s.title ?? ''));
+  assert.equal(new Set(logical.map(s => s.costOperationId)).size, logical.length);
+  for (const step of afterBoth.protocolSteps.filter(s => s.costOperationId)) {
+    assert.ok(Number.isFinite(step.sourceConsumedMoles));
+  }
+});
 ```
 
 - [ ] **Step 2:** FAIL (suffix IDs restart at `op-1` and collide with prefix IDs).
@@ -608,14 +642,17 @@ for (const [label, composition] of [['O2', { oxygenPercent: 100, heliumPercent: 
   test(`${label} 200 L at 350 bar: outcome under default equipment is established, and prices with a 350 bar booster limit`, () => {
     const big = bank({ ...composition, volumeL: 200, pressureBar: 350 });
     const defaults = priceBankByRecipe({ bank: big, costs: costs(), settings: settingsWith(), physics });
-    console.log(`default-equipment ${label}:`, defaults.ok, defaults.reason ?? '');
+    assert.equal(defaults.ok, false);
+    assert.match(defaults.reason, /Maximum safe pressure/);
+    if (label === 'He') assert.match(defaults.reason, /Booster output cannot exceed 200/);
+    if (label === 'O2') assert.match(defaults.reason, /Unsafe 100% O₂ transfer/);
     const raised = priceBankByRecipe({ bank: big, costs: costs(), settings: settingsWith(s => { s.booster.maxBoosterOutputPressureBar = 350; }), physics });
     assert.equal(raised.ok, true, raised.reason);
-    assert.equal(raised.exhaustedSources, 0);
+    assert.ok(raised.exhaustedSources < raised.sourceCount, 'a recipe may empty some virtual banks in turn, but supply must not be the binding limit');
   });
 }
 ```
-Then replace the `console.log` lines with a real assertion once the default-equipment outcome is observed (O₂ is known to fail with a maximum safe pressure of 200 bar; assert He's observed outcome explicitly — whichever it is — and update the spec line 174 if He differs).
+Observed with the real optimizer on 4 virtual 200 L, 200 bar banks, an empty 200 L tank and a 350 bar target: default equipment fails for He (`Booster output cannot exceed 200.0 bar. Maximum safe pressure … is 200.0 bar`) and for O₂ (`Unsafe 100% O₂ transfer … exceeding the 4:1 limit. Maximum safe pressure … is 230.0 bar`); with `maxBoosterOutputPressureBar = 350` both are feasible, and the He recipe empties one of the four virtual banks while using the others. The optimizer ran in milliseconds per call.
 
 - [ ] **Step 3:** FAIL (module missing).
 - [ ] **Step 4: Implement `js/bank-pricing.js`**
@@ -702,7 +739,7 @@ export function priceBankByRecipe({ bank, costs, settings, physics }) {
 
   const cost = computeFillCost({ steps: result.protocolSteps, banks: sources, costs, temperatureC });
   const litres = totalMoles * litresPerMole(temperatureC);
-  const exhaustedSources = result.protocolSteps.filter(step => step.sourceExhausted).length;
+  const exhaustedSources = new Set(result.protocolSteps.filter(step => step.sourceExhausted).map(step => step.sourceBankId)).size;
   const recipeCost = cost.total;
   return {
     ok: true,
@@ -710,6 +747,7 @@ export function priceBankByRecipe({ bank, costs, settings, physics }) {
     recipeCost,
     litres,
     exhaustedSources,
+    sourceCount: sources.length,
     operationCount: Object.fromEntries(cost.operationLines.map(line => [line.operation, line.count ?? 1]))
   };
 }
@@ -825,6 +863,6 @@ function attachCost(result, input, steps) {
 ## Self-Review
 
 - **Spec coverage:** scope across three flows (Tasks 4–6, 11); settings and unit conversion (1–2, 9); stored bank price (3, 10); `costOperationId` contract and thermal-split sharing (4, 6, tests in 4–6); readings namespace (6); cost model with unpriced/incomplete (7); top-up flat fee with included air and no gas line (7, 11); recipe pricing with virtual banks, empty tank, no thermal block, discount-once, apply-not-write (8, 10); source-count function and cap 6 (8); benchmark targets with stop-and-report (8); default-vs-raised booster limit for O₂ and He with He established by test (8); vented value dropped (no task, none present); docs, baselines rules (12).
-- **Placeholders:** Tasks 4, 5, 6, 8, 10 and 11 reference existing fixtures or call sites to adapt (named helpers such as `defaultExampleInput`, `rowNeedingEqualizeThenBoost`, the What-if result assembly site); these exist only conceptually and must be built from the named existing tests, as each step states. Tasks 9–11 UI code is described by exact hooks, ids and behavior rather than full markup, because the surrounding markup was not read in full during planning.
+- **Placeholders:** none remain in the test code; Tasks 9–11 specify UI by exact hooks, ids and behavior rather than full markup, and their implementers read the adjacent markup named in each step.
 - **Type consistency:** `costOperation` values `boost|decant|equalize|topUp`, `costOperationId`, `sourceConsumedMoles`, `pricePerLitre`, `computeFillCost`, `priceBankByRecipe`, `virtualBankCount`, `litresPerMole` are used identically across tasks. `operationCount.topUp` in Task 8 tests is produced by the `operationLines` count in the same task.
-- **Known open item:** the He default-equipment outcome is observed in Task 8 and the spec is updated if it differs from O₂.
+- **Settled by probe:** the He and O₂ default-equipment outcomes in Task 8 are recorded from real optimizer runs; no spec follow-up is pending.
