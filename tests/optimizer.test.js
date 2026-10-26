@@ -1895,65 +1895,67 @@ test('optimizeBlend returns a feasible split protocol with safe endpoints and ta
     assert.ok(pressures.every(pressure => pressure <= 100 + 1e-7), step.title);
   }
 });
-test('two scheduler-split transfers preserve stage order, inventories, and thermal safety', () => {
-  const workingPressureBar = 99.01;
-  const targetPressureBar = 99;
-  const result = optimizeBlend({
-    cylinder: {
+const schedulerSplitInput = {
+  cylinder: {
+    volumeL: 12,
+    initialPressureBar: 95,
+    initialOxygenPercent: 0,
+    initialHeliumPercent: 0,
+    targetPressureBar: 99,
+    targetOxygenPercent: 4,
+    targetHeliumPercent: 0.2,
+    workingPressureBar: 99.01,
+    hotOverfillPercent: 0
+  },
+  physics: { model: 'ideal', temperatureC: 20 },
+  thermal: {
+    tankMaterial: 'steel',
+    coolingMedium: 'air',
+    ambientTemperatureC: 20,
+    inletTemperatureC: 40,
+    targetMediumTemperatureC: 20,
+    targetInWaterTemperatureC: 20,
+    waitMode: 'minutes',
+    waitMinutes: 0
+  },
+  settings: {
+    booster: {
+      otherBoostBpm: 50,
+      oxygenBoostBpm: 50,
+      otherDecantRateBarPerMin: 5,
+      oxygenDecantRateBarPerMin: 5,
+      cylinderVolumeCm3: 9,
+      minimumSourcePressureBar: 0
+    }
+  },
+  banks: [
+    {
+      id: 'o2',
+      name: 'Oxygen',
       volumeL: 12,
-      initialPressureBar: 95,
-      initialOxygenPercent: 0,
-      initialHeliumPercent: 0,
-      targetPressureBar,
-      targetOxygenPercent: 4,
-      targetHeliumPercent: 0.2,
-      workingPressureBar,
-      hotOverfillPercent: 0
+      pressureBar: 300,
+      minimumPressureBar: 0,
+      oxygenPercent: 100,
+      heliumPercent: 0,
+      enabled: true
     },
-    physics: { model: 'ideal', temperatureC: 20 },
-    thermal: {
-      tankMaterial: 'steel',
-      coolingMedium: 'air',
-      ambientTemperatureC: 20,
-      inletTemperatureC: 40,
-      targetMediumTemperatureC: 20,
-      targetInWaterTemperatureC: 20,
-      waitMode: 'minutes',
-      waitMinutes: 0
-    },
-    settings: {
-      booster: {
-        otherBoostBpm: 50,
-        oxygenBoostBpm: 50,
-        otherDecantRateBarPerMin: 5,
-        oxygenDecantRateBarPerMin: 5,
-        cylinderVolumeCm3: 9,
-        minimumSourcePressureBar: 0
-      }
-    },
-    banks: [
-      {
-        id: 'o2',
-        name: 'Oxygen',
-        volumeL: 12,
-        pressureBar: 300,
-        minimumPressureBar: 0,
-        oxygenPercent: 100,
-        heliumPercent: 0,
-        enabled: true
-      },
-      {
-        id: 'he',
-        name: 'Helium',
-        volumeL: 12,
-        pressureBar: 300,
-        minimumPressureBar: 0,
-        oxygenPercent: 0,
-        heliumPercent: 100,
-        enabled: true
-      }
-    ]
-  });
+    {
+      id: 'he',
+      name: 'Helium',
+      volumeL: 12,
+      pressureBar: 300,
+      minimumPressureBar: 0,
+      oxygenPercent: 0,
+      heliumPercent: 100,
+      enabled: true
+    }
+  ]
+};
+
+test('two scheduler-split transfers preserve stage order, inventories, and thermal safety', () => {
+  const workingPressureBar = schedulerSplitInput.cylinder.workingPressureBar;
+  const targetPressureBar = schedulerSplitInput.cylinder.targetPressureBar;
+  const result = optimizeBlend(schedulerSplitInput);
 
   assert.equal(result.feasible, true, result.error);
   assert.ok(Math.abs(result.thermal.finalAmbientPressureBar - targetPressureBar) < 1e-5);
@@ -3270,4 +3272,48 @@ test('rejects invalid explicit hot-overfill values in safety helpers', () => {
     }),
     /hot overfill/i
   );
+});
+
+const defaultRecipeInput = {
+  cylinder: {
+    volumeL: 11.1, initialPressureBar: 45, targetPressureBar: 195,
+    initialOxygenPercent: 21, initialHeliumPercent: 0,
+    targetOxygenPercent: 18, targetHeliumPercent: 45,
+    workingPressureBar: 207, hotOverfillPercent: 2
+  },
+  physics: { model: 'vdw', temperatureC: 21 },
+  banks: DEFAULT_BANKS.map(bank => ({ ...bank })),
+  thermal: {
+    tankMaterial: 'aluminum', coolingMedium: 'air', ambientTemperatureC: 21, inletTemperatureC: 25,
+    targetMediumTemperatureC: 21, targetInWaterTemperatureC: 10,
+    waitMode: 'minutes', waitMinutes: 5, interimMeasurements: []
+  },
+  settings: DEFAULT_SETTINGS
+};
+
+test('optimizer steps carry cost contract fields', () => {
+  const result = optimizeBlend(defaultRecipeInput);
+  const transfers = result.protocolSteps.filter(s => s.type === 'boost' || s.type === 'decant');
+  assert.ok(transfers.length > 0);
+  for (const step of transfers) {
+    assert.ok(Number.isFinite(step.sourceConsumedMoles) && step.sourceConsumedMoles > 0);
+    assert.match(step.costOperationId, /^op-\d+$/);
+    assert.ok(['boost', 'decant', 'topUp'].includes(step.costOperation));
+    assert.equal(step.costOperation === 'topUp', step.sourceBankId === 'compressor-air');
+  }
+});
+test('a thermally split transfer shares one operation id and its moles sum to the whole', () => {
+  const result = optimizeBlend(schedulerSplitInput);
+  const stages = result.protocolSteps.filter(s => s._thermalSplit);
+  assert.equal(stages.length, 4);
+  assert.equal(stages[0].costOperationId, stages[1].costOperationId);
+  assert.equal(stages[2].costOperationId, stages[3].costOperationId);
+  assert.notEqual(stages[0].costOperationId, stages[2].costOperationId);
+  assert.ok(stages.every(s => s.sourceConsumedMoles > 0));
+});
+test('operation ids are unique per operation', () => {
+  const ids = optimizeBlend(defaultRecipeInput).protocolSteps.filter(s => s.costOperationId)
+    .filter(s => !/safe stage/.test(s.title ?? '')).map(s => s.costOperationId);
+  assert.ok(ids.length > 0);
+  assert.equal(new Set(ids).size, ids.length);
 });

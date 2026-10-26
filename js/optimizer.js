@@ -2225,6 +2225,7 @@ function optimizeBlendWithoutThermal(input) {
   const stepColors = ['#06b6d4', '#f59e0b', '#10b981', '#a855f7', '#ec4899'];
 
   let stepNumber = 0;
+  let costOperationCounter = 0;
   for (const { bank, addedMoles } of recipeBoosts) {
     const transferStages = pressureTransferStages({
       cumulativeMoles,
@@ -2255,6 +2256,7 @@ function optimizeBlendWithoutThermal(input) {
         ? currentPressure / stage.sourceEndPressureBar
         : null;
       stepNumber++;
+      const costOperationId = `op-${++costOperationCounter}`;
       const minimumSourcePressureBar = isCompressorAir(bank) ? null : minimumSourcePressureFor(bank);
       const sourcePressureTolerance = minimumSourcePressureBar === null
         ? 0
@@ -2303,6 +2305,9 @@ function optimizeBlendWithoutThermal(input) {
         recipeAction: operation,
         recipeGas: bank.name,
         sourceBankId: bank.id,
+        sourceConsumedMoles: stageAddedMoles,
+        costOperation: isCompressorAir(bank) ? 'topUp' : (stage.type === 'decant' ? 'decant' : 'boost'),
+        costOperationId,
         description: descriptionParts.join(' '),
         pressureDeltaBar: pressureDelta,
         pressureReferenceTemperatureC: temperatureC,
