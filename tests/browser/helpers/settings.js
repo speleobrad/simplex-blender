@@ -4,6 +4,7 @@ const CATEGORIES = {
   'gas-presets': 'Gas presets',
   'cylinder-presets': 'Cylinder presets',
   equipment: 'Equipment',
+  costs: 'Costs',
   'preset-management': 'Preset management'
 };
 
@@ -15,7 +16,7 @@ function settingsDialog(page) {
 export async function openSettingsCategory(page, category) {
   const categoryKey = category;
   const label = CATEGORIES[category];
-  if (!label || !['general', 'gas-presets', 'cylinder-presets', 'equipment', 'preset-management'].includes(categoryKey)) {
+  if (!label || !['general', 'gas-presets', 'cylinder-presets', 'equipment', 'costs', 'preset-management'].includes(categoryKey)) {
     throw new RangeError(`Unknown settings category: ${category}`);
   }
   const dialog = settingsDialog(page);
@@ -29,7 +30,7 @@ export async function openSettingsCategory(page, category) {
   const pane = dialog.locator(`#settings-pane-${categoryKey}`);
   await expect(button).toHaveAttribute('aria-selected', 'true');
   await expect(pane).toBeVisible();
-  for (const key of ['general', 'gas-presets', 'cylinder-presets', 'equipment', 'preset-management']) {
+  for (const key of ['general', 'gas-presets', 'cylinder-presets', 'equipment', 'costs', 'preset-management']) {
     const candidate = dialog.locator(`#settings-pane-${key}`);
     if (key === categoryKey) continue;
     await expect(candidate).toBeHidden();

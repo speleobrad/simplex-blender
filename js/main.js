@@ -48,7 +48,7 @@ import { loadAnalytics } from './analytics.js';
 import { createOnboardingController } from './ui/onboarding.js';
 import { renderCompareRecipe } from './ui/compare-recipe.js';
 import { renderPressureLimitWarnings, renderResults } from './ui/results.js';
-import { renderSettingsDialog, renderPresetOptions } from './ui/settings-dialog.js';
+import { renderSettingsDialog, renderPresetOptions, costFieldToStored, setCostField } from './ui/settings-dialog.js';
 import { renderEquipmentSummary } from './ui/equipment-summary.js';
 import { renderSupplyBanks } from './ui/supply-banks.js';
 import { renderStorageWarning } from './ui/storage-warning.js';
@@ -306,7 +306,7 @@ function toggleTheme() {
 
 
 function setSettingsCategory(category) {
-  const categories = ['general', 'gas-presets', 'cylinder-presets', 'equipment', 'preset-management'];
+  const categories = ['general', 'gas-presets', 'cylinder-presets', 'equipment', 'costs', 'preset-management'];
   if (!categories.includes(category)) return;
   state.settingsCategory = category;
   for (const candidate of categories) {
@@ -596,6 +596,11 @@ function updateSettingsDraft(input, eventType) {
   const collection = input.dataset.settingsCollection;
   const index = Number(input.dataset.settingsIndex);
   const field = input.dataset.settingsField;
+  if (collection === 'costs') {
+    setCostField(state.settingsDraft.costs, field, costFieldToStored(field, input.value, state.settingsDraft.units));
+    persistSettingsDraft();
+    return;
+  }
   const quantity = {
     volumeL: 'volumeL',
     massKg: 'massKg',

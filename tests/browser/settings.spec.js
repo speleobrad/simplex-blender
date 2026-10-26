@@ -3,7 +3,7 @@ import { assertContained, assertInsideViewport, assertNoUnexpectedOverlap } from
 import { cancelSettings, openSettingsCategory, saveSettings, settingsDialog } from './helpers/settings.js';
 import { acceptConsent, completeOrExitTour } from './helpers/onboarding.js';
 
-const categories = ['general', 'gas-presets', 'cylinder-presets', 'equipment', 'preset-management'];
+const categories = ['general', 'gas-presets', 'cylinder-presets', 'equipment', 'costs', 'preset-management'];
 
 test.describe('settings categories and drafts', () => {
   test('navigates every settings category and keeps one active pane', async ({ appPage }) => {
@@ -32,6 +32,46 @@ test.describe('settings categories and drafts', () => {
     await expect(model).toHaveValue('ideal');
     await cancelSettings(page);
   });
+  test('saves fill cost prices across reload and discards them on Cancel', async ({ appPage }) => {
+    const page = await appPage.goto('tourSeen');
+    const costs = await openSettingsCategory(page, 'costs');
+    await costs.getByRole('textbox', { name: 'Currency symbol', exact: true }).fill('€');
+    await costs.getByRole('spinbutton', { name: 'Oxygen price (/L)', exact: true }).fill('0.02');
+    await costs.getByRole('spinbutton', { name: 'Leftover gas discount (%)', exact: true }).fill('12.5');
+    await costs.getByRole('spinbutton', { name: /Top-up, per operation/ }).fill('1.5');
+    await saveSettings(page);
+
+    await page.reload();
+    const persisted = await openSettingsCategory(page, 'costs');
+    await expect(persisted.getByRole('textbox', { name: 'Currency symbol', exact: true })).toHaveValue('€');
+    await expect(persisted.getByRole('spinbutton', { name: 'Oxygen price (/L)', exact: true })).toHaveValue('0.02');
+    await expect(persisted.getByRole('spinbutton', { name: 'Leftover gas discount (%)', exact: true })).toHaveValue('12.5');
+    await expect(persisted.getByRole('spinbutton', { name: /Top-up, per operation/ })).toHaveValue('1.5');
+    await persisted.getByRole('spinbutton', { name: 'Oxygen price (/L)', exact: true }).fill('0.09');
+    await cancelSettings(page);
+
+    const reopened = await openSettingsCategory(page, 'costs');
+    await expect(reopened.getByRole('spinbutton', { name: 'Oxygen price (/L)', exact: true })).toHaveValue('0.02');
+    await cancelSettings(page);
+  });
+
+  test('shows per-litre cost prices in /cu ft after switching to imperial units', async ({ appPage }) => {
+    const page = await appPage.goto('tourSeen');
+    const costs = await openSettingsCategory(page, 'costs');
+    await costs.getByRole('spinbutton', { name: 'Oxygen price (/L)', exact: true }).fill('0.02');
+    await costs.getByRole('spinbutton', { name: /Top-up, per operation/ }).fill('1.5');
+    await saveSettings(page);
+
+    const general = await openSettingsCategory(page, 'general');
+    await general.getByRole('combobox', { name: 'Units' }).selectOption('imperial');
+    const imperialCosts = await openSettingsCategory(page, 'costs');
+    const oxygen = imperialCosts.getByRole('spinbutton', { name: 'Oxygen price (/cu ft)', exact: true });
+    await expect(oxygen).toHaveValue('0.566337');
+    await expect(imperialCosts.getByRole('spinbutton', { name: /Top-up, per operation/ })).toHaveValue('1.5');
+    await expect(imperialCosts.locator('label[for="settings-cost-price-oxygen"]')).toContainText('/cu ft');
+    await cancelSettings(page);
+  });
+
   test('restores derived calculator state after canceling unit and cylinder drafts', async ({ appPage }) => {
     const page = await appPage.goto('tourSeen');
     const general = await openSettingsCategory(page, 'general');
