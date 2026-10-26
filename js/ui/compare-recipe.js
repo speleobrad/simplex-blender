@@ -107,6 +107,7 @@ function addGasFields(card, row, rowNumber, banks, errors, pressureStart, units 
   const selectedBank = row.bankId === COMPRESSOR_AIR_ID
     ? { name: 'Compressor Air', oxygenPercent: 21, heliumPercent: 0, infinite: true }
     : enabledBanks.find(candidate => candidate.id === row.bankId);
+  let detailsElement = null;
   if (selectedBank) {
     const details = element('p', {
       className: 'col-span-2 min-w-0 break-words text-[10px] text-slate-400',
@@ -114,7 +115,7 @@ function addGasFields(card, row, rowNumber, banks, errors, pressureStart, units 
         ? 'Compressor Air: O₂ 21% · He 0% · Infinite supply'
         : `${selectedBank.name}: O₂ ${selectedBank.oxygenPercent}% · He ${selectedBank.heliumPercent}% · ${selectedBank.volumeL} L · ${selectedBank.pressureBar} bar`
     });
-    fields.append(details);
+    detailsElement = details;
   }
 
   const addedField = element('div');
@@ -130,7 +131,9 @@ function addGasFields(card, row, rowNumber, banks, errors, pressureStart, units 
   target.setAttribute('data-receiver-start-pressure', pressureStart);
   appendLabelledControl(targetField, row, rowNumber, 'targetPressureBar', `Receiver target pressure (${unitLabel('pressureBar', units)})`, target, errors);
 
-  fields.append(bankField, addedField, targetField);
+  fields.append(bankField);
+  if (detailsElement) fields.append(detailsElement);
+  fields.append(addedField, targetField);
   card.append(fields);
 }
 

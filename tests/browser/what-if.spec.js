@@ -143,6 +143,22 @@ async function warningSettings(page) {
     await steps.nth(0).locator('[data-action="drag-compare-row"]').dragTo(steps.nth(1).locator('[data-action="drag-compare-row"]'));
     await expect(page.locator('#screen-what-if fieldset[data-row-id^="compare-row-"]:visible').first().locator('[data-compare-field="type"]')).toHaveValue('drain');
   });
+  test('keeps operation and gas source aligned when source details are shown below them', async ({ appPage }) => {
+    const page = await load(appPage);
+    await openWhatIf(page);
+    const step = page.locator('#screen-what-if fieldset[data-row-id^="compare-row-"]:visible').first();
+    await step.locator('[data-compare-field="type"]').selectOption('add');
+    for (const source of ['compressor-air', 'bank-oxygen']) {
+      await step.locator('[data-compare-field="bankId"]').selectOption(source);
+      const details = step.getByText(/O₂ \d+% · He \d+%/);
+      await expect(details).toBeVisible();
+      const operationBox = await step.locator('[data-compare-field="type"]').boundingBox();
+      const sourceBox = await step.locator('[data-compare-field="bankId"]').boundingBox();
+      const detailsBox = await details.boundingBox();
+      expect(Math.abs(operationBox.y - sourceBox.y)).toBeLessThanOrEqual(1);
+      expect(detailsBox.y).toBeGreaterThanOrEqual(sourceBox.y + sourceBox.height);
+    }
+  });
   test('copies and independently edits every scenario start field', async ({ appPage }) => {
     const page = await load(appPage);
     const values = {
