@@ -2653,6 +2653,12 @@ export function searchSalvageVariant(input) {
     const variant = buildSalvageVariant(candidate, context, rankedReceiverIds.slice(0, count));
     if (variant) variants.push(variant);
   }
+  // A receiver ranked first can fail a gate that another receiver alone would pass, so every
+  // other receiver is also tried on its own.
+  for (const receiverId of rankedReceiverIds.slice(1)) {
+    const variant = buildSalvageVariant(candidate, context, [receiverId]);
+    if (variant) variants.push(variant);
+  }
   const selected = selectSalvageVariant({
     baseline: salvageBaseline(baseline, context),
     variants,

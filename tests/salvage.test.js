@@ -372,3 +372,26 @@ test('rankReceivers puts a near-tie receiver with more reachable targets first, 
   const noReach = rankReceivers([candidate('shallow', 62.6, 3), candidate('deep', 62.14, 5)], scoreOf);
   assert.deepEqual(noReach.map(entry => entry.id), ['shallow', 'deep']);
 });
+
+test('selection falls through to LP cost when attractiveness and reach both tie', () => {
+  const cheap = variant('cheap', { receiver: reaching(4, 61.0), lpCost: 1 });
+  const dear = variant('dear', { receiver: reaching(4, 61.0), lpCost: 9 });
+  assert.equal(selectWithReach([dear, cheap]).id, 'cheap');
+  assert.equal(selectWithReach([cheap, dear]).id, 'cheap');
+});
+
+test('near-tie reach preference never overrides a higher value kept', () => {
+  const moreValue = variant('more-value', { receiver: { ...reaching(2, 61.0), pressureBar: 45 } });
+  const moreTargets = variant('more-targets', { receiver: reaching(5, 61.0) });
+  assert.equal(selectWithReach([moreTargets, moreValue]).id, 'more-value');
+});
+
+test('near-tie reach preference still enforces the retention gate', () => {
+  const retainedBaseline = { ...baseline, retainedMoles: 10 };
+  const lowRetention = { ...variant('low', { receiver: reaching(5, 61.5) }), retainedMoles: 9 };
+  const keepsGas = { ...variant('keeps', { receiver: reaching(3, 61.0) }), retainedMoles: 10 };
+  const chosen = selectSalvageVariant({
+    baseline: retainedBaseline, variants: [lowRetention, keepsGas], bankScoresOf: scoreOf, bankReachOf: reachOf, physics: IDEAL
+  });
+  assert.equal(chosen.id, 'keeps');
+});
