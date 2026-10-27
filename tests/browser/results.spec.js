@@ -354,7 +354,40 @@ test.describe('fill costs in the Tanks and costs', () => {
     await openRecipeScenario(page);
     await selectResultTab(page, 'Tanks and costs');
 
-    await expect(costSection(page).locator('[data-result-key="cost-gas-price-heading"]')).toHaveText('Price (€ / cu ft)');
+    await expect(costSection(page).locator('[data-result-key="cost-gas-price-heading"]')).toHaveText('Price (€/cu\u00A0ft)');
+  });
+
+  test('splits the gas Price header into a label line and one unbroken unit line on every viewport', async ({ appPage }) => {
+    const page = await appPage.goto('tourSeen');
+    const costs = await openSettingsCategory(page, 'costs');
+    await costs.getByRole('textbox', { name: 'Currency symbol', exact: true }).fill('CHF');
+    await saveSettings(page);
+    await priceEveryBank(page, 0.02);
+
+    const general = await openSettingsCategory(page, 'general');
+    await general.getByRole('combobox', { name: 'Units' }).selectOption('imperial');
+    await saveSettings(page);
+    await openRecipeScenario(page);
+    await selectResultTab(page, 'Tanks and costs');
+
+    const price = costSection(page).locator('[data-result-key="cost-gas-price-heading"]');
+    await expect(price).toHaveText('Price (CHF/cu\u00A0ft)');
+    const geometry = await price.evaluate(header => {
+      const [label, unit] = header.querySelectorAll(':scope > span');
+      const lines = element => {
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        return range.getClientRects().length;
+      };
+      return {
+        labelLines: lines(label),
+        unitLines: lines(unit),
+        unitNowrap: getComputedStyle(unit).whiteSpace,
+        labelAboveUnit: label.getBoundingClientRect().bottom <= unit.getBoundingClientRect().top + 1,
+        unitFits: unit.scrollWidth <= header.clientWidth
+      };
+    });
+    expect(geometry).toEqual({ labelLines: 1, unitLines: 1, unitNowrap: 'nowrap', labelAboveUnit: true, unitFits: true });
   });
 
   test('prices Reuse value from retained helium and doubles it when the helium price doubles', async ({ appPage }) => {

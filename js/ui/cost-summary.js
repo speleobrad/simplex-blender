@@ -55,18 +55,38 @@ function perVolumeText(pricePerLitre, units) {
 }
 
 // Headers carry the currency and unit so that table cells hold numbers only.
-function priceHeadingText(symbol, units) {
-  const unit = unitWord('pricePerVolumeL', units);
-  return symbol ? `Price (${symbol} / ${unit})` : `Price (per ${unit})`;
+// Spaces inside a unit line are non-breaking so "cu ft" and "per L" never split.
+const NBSP = '\u00A0';
+
+function keepTogether(text) {
+  return text.replace(/ /g, NBSP);
 }
 
 function currencyHeading(label, symbol) {
   return symbol ? `${label} (${symbol})` : label;
 }
 
-function setText(root, key, text) {
+// The Price header is two deliberate lines: "Price", then the unit "(EUR/L)" kept whole.
+function priceHeading(symbol, units) {
+  const unit = unitWord('pricePerVolumeL', units);
+  return { label: 'Price', detail: symbol ? `(${symbol}/${unit})` : `(per ${unit})` };
+}
+
+function setHeading(root, key, text) {
   const element = hook(root, key);
   if (element) element.textContent = text;
+}
+
+function setPriceHeading(root, key, { label, detail }) {
+  const element = hook(root, key);
+  if (!element) return;
+  const top = document.createElement('span');
+  top.className = 'block';
+  top.textContent = label;
+  const bottom = document.createElement('span');
+  bottom.className = 'block whitespace-nowrap';
+  bottom.textContent = keepTogether(detail);
+  element.replaceChildren(top, ' ', bottom);
 }
 
 function gasRow(line, units) {
@@ -133,11 +153,11 @@ export function renderCostSummary(cost, { root, units = 'metric', currencySymbol
     return;
   }
 
-  setText(root, 'cost-gas-volume-heading', `Volume (${unitLabel('volumeL', units)})`);
-  setText(root, 'cost-gas-price-heading', priceHeadingText(currencySymbol, units));
-  setText(root, 'cost-gas-cost-heading', currencyHeading('Cost', currencySymbol));
-  setText(root, 'cost-operation-fee-heading', currencyHeading('Fee', currencySymbol));
-  setText(root, 'cost-operation-cost-heading', currencyHeading('Cost', currencySymbol));
+  setHeading(root, 'cost-gas-volume-heading', `Volume (${unitLabel('volumeL', units)})`);
+  setPriceHeading(root, 'cost-gas-price-heading', priceHeading(currencySymbol, units));
+  setHeading(root, 'cost-gas-cost-heading', currencyHeading('Cost', currencySymbol));
+  setHeading(root, 'cost-operation-fee-heading', currencyHeading('Fee', currencySymbol));
+  setHeading(root, 'cost-operation-cost-heading', currencyHeading('Cost', currencySymbol));
   setVisible(status, false);
   setVisible(tables, true);
   setVisible(total, true);

@@ -121,7 +121,7 @@ test('puts the currency in the headers and keeps table amounts as bare numbers',
     const { host, gasBody, operationBody, total } = createHost();
     const headings = addHeadings(host);
     renderCostSummary(PRICED_COST, { root: host, units: 'metric', currencySymbol: 'CHF' });
-    assert.equal(headings.gasPrice.textContent, 'Price (CHF / L)');
+    assert.equal(headings.gasPrice.textContent, 'Price (CHF/L)');
     assert.equal(headings.gasCost.textContent, 'Cost (CHF)');
     assert.equal(headings.operationFee.textContent, 'Fee (CHF)');
     assert.equal(headings.operationCost.textContent, 'Cost (CHF)');
@@ -220,6 +220,14 @@ test('does nothing when the host has no Costs section', () => {
   });
 });
 
+const NBSP = '\u00A0';
+
+// The Price header is two block lines; the unit line is a single non-wrapping span.
+function priceLines(heading) {
+  const [label, space, unit] = heading.children;
+  return { label: label.textContent, space, unit: unit.textContent, unitClass: unit.className };
+}
+
 test('labels the gas volume column with the active volume unit', () => {
   withDocument(() => {
     const { host } = createHost();
@@ -231,20 +239,41 @@ test('labels the gas volume column with the active volume unit', () => {
   });
 });
 
-test('labels the gas price column with the active per-volume unit and currency', () => {
+test('labels the gas price column as two lines: Price, then the unit kept whole', () => {
   withDocument(() => {
     const { host } = createHost();
     const { gasPrice } = addHeadings(host);
     renderCostSummary(PRICED_COST, { root: host, units: 'metric', currencySymbol: '€' });
-    assert.equal(gasPrice.textContent, 'Price (€ / L)');
+    assert.deepEqual(priceLines(gasPrice), { label: 'Price', space: ' ', unit: '(€/L)', unitClass: 'block whitespace-nowrap' });
+    assert.equal(gasPrice.textContent, 'Price (€/L)');
+
     renderCostSummary(PRICED_COST, { root: host, units: 'imperial', currencySymbol: '€' });
-    assert.equal(gasPrice.textContent, 'Price (€ / cu ft)');
-    renderCostSummary(PRICED_COST, { root: host, units: 'metric', currencySymbol: '' });
-    assert.equal(gasPrice.textContent, 'Price (per L)');
-    renderCostSummary(PRICED_COST, { root: host, units: 'imperial', currencySymbol: '' });
-    assert.equal(gasPrice.textContent, 'Price (per cu ft)');
+    assert.equal(priceLines(gasPrice).unit, `(€/cu${NBSP}ft)`);
+    assert.equal(gasPrice.textContent, `Price (€/cu${NBSP}ft)`);
   });
 });
+
+test('keeps the unit line unbroken for empty symbols and long non-ASCII symbols', () => {
+  withDocument(() => {
+    const { host } = createHost();
+    const { gasPrice } = addHeadings(host);
+    renderCostSummary(PRICED_COST, { root: host, units: 'metric', currencySymbol: '' });
+    assert.equal(priceLines(gasPrice).unit, `(per${NBSP}L)`);
+    renderCostSummary(PRICED_COST, { root: host, units: 'imperial', currencySymbol: '' });
+    assert.equal(priceLines(gasPrice).unit, `(per${NBSP}cu${NBSP}ft)`);
+    renderCostSummary(PRICED_COST, { root: host, units: 'metric', currencySymbol: 'zł' });
+    assert.equal(priceLines(gasPrice).unit, '(zł/L)');
+    renderCostSummary(PRICED_COST, { root: host, units: 'imperial', currencySymbol: 'ABCDEFGH' });
+    assert.equal(priceLines(gasPrice).unit, `(ABCDEFGH/cu${NBSP}ft)`);
+    assert.doesNotMatch(priceLines(gasPrice).unit, / /);
+  });
+});
+
+test('the static Price header markup is two lines with a non-wrapping unit', () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  assert.match(html, /data-result-key="cost-gas-price-heading"><span class="block">Price<\/span> <span class="block whitespace-nowrap">\(per&nbsp;L\)<\/span><\/th>/);
+});
+
 
 test('shows Total gas cost and Operations cost rows with 2-decimal amounts', () => {
   withDocument(() => {
