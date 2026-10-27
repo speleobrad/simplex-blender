@@ -93,7 +93,7 @@ All quantities use moles and the selected gas model, not bar·L. Receivers casca
 - **Solve count:** N+1 static solves for the receiver search. In the thermal search, each candidate that replays a variant costs two static solves (its vent-only baseline, then the variant re-solve). Measure the Optimize latency on the default inventory before and after.
 - **Retention invariant:** the preservation regression in `docs/development.md` (12 L, 80 bar, 21/35 to 210 bar, 18/45) must still begin with retention, not a drain.
 - **Booster rate on a reversed flow:** the fill-rate model is receiver-oriented; the first plan task verifies the tank-side pressure rate derived from it against a moles-conservation check.
-- **Screenshot baselines:** the Inventory table gained a Max pressure column, so the inventory-populated baselines were checked in the CI-equivalent container per `docs/ci-reproduction.md`; only `inventory-populated-tablet-linux.png` exceeded the 1% tolerance (4358 pixels, the new column only) and was regenerated. A pushed Actions run is still required to confirm.
+- **Screenshot baselines:** the Inventory table gained a Max pressure column, so the inventory-populated baselines were checked in the CI-equivalent container per `docs/ci-reproduction.md`; only `inventory-populated-tablet-linux.png` exceeded the 1% tolerance (4358 pixels: the new column and the resulting column reflow) and was regenerated. A pushed Actions run is still required to confirm.
 - **#3 interaction:** #3 prices operations by step type. When #3 is implemented, `salvage` steps need an operation mapping; this issue does not change #3.
 
 ## Out of scope
