@@ -1590,7 +1590,7 @@ test('salvage card names the receiver, moved helium, and receiver before and aft
           receiverEndPressureBar: 150,
           receiverStartMix: { oxygenPercent: 21, heliumPercent: 0 },
           receiverEndMix: { oxygenPercent: 21, heliumPercent: 0 },
-          title: 'Salvage decant into Spare bank to 150.0 bar',
+          title: 'Salvage: decant into Spare bank to 150.0 bar',
           resultingPressureBar: 120,
           resultingMix: { oxygenPercent: 21, heliumPercent: 30 }
         }
@@ -1639,7 +1639,7 @@ test('salvage and the drain after it get no interim reading slot', () => {
           receiverEndPressureBar: 150,
           receiverStartMix: { oxygenPercent: 21, heliumPercent: 0 },
           receiverEndMix: { oxygenPercent: 21, heliumPercent: 0 },
-          title: 'Salvage decant into Spare bank to 150.0 bar',
+          title: 'Salvage: decant into Spare bank to 150.0 bar',
           resultingPressureBar: 120,
           resultingMix: { oxygenPercent: 21, heliumPercent: 30 },
           _measurementIndex: 1
@@ -1664,6 +1664,147 @@ test('salvage and the drain after it get no interim reading slot', () => {
     assert.doesNotMatch(children[1].textContent, /record actual readings/i);
     assert.match(children[2].textContent, /Drain \/ Vent Cylinder Gas/);
     assert.doesNotMatch(children[2].textContent, /record actual readings/i);
+  } finally {
+    globalThis.document = previousDocument;
+  }
+});
+
+function findByAction(element, action) {
+  if (element.attributes?.get('data-action') === action) return element;
+  for (const child of element.children ?? []) {
+    const found = findByAction(child, action);
+    if (found) return found;
+  }
+  return null;
+}
+
+test('a drain holding a stored reading keeps its reading control', () => {
+  // Default recipe at 62 bar / 22 °C: the re-plan puts a drain at index 2, where the reading sits.
+  const previousDocument = globalThis.document;
+  const document = createFakeDocument();
+  globalThis.document = document;
+
+  try {
+    renderResults({
+      feasible: true,
+      blend: {
+        retainedPressureBar: 45, retainedPercent: 60, ventedPressureBar: 40,
+        ventedGasLitres: 10, heliumVentedLitres: 0, heliumSalvagedLitres: 0, finalPressureBar: 203.7,
+        finalOxygenPercent: 18, finalHeliumPercent: 45
+      },
+      protocolSteps: [
+        { type: 'keep', title: 'Preserve 100% of Cylinder Gas', description: 'Keep it.', resultingPressureBar: 45, _measurementIndex: 0 },
+        { type: 'decant', title: 'Step 1: Decant Oxygen to 55.4 bar', description: 'Add oxygen.', resultingPressureBar: 55.4, _measurementIndex: 1 },
+        { type: 'drain', title: 'Drain / Vent Cylinder Gas', description: 'Vent the rest.', resultingPressureBar: 40, _measurementIndex: 2 },
+        { type: 'decant', title: 'Step 2: Equalize Sample scrap to 41.9 bar', description: 'Equalize.', resultingPressureBar: 41.9, _measurementIndex: 3 }
+      ]
+    }, {
+      cylinder: { workingPressureBar: 207, hotOverfillPercent: 2 },
+      thermal: { interimMeasurements: [null, null, { pressureBar: 62, temperatureC: 22 }] },
+      settings: { units: 'metric' }
+    });
+
+    const card = document.elements.get('steps-container').children[2];
+    assert.match(card.textContent, /Drain \/ Vent Cylinder Gas/);
+    assert.match(card.textContent, /Measured start for step \d+: 62\.0 bar · 22\.0 °C/);
+    assert.ok(findByAction(card, 'clear-interim-measurement'), 'the stored drain reading can be cleared');
+  } finally {
+    globalThis.document = previousDocument;
+  }
+});
+
+test('a drain holding a stored reading keeps its reading control after partial salvage', () => {
+  // Partial-salvage fixture at 122.17 bar / 15.6 °C: salvage, then two drains. The reading sits on the second drain (index 2).
+  const previousDocument = globalThis.document;
+  const document = createFakeDocument();
+  globalThis.document = document;
+
+  try {
+    renderResults({
+      feasible: true,
+      blend: {
+        retainedPressureBar: 100, retainedPercent: 60, ventedPressureBar: 110,
+        ventedGasLitres: 10, heliumVentedLitres: 0, heliumSalvagedLitres: 42, finalPressureBar: 100,
+        finalOxygenPercent: 15, finalHeliumPercent: 55
+      },
+      protocolSteps: [
+        {
+          type: 'salvage',
+          stage: 'decant',
+          receiverBankId: 'bank-n',
+          receiverBankName: 'Leftover N',
+          movedMoles: 1.2,
+          movedHeliumLitres: 42.4,
+          receiverStartPressureBar: 20,
+          receiverEndPressureBar: 30,
+          receiverStartMix: { oxygenPercent: 32, heliumPercent: 0 },
+          receiverEndMix: { oxygenPercent: 32, heliumPercent: 0 },
+          title: 'Salvage: decant into Leftover N to 30.0 bar',
+          resultingPressureBar: 125.5,
+          resultingMix: { oxygenPercent: 21, heliumPercent: 35 },
+          _measurementIndex: 0
+        },
+        { type: 'drain', title: 'Drain / Vent Cylinder Gas', description: 'Vent the rest.', resultingPressureBar: 125.5, _measurementIndex: 1 },
+        { type: 'drain', title: 'Drain / Vent Cylinder Gas', description: 'Vent the rest.', resultingPressureBar: 110, _measurementIndex: 2 },
+        { type: 'decant', title: 'Step 1: Decant Pure Oxygen to 125.5 bar', description: 'Add oxygen.', resultingPressureBar: 125.5, _measurementIndex: 3 }
+      ]
+    }, {
+      cylinder: { workingPressureBar: 232 },
+      thermal: { interimMeasurements: [null, null, { pressureBar: 122.17, temperatureC: 15.6 }] },
+      settings: { units: 'metric' }
+    });
+
+    const children = document.elements.get('steps-container').children;
+    assert.equal(children.length, 4);
+    assert.doesNotMatch(children[1].textContent, /record actual readings/i);
+    assert.match(children[2].textContent, /Measured start for step \d+: 122\.2 bar · 15\.6 °C/);
+    assert.ok(findByAction(children[2], 'clear-interim-measurement'), 'the stored drain reading can be cleared');
+  } finally {
+    globalThis.document = previousDocument;
+  }
+});
+
+test('salvage card is titled without a step number', () => {
+  const previousDocument = globalThis.document;
+  const document = createFakeDocument();
+  globalThis.document = document;
+
+  try {
+    renderResults({
+      feasible: true,
+      blend: {
+        retainedPressureBar: 50, retainedPercent: 60, ventedPressureBar: 30,
+        ventedGasLitres: 10, heliumVentedLitres: 2, heliumSalvagedLitres: 42, finalPressureBar: 50,
+        finalOxygenPercent: 21, finalHeliumPercent: 0
+      },
+      protocolSteps: [
+        {
+          type: 'salvage',
+          stage: 'decant',
+          receiverBankId: 'spare',
+          receiverBankName: 'Spare bank',
+          movedMoles: 1.2,
+          movedHeliumLitres: 42.4,
+          receiverStartPressureBar: 20,
+          receiverEndPressureBar: 150,
+          receiverStartMix: { oxygenPercent: 21, heliumPercent: 0 },
+          receiverEndMix: { oxygenPercent: 21, heliumPercent: 0 },
+          title: 'Salvage: decant into Spare bank to 150.0 bar',
+          resultingPressureBar: 120,
+          resultingMix: { oxygenPercent: 21, heliumPercent: 30 }
+        },
+        { type: 'decant', title: 'Step 1: Decant Pure Oxygen to 125.5 bar', description: 'Add oxygen.', resultingPressureBar: 125.5, _measurementIndex: 1 }
+      ]
+    }, {
+      cylinder: { workingPressureBar: 232 },
+      thermal: { interimMeasurements: [null, null] },
+      settings: { units: 'metric' }
+    });
+
+    const [salvage, decant] = document.elements.get('steps-container').children;
+    assert.match(salvage.textContent, /Salvage: decant into Spare bank to 150\.0 bar/);
+    assert.doesNotMatch(salvage.textContent, /Step \d/);
+    assert.match(decant.textContent, /Step 1: Decant Pure Oxygen to 125\.5 bar/);
   } finally {
     globalThis.document = previousDocument;
   }
@@ -1694,7 +1835,7 @@ test('salvage card shows moved helium in the user units', () => {
           receiverEndPressureBar: 150,
           receiverStartMix: { oxygenPercent: 21, heliumPercent: 0 },
           receiverEndMix: { oxygenPercent: 21, heliumPercent: 0 },
-          title: 'Salvage boost into Spare bank to 150.0 bar',
+          title: 'Salvage: boost into Spare bank to 150.0 bar',
           resultingPressureBar: 120,
           resultingMix: { oxygenPercent: 21, heliumPercent: 30 }
         }
@@ -1706,7 +1847,7 @@ test('salvage card shows moved helium in the user units', () => {
     });
 
     const card = document.elements.get('steps-container').children[0];
-    assert.match(card.textContent, /Salvage boost into Spare bank to 2175\.6 psi/);
+    assert.match(card.textContent, /Salvage: boost into Spare bank to 2175\.6 psi/);
     assert.doesNotMatch(card.textContent, /42 L/);
     assert.match(card.textContent, /Helium moved1 cu ft/);
   } finally {

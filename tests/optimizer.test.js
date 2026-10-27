@@ -3382,6 +3382,8 @@ test('partial salvage is followed by the vent drain down to the retained pressur
   const drainPressure = result.protocolSteps[drainIndex].resultingPressureBar;
   assert.ok(salvagePressure > drainPressure + 1, 'the drain starts above its retained pressure');
   assert.ok(Math.abs(drainPressure - 100) < 0.01, 'the drain ends at the retained pressure');
+  const salvageTitle = result.protocolSteps[salvageIndex].title;
+  assert.match(salvageTitle, /^Salvage: (decant|boost) into .+ to [0-9]+\.[0-9] bar$/);
 });
 
 test('salvage never fills a receiver already at its maximum pressure', () => {

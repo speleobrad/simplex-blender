@@ -2486,7 +2486,7 @@ function runSalvageCascade({
         receiverStartMix: { oxygenPercent: receiverStart.oxygenPercent, heliumPercent: receiverStart.heliumPercent },
         receiverEndMix: { oxygenPercent: receiverEnd.oxygenPercent, heliumPercent: receiverEnd.heliumPercent },
         receiverVolumeL: receiverStart.volumeL,
-        title: `Salvage ${stage} into ${receiverStart.name} to ${receiverEnd.pressureBar.toFixed(1)} bar`,
+        title: `Salvage: ${stage} into ${receiverStart.name} to ${receiverEnd.pressureBar.toFixed(1)} bar`,
         recipeLabel: `Salvage into ${receiverStart.name}`,
         description: `${verb} ${(sized.movedMoles * litresPerMole).toFixed(0)} L of cylinder gas into ${receiverStart.name}, from ${receiverStart.pressureBar.toFixed(1)} to ${receiverEnd.pressureBar.toFixed(1)} bar. Cylinder falls to ${tankPressureBar.toFixed(1)} bar and ${movedHeliumLitres.toFixed(0)} L of helium is recovered.`,
         pressureReferenceTemperatureC: temperatureC,

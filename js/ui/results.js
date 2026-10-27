@@ -581,6 +581,7 @@ function displayStepTitle(step, index, units = 'metric') {
   if (Number.isFinite(transferPressureBar)) {
     title = title.replace(/to [0-9]+(?:\.[0-9]+)? bar$/i, `to ${formatUnitValue(transferPressureBar, 'pressureBar', units)}`);
   }
+  if (step.type === 'salvage') return title; // salvage cards are unnumbered; the title names the stage and receiver
   return `Step ${protocolStepNumber(step, index)}: ${title}`;
 }
 
@@ -609,11 +610,12 @@ function renderProtocol(protocolSteps, alertMessage = null, calculation = null, 
       : hasStepMeasurementIndex
         ? step._measurementIndex
         : index;
+    const storedReading = calculation?.thermal?.interimMeasurements?.[interimMeasurementIndex] ?? null;
     if (showInterimMeasurements
       && index > 0
       && step.type !== 'keep'
       && step.type !== 'salvage'
-      && step.type !== 'drain'
+      && (step.type !== 'drain' || storedReading !== null)
       && Number.isInteger(interimMeasurementIndex)) {
       const measurements = calculation?.thermal?.interimMeasurements ?? [];
       const measurement = measurements[interimMeasurementIndex] ?? null;
