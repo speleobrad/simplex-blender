@@ -17,7 +17,7 @@
 - `maxPressureBar`: 1–350, ≥ `pressureBar`; missing migrates to `Math.max(200, pressureBar)`; Sample scrap default 200.
 - Receivers: enabled, not 100% O₂, not 100% He, not compressor Air.
 - Cylinder retention stays primary: do not change the LP retention coefficient; the preservation regression in `docs/development.md` must still pass.
-- Salvage never reads Settings or #3 cost data. Optimize only; Compare/What-if and summary tiles unchanged; do not touch screenshot baselines (`docs/ci-reproduction.md`). The Inventory Max pressure column means three inventory-populated baselines must be regenerated per that doc; this branch does not regenerate them.
+- Salvage never reads Settings or #3 cost data. Optimize only; Compare/What-if and summary tiles unchanged; do not touch screenshot baselines (`docs/ci-reproduction.md`). The Inventory Max pressure column changed only the tablet inventory baseline beyond tolerance; it was regenerated per that doc.
 - Calculation is side-effect free: never mutate persisted Inventory.
 - Do not push; commit on branch `feat/helium-salvage`. Baseline: 450 passing tests when this plan was written; `npm test` passed 531 at the end of implementation.
 

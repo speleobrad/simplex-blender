@@ -17,7 +17,7 @@ When the Optimize recipe must drain the working tank, decide whether the surplus
 - **Approach:** variant search with re-solve. Receiver and source may be the same bank; the planner models that case.
 - **Transfer:** the working tank is the source. Decant until pressures equalize, then the booster (allowed) down to the booster minimum source pressure.
 - **Prices:** independent constants `SALVAGE_HE_PRICE_PER_LITRE = 0.075` and `SALVAGE_O2_PRICE_PER_LITRE = 0.007` (virtual units per free-gas litre), defined in `js/salvage.js`. Salvage never reads Settings or the #3 cost data, so #3 stays display-only and unchanged.
-- **Scope:** Optimize only. Compare and What-if rows are manual and unchanged. The summary tiles are unchanged. The Inventory table gained a Max pressure column, so the three inventory-populated screenshot baselines must be regenerated per `docs/ci-reproduction.md`; this branch does not regenerate them.
+- **Scope:** Optimize only. Compare and What-if rows are manual and unchanged. The summary tiles are unchanged. The Inventory table gained a Max pressure column; in the CI-equivalent container only `inventory-populated-tablet-linux.png` exceeded tolerance and was regenerated per `docs/ci-reproduction.md`.
 - **No global on/off setting.** The attractiveness gate protects banks.
 - **Initial drain only.** A drain created by an interim-reading re-plan stays vent-only.
 
