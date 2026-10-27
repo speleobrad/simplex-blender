@@ -139,7 +139,7 @@ function suppliedSalvagedHeliumMoles(steps, trajectory) {
   return total;
 }
 
-function blendFromLedger({ input, template, steps, trajectory, retainedFraction, ventedMoles }) {
+function blendFromLedger({ input, template, steps, trajectory, retainedFraction, ventedMoles, startPressureBar }) {
   const { cylinder, physics } = input;
   const temperatureC = physics.temperatureC;
   const useVdw = physics.model !== 'ideal';
@@ -155,7 +155,7 @@ function blendFromLedger({ input, template, steps, trajectory, retainedFraction,
     ...template.blend,
     retainedPressureBar,
     retainedPercent: retainedFraction * 100,
-    ventedPressureBar: Math.max(0, cylinder.initialPressureBar - retainedPressureBar),
+    ventedPressureBar: Math.max(0, startPressureBar - retainedPressureBar),
     ventedMoles,
     ventedGasLitres: ventedMoles * litresPerMole,
     heliumVentedLitres: ventedMoles * (cylinder.initialHeliumPercent / 100) * litresPerMole,
@@ -168,7 +168,7 @@ function startingPlan(base, input) {
   return {
     ...base,
     readingPlan: {
-      segments: [{ fromIndex: 0, banks: input.banks ?? [], startMix: initialMixOf(input.cylinder) }],
+      segments: [{ fromIndex: 0, banks: base.salvageBanks ?? input.banks ?? [], startMix: initialMixOf(input.cylinder) }],
       retainedFraction: base.blend.retainedPercent / 100,
       ventedMoles: base.blend.ventedMoles ?? 0
     }
@@ -225,10 +225,11 @@ function applyReading(plan, input, readingsInput, index, reading) {
   }
 
   const allBanks = segmentFor(plan.readingPlan, index).banks;
-  const remainingBanks = allBanks.map(bank => ({
-    ...bank,
-    pressureBar: calcPressure(Math.max(0, bankMoles.get(bank.id)) / bank.volumeL, bank.oxygenPercent, bank.heliumPercent, referenceC, useVdw)
-  }));
+  const remainingBanks = allBanks.map(bank => {
+    const pressureBar = calcPressure(Math.max(0, bankMoles.get(bank.id)) / bank.volumeL, bank.oxygenPercent, bank.heliumPercent, referenceC, useVdw);
+    // Derived state is a model estimate; the rating must not sit below it.
+    return { ...bank, pressureBar, maxPressureBar: Math.max(bank.maxPressureBar, pressureBar) };
+  });
   const pressureAtReferenceBar = calculatePressureAtTemperature({
     pressureBar: reading.pressureBar,
     oxygenPercent: mix.oxygenPercent,
@@ -240,6 +241,7 @@ function applyReading(plan, input, readingsInput, index, reading) {
   });
   const suffixInput = {
     ...input,
+    _salvage: false,
     cylinder: {
       ...cylinder,
       initialPressureBar: pressureAtReferenceBar,
@@ -261,15 +263,23 @@ function applyReading(plan, input, readingsInput, index, reading) {
   if (suffix.feasible === false || !suffix.logicalPlan) {
     return fail(suffix.error ?? 'No plan reaches the target from this reading.');
   }
-  const suffixSteps = suffix.logicalPlan.protocolSteps.slice(firstIndex)
-    .map((candidate, offset) => renumberStep(candidate, index + offset));
-  if (suffixSteps.length === 0) return fail('No steps remain to plan from this reading.');
-  const mergedSteps = [...prefix, ...suffixSteps];
+  const suffixSteps = suffix.logicalPlan.protocolSteps.slice(firstIndex);
+  const prefixTransfers = prefix.filter(step => step?.sourceBankId).length;
+  let suffixTransfer = prefixTransfers;
+  const renumberedSuffix = suffixSteps.map(candidate => {
+    if (!candidate?.sourceBankId) return candidate;
+    suffixTransfer += 1;
+    return renumberStep(candidate, suffixTransfer);
+  });
+  if (renumberedSuffix.length === 0) return fail('No steps remain to plan from this reading.');
+  const mergedSteps = [...prefix, ...renumberedSuffix];
 
+  // Trajectory points are the start mix and one point per transfer; salvage and drain
+  // add none. The suffix's points follow the prefix's transfers, numbered the same way.
   const mergedTrajectory = [
-    ...plan.logicalPlan.trajectory.slice(0, index),
+    ...plan.logicalPlan.trajectory.slice(0, 1 + prefixTransfers),
     ...suffix.logicalPlan.trajectory.slice(1).map((point, offset) => {
-      const step = index + offset + 1 - firstIndex;
+      const step = prefixTransfers + offset + 1;
       return {
         ...point,
         step,
@@ -280,7 +290,14 @@ function applyReading(plan, input, readingsInput, index, reading) {
 
   const retainedFraction = plan.readingPlan.retainedFraction * (suffix.blend.retainedPercent / 100);
   const ventedMoles = plan.readingPlan.ventedMoles + (suffix.blend.ventedMoles ?? 0);
-  const blend = blendFromLedger({ input, template: suffix, steps: mergedSteps, trajectory: mergedTrajectory, retainedFraction, ventedMoles });
+  const lastSalvage = mergedSteps.filter(step => step?.type === 'salvage').at(-1);
+  const postSalvagePressureBar = Number.isFinite(lastSalvage?.resultingPressureBar)
+    ? lastSalvage.resultingPressureBar
+    : cylinder.initialPressureBar;
+  const blend = blendFromLedger({
+    input, template: suffix, steps: mergedSteps, trajectory: mergedTrajectory,
+    retainedFraction, ventedMoles, startPressureBar: postSalvagePressureBar
+  });
   const finalized = finalizeComposedPlan({
     input: readingsInput,
     template: { ...suffix, blend },
@@ -292,6 +309,7 @@ function applyReading(plan, input, readingsInput, index, reading) {
   return {
     plan: {
       ...finalized,
+      ...(plan.salvageTransfers ? { salvageTransfers: plan.salvageTransfers, salvageBanks: plan.salvageBanks } : {}),
       readingPlan: {
         segments: [
           ...plan.readingPlan.segments.filter(segment => segment.fromIndex < index),

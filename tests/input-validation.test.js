@@ -338,3 +338,13 @@ test('Warning mode bypasses only cylinder ceilings, not supported calculator inp
   assert.match(warningInvalidHotErrors.join(' '), /hot overfill/i);
   assert.doesNotMatch(warningInvalidHotErrors.join(' '), /measured.*hot overfill/i);
 });
+
+test('supply bank maximum pressure must be 1–350 bar and at least the current pressure', () => {
+  const bank = { id: 'bank-max', name: 'Max', volumeL: 10, pressureBar: 150, maxPressureBar: 200, oxygenPercent: 0, heliumPercent: 100, enabled: true };
+  const message = 'Supply bank maximum pressure must be 1–350 bar and at least the current pressure.';
+  for (const maxPressureBar of [0, 351, Number.NaN, Number.POSITIVE_INFINITY, 149]) {
+    assert.deepEqual(validateSupplyBankInput({ ...bank, maxPressureBar }), [message]);
+  }
+  assert.deepEqual(validateSupplyBankInput({ ...bank, maxPressureBar: 150 }), []);
+  assert.deepEqual(validateSupplyBankInput({ ...bank, maxPressureBar: 350 }), []);
+});

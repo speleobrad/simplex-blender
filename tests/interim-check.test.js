@@ -4,7 +4,7 @@ import { verifyInterimMeasurement } from '../js/interim-check.js';
 import { optimizeBlend } from '../js/optimizer.js';
 
 const bank = (id, name, oxygenPercent, heliumPercent) => ({
-  id, name, enabled: true, volumeL: 50, pressureBar: 300, oxygenPercent, heliumPercent
+  id, name, enabled: true, volumeL: 50, pressureBar: 300, maxPressureBar: 350, oxygenPercent, heliumPercent
 });
 
 // Default-like recipe: 50 bar Air at 21 °C to 195 bar 18/45, settled at 10 °C in water.
@@ -46,6 +46,7 @@ test('a reading below ambient is rejected when no drain produced it', () => {
   );
   assert.equal(result.ok, false);
   assert.match(result.error, /below ambient 21\.0 °C.*pressure-lowering drain/);
+  assert.match(result.error, /salvage transfer out of the working tank/);
 });
 
 test('a pressure outside the tolerance band for the measured temperature is rejected', () => {
@@ -74,6 +75,39 @@ test('mismatch messages use the selected display units', () => {
 test('a reading below ambient after a drain is accepted at the drained state', () => {
   const result = verifyInterimMeasurement(
     drainScenario, 1, { pressureBar: 41.7, temperatureC: 11.8 }, { tolerancePercent }
+  );
+  assert.deepEqual(result, { ok: true });
+});
+
+// Salvage scenario: the drained 150 bar cylinder moves its surplus into Leftover N, then the
+// recipe decants Pure Oxygen. The salvage cools the working tank below ambient.
+const salvageScenario = {
+  cylinder: {
+    volumeL: 12, initialPressureBar: 150, targetPressureBar: 100,
+    initialOxygenPercent: 32, initialHeliumPercent: 0,
+    targetOxygenPercent: 21, targetHeliumPercent: 35
+  },
+  physics: { model: 'vdw', temperatureC: 20 },
+  banks: [
+    { id: 'bank-he', name: 'Pure Helium', volumeL: 50, pressureBar: 200, maxPressureBar: 350, minimumPressureBar: 15, oxygenPercent: 0, heliumPercent: 100, enabled: true },
+    { id: 'bank-o2', name: 'Pure Oxygen', volumeL: 40, pressureBar: 180, maxPressureBar: 350, minimumPressureBar: 10, oxygenPercent: 100, heliumPercent: 0, enabled: true },
+    { id: 'bank-n', name: 'Leftover N', volumeL: 50, pressureBar: 20, maxPressureBar: 200, minimumPressureBar: 10, oxygenPercent: 32, heliumPercent: 0, enabled: true }
+  ],
+  thermal: {
+    tankMaterial: 'steel', coolingMedium: 'air', ambientTemperatureC: 20, inletTemperatureC: 40,
+    targetMediumTemperatureC: 20, targetInWaterTemperatureC: 20, waitMode: 'minutes', waitMinutes: 0,
+    interimMeasurements: []
+  },
+  settings: { booster: { maxCompressorPressureBar: 350, maxBoosterOutputPressureBar: 350 } }
+};
+
+test('a reading below ambient after a salvage is accepted at the salvage-cooled state', () => {
+  const planned = optimizeBlend(salvageScenario).protocolSteps.find(step => step._measurementIndex === 1).thermal;
+  assert.ok(planned.temperatureStartC < 20, 'the salvage should cool the tank below ambient');
+  const result = verifyInterimMeasurement(
+    salvageScenario, 1,
+    { pressureBar: planned.pressureStartBar, temperatureC: planned.temperatureStartC },
+    { tolerancePercent }
   );
   assert.deepEqual(result, { ok: true });
 });

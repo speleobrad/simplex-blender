@@ -42,7 +42,7 @@ export function verifyInterimMeasurement(input, index, measurement, { toleranceP
   if (measurement.temperatureC < ambientC && !gasCanBeBelowAmbient(protocolSteps, stepIndex)) {
     return {
       ok: false,
-      error: `Measured temperature ${formatUnitValue(measurement.temperatureC, 'temperatureC', units)} is below ambient ${formatUnitValue(ambientC, 'temperatureC', units)}, but this gas state did not come from a pressure-lowering drain. Stop, recheck the starting cylinder, and retry from the actual measured state.`
+      error: `Measured temperature ${formatUnitValue(measurement.temperatureC, 'temperatureC', units)} is below ambient ${formatUnitValue(ambientC, 'temperatureC', units)}, but this gas state did not come from a pressure-lowering drain or a salvage transfer out of the working tank. Stop, recheck the starting cylinder, and retry from the actual measured state.`
     };
   }
 

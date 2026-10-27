@@ -3,9 +3,9 @@ import { validateSupplyBankInput } from './input-validation.js';
 const STORAGE_KEY = 'simplex-gas-remixer-banks';
 
 export const DEFAULT_BANKS = Object.freeze([
-  Object.freeze({ id: 'bank-helium', name: 'Helium', volumeL: 40, pressureBar: 150, oxygenPercent: 0, heliumPercent: 100, enabled: true }),
-  Object.freeze({ id: 'bank-oxygen', name: 'Oxygen', volumeL: 50, pressureBar: 200, oxygenPercent: 100, heliumPercent: 0, enabled: true }),
-  Object.freeze({ id: 'bank-sample-scrap', name: 'Sample scrap', volumeL: 12, pressureBar: 45, oxygenPercent: 19, heliumPercent: 40, enabled: true, gasPresetName: null })
+  Object.freeze({ id: 'bank-helium', name: 'Helium', volumeL: 40, pressureBar: 150, maxPressureBar: 200, oxygenPercent: 0, heliumPercent: 100, enabled: true }),
+  Object.freeze({ id: 'bank-oxygen', name: 'Oxygen', volumeL: 50, pressureBar: 200, maxPressureBar: 200, oxygenPercent: 100, heliumPercent: 0, enabled: true }),
+  Object.freeze({ id: 'bank-sample-scrap', name: 'Sample scrap', volumeL: 12, pressureBar: 45, maxPressureBar: 200, oxygenPercent: 19, heliumPercent: 40, enabled: true, gasPresetName: null })
 ]);
 
 const LEGACY_DEFAULT_BANKS = Object.freeze([
@@ -29,6 +29,12 @@ function isLegacyAirBank(bank) {
   return bank?.oxygenPercent === 21 && bank?.heliumPercent === 0;
 }
 
+function migrateMaxPressureBar(bank) {
+  if (!bank || typeof bank !== 'object' || bank.maxPressureBar !== undefined) return bank;
+  if (!Number.isFinite(bank.pressureBar)) return bank;
+  return { ...bank, maxPressureBar: Math.max(200, bank.pressureBar) };
+}
+
 function copyBanks(banks) {
   return banks.map(bank => {
     const copy = {
@@ -36,6 +42,7 @@ function copyBanks(banks) {
       name: bank.name,
       volumeL: bank.volumeL,
       pressureBar: bank.pressureBar,
+      maxPressureBar: bank.maxPressureBar,
       oxygenPercent: bank.oxygenPercent,
       heliumPercent: bank.heliumPercent,
       enabled: bank.enabled
@@ -82,6 +89,7 @@ export function loadSupplyBanks(storage, onFallback = () => {}) {
     ? banks.filter(bank => !isLegacyAirBank(bank))
     : banks;
   if (isLegacyDefaultBanks(normalizedBanks)) normalizedBanks = DEFAULT_BANKS;
+  else if (Array.isArray(normalizedBanks)) normalizedBanks = normalizedBanks.map(migrateMaxPressureBar);
   const errors = validateBanks(normalizedBanks);
   if (errors.length > 0) {
     onFallback(new RangeError(errors.join(' ')));

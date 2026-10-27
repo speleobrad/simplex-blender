@@ -47,7 +47,7 @@ test.describe('continued browser sessions', () => {
     await expect(rowB.getByRole('textbox', { name: /bank name$/i })).toHaveValue('Continued-session bank');
     await expect(rowB.getByRole('combobox', { name: /^Gas preset for /i })).toHaveValue('gas:Tx 18/45');
     await expect(rowB.getByRole('spinbutton', { name: /volume in (?:litres|L)$/i })).toHaveValue('32');
-    await expect(rowB.getByRole('spinbutton', { name: /pressure in bar$/i })).toHaveValue('180');
+    await expect(rowB.getByRole('spinbutton', { name: /(?<!max )pressure in bar$/i })).toHaveValue('180');
     await expect(rowB.getByRole('spinbutton', { name: /oxygen percentage$/i })).toHaveValue('18');
     await expect(rowB.getByRole('spinbutton', { name: /helium percentage$/i })).toHaveValue('45');
     await expect(rowB.getByRole('checkbox', { name: /Use Continued-session bank/i })).toBeChecked();
@@ -56,7 +56,7 @@ test.describe('continued browser sessions', () => {
     await sessionC.page.getByRole('tab', { name: 'Inventory', exact: true }).click();
     const rowC = bankRows(sessionC.page).nth(index);
     await expect(rowC.getByRole('spinbutton', { name: /volume in (?:litres|L)$/i })).toHaveValue('32');
-    await expect(rowC.getByRole('spinbutton', { name: /pressure in bar$/i })).toHaveValue('180');
+    await expect(rowC.getByRole('spinbutton', { name: /(?<!max )pressure in bar$/i })).toHaveValue('180');
     await expect(rowC.getByRole('spinbutton', { name: /oxygen percentage$/i })).toHaveValue('18');
     await expect(rowC.getByRole('spinbutton', { name: /helium percentage$/i })).toHaveValue('45');
     await expect(rowC.getByRole('checkbox', { name: /Use Continued-session bank/i })).not.toBeChecked();
@@ -100,7 +100,7 @@ test.describe('continued browser sessions', () => {
     await sessionB.page.getByRole('tab', { name: 'Inventory', exact: true }).click();
     const rowB = bankRows(sessionB.page).nth(index);
     await expect(rowB.getByRole('spinbutton', { name: /volume in (?:ft³|cu ft)$/i })).toHaveValue('0.4237760006578631');
-    await expect(rowB.getByRole('spinbutton', { name: /pressure in psi$/i })).toHaveValue('2175.56607');
+    await expect(rowB.getByRole('spinbutton', { name: /(?<!max )pressure in psi$/i })).toHaveValue('2175.56607');
     const unitsMetric = await openSettingsCategory(sessionB.page, 'general');
     await unitsMetric.getByRole('combobox', { name: 'Units' }).selectOption('metric');
     await saveSettings(sessionB.page);
@@ -114,7 +114,7 @@ test.describe('continued browser sessions', () => {
     await sessionC.page.getByRole('tab', { name: 'Inventory', exact: true }).click();
     const rowC = bankRows(sessionC.page).nth(index);
     await expect(rowC.getByRole('spinbutton', { name: /volume in (?:litres|L)$/i })).toHaveValue('12');
-    await expect(rowC.getByRole('spinbutton', { name: /pressure in bar$/i })).toHaveValue('150');
+    await expect(rowC.getByRole('spinbutton', { name: /(?<!max )pressure in bar$/i })).toHaveValue('150');
     await expect(sessionC.page.evaluate(() => JSON.parse(localStorage.getItem('simplex-gas-remixer-banks')).find(bank => bank.name === 'Imperial session bank'))).resolves.toMatchObject({ volumeL: 12, pressureBar: 150 });
     await closeSession(sessionC);
   });

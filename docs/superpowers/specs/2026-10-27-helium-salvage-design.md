@@ -4,7 +4,7 @@ Resolves GitHub issue #5.
 
 ## Status
 
-Design approved by the user in conversation on 2026-10-27. The written spec awaits user review. Implementation has not started.
+Design approved by the user in conversation on 2026-10-27. Implemented on branch `feat/helium-salvage` (refs #5); not yet merged.
 
 ## Goal
 
@@ -17,7 +17,7 @@ When the Optimize recipe must drain the working tank, decide whether the surplus
 - **Approach:** variant search with re-solve. Receiver and source may be the same bank; the planner models that case.
 - **Transfer:** the working tank is the source. Decant until pressures equalize, then the booster (allowed) down to the booster minimum source pressure.
 - **Prices:** independent constants `SALVAGE_HE_PRICE_PER_LITRE = 0.075` and `SALVAGE_O2_PRICE_PER_LITRE = 0.007` (virtual units per free-gas litre), defined in `js/salvage.js`. Salvage never reads Settings or the #3 cost data, so #3 stays display-only and unchanged.
-- **Scope:** Optimize only. Compare and What-if rows are manual and unchanged. The summary tiles are unchanged, so screenshot baselines are not touched.
+- **Scope:** Optimize only. Compare and What-if rows are manual and unchanged. The summary tiles are unchanged. The Inventory table gained a Max pressure column; in the CI-equivalent container only `inventory-populated-tablet-linux.png` exceeded tolerance and was regenerated per `docs/ci-reproduction.md`.
 - **No global on/off setting.** The attractiveness gate protects banks.
 - **Initial drain only.** A drain created by an interim-reading re-plan stays vent-only.
 
@@ -30,7 +30,8 @@ flowchart TD
   R --> V[Variants: vent, +bank1, +bank1+bank2, ...]
   V --> L[Re-solve static LP per variant with mutated banks]
   L --> G[Gates and ranking]
-  G --> T[Thermal search once, on the winner]
+  G --> W[Winning receiver order, fixed for the optimize run]
+  W --> T[Thermal bisection: each candidate replays the order through the static solver and re-checks the gates]
 ```
 
 1. Run the static solver on the original banks at the ambient-settled target pressure. If it does not drain (`drainPressure` at floating-point roundoff), salvage is skipped.
@@ -38,16 +39,17 @@ flowchart TD
 3. For each variant, mutate copies of the receiving banks (moles added, composition, pressure under the selected gas model), re-run the static solver, and compute the final leftover state of every bank after the recipe's draws.
 4. Apply, in order:
    1. **Feasible:** the re-solved surplus `S'` is at least the salvaged moles. Otherwise the variant is discarded.
+   1b. **Retention:** the re-solved cylinder retained moles `x_cyl'` are at least the baseline's `x_cyl` (within 1e-9 relative). Cylinder retention is the primary objective (`docs/development.md`); salvage must never make the recipe discard more working-tank gas than the vent baseline does.
    2. **Attractiveness gate:** for each bank, `score(final state in variant) − score(final state in baseline)` is at least −2.0.
-   3. **Value gate:** net value kept is at least `SALVAGE_MIN_VALUE = 1.0` virtual unit. Net value kept is **post-recipe**: for every enabled bank, take its final He and O₂ free-gas litres after the recipe's draws (the same final states used for the attractiveness gate), price them with the fixed prices, sum across banks, and subtract the same sum for the vent baseline. Gas moved into a bank and then drawn by the recipe therefore counts only through the draws it displaces from other banks, never gross. The working tank's end state is identical in every variant (same target), so any change in how much the cylinder retains shows up as a change in bank stock.
+   3. **Value gate:** net value kept is at least `SALVAGE_MIN_VALUE = 1.0` virtual unit. Net value kept is **post-recipe**: for every enabled bank, take its final He and O₂ free-gas litres after the recipe's draws (the same final states used for the attractiveness gate), price them with the fixed prices, sum across banks, and subtract the same sum for the vent baseline. Gas moved into a bank and then drawn by the recipe therefore counts only through the draws it displaces from other banks, never gross. The working tank's end state is identical in every variant (same target); with the retention gate its retained gas never falls below the baseline's.
    4. **Rank:** highest value kept, then highest Σ delta attractiveness, then lowest LP cost.
-5. The winner (or the baseline if none qualifies) is passed to the existing thermal search unchanged. The thermal bisection (about 40 static solves) runs once, not per variant.
+5. The receiver order is chosen once by `searchSalvageVariant`, on the requested target at its ambient-settled pressure. The thermal bisection then replays that fixed order for each candidate pressure: the candidate's vent-only solve is rebuilt with the same receivers and re-checked against the same gates. A candidate that fails them is solved vent-only. If the salvage thermal result is infeasible, a vent-only thermal search is used instead.
 
 The retention coefficient is unchanged: the optimizer still prefers keeping gas in the cylinder over salvaging it. Salvage only decides what happens to gas the recipe has already chosen to remove.
 
 ## Attractiveness score
 
-`js/leftover-attractiveness.js` exports a pure `leftoverAttractiveness({ oxygenPercent, heliumPercent, pressureBar, volumeL, maxPressureBar })` returning a score on a **0–100 scale**, defined as
+`js/leftover-attractiveness.js` exports a pure `leftoverAttractiveness({ oxygenPercent, heliumPercent, pressureBar, volumeL, maxPressureBar, temperatureC, physics })` returning a score on a **0–100 scale**, defined as
 
 `score = 100 · (0.4 · s_line + 0.4 · s_versatility + 0.2 · s_energy)`
 
@@ -56,7 +58,7 @@ where each term below lies in [0, 1], so the score is in [0, 100]. The −2.0 ga
 - **Line proximity:** `s_line = exp(-15 · d_perp)` with `d_perp = |3.077·f_O₂ + f_He − 1| / √(3.077² + 1)`. For the five standard targets the residual `|3.077·f_O₂ + f_He − 1|` is at most 0.02, so `d_perp` is at most about 0.006 and `s_line` is at least about 0.91.
 - **Versatility:** for each standard target (21/35, 18/45, 15/55, 12/65, 10/70), the bank counts as reachable when it can be topped up to the target by adding gas only, within its max pressure. For gas fractions `f_x` and target fractions `t_x` (O₂, He, N₂), that is `P_bank · max_x(f_x / t_x) ≤ maxPressureBar` (components with `t_x = 0` need `f_x = 0`). The reference implementation checked only N₂, which wrongly scored pure O₂ as reaching every target.
 - **Energy:** a helium-amount term, `min(1, heliumLitres / 1000)`, where `heliumLitres = bank free-gas litres × f_He` (free-gas litres use the same convention as `ventedGasLitres`). This replaces `(P/100)·f_He`, which ignored volume and exceeded 1 above 100 bar. The 1000 L reference is a named constant `SCORE_REFERENCE_HELIUM_LITRES`, so the default Sample scrap bank (12 L, 45 bar, 19/40) scores about 0.2 on this term.
-- **Weights and thresholds:** 0.4 / 0.4 / 0.2 and the −2.0 gate are kept from the reference (the gate is "variant minus baseline" for the same bank's post-recipe state). A bank with invalid fractions (negative, or O₂ + He above 100%) scores 0. Tests pin the intended behavior, for example that dumping a 12/65 mix into a 21/35 scrap bank is refused.
+- **Weights and thresholds:** 0.4 / 0.4 / 0.2 and the −2.0 gate are kept from the reference (the gate is "variant minus baseline" for the same bank's post-recipe state). A bank with invalid fractions (negative, or O₂ + He above 100%) scores 0. Tests pin hand-computed values. The gate refuses a transfer that costs a bank reachable targets, for example a 100 bar, 12 L bank with a 200 bar maximum receiving 10 bar of 12/65 (the 12/65 target is no longer reachable, score change about −6); the same bank at 45 bar receiving 50 bar of 12/65 is accepted (about +7). Pure O₂ and pure He are not always unreachable: with a 350 bar maximum, pure O₂ reaches all five targets only at or below 35 bar, pure He at or below 122.5 bar.
 - **`s_versatility`** is `reachableCount / 5`.
 
 ## Transfer limits
@@ -71,8 +73,8 @@ All quantities use moles and the selected gas model, not bar·L. Receivers casca
 
 ## Protocol and thermal model
 
-- `drain` stays the vent step; its pressure drop is only the vented remainder. Salvage adds protocol steps of type `salvage` (stage `decant` or `boost`), each carrying `receiverBankId`, `receiverBankName`, `movedMoles`, `movedHeliumLitres`, and the receiving bank's before and after pressure and mix.
-- A salvage step has no trajectory point (the working tank's mix is unchanged) and no interim-reading slot, like drain.
+- Salvage steps come first, in cascade order, each lowering the working tank by its moved moles; the `drain` vent step follows and drops the tank from its post-salvage pressure to the retained pressure, so its drop is only the vented remainder (omitted if none). Salvage adds protocol steps of type `salvage` (stage `decant` or `boost`), each carrying `receiverBankId`, `receiverBankName`, `movedMoles`, `movedHeliumLitres`, and the receiving bank's before and after pressure and mix.
+- A salvage step has no trajectory point (the working tank's mix is unchanged) and no interim-reading slot. Unlike a drain, which keeps its slot while a reading is stored there, a salvage step never has one.
 - `js/thermodynamics.js` models a salvage step as a drain-type, cooling step on the working tank. A decant stage uses the configured decant rate selected by the working tank mix; a boost stage uses the booster fill-rate model with the bank as receiver. The tank-side pressure rate follows from moles conservation. The bank's own temperature is not modeled (assumed at ambient).
 - Helium vented is reduced by the helium moved into banks. The existing "Helium salvaged" tile keeps its present meaning (helium retained in the cylinder or supplied). Salvage details appear in the protocol cards only.
 
@@ -82,18 +84,18 @@ All quantities use moles and the selected gas model, not bar·L. Receivers casca
 
 ## Files
 
-- **Create:** `js/leftover-attractiveness.js`, `js/salvage.js` (price constants, transfer limits, receiver ranking, variant generation, selection).
-- **Modify:** `js/optimizer.js` (wrapper that selects the variant before the thermal search), `js/thermodynamics.js` (salvage step type), `js/bank-storage.js` (field, migration, defaults), `js/input-validation.js` (bank validation), `js/ui/supply-banks.js` (field), `js/ui/results.js` (cards), `js/plan-with-readings.js`, `docs/optimizer.md`, `docs/architecture.md`, `docs/UI.md`.
+- **Create:** `js/leftover-attractiveness.js`, `js/salvage.js` (price constants, receiver eligibility, transfer limits, bank-state updates, net value, receiver ranking, variant selection; variant construction stays in `js/optimizer.js`).
+- **Modify:** `js/optimizer.js` (variant construction, the receiver replay in `optimizeBlendWithoutThermal`, and the thermal fallback), `js/thermodynamics.js` (salvage step type), `js/bank-storage.js` (field, migration, defaults), `js/input-validation.js` (bank validation), `js/ui/supply-banks.js` (field), `js/ui/results.js` (cards), `js/plan-with-readings.js`, `docs/optimizer.md`, `docs/architecture.md`, `docs/UI.md`.
 - **Tests:** `tests/optimizer.test.js` and new `tests/leftover-attractiveness.test.js`, `tests/salvage.test.js`, plus extensions to the bank-storage, input-validation, results and plan-with-readings suites and a browser test for the Inventory field.
 
 ## Risks and checks
 
-- **Solve count:** N+1 static solves before the thermal search. Measure the Optimize latency on the default inventory before and after.
+- **Solve count:** N+1 static solves for the receiver search. In the thermal search, each candidate that replays a variant costs two static solves (its vent-only baseline, then the variant re-solve). Measure the Optimize latency on the default inventory before and after.
 - **Retention invariant:** the preservation regression in `docs/development.md` (12 L, 80 bar, 21/35 to 210 bar, 18/45) must still begin with retention, not a drain.
 - **Booster rate on a reversed flow:** the fill-rate model is receiver-oriented; the first plan task verifies the tank-side pressure rate derived from it against a moles-conservation check.
-- **Screenshot baselines:** unchanged by this design; read `docs/ci-reproduction.md` before touching any.
+- **Screenshot baselines:** the Inventory table gained a Max pressure column, so the inventory-populated baselines were checked in the CI-equivalent container per `docs/ci-reproduction.md`; only `inventory-populated-tablet-linux.png` exceeded the 1% tolerance (4358 pixels: the new column and the resulting column reflow) and was regenerated. A pushed Actions run is still required to confirm.
 - **#3 interaction:** #3 prices operations by step type. When #3 is implemented, `salvage` steps need an operation mapping; this issue does not change #3.
 
 ## Out of scope
 
-Booster-assisted transfers into banks from Compare/What-if; per-bank opt-out flags; salvage in re-plans; any display of money value; bank temperature modeling.
+Booster-assisted transfers into banks from Compare/What-if; per-bank opt-out flags; a new salvage search in re-plans (re-plans reuse the base plan's salvage banks and never salvage again); any display of money value; bank temperature modeling.
