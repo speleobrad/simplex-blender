@@ -1,7 +1,7 @@
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
-import { parseCostFee, renderSettingsDialog } from '../js/ui/settings-dialog.js';
+import { parseCostNumber, renderSettingsDialog } from '../js/ui/settings-dialog.js';
 
 class FakeElement {
   constructor(tagName = 'div') {
@@ -476,12 +476,13 @@ test('shows identical flat fees in metric and imperial units because fees are ne
   }
 });
 
-test('parses typed fees without unit conversion and maps empty or non-numeric text to NaN', () => {
-  assert.equal(parseCostFee(' 1.5 '), 1.5);
-  assert.equal(parseCostFee('0.25'), 0.25);
-  assert.ok(Number.isNaN(parseCostFee('')));
-  assert.ok(Number.isNaN(parseCostFee('   ')));
-  assert.ok(Number.isNaN(parseCostFee('abc')));
+test('parses typed cost numbers without unit conversion and maps empty or non-numeric text to NaN', () => {
+  assert.equal(parseCostNumber(' 1.5 '), 1.5);
+  assert.equal(parseCostNumber('0.25'), 0.25);
+  assert.equal(parseCostNumber('10'), 10);
+  assert.ok(Number.isNaN(parseCostNumber('')));
+  assert.ok(Number.isNaN(parseCostNumber('   ')));
+  assert.ok(Number.isNaN(parseCostNumber('abc')));
 });
 
 test('provides a Costs pane with symbol, discount and three flat fees and no per-litre inputs', () => {

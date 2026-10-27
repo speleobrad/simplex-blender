@@ -49,7 +49,7 @@ import { loadAnalytics } from './analytics.js';
 import { createOnboardingController } from './ui/onboarding.js';
 import { renderCompareRecipe } from './ui/compare-recipe.js';
 import { renderPressureLimitWarnings, renderResults } from './ui/results.js';
-import { renderSettingsDialog, renderPresetOptions, parseCostFee, setCostField } from './ui/settings-dialog.js';
+import { renderSettingsDialog, renderPresetOptions, parseCostNumber, setCostField } from './ui/settings-dialog.js';
 import { renderEquipmentSummary } from './ui/equipment-summary.js';
 import { formatBankPrice, formatSuggestionNote, renderSupplyBanks } from './ui/supply-banks.js';
 import { renderStorageWarning } from './ui/storage-warning.js';
@@ -294,7 +294,8 @@ function bankPricingSignature(bank) {
     costs: state.settings.costs,
     booster: state.settings.booster,
     pressureLimitMode: state.settings.pressureLimitMode,
-    physics: currentPhysicsForBanks()
+    physics: currentPhysicsForBanks(),
+    inventoryBanks: state.banks // redesign: wired in Task 3/4
   });
 }
 
@@ -397,7 +398,9 @@ function finishBankPriceCalculation(bankId) {
       bank,
       costs: state.settings.costs,
       settings: state.settings,
-      physics: currentPhysicsForBanks()
+      physics: currentPhysicsForBanks(),
+      inventoryBanks: state.banks,
+      inventoryTemperatureC: currentPhysicsForBanks().temperatureC // redesign: wired in Task 3/4
     });
   } catch (error) {
     delete state.bankSuggestions[bankId];
@@ -753,8 +756,9 @@ function updateSettingsDraft(input, eventType) {
   const index = Number(input.dataset.settingsIndex);
   const field = input.dataset.settingsField;
   if (collection === 'costs') {
-    const value = field === 'currencySymbol' ? input.value : parseCostFee(input.value);
-    setCostField(state.settingsDraft.costs, field, value);
+    const value = field === 'currencySymbol' ? input.value : parseCostNumber(input.value);
+    const isFee = field.startsWith('operationPrices.');
+    setCostField(state.settingsDraft.costs, field, isFee && Number.isFinite(value) ? Math.round(value * 100) / 100 : value);
     persistSettingsDraft();
     return;
   }

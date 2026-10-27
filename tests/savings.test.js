@@ -1,0 +1,83 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { computeSavings } from '../js/savings.js';
+import { DEFAULT_SETTINGS } from '../js/settings.js';
+import { litresPerMole } from '../js/cost.js';
+
+// Ideal physics makes every free-gas litre count exactly P × V, independent of temperature.
+const physics = { model: 'ideal', temperatureC: 20 };
+const inventoryTemperatureC = 20;
+const costs = { currencySymbol: '', leftoverDiscountPercent: 10, operationPrices: { boost: 2, decant: 1, topUp: 5 } };
+const bank = over => ({ id: 'b', name: 'B', volumeL: 10, pressureBar: 150, oxygenPercent: 32, heliumPercent: 0, enabled: true, ...over });
+const pureO2 = bank({ id: 'o2', name: 'O2 bottle', oxygenPercent: 100, pricePerLitre: 0.02 });
+const pureHe = bank({ id: 'he', name: 'He bottle', oxygenPercent: 0, heliumPercent: 100, pricePerLitre: 0.05 });
+const real = bank({ id: 'real', name: 'EAN32', volumeL: 12, pricePerLitre: 0.001 });
+const perMole = litresPerMole(physics.temperatureC);
+// A decant from `sourceBankId` that consumed `litres` of free gas.
+const decantFrom = (sourceBankId, litres, id = 'op-1') => ({
+  costOperation: 'decant', costOperationId: id, sourceBankId, sourceConsumedMoles: litres / perMole
+});
+const run = ({ banks, steps = [], blend = { heliumRetainedLitres: 100 } }) => computeSavings({
+  result: { blend, protocolSteps: steps },
+  banks, costs, settings: DEFAULT_SETTINGS, physics, inventoryTemperatureC
+});
+
+test('saved cost is retained helium litres times the weighted pure helium price', () => {
+  // Two He banks, weights 10 L × 150 bar = 1500 and 5 L × 150 bar = 750 (ideal litres = P·V).
+  // Weighted He = (1500 × 0.05 + 750 × 0.11) / 2250 = 0.07. Saved = 100 × 0.07 = 7.
+  const heSmall = bank({ id: 'he2', name: 'He small', volumeL: 5, oxygenPercent: 0, heliumPercent: 100, pricePerLitre: 0.11 });
+  const result = run({ banks: [pureO2, pureHe, heSmall] });
+  assert.ok(Math.abs(result.savedCost - 7) < 1e-9, `${result.savedCost}`);
+  assert.deepEqual(result.missing, []);
+});
+
+test('no helium price makes saved cost null and names helium', () => {
+  const result = run({ banks: [pureO2, real] });
+  assert.equal(result.savedCost, null);
+  assert.ok(result.missing.includes('helium'));
+});
+
+test('salvage is litres used × discount-0 recipe price minus what the bank charged', () => {
+  // EAN32 at 150 bar, 12 L, ideal: litres = 1800. Recipe cost = 6 (top-up 5 + decant 1) + 0.02·b·1800,
+  // with b = 0.32 − 0.21 × 0.68 / 0.79 (O2 needed beyond air). Per litre = 6/1800 + 0.02·b. Discount is ignored.
+  const b = 0.32 - 0.21 * 0.68 / 0.79;
+  const recipePerLitre = 6 / 1800 + 0.02 * b;
+  const used = 360;
+  const expected = used * recipePerLitre - used * 0.001;
+  const result = run({ banks: [pureO2, pureHe, real], steps: [decantFrom('real', used)] });
+  assert.ok(Math.abs(result.salvagedSaving - expected) < 1e-6, `${result.salvagedSaving} vs ${expected}`);
+  assert.deepEqual(result.missing, []);
+});
+
+test('a used pure bank is not a salvage source', () => {
+  const result = run({ banks: [pureO2, pureHe, real], steps: [decantFrom('o2', 100)] });
+  assert.equal(result.salvagedSaving, 0);
+  assert.deepEqual(result.missing, []);
+});
+
+test('an unpriced used bank is skipped, marked missing, and salvage stays numeric', () => {
+  const unpriced = bank({ id: 'real', name: 'EAN32', volumeL: 12, pricePerLitre: null });
+  const result = run({ banks: [pureO2, pureHe, unpriced], steps: [decantFrom('real', 360)] });
+  assert.equal(result.salvagedSaving, 0);
+  assert.ok(result.missing.includes('unpriced banks'));
+});
+
+test('a missing pure oxygen price makes salvage null and gives the reason', () => {
+  const result = run({ banks: [pureHe, real], steps: [decantFrom('real', 360)] });
+  assert.equal(result.salvagedSaving, null);
+  assert.ok(result.missing.includes('Set a price on a pure oxygen bank first.'));
+});
+
+test('missing reasons are deduplicated', () => {
+  const unpriced = bank({ id: 'real', name: 'EAN32', volumeL: 12, pricePerLitre: null });
+  const result = run({ banks: [unpriced], steps: [decantFrom('real', 100, 'op-1'), decantFrom('real', 100, 'op-2')] });
+  assert.equal(new Set(result.missing).size, result.missing.length);
+});
+
+test('computeSavings does not mutate the result, banks or costs', () => {
+  const banks = [pureO2, pureHe, real];
+  const steps = [decantFrom('real', 360)];
+  const before = JSON.stringify({ banks, steps, costs });
+  run({ banks, steps });
+  assert.equal(JSON.stringify({ banks, steps, costs }), before);
+});

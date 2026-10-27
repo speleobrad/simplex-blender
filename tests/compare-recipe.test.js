@@ -565,3 +565,11 @@ test('source consumed moles match the finite source pressure drop', () => {
   const bankEnd = calcMolarDensity(protocol.protocolSteps.at(-1).sourceEndPressureBar, 0, 100, physics.temperatureC, false) * 40;
   assert.ok(Math.abs(consumed - (bankStart - bankEnd)) < 1e-6);
 });
+
+test('compare summary reports retained helium ungated for a 98% helium initial mix', () => {
+  const heliumRich = { ...cylinder, initialPressureBar: 80, initialOxygenPercent: 0, initialHeliumPercent: 98 };
+  const result = buildCompareProtocol([{ id: 'keep', type: 'keep' }], { cylinder: heliumRich, banks: [], physics, settings });
+  assert.equal(result.summary.heliumSalvagedLitres, 0);
+  // Ideal gas, nothing vented: retained He litres = 80 bar × 12 L × 0.98.
+  assert.ok(Math.abs(result.summary.heliumRetainedLitres - 80 * 12 * 0.98) < 1e-6, `${result.summary.heliumRetainedLitres}`);
+});

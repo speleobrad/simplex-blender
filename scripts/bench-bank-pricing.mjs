@@ -1,21 +1,28 @@
-// Benchmarks priceBankByRecipe on the default banks and on the worst-case bank.
+// Benchmarks priceBankByRecipe on the priceable default banks and on worst-case mixed banks.
+// Pure banks are refused by design, so they are not benchmarked.
 // Usage: node scripts/bench-bank-pricing.mjs
 import { performance } from 'node:perf_hooks';
 import { DEFAULT_SETTINGS, copySettings } from '../js/settings.js';
 import { DEFAULT_BANKS } from '../js/bank-storage.js';
 import { priceBankByRecipe } from '../js/bank-pricing.js';
+import { isPureBank } from '../js/pure-prices.js';
 
 const DEFAULT_BANK_TARGET_MS = 2000;
 const WORST_BANK_TARGET_MS = 10000;
 const RUNS = 3;
 
 const physics = { model: 'vdw', temperatureC: 20 };
+const inventoryTemperatureC = 21;
 const costs = {
   currencySymbol: '',
-  pricePerLitre: { oxygen: 0.01, helium: 0.05 },
   leftoverDiscountPercent: 0,
-  operationPrices: { boostPerLitre: 0.002, decantPerLitre: 0.001, equalizePerLitre: 0.0005, topUpPerOperation: 5 }
+  operationPrices: { boost: 1.5, decant: 0.75, topUp: 5 }
 };
+// Priced pure O2 and He inventory banks supply the virtual sources.
+const inventoryBanks = [
+  { id: 'pure-o2', name: 'Pure O2', volumeL: 200, pressureBar: 200, oxygenPercent: 100, heliumPercent: 0, enabled: true, pricePerLitre: 0.01 },
+  { id: 'pure-he', name: 'Pure He', volumeL: 200, pressureBar: 200, oxygenPercent: 0, heliumPercent: 100, enabled: true, pricePerLitre: 0.05 }
+];
 
 const baseSettings = () => {
   const settings = copySettings(DEFAULT_SETTINGS);
@@ -29,16 +36,21 @@ const raisedSettings = () => {
 };
 
 const cases = [
-  ...DEFAULT_BANKS.map(bank => ({ label: `default: ${bank.name}`, bank: structuredClone(bank), settings: baseSettings(), target: DEFAULT_BANK_TARGET_MS })),
+  ...DEFAULT_BANKS.filter(bank => !isPureBank(bank)).map(bank => ({
+    label: `default: ${bank.name}`,
+    bank: structuredClone(bank),
+    settings: baseSettings(),
+    target: DEFAULT_BANK_TARGET_MS
+  })),
   {
-    label: 'worst: 200 L 350 bar O2 (350 bar booster)',
-    bank: { id: 'worst-o2', name: 'Worst O2', volumeL: 200, pressureBar: 350, oxygenPercent: 100, heliumPercent: 0, enabled: true },
+    label: 'worst: 200 L 350 bar EAN 50 (350 bar booster)',
+    bank: { id: 'worst-ean50', name: 'Worst EAN 50', volumeL: 200, pressureBar: 350, oxygenPercent: 50, heliumPercent: 0, enabled: true },
     settings: raisedSettings(),
     target: WORST_BANK_TARGET_MS
   },
   {
-    label: 'worst: 200 L 350 bar He (350 bar booster)',
-    bank: { id: 'worst-he', name: 'Worst He', volumeL: 200, pressureBar: 350, oxygenPercent: 0, heliumPercent: 100, enabled: true },
+    label: 'worst: 200 L 350 bar Tx 21/35 (350 bar booster)',
+    bank: { id: 'worst-tx', name: 'Worst Tx 21/35', volumeL: 200, pressureBar: 350, oxygenPercent: 21, heliumPercent: 35, enabled: true },
     settings: raisedSettings(),
     target: WORST_BANK_TARGET_MS
   }
@@ -50,7 +62,7 @@ for (const { label, bank, settings, target } of cases) {
   let result;
   for (let run = 0; run < RUNS; run += 1) {
     const start = performance.now();
-    result = priceBankByRecipe({ bank, costs: structuredClone(costs), settings, physics });
+    result = priceBankByRecipe({ bank, costs: structuredClone(costs), settings, physics, inventoryBanks, inventoryTemperatureC });
     times.push(performance.now() - start);
   }
   const worst = Math.max(...times);

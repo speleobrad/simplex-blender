@@ -1,6 +1,8 @@
 import { GAS_CONSTANT } from './physics.js';
 
-const OPERATION_ORDER = ['boost', 'decant', 'equalize', 'topUp'];
+// Fee class of each operation: `equalize` is charged as a decant.
+const FEE_KEY_BY_OPERATION = Object.freeze({ boost: 'boost', decant: 'decant', equalize: 'decant', topUp: 'topUp' });
+const OPERATION_LINE_ORDER = Object.freeze(['boost', 'decant', 'topUp']);
 
 export function litresPerMole(temperatureC) {
   return GAS_CONSTANT * (temperatureC + 273.15);
@@ -19,26 +21,32 @@ export function withoutBankPrices(banks) {
   });
 }
 
-function anySettingsPrice(costs) {
-  return Object.values(costs?.operationPrices ?? {}).some(value => Number.isFinite(value) && value > 0);
+function feeOf(costs, key) {
+  const fee = costs?.operationPrices?.[key];
+  return Number.isFinite(fee) ? fee : 0;
 }
 
+/**
+ * Flat fee model: each distinct `costOperationId` is one operation, charged once at
+ * the fee of its class (boost, decant incl. equalize, topUp). Gas is charged per litre
+ * of each bank's stored price; compressor air (topUp) has no gas line.
+ */
 export function computeFillCost({ steps = [], banks = [], costs, temperatureC }) {
   const perMole = litresPerMole(temperatureC);
   const bankById = new Map(banks.map(bank => [bank.id, bank]));
   const gas = new Map();
-  const operationLitres = { boost: 0, decant: 0, equalize: 0, topUp: 0 };
-  const topUpIds = new Set();
+  const operationIds = { boost: new Set(), decant: new Set(), topUp: new Set() };
 
   for (const step of steps) {
     const operation = step?.costOperation;
     if (!operation) continue;
-    const litres = (Number.isFinite(step.sourceConsumedMoles) ? step.sourceConsumedMoles : 0) * perMole;
-    operationLitres[operation] += litres;
     if (operation === 'topUp') {
-      topUpIds.add(step.costOperationId);
+      operationIds.topUp.add(step.costOperationId);
       continue;
     }
+    const feeKey = FEE_KEY_BY_OPERATION[operation];
+    if (feeKey) operationIds[feeKey].add(step.costOperationId);
+    const litres = (Number.isFinite(step.sourceConsumedMoles) ? step.sourceConsumedMoles : 0) * perMole;
     const bank = bankById.get(step.sourceBankId);
     const line = gas.get(step.sourceBankId) ?? {
       sourceBankId: step.sourceBankId,
@@ -58,16 +66,12 @@ export function computeFillCost({ steps = [], banks = [], costs, temperatureC })
   const unpricedSources = gasLines.filter(line => line.unitPrice === null)
     .map(({ sourceBankId, name }) => ({ sourceBankId, name }));
 
-  const prices = costs?.operationPrices ?? {};
-  const operationLines = OPERATION_ORDER
-    .filter(operation => operation === 'topUp' ? topUpIds.size > 0 : operationLitres[operation] > 0)
+  const operationLines = OPERATION_LINE_ORDER
+    .filter(operation => operationIds[operation].size > 0)
     .map(operation => {
-      if (operation === 'topUp') {
-        const rate = prices.topUp ?? 0; // redesign: replaced in Task 2
-        return { operation, litres: operationLitres.topUp, count: topUpIds.size, rate, cost: topUpIds.size * rate };
-      }
-      const rate = 0; // redesign: replaced in Task 2
-      return { operation, litres: operationLitres[operation], count: null, rate, cost: operationLitres[operation] * rate };
+      const count = operationIds[operation].size;
+      const fee = feeOf(costs, operation);
+      return { operation, count, fee, cost: count * fee };
     });
 
   const gasTotal = gasLines.reduce((sum, line) => sum + line.cost, 0);
@@ -80,6 +84,6 @@ export function computeFillCost({ steps = [], banks = [], costs, temperatureC })
     total: gasTotal + operationTotal,
     unpricedSources,
     incomplete: unpricedSources.length > 0,
-    configured: anySettingsPrice(costs) || gasLines.some(line => line.unitPrice !== null)
+    configured: OPERATION_LINE_ORDER.some(key => feeOf(costs, key) > 0) || gasLines.some(line => line.unitPrice !== null)
   };
 }

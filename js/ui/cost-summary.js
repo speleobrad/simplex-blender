@@ -4,7 +4,6 @@ import { formatMoney } from '../currency-format.js';
 const OPERATION_LABELS = Object.freeze({
   boost: 'Boost',
   decant: 'Decant',
-  equalize: 'Equalize',
   topUp: 'Top-up'
 });
 
@@ -44,7 +43,7 @@ function litresText(litres, units) {
 }
 
 function perVolumeText(pricePerLitre, symbol, units) {
-  return `${formatMoney(convertToDisplay(pricePerLitre, 'pricePerVolumeL', units), symbol, 4)} ${unitLabel('pricePerVolumeL', units)}`;
+  return `${formatMoney(convertToDisplay(pricePerLitre, 'pricePerVolumeL', units), symbol, 6)} ${unitLabel('pricePerVolumeL', units)}`;
 }
 
 function gasRow(line, symbol, units) {
@@ -59,24 +58,20 @@ function gasRow(line, symbol, units) {
   return row;
 }
 
-function operationRow(line, symbol, units) {
+// redesign: wired in Task 3/4 (operation table is count × fee; no per-litre column)
+function operationRow(line, symbol) {
   const row = document.createElement('tr');
+  const label = OPERATION_LABELS[line.operation] ?? line.operation;
   if (line.operation === 'topUp') {
-    const label = document.createElement('span');
-    label.textContent = 'includes compressor air';
-    const litres = `${litresText(line.litres, units)} (information only)`;
-    row.append(
-      labelCell(OPERATION_LABELS.topUp, ' ', label),
-      cell(litres),
-      cell(`${line.count} × ${formatMoney(line.rate, symbol, 2)}`),
-      cell(formatMoney(line.cost, symbol, 2))
-    );
-    return row;
+    const note = document.createElement('span');
+    note.textContent = 'includes compressor air';
+    row.append(labelCell(label, ' ', note));
+  } else {
+    row.append(labelCell(label));
   }
   row.append(
-    labelCell(OPERATION_LABELS[line.operation] ?? line.operation),
-    cell(litresText(line.litres, units)),
-    cell(perVolumeText(line.rate, symbol, units)),
+    cell(String(line.count)),
+    cell(formatMoney(line.fee, symbol, 2)),
     cell(formatMoney(line.cost, symbol, 2))
   );
   return row;
@@ -113,11 +108,8 @@ export function renderCostSummary(cost, { root, units = 'metric', currencySymbol
     return;
   }
 
-  const volumeHeading = `Volume (${unitLabel('volumeL', units)})`;
-  for (const key of ['cost-gas-volume-heading', 'cost-operations-volume-heading']) {
-    const heading = hook(root, key);
-    if (heading) heading.textContent = volumeHeading;
-  }
+  const gasHeading = hook(root, 'cost-gas-volume-heading');
+  if (gasHeading) gasHeading.textContent = `Volume (${unitLabel('volumeL', units)})`;
   setVisible(status, false);
   setVisible(tables, true);
   setVisible(total, true);
@@ -125,7 +117,7 @@ export function renderCostSummary(cost, { root, units = 'metric', currencySymbol
   const gasRows = cost.gasLines.map(line => gasRow(line, currencySymbol, units));
   gasBody.replaceChildren(...(gasRows.length ? gasRows : [messageRow('No gas transferred.')]));
 
-  const operationRows = cost.operationLines.map(line => operationRow(line, currencySymbol, units));
+  const operationRows = cost.operationLines.map(line => operationRow(line, currencySymbol));
   operationBody.replaceChildren(...(operationRows.length ? operationRows : [messageRow('No operations.')]));
 
   total.textContent = totalText(cost, currencySymbol);

@@ -86,7 +86,7 @@ function rowTexts(body) {
 
 const PRICED_COST = {
   gasLines: [{ sourceBankId: 'bank-o2', name: 'Oxygen bank', litres: 10, unitPrice: 0.025, cost: 0.25 }],
-  operationLines: [{ operation: 'boost', litres: 400, count: null, rate: 0.0275, cost: 11 }],
+  operationLines: [{ operation: 'boost', count: 2, fee: 5, cost: 10 }],
   gasTotal: 0.25,
   operationTotal: 11,
   total: 11.25,
@@ -103,8 +103,8 @@ test('renders priced gas, operation and total lines with the currency prefix', (
     assert.equal(status.hidden, true);
     assert.equal(tables.hidden, false);
     assert.equal(total.hidden, false);
-    assert.deepEqual(rowTexts(gasBody), [['Oxygen bank', '10.0 L', '€0.0250 /L', '€0.25']]);
-    assert.deepEqual(rowTexts(operationBody), [['Boost', '400.0 L', '€0.0275 /L', '€11.00']]);
+    assert.deepEqual(rowTexts(gasBody), [['Oxygen bank', '10.0 L', '€0.025000 /L', '€0.25']]);
+    assert.deepEqual(rowTexts(operationBody), [['Boost', '2', '€5.00', '€10.00']]);
     assert.equal(total.textContent, 'Total €11.25');
   });
 });
@@ -140,12 +140,12 @@ test('labels the total incomplete with unpriced source names and marks the gas r
   });
 });
 
-test('shows top-up as count times fee with compressor air as information only', () => {
+test('shows top-up as count, fee and cost with compressor air as information only', () => {
   withDocument(() => {
     const { host, gasBody, operationBody, total } = createHost();
     const cost = {
       gasLines: [{ sourceBankId: 'bank-o2', name: 'Oxygen bank', litres: 10, unitPrice: 0.025, cost: 0.25 }],
-      operationLines: [{ operation: 'topUp', litres: 30, count: 1, rate: 5, cost: 5 }],
+      operationLines: [{ operation: 'topUp', count: 1, fee: 5, cost: 5 }],
       gasTotal: 0.25,
       operationTotal: 5,
       total: 5.25,
@@ -158,8 +158,8 @@ test('shows top-up as count times fee with compressor air as information only', 
     assert.equal(gasBody.children.length, 1);
     const [topUpRow] = rowTexts(operationBody);
     assert.equal(topUpRow[0], 'Top-up includes compressor air');
-    assert.equal(topUpRow[1], '30.0 L (information only)');
-    assert.equal(topUpRow[2], '1 × €5.00');
+    assert.equal(topUpRow[1], '1');
+    assert.equal(topUpRow[2], '€5.00');
     assert.equal(topUpRow[3], '€5.00');
     assert.equal(total.textContent, 'Total €5.25');
   });
@@ -195,7 +195,7 @@ test('converts litres and prices to imperial units', () => {
 
     const [[, litres, price]] = rowTexts(gasBody);
     assert.match(litres, /cu ft$/);
-    assert.match(price, /^€\d+\.\d{4} \/cu ft$/);
+    assert.match(price, /^€\d+\.\d{6} \/cu ft$/);
   });
 });
 
@@ -206,16 +206,13 @@ test('does nothing when the host has no Costs section', () => {
   });
 });
 
-test('labels the volume column with the active volume unit', () => {
+test('labels the gas volume column with the active volume unit', () => {
   withDocument(() => {
     const { host } = createHost();
     const gasHeading = new FakeNode('th');
     gasHeading.setAttribute('data-result-key', 'cost-gas-volume-heading');
-    const opHeading = new FakeNode('th');
-    opHeading.setAttribute('data-result-key', 'cost-operations-volume-heading');
-    host.children[0].children[0].append(gasHeading, opHeading);
+    host.children[0].children[0].append(gasHeading);
     renderCostSummary(PRICED_COST, { root: host, units: 'imperial', currencySymbol: '€' });
     assert.equal(gasHeading.textContent, 'Volume (cu ft)');
-    assert.equal(opHeading.textContent, 'Volume (cu ft)');
   });
 });

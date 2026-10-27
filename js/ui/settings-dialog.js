@@ -52,10 +52,11 @@ export function setCostField(costs, field, value) {
 }
 
 /**
- * Parse a typed flat operation fee. Fees are money per operation, so they are
- * never unit-converted. Empty or non-numeric text becomes NaN so validation rejects it.
+ * Parse a typed cost number (a flat operation fee or the leftover discount). Fees are money
+ * per operation, so they are never unit-converted. Empty or non-numeric text becomes NaN so
+ * validation rejects it.
  */
-export function parseCostFee(text) {
+export function parseCostNumber(text) {
   const trimmed = String(text ?? '').trim();
   if (trimmed === '') return Number.NaN;
   return Number(trimmed);

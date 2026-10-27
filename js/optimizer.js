@@ -1653,6 +1653,7 @@ function blendSummary({
   ventedGasLitres,
   heliumVentedLitres,
   heliumSalvagedLitres,
+  heliumRetainedLitres,
   finalPressureBar,
   targetOxygenPercent,
   targetHeliumPercent
@@ -1665,6 +1666,7 @@ function blendSummary({
     ventedGasLitres,
     heliumVentedLitres,
     heliumSalvagedLitres,
+    heliumRetainedLitres,
     finalPressureBar,
     finalOxygenPercent: targetOxygenPercent,
     finalHeliumPercent: targetHeliumPercent
@@ -2171,6 +2173,7 @@ function optimizeBlendWithoutThermal(input) {
     .reduce((total, { bank, addedMoles }) => total + addedMoles * (bank.heliumPercent / 100), 0);
   const heliumSalvagedLitres = (retainedHeliumMoles + salvagedSupplyHeliumMoles)
     * (GAS_CONSTANT * (temperatureC + 273.15));
+  const heliumRetainedLitres = retainedMoles * (initialHeliumPercent / 100) * (GAS_CONSTANT * (temperatureC + 273.15));
   const ventedGasLitres = ventedMoles * (GAS_CONSTANT * (temperatureC + 273.15));
   const heliumVentedLitres = ventedGasLitres * (initialHeliumPercent / 100);
 
@@ -2342,6 +2345,7 @@ function optimizeBlendWithoutThermal(input) {
     ventedGasLitres,
     heliumVentedLitres,
     heliumSalvagedLitres,
+    heliumRetainedLitres,
     finalPressureBar: recipeTargetPressureBar,
     targetOxygenPercent,
     targetHeliumPercent

@@ -2201,6 +2201,28 @@ test('excludes helium from an initial mix that is 98% helium or richer', () => {
   assert.equal(result.blend.heliumSalvagedLitres, 0);
 });
 
+test('reports retained helium ungated, even for an initial mix 98% helium or richer', () => {
+  const result = optimizeBlend({
+    cylinder: {
+      volumeL: 12,
+      initialPressureBar: 80,
+      initialOxygenPercent: 0,
+      initialHeliumPercent: 98,
+      targetPressureBar: 80,
+      targetOxygenPercent: 0,
+      targetHeliumPercent: 98
+    },
+    physics: { model: 'ideal', temperatureC: 20 },
+    banks: [],
+    settings: DEFAULT_SETTINGS
+  });
+
+  assert.equal(result.feasible, true);
+  assert.equal(result.blend.heliumSalvagedLitres, 0);
+  // Ideal gas, nothing vented: retained moles = 80 bar × 12 L / (R × T), so retained He litres = 80 × 12 × 0.98.
+  assert.ok(Math.abs(result.blend.heliumRetainedLitres - 80 * 12 * 0.98) < 1e-6, `${result.blend.heliumRetainedLitres}`);
+});
+
 
 test('rejects invalid thermal inputs with the existing invalid result shape', () => {
   const input = {

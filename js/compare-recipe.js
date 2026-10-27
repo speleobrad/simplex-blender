@@ -952,7 +952,8 @@ export function buildCompareProtocol(rows, { cylinder, physics, banks = [], sett
     heliumVentedLitres: ventedMoles * (initialMix.heliumPercent / 100) * gasMolarVolumeL,
     heliumSalvagedLitres: (
       salvagedHeliumFrom(retainedInitialMoles, initialMix.heliumPercent) + addedHeliumMoles
-    ) * gasMolarVolumeL
+    ) * gasMolarVolumeL,
+    heliumRetainedLitres: retainedInitialMoles * (initialMix.heliumPercent / 100) * gasMolarVolumeL
   };
   return { protocolSteps, trajectory, initialMix, sourceBanks: [...sourceSummaries.values()], summary };
 }
