@@ -17,9 +17,9 @@
 - `maxPressureBar`: 1–350, ≥ `pressureBar`; missing migrates to `Math.max(200, pressureBar)`; Sample scrap default 200.
 - Receivers: enabled, not 100% O₂, not 100% He, not compressor Air.
 - Cylinder retention stays primary: do not change the LP retention coefficient; the preservation regression in `docs/development.md` must still pass.
-- Salvage never reads Settings or #3 cost data. Optimize only; Compare/What-if and summary tiles unchanged; do not touch screenshot baselines (`docs/ci-reproduction.md`).
+- Salvage never reads Settings or #3 cost data. Optimize only; Compare/What-if and summary tiles unchanged; do not touch screenshot baselines (`docs/ci-reproduction.md`). The Inventory Max pressure column means three inventory-populated baselines must be regenerated per that doc; this branch does not regenerate them.
 - Calculation is side-effect free: never mutate persisted Inventory.
-- Do not push; commit on branch `feat/helium-salvage`. Baseline: 450 passing tests.
+- Do not push; commit on branch `feat/helium-salvage`. Baseline: 450 passing tests when this plan was written; `npm test` passed 531 at the end of implementation.
 
 ---
 
@@ -65,8 +65,8 @@
   - `salvageTransferMoles({ bank, tank, surplusMoles, physics, minimumSourcePressureBar, maxBoosterOutputPressureBar, retainedMoles }) → { movedMoles, stage: 'decant'|'boost'|'decant+boost', receiverEndPressureBar }`: min of surplus, room up to `min(bank.maxPressureBar, maxBoosterOutputPressureBar if boost needed)`, and what the tank can deliver down to `max(minimumSourcePressureBar, retained pressure)`. Decant limited to equalization; boost beyond it.
   - `applyTransferToBank(bank, tankMix, movedMoles, physics) → bank'` (new moles, composition, pressure via the gas model, `volumeL` unchanged).
   - `netStockValue(banks, physics) → number` priced He+O₂ free litres summed over enabled banks.
-  - `selectSalvageVariant({ baseline, variants, bankScoresOf }) → winner|null` where each variant is `{ id, salvagedMoles, resolvedSurplusMoles, finalBanks, lpCost, transfers }` and `baseline` is `{ finalBanks }`; applies spec gates in order (feasible `resolvedSurplusMoles ≥ salvagedMoles`; per-bank attractiveness delta ≥ −2 for every bank present in both; net value delta ≥ `SALVAGE_MIN_VALUE`) then rank by net value, then Σ attractiveness delta, then lowest `lpCost`. Pure; never calls the optimizer.
-  - `rankReceivers(candidates) → sorted by delta attractiveness of the receiving bank right after transfer`.
+  - `selectSalvageVariant({ baseline, variants, bankScoresOf, physics }) → winner|null` where each variant is `{ id, salvagedMoles, resolvedSurplusMoles, finalBanks, lpCost, transfers }` and `baseline` is `{ finalBanks }`; applies spec gates in order (feasible `resolvedSurplusMoles ≥ salvagedMoles`; per-bank attractiveness delta ≥ −2 for every bank present in both; net value delta ≥ `SALVAGE_MIN_VALUE`) then rank by net value, then Σ attractiveness delta, then lowest `lpCost`. Pure; never calls the optimizer.
+  - `rankReceivers(candidates, bankScoresOf) → sorted by delta attractiveness of the receiving bank right after transfer`.
 
 - [ ] **Step 1: Failing tests** with hand-computed ideal-gas fixtures: transfer caps (surplus-limited, bank-max-limited, equalization-only decant when booster not needed, booster minimum source pressure leaves remainder vented); receiver eligibility truth table; net value counts moves through displaced draws only (a receiver that is also fully drawn yields ≈0 net, not gross); selection: infeasible variant dropped, attractiveness-violating variant dropped, below-min-value dropped, tie-breaking order, `null` when none qualifies.
 - [ ] **Step 2:** fail. **Step 3:** implement. **Step 4:** pass, `npm test` green.

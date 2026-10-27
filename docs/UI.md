@@ -106,8 +106,6 @@ The collapsed **Technical details** disclosure shows transfer metrics and their 
 
 Only the latest recorded interim reading can be changed or cleared. Earlier recorded readings and empty slots before the latest reading are locked: a recorded row shows its summary and the note `Locked: only the latest reading can be changed or cleared.`, and an empty slot shows `No reading recorded before Step N` with the same note. Controls exist for non-`keep` and non-`salvage` transfer steps after the first step. A `drain` step has a control only while a reading is stored at its index, so a stored reading stays visible and clearable on its drain.
 
-Salvage steps have no reading slot either.
-
 What-if operation pressures are the requested hot transfer-end pressures. The simulator derives the reference-temperature pressure used to reach that endpoint and shows the lower pressure that results after the wait or ambient settling separately.
 
 For an unavailable requested pressure, the recipe still renders the maximum-pressure exact-mix protocol under the active constraints and an explanatory alert. The alert presents the target-mix reason, maximum pressure, and settled-pressure estimate as separate sentences on separate lines. In Hard stop mode this is the maximum safely achievable pressure for the cylinder policy; in Warning mode it may exceed cylinder limits and is not a safety guarantee. Diagnostics may identify a component shortfall, the source bank involved, the required pressure, or an exhausted bank. If no solution exists, the summary is cleared and the explanatory error remains.
@@ -169,6 +167,7 @@ The editable table has these columns:
 | Bank / gas | Editable bank name and gas-preset selector; custom gas values remain possible. |
 | Vol(L) | Editable bank volume, displayed in the selected units. |
 | P(bar) | Editable bank pressure, displayed in the selected units. |
+| Max pressure (unit) | Editable maximum pressure, displayed in the selected units. It must be 1–350 bar and at least the bank's current pressure; otherwise the edit is rejected with a message. Salvage uses it to limit how much gas a bank can receive. |
 | O₂% | Editable oxygen percentage. |
 | He% | Editable helium percentage. |
 | Del | Deletes the bank. |
@@ -184,7 +183,7 @@ General settings include **Cylinder pressure limit behavior**, with **Hard stop*
 
 Warning bypasses only cylinder working-pressure and above-ambient transient hot-overfill enforcement. It does not make over-limit filling safe and does not bypass supported 350-bar bounds, the calculator's 10-bar target minimum, or compressor/booster pressure ceilings. Hot overfill applies only to above-ambient transients; ambient, settled, and target-temperature states remain at working pressure in Hard stop, while Warning reports any exceedance.
 
-Manual interim readings are checked when applied. A reading whose temperature is below ambient is rejected unless the gas state comes from a pressure-lowering drain; a reading whose pressure differs from the plan by more than **Interim pressure tolerance** is rejected too. The plan is recomputed from the readings before that step. The tolerance (default 3% of the planned pressure, 0.5–10% in 0.5% steps) is configured in Settings → General. A rejected reading shows an inline alert in its own form and is not stored. Saving a changed tolerance clears all recorded interim readings, because the reading signature includes every setting, as with any other settings change; record them again afterward.
+Manual interim readings are checked when applied. A reading whose temperature is below ambient is rejected unless the gas state comes from a pressure-lowering drain or a salvage transfer out of the working tank; a reading whose pressure differs from the plan by more than **Interim pressure tolerance** is rejected too. The plan is recomputed from the readings before that step. The tolerance (default 3% of the planned pressure, 0.5–10% in 0.5% steps) is configured in Settings → General. A rejected reading shows an inline alert in its own form and is not stored. Saving a changed tolerance clears all recorded interim readings, because the reading signature includes every setting, as with any other settings change; record them again afterward.
 
 When a reading is accepted, the recipe below it is recalculated: the steps before the reading stay as planned, and the steps from the reading onward are re-planned from the measured state to the original target mix and pressure. The step cards, thermal graphs and summary figures show the recalculated recipe. The struck-through values beside a manual start reading are the plan before the reading, so the planned start stays visible when the reading differs. A single notice under the status line states that the recipe is a mix of planned steps and interim manual readings; it carries no other details.
 
