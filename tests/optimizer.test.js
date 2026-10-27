@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { optimizeBlend, isSafeSimulation, scheduleSafeThermalProtocol, solveThermalWithSalvageFallback } from '../js/optimizer.js';
+import * as optimizerModule from '../js/optimizer.js';
 import { calcMolarDensity } from '../js/physics.js';
 import { calculatePressureAtTemperature } from '../js/thermodynamics.js';
 import { DEFAULT_BANKS } from '../js/bank-storage.js';
@@ -3528,4 +3529,92 @@ test('thermal salvage step cools the tank while its pressure falls', () => {
   assert.ok(salvage?.thermal, 'expected a thermal salvage step');
   assert.ok(salvage.thermal.temperatureAtTransferEndC < salvage.thermal.temperatureStartC);
   assert.ok(salvage.resultingPressureBar < input.cylinder.initialPressureBar);
+});
+
+// Salvage that moves the whole vent surplus into a leftover bank, with the drained cylinder
+// then decanted from the recipe banks. Retained cylinder moles are unchanged by the salvage.
+function salvageThenDecantInput({ thermal } = {}) {
+  return {
+    cylinder: {
+      volumeL: 12,
+      initialPressureBar: 150,
+      initialOxygenPercent: 32,
+      initialHeliumPercent: 0,
+      targetPressureBar: 100,
+      targetOxygenPercent: 21,
+      targetHeliumPercent: 35
+    },
+    physics: { model: 'vdw', temperatureC: 20 },
+    banks: [
+      { id: 'bank-he', name: 'Pure Helium', volumeL: 50, pressureBar: 200, maxPressureBar: 350, minimumPressureBar: 15, oxygenPercent: 0, heliumPercent: 100, enabled: true },
+      { id: 'bank-o2', name: 'Pure Oxygen', volumeL: 40, pressureBar: 180, maxPressureBar: 350, minimumPressureBar: 10, oxygenPercent: 100, heliumPercent: 0, enabled: true },
+      { id: 'bank-n', name: 'Leftover N', volumeL: 50, pressureBar: 20, maxPressureBar: 200, minimumPressureBar: 10, oxygenPercent: 32, heliumPercent: 0, enabled: true }
+    ],
+    settings: { booster: { maxCompressorPressureBar: 350, maxBoosterOutputPressureBar: 350 } },
+    ...(thermal ? { thermal } : {})
+  };
+}
+
+const SALVAGE_THERMAL = {
+  tankMaterial: 'steel',
+  coolingMedium: 'air',
+  ambientTemperatureC: 20,
+  inletTemperatureC: 40,
+  targetMediumTemperatureC: 20,
+  targetInWaterTemperatureC: 20,
+  waitMode: 'minutes',
+  waitMinutes: 0
+};
+
+test('thermal trajectory maps bank points to recipe decants, never to salvage steps', () => {
+  const result = optimizeBlend(salvageThenDecantInput({ thermal: SALVAGE_THERMAL }));
+  assert.equal(result.feasible, true);
+  assert.equal(result.salvageTransfers.length, 1);
+
+  const decantPressures = result.protocolSteps
+    .filter(step => step.type === 'decant')
+    .map(step => step.resultingPressureBar);
+  const bankPoints = result.trajectory.filter(point => point.bankId);
+  assert.equal(bankPoints.length, decantPressures.length);
+  bankPoints.forEach((point, index) => {
+    assert.ok(Math.abs(point.pressureBar - decantPressures[index]) < 1e-6,
+      `bank point ${index} at ${point.pressureBar} bar, expected decant ${decantPressures[index]} bar`);
+  });
+});
+
+test('salvage that takes the whole surplus emits no drain and no keep step', () => {
+  for (const thermal of [undefined, SALVAGE_THERMAL]) {
+    const result = optimizeBlend(salvageThenDecantInput({ thermal }));
+    assert.equal(result.feasible, true);
+    assert.ok(Math.abs(result.blend.ventedGasLitres) < 1e-6, 'salvage takes the whole surplus');
+    const types = result.protocolSteps.map(step => step.type);
+    assert.equal(types[0], 'salvage');
+    assert.equal(types.includes('drain'), false);
+    assert.equal(types.includes('keep'), false);
+  }
+});
+
+test('thermal salvage search runs once per optimize, not once per thermal candidate', () => {
+  const calls = [];
+  const result = solveThermalWithSalvageFallback(
+    salvageThenDecantInput({ thermal: SALVAGE_THERMAL }),
+    optimizerModule.optimizeBlendWithoutThermal,
+    { searchSalvage: candidate => { calls.push(candidate); return optimizerModule.searchSalvageVariant(candidate); } }
+  );
+  assert.equal(result.feasible, true);
+  assert.equal(result.salvageTransfers.length, 1);
+  assert.equal(calls.length, 1);
+});
+
+test('salvage that keeps the cylinder retained gas unchanged is accepted and moves the whole surplus', () => {
+  const input = salvageThenDecantInput();
+  const baseline = optimizeBlend({ ...input, _salvage: false });
+  const result = optimizeBlend(input);
+
+  assert.equal(result.feasible, true);
+  assert.equal(result.salvageTransfers.length, 1);
+  assert.equal(result.salvageTransfers[0].receiverBankId, 'bank-n');
+  assert.ok(Math.abs(result.salvageTransfers[0].movedMoles - baseline.blend.ventedMoles) < 1e-6,
+    'salvage moves exactly the baseline vented moles');
+  assert.ok(Math.abs(result.solution.x_cyl - baseline.solution.x_cyl) <= 1e-9 * Math.max(1, baseline.solution.x_cyl));
 });

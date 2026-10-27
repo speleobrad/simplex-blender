@@ -623,6 +623,14 @@ function splitTransferAtSafeHotEndpoint({
   return split;
 }
 
+// A rest sits before the step at `index`: a keep, or the salvage that now stands in for it.
+// Once salvage takes the whole surplus no keep is emitted, so the recipe step follows salvage.
+function isRestBefore(steps, index) {
+  if (steps[index - 1]?.type === 'keep') return true;
+  return steps[index - 1]?.type === 'salvage'
+    && steps[index]?.type !== 'salvage' && steps[index]?.type !== 'drain';
+}
+
 export function scheduleSafeThermalProtocol({
   protocolSteps,
   thermal,
@@ -692,7 +700,7 @@ export function scheduleSafeThermalProtocol({
           : null,
         _scheduledMeasuredStartTemperatureC: hasMeasurement
           ? steps[targetIndex]._scheduledMeasuredStartTemperatureC
-            ?? (steps[targetIndex - 1]?.type === 'keep'
+            ?? (isRestBefore(steps, targetIndex)
               ? targetState.temperatureStartC
               : options.thermal.ambientTemperatureC ?? targetState.temperatureStartC)
           : null
@@ -711,7 +719,7 @@ export function scheduleSafeThermalProtocol({
     };
     let waitIndex = targetIndex - 1;
     detachInitialMeasurement();
-    if (waitIndex < 0 || steps[waitIndex]?.type === 'keep') {
+    if (waitIndex < 0 || isRestBefore(steps, targetIndex)) {
       if (steps[targetIndex] && steps[targetIndex].type !== 'keep') {
         steps[targetIndex] = {
           ...steps[targetIndex],
@@ -2218,7 +2226,7 @@ function solveBlendWithoutSalvage(input) {
       oxygenCompressionRatio: null,
       badgeClass: 'bg-rose-500/20 text-rose-300 border-rose-500/40'
     });
-  } else {
+  } else if (salvagedMoles <= 0) {
     protocolSteps.push({
       type: 'keep',
       title: 'Preserve 100% of Cylinder Gas',
@@ -2516,36 +2524,43 @@ function salvageTransferRecord(step) {
   };
 }
 
-// Static blend with salvage: the baseline (vent-only) solve, then one re-solve per
-// ranked receiver prefix. The selector keeps the best variant that passes its gates.
-function optimizeBlendWithoutThermal(input) {
-  const baseline = solveBlendWithoutSalvage(input);
-  if (input._salvage === false || !baseline.feasible) return baseline;
+// Salvage context for a solved vent-only baseline: the surplus, the retained cylinder,
+// the source floor and the bank scoring used by the selector. Null when nothing is vented.
+function salvageContext(input, baseline) {
   const surplusMoles = baseline.blend.ventedMoles;
-  if (!(surplusMoles > SALVAGE_MOLE_TOLERANCE)) return baseline;
-
+  if (!(surplusMoles > SALVAGE_MOLE_TOLERANCE)) return null;
   const { cylinder, physics, banks, settings } = input;
   const { temperatureC } = physics;
   const tankMix = {
     oxygenPercent: cylinder.initialOxygenPercent,
     heliumPercent: cylinder.initialHeliumPercent
   };
-  const tankAtStart = { volumeL: cylinder.volumeL, pressureBar: cylinder.initialPressureBar, ...tankMix };
-  const retainedMoles = baseline.solution.x_cyl || 0;
-  const initialMoles = baseline.gas.initialMoles;
-  // The tank is the salvage source: its floor is the configured source minimum, not a bank's.
-  const minimumSourcePressureBar = minimumSourcePressureBarFor(settings, {});
-  const maxBoosterOutputPressureBar = boosterOutputLimitBar(settings);
-  const bankScoresOf = bank => leftoverAttractiveness({
-    oxygenPercent: bank.oxygenPercent,
-    heliumPercent: bank.heliumPercent,
-    pressureBar: bank.pressureBar,
-    volumeL: bank.volumeL,
-    maxPressureBar: bank.maxPressureBar,
-    temperatureC,
-    physics
-  });
+  return {
+    banks,
+    physics,
+    surplusMoles,
+    tankMix,
+    tankAtStart: { volumeL: cylinder.volumeL, pressureBar: cylinder.initialPressureBar, ...tankMix },
+    retainedMoles: baseline.solution.x_cyl || 0,
+    initialMoles: baseline.gas.initialMoles,
+    // The tank is the salvage source: its floor is the configured source minimum, not a bank's.
+    minimumSourcePressureBar: minimumSourcePressureBarFor(settings, {}),
+    maxBoosterOutputPressureBar: boosterOutputLimitBar(settings),
+    bankScoresOf: bank => leftoverAttractiveness({
+      oxygenPercent: bank.oxygenPercent,
+      heliumPercent: bank.heliumPercent,
+      pressureBar: bank.pressureBar,
+      volumeL: bank.volumeL,
+      maxPressureBar: bank.maxPressureBar,
+      temperatureC,
+      physics
+    })
+  };
+}
 
+// Receiver ids that accept some salvage, best first (see rankReceivers).
+function rankSalvageReceivers(context) {
+  const { banks, physics, tankMix, tankAtStart, surplusMoles, retainedMoles } = context;
   const candidates = [];
   for (const receiver of banks.filter(isSalvageReceiver)) {
     const probe = salvageTransferMoles({
@@ -2553,8 +2568,8 @@ function optimizeBlendWithoutThermal(input) {
       tank: tankAtStart,
       surplusMoles,
       physics,
-      minimumSourcePressureBar,
-      maxBoosterOutputPressureBar,
+      minimumSourcePressureBar: context.minimumSourcePressureBar,
+      maxBoosterOutputPressureBar: context.maxBoosterOutputPressureBar,
       retainedMoles
     });
     if (probe.movedMoles <= SALVAGE_MOLE_TOLERANCE) continue;
@@ -2563,43 +2578,95 @@ function optimizeBlendWithoutThermal(input) {
       transferredReceiver: applyTransferToBank(receiver, tankMix, probe.movedMoles, physics)
     });
   }
-  if (candidates.length === 0) return baseline;
-  const rankedReceiverIds = rankReceivers(candidates, bankScoresOf).map(candidate => candidate.receiver.id);
+  return rankReceivers(candidates, context.bankScoresOf).map(candidate => candidate.receiver.id);
+}
 
+// One salvage variant that moves gas into the given receiver prefix, re-solved for the
+// recipe. Null when nothing moves or the re-solve is infeasible.
+function buildSalvageVariant(input, context, receiverIds) {
+  const cascade = runSalvageCascade({
+    input,
+    initialMoles: context.initialMoles,
+    receiverIds,
+    surplusMoles: context.surplusMoles,
+    retainedMoles: context.retainedMoles,
+    minimumSourcePressureBar: context.minimumSourcePressureBar,
+    maxBoosterOutputPressureBar: context.maxBoosterOutputPressureBar
+  });
+  if (cascade.movedMoles <= SALVAGE_MOLE_TOLERANCE) return null;
+  const plan = {
+    steps: cascade.steps,
+    movedMoles: cascade.movedMoles,
+    banks: cascade.banks,
+    transfers: cascade.steps.map(salvageTransferRecord)
+  };
+  const result = solveBlendWithoutSalvage({ ...input, banks: cascade.banks, _salvagePlan: plan });
+  if (!result.feasible) return null;
+  return {
+    result,
+    receiverIds,
+    finalBanks: bankStatesAfterRecipe(result, cascade.banks, context.physics),
+    salvagedMoles: cascade.movedMoles,
+    resolvedSurplusMoles: context.initialMoles - (result.solution.x_cyl || 0),
+    lpCost: result.lpCost ?? null
+  };
+}
+
+function salvageBaseline(baseline, context) {
+  return { finalBanks: bankStatesAfterRecipe(baseline, context.banks, context.physics) };
+}
+
+// The requested-target candidate of a thermal input: the same target the thermal search
+// starts from, with the internal thermal-target flag that thermal candidates carry.
+function requestedSalvageCandidate(input) {
+  if (!input.thermal) return input;
+  return {
+    ...input,
+    [INTERNAL_THERMAL_TARGET]: true,
+    cylinder: { ...input.cylinder, targetPressureBar: normalizeInWaterTarget(input) }
+  };
+}
+
+// Picks the salvage receiver prefix once, on the requested target: the N+1 prefix search
+// with the selector's gates. Returns the winning receiver ids, or null for vent-only.
+export function searchSalvageVariant(input) {
+  if (!input?.cylinder || typeof input.cylinder !== 'object') return null;
+  const candidate = requestedSalvageCandidate(input);
+  const baseline = solveBlendWithoutSalvage(candidate);
+  if (!baseline.feasible) return null;
+  const context = salvageContext(candidate, baseline);
+  if (!context) return null;
+
+  const rankedReceiverIds = rankSalvageReceivers(context);
   const variants = [];
   for (let count = 1; count <= rankedReceiverIds.length; count++) {
-    const cascade = runSalvageCascade({
-      input,
-      initialMoles,
-      receiverIds: rankedReceiverIds.slice(0, count),
-      surplusMoles,
-      retainedMoles,
-      minimumSourcePressureBar,
-      maxBoosterOutputPressureBar
-    });
-    if (cascade.movedMoles <= SALVAGE_MOLE_TOLERANCE) continue;
-    const plan = {
-      steps: cascade.steps,
-      movedMoles: cascade.movedMoles,
-      banks: cascade.banks,
-      transfers: cascade.steps.map(salvageTransferRecord)
-    };
-    const result = solveBlendWithoutSalvage({ ...input, banks: cascade.banks, _salvagePlan: plan });
-    if (!result.feasible) continue;
-    variants.push({
-      result,
-      finalBanks: bankStatesAfterRecipe(result, cascade.banks, physics),
-      salvagedMoles: cascade.movedMoles,
-      resolvedSurplusMoles: initialMoles - (result.solution.x_cyl || 0),
-      lpCost: result.lpCost ?? null
-    });
+    const variant = buildSalvageVariant(candidate, context, rankedReceiverIds.slice(0, count));
+    if (variant) variants.push(variant);
   }
-
   const selected = selectSalvageVariant({
-    baseline: { finalBanks: bankStatesAfterRecipe(baseline, banks, physics) },
+    baseline: salvageBaseline(baseline, context),
     variants,
-    bankScoresOf,
-    physics
+    bankScoresOf: context.bankScoresOf,
+    physics: candidate.physics
+  });
+  return selected?.receiverIds ?? null;
+}
+
+// Static blend with salvage. The receiver prefix comes from `searchSalvageVariant` (run
+// once per optimize). It is replayed here on this input's own vent-only solve, and the
+// variant is kept only if the selector's gates still pass. Otherwise vent-only.
+export function optimizeBlendWithoutThermal(input) {
+  const baseline = solveBlendWithoutSalvage(input);
+  if (input._salvage === false || !baseline.feasible || !input._salvageReceiverIds) return baseline;
+  const context = salvageContext(input, baseline);
+  if (!context) return baseline;
+  const variant = buildSalvageVariant(input, context, input._salvageReceiverIds);
+  if (!variant) return baseline;
+  const selected = selectSalvageVariant({
+    baseline: salvageBaseline(baseline, context),
+    variants: [variant],
+    bankScoresOf: context.bankScoresOf,
+    physics: input.physics
   });
   if (!selected) return baseline;
   const output = { ...selected.result };
@@ -2643,7 +2710,7 @@ function normalizeInWaterTarget(input) {
 function trajectoryWithThermalEndpoints(trajectory, simulation) {
   if (!Array.isArray(trajectory) || !simulation?.final) return trajectory;
   const transferSteps = (simulation.protocolSteps ?? [])
-    .filter(step => step.type !== 'drain'
+    .filter(step => step.type !== 'drain' && step.type !== 'salvage'
       && step.thermal?.rateSource
       && step.thermal.rateSource !== 'none')
     .map(step => ({ step, state: step.thermal }));
@@ -3095,12 +3162,19 @@ export function optimizeBlend(input) {
   return solveThermalWithSalvageFallback(input, optimizeBlendWithoutThermal);
 }
 
-// Thermal search with salvage; if salvage's winner has no feasible thermal plan, falls
-// back to the vent-only search. `optimizeStatic` is the static solver (injectable for tests).
-export function solveThermalWithSalvageFallback(input, optimizeStatic) {
-  if (!input?.thermal) return optimizeStatic(input);
-  const withSalvage = optimizeThermalBlend(input, optimizeStatic);
-  if (input._salvage === false || withSalvage.feasible) return withSalvage;
+// Salvage is searched once, on the requested target (see searchSalvageVariant). The winning
+// receiver prefix is then replayed on each thermal candidate. If that thermal plan is
+// infeasible, the vent-only thermal search is used instead. `optimizeStatic` is the static
+// solver and `searchSalvage` is injectable so tests can count searches.
+export function solveThermalWithSalvageFallback(input, optimizeStatic, { searchSalvage = searchSalvageVariant } = {}) {
+  const solve = candidate => (input?.thermal
+    ? optimizeThermalBlend(candidate, optimizeStatic)
+    : optimizeStatic(candidate));
+  if (input?._salvage === false) return solve(input);
+  const receiverIds = searchSalvage(input);
+  if (!receiverIds) return solve({ ...input, _salvage: false });
+  const withSalvage = solve({ ...input, _salvageReceiverIds: receiverIds });
+  if (!input?.thermal || withSalvage.feasible) return withSalvage;
   const baselineResult = optimizeThermalBlend({ ...input, _salvage: false }, optimizeStatic);
   return baselineResult.feasible ? baselineResult : withSalvage;
 }
