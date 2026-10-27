@@ -1236,3 +1236,75 @@ test('final ambient-settle wait lengthens as submersion drops and uses the paral
   assert.ok(settle(20) > settle(60));
   assert.ok(Math.abs(settle(60) - 4.6 * coolingTimeConstantMinutes('steel', 'water', 60)) < 1e-9);
 });
+
+test('salvage decant cools the working tank at the decant rate as its pressure falls', () => {
+  const simulation = simulateThermalProtocol({
+    protocolSteps: [{
+      type: 'salvage',
+      stage: 'decant',
+      operation: 'Salvage Decant',
+      receiverStartPressureBar: 20,
+      receiverEndPressureBar: 40,
+      receiverVolumeL: 50,
+      resultingPressureBar: 50,
+      resultingMix: { oxygenPercent: 21, heliumPercent: 35 },
+      sourceOxygenPercent: 21,
+      sourceHeliumPercent: 35
+    }],
+    cylinder: { initialPressureBar: 100, volumeL: 12 },
+    physics: { model: 'ideal', temperatureC: 40 },
+    thermal: {
+      tankMaterial: 'steel',
+      coolingMedium: 'air',
+      ambientTemperatureC: 20,
+      inletTemperatureC: 20,
+      waitMode: 'minutes',
+      waitMinutes: 0,
+      targetTemperatureC: 25
+    },
+    settings: { booster: { otherDecantRateBarPerMin: 5 } }
+  });
+
+  const thermal = simulation.protocolSteps[0].thermal;
+  assert.equal(thermal.rateSource, 'salvage-decant');
+  assert.equal(thermal.rateBarPerMin, 5);
+  assert.equal(thermal.durationMinutes, 4);
+  assert.ok(thermal.pressureAtTransferEndHotBar < 100);
+  assert.ok(thermal.temperatureAtTransferEndC < thermal.temperatureStartC);
+});
+
+test('salvage booster stage uses the booster fill-rate model and cools the tank', () => {
+  const simulation = simulateThermalProtocol({
+    protocolSteps: [{
+      type: 'salvage',
+      stage: 'boost',
+      operation: 'Salvage Boost',
+      receiverStartPressureBar: 40,
+      receiverEndPressureBar: 90,
+      receiverVolumeL: 50,
+      receiverStartMix: { oxygenPercent: 32, heliumPercent: 0 },
+      resultingPressureBar: 80,
+      resultingMix: { oxygenPercent: 21, heliumPercent: 35 },
+      sourceOxygenPercent: 21,
+      sourceHeliumPercent: 35
+    }],
+    cylinder: { initialPressureBar: 100, volumeL: 12 },
+    physics: { model: 'ideal', temperatureC: 40 },
+    thermal: {
+      tankMaterial: 'steel',
+      coolingMedium: 'air',
+      ambientTemperatureC: 20,
+      inletTemperatureC: 20,
+      waitMode: 'minutes',
+      waitMinutes: 0,
+      targetTemperatureC: 25
+    },
+    settings: { booster: { otherBoostBpm: 60, cylinderVolumeCm3: 500, maxCompressorPressureBar: 232 } }
+  });
+
+  const thermal = simulation.protocolSteps[0].thermal;
+  assert.equal(thermal.rateSource, 'salvage-booster');
+  assert.ok(thermal.durationMinutes > 0);
+  assert.ok(thermal.pressureAtTransferEndHotBar < 100);
+  assert.ok(thermal.temperatureAtTransferEndC < thermal.temperatureStartC);
+});

@@ -388,6 +388,7 @@ function inletTemperatureFor(rateSource, thermal, booster) {
 
 
 function stepTransferEndPressure(step, currentPressureBar) {
+  if (step.type === 'salvage' && Number.isFinite(step.resultingPressureBar)) return Math.max(0, step.resultingPressureBar);
   if (Number.isFinite(step.receiverEndPressureBar)) return Math.max(0, step.receiverEndPressureBar);
   if (Number.isFinite(step.resultingPressureBar)) return Math.max(0, step.resultingPressureBar);
   return Math.max(0, currentPressureBar);
@@ -409,6 +410,64 @@ function compareTargetWaitError(message, details) {
   return error;
 }
 
+function salvageTransferRate({
+  step,
+  currentPressureBar,
+  currentTemperatureC,
+  transferEndPressureBar,
+  cylinder,
+  physics,
+  booster
+}) {
+  const tankDropBar = Math.max(0, currentPressureBar - transferEndPressureBar);
+  const bankStartPressureBar = Math.max(0, step.receiverStartPressureBar ?? 0);
+  const bankRiseBar = Math.max(0, (step.receiverEndPressureBar ?? bankStartPressureBar) - bankStartPressureBar);
+  if (tankDropBar <= 0 || bankRiseBar <= 0) {
+    return {
+      rateSource: 'none',
+      rateBarPerMin: null,
+      pressureIncreaseBar: 0,
+      pressureChangeBar: -tankDropBar
+    };
+  }
+  const sourceOxygenPercent = step.sourceOxygenPercent ?? step.resultingMix?.oxygenPercent ?? 0;
+  const sourceHeliumPercent = step.sourceHeliumPercent ?? step.resultingMix?.heliumPercent ?? 0;
+  const isOxygenRich = sourceOxygenPercent >= OXYGEN_RICH_THRESHOLD;
+  const pressureChangeBar = -tankDropBar;
+  if (step.stage === 'boost') {
+    const bankMix = {
+      oxygenPercent: step.receiverStartMix?.oxygenPercent ?? 0,
+      heliumPercent: step.receiverStartMix?.heliumPercent ?? 0
+    };
+    return {
+      rateSource: 'salvage-booster',
+      rateBarPerMin: calculateBoosterFillRate({
+        cylinderVolumeCm3: booster.cylinderVolumeCm3,
+        bpm: isOxygenRich ? booster.oxygenBoostBpm : booster.otherBoostBpm,
+        sourcePressureBar: (currentPressureBar + transferEndPressureBar) / 2,
+        receiverPressureBar: bankStartPressureBar + bankRiseBar / 2,
+        sourceOxygenPercent,
+        sourceHeliumPercent,
+        receiverOxygenPercent: bankMix.oxygenPercent,
+        receiverHeliumPercent: bankMix.heliumPercent,
+        receiverVolumeL: step.receiverVolumeL,
+        temperatureC: currentTemperatureC,
+        useVdw: physics.model === 'vdw'
+      }).fillRateBarPerMin,
+      pressureIncreaseBar: bankRiseBar,
+      pressureChangeBar
+    };
+  }
+  return {
+    rateSource: 'salvage-decant',
+    rateBarPerMin: isOxygenRich
+      ? booster.oxygenDecantRateBarPerMin
+      : booster.otherDecantRateBarPerMin,
+    pressureIncreaseBar: bankRiseBar,
+    pressureChangeBar
+  };
+}
+
 function rateForProtocolStep({
   step,
   currentPressureBar,
@@ -419,6 +478,17 @@ function rateForProtocolStep({
   thermal,
   booster
 }) {
+  if (step.type === 'salvage') {
+    return salvageTransferRate({
+      step,
+      currentPressureBar,
+      currentTemperatureC,
+      transferEndPressureBar,
+      cylinder,
+      physics,
+      booster
+    });
+  }
   const receiverMix = stepMix(step);
   const sourceOxygenPercent = step.sourceOxygenPercent ?? receiverMix.oxygenPercent;
   const sourceHeliumPercent = step.sourceHeliumPercent ?? receiverMix.heliumPercent;
@@ -545,7 +615,9 @@ function buildThermalStepSamples({
   const hasTransferProfile = transfer.rateSource === 'booster'
     || transfer.rateSource === 'compressor'
     || transfer.rateSource === 'decant-rate'
-    || transfer.rateSource === 'draining-rate';
+    || transfer.rateSource === 'draining-rate'
+    || transfer.rateSource === 'salvage-decant'
+    || transfer.rateSource === 'salvage-booster';
   const hotTransferEndPressure = pressureAtTransferEndHotBar
     ?? transferEndPressureBar;
   const ambientTransferEndPressure = pressureAtTransferEndAmbientBar
@@ -786,7 +858,9 @@ export function simulateThermalProtocol({
     const hasTransferProfile = transfer.rateSource === 'booster'
       || transfer.rateSource === 'compressor'
       || transfer.rateSource === 'decant-rate'
-      || transfer.rateSource === 'draining-rate';
+      || transfer.rateSource === 'draining-rate'
+      || transfer.rateSource === 'salvage-decant'
+      || transfer.rateSource === 'salvage-booster';
     const transferTemperatureSamples = hasTransferProfile
       ? estimateTransferTemperatureSamples({
         startTemperatureC: currentTemperatureC,
@@ -1049,7 +1123,9 @@ export function simulateCompareProtocol({
       hasTransferProfile = transfer.rateSource === 'booster'
         || transfer.rateSource === 'compressor'
         || transfer.rateSource === 'decant-rate'
-        || transfer.rateSource === 'draining-rate';
+        || transfer.rateSource === 'draining-rate'
+        || transfer.rateSource === 'salvage-decant'
+        || transfer.rateSource === 'salvage-booster';
       transferTemperatureSamples = hasTransferProfile
         ? estimateTransferTemperatureSamples({
           startTemperatureC: currentTemperatureC,

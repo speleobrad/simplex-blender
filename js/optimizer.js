@@ -13,6 +13,15 @@ import {
   calculateCoolingTime,
   coolingTimeConstantMinutes
 } from './thermodynamics.js';
+import { leftoverAttractiveness } from './leftover-attractiveness.js';
+import {
+  applyDrawToBank,
+  applyTransferToBank,
+  isSalvageReceiver,
+  rankReceivers,
+  salvageTransferMoles,
+  selectSalvageVariant
+} from './salvage.js';
 const THERMAL_SAFETY_TOLERANCE_BAR = 1e-9;
 const MAX_AUTOMATIC_WAIT_MINUTES = 1440;
 
@@ -1713,22 +1722,18 @@ function validateBlendInput(input) {
 }
 
 
-function optimizeBlendWithoutThermal(input) {
+function solveBlendWithoutSalvage(input) {
   const inputErrors = validateBlendInput(input);
   if (inputErrors.length > 0) {
     return failedResult(`Invalid blend input: ${inputErrors.join(' ')}`, null, []);
   }
   const { cylinder, physics, banks, settings } = input;
-  const configuredMinimumSourcePressureBar = settings?.booster?.minimumSourcePressureBar;
+  const salvagePlan = input._salvagePlan ?? null;
   const maxCompressorPressureBar = Number.isFinite(settings?.booster?.maxCompressorPressureBar)
     ? settings.booster.maxCompressorPressureBar
     : 232;
-  const maxBoosterOutputPressureBar = Number.isFinite(settings?.booster?.maxBoosterOutputPressureBar)
-    ? settings.booster.maxBoosterOutputPressureBar
-    : 200;
-  const minimumSourcePressureFor = bank => Number.isFinite(configuredMinimumSourcePressureBar)
-    ? configuredMinimumSourcePressureBar
-    : (Number.isFinite(bank.minimumPressureBar) ? bank.minimumPressureBar : 20);
+  const maxBoosterOutputPressureBar = boosterOutputLimitBar(settings);
+  const minimumSourcePressureFor = bank => minimumSourcePressureBarFor(settings, bank);
 
   const useVdw = physics.model === 'vdw';
   const { temperatureC } = physics;
@@ -2150,7 +2155,8 @@ function optimizeBlendWithoutThermal(input) {
 
 
   const retainedMoles = recipeSolverResult.solution.x_cyl || 0;
-  const ventedMoles = Math.max(0, initialMoles - retainedMoles);
+  const salvagedMoles = salvagePlan?.movedMoles ?? 0;
+  const ventedMoles = Math.max(0, initialMoles - retainedMoles - salvagedMoles);
   const retainedDensity = retainedMoles / volumeL;
   const retainedPressure = calcPressure(
     retainedDensity,
@@ -2159,7 +2165,10 @@ function optimizeBlendWithoutThermal(input) {
     temperatureC,
     useVdw
   );
-  const drainPressure = Math.max(0, initialPressureBar - retainedPressure);
+  const postSalvagePressure = salvagedMoles > 0
+    ? pressureFromMoles(initialMoles - salvagedMoles, volumeL, initialOxygenPercent, initialHeliumPercent, temperatureC, useVdw)
+    : initialPressureBar;
+  const drainPressure = Math.max(0, postSalvagePressure - retainedPressure);
   const recipeBoosts = activeBoostsFor(recipeSolverResult, activeBanks, {
     airFirst: recipeTargetPressureBar > maxCompressorPressureBar
   });
@@ -2174,7 +2183,7 @@ function optimizeBlendWithoutThermal(input) {
   const ventedGasLitres = ventedMoles * (GAS_CONSTANT * (temperatureC + 273.15));
   const heliumVentedLitres = ventedGasLitres * (initialHeliumPercent / 100);
 
-  const protocolSteps = [];
+  const protocolSteps = [...(salvagePlan?.steps ?? [])];
   const trajectory = [{
     step: 0,
     label: 'Start Mix',
@@ -2185,7 +2194,7 @@ function optimizeBlendWithoutThermal(input) {
     color: '#f43f5e'
   }];
 
-  let currentPressure = initialPressureBar;
+  let currentPressure = postSalvagePressure;
   let cumulativeMoles = retainedMoles;
   let cumulativeOxygenMoles = retainedMoles * (initialOxygenPercent / 100);
   let cumulativeHeliumMoles = retainedMoles * (initialHeliumPercent / 100);
@@ -2202,7 +2211,7 @@ function optimizeBlendWithoutThermal(input) {
       type: 'drain',
       title: 'Drain / Vent Cylinder Gas',
       recipeLabel: 'Drain / Vent Cylinder Gas',
-      description: `Bleed cylinder from ${initialPressureBar.toFixed(drainPrecision)} bar down to ${retainedPressure.toFixed(drainPrecision)} bar (-${drainPressure.toFixed(drainPrecision)} bar vented). Retains ${((retainedMoles / (initialMoles || 1)) * 100).toFixed(0)}% of the original mix.`,
+      description: `Bleed cylinder from ${postSalvagePressure.toFixed(drainPrecision)} bar down to ${retainedPressure.toFixed(drainPrecision)} bar (-${drainPressure.toFixed(drainPrecision)} bar vented). Retains ${((retainedMoles / (initialMoles || 1)) * 100).toFixed(0)}% of the original mix.`,
       pressureReferenceTemperatureC: temperatureC,
       resultingPressureBar: currentPressure,
       resultingMix: { oxygenPercent: initialOxygenPercent, heliumPercent: initialHeliumPercent },
@@ -2364,8 +2373,251 @@ function optimizeBlendWithoutThermal(input) {
     blend,
     protocolSteps,
     trajectory,
-    maximumPressure: null
+    maximumPressure: null,
+    ...(salvagePlan ? {
+      salvageTransfers: salvagePlan.transfers,
+      salvageBanks: salvagePlan.banks,
+      lpCost: recipeSolverResult.cost ?? null
+    } : {})
   };
+}
+
+const SALVAGE_MOLE_TOLERANCE = 1e-9;
+const SALVAGE_BADGE_CLASS = 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40';
+
+function minimumSourcePressureBarFor(settings, bank) {
+  const configured = settings?.booster?.minimumSourcePressureBar;
+  if (Number.isFinite(configured)) return configured;
+  return Number.isFinite(bank.minimumPressureBar) ? bank.minimumPressureBar : 20;
+}
+
+function boosterOutputLimitBar(settings) {
+  return Number.isFinite(settings?.booster?.maxBoosterOutputPressureBar)
+    ? settings.booster.maxBoosterOutputPressureBar
+    : 200;
+}
+
+// Moves the working tank's surplus into receivers in order. Each receiver yields one
+// `salvage` step per stage (decant, then boost when both apply) that lowers the tank.
+function runSalvageCascade({
+  input,
+  initialMoles,
+  receiverIds,
+  surplusMoles,
+  retainedMoles,
+  minimumSourcePressureBar,
+  maxBoosterOutputPressureBar
+}) {
+  const { cylinder, physics } = input;
+  const useVdw = physics.model === 'vdw';
+  const { temperatureC } = physics;
+  const tankMix = {
+    oxygenPercent: cylinder.initialOxygenPercent,
+    heliumPercent: cylinder.initialHeliumPercent
+  };
+  const litresPerMole = GAS_CONSTANT * (temperatureC + 273.15);
+  const tankAt = pressureBar => ({ volumeL: cylinder.volumeL, pressureBar, ...tankMix });
+  let banks = input.banks;
+  let tankMoles = initialMoles;
+  let tankPressureBar = cylinder.initialPressureBar;
+  let remainingMoles = surplusMoles;
+  let movedMoles = 0;
+  const steps = [];
+
+  for (const receiverId of receiverIds) {
+    let receiver = banks.find(bank => bank.id === receiverId);
+    const probe = salvageTransferMoles({
+      bank: receiver,
+      tank: tankAt(tankPressureBar),
+      surplusMoles: remainingMoles,
+      physics,
+      minimumSourcePressureBar,
+      maxBoosterOutputPressureBar,
+      retainedMoles
+    });
+    if (probe.movedMoles <= SALVAGE_MOLE_TOLERANCE) continue;
+    const boosterLimits = probe.stage === 'decant+boost'
+      ? [undefined, maxBoosterOutputPressureBar]
+      : [maxBoosterOutputPressureBar];
+
+    for (const boosterLimit of boosterLimits) {
+      const sized = salvageTransferMoles({
+        bank: receiver,
+        tank: tankAt(tankPressureBar),
+        surplusMoles: remainingMoles,
+        physics,
+        minimumSourcePressureBar,
+        maxBoosterOutputPressureBar: boosterLimit,
+        retainedMoles
+      });
+      if (sized.movedMoles <= SALVAGE_MOLE_TOLERANCE) continue;
+
+      const stage = sized.stage === 'boost' ? 'boost' : 'decant';
+      const receiverStart = receiver;
+      const receiverEnd = applyTransferToBank(receiverStart, tankMix, sized.movedMoles, physics);
+      tankMoles -= sized.movedMoles;
+      tankPressureBar = pressureFromMoles(
+        tankMoles,
+        cylinder.volumeL,
+        tankMix.oxygenPercent,
+        tankMix.heliumPercent,
+        temperatureC,
+        useVdw
+      );
+      const movedHeliumLitres = sized.movedMoles * (tankMix.heliumPercent / 100) * litresPerMole;
+      const verb = stage === 'boost' ? 'Boosts' : 'Decants';
+      steps.push({
+        type: 'salvage',
+        stage,
+        receiverBankId: receiverStart.id,
+        receiverBankName: receiverStart.name,
+        movedMoles: sized.movedMoles,
+        movedHeliumLitres,
+        receiverStartPressureBar: receiverStart.pressureBar,
+        receiverEndPressureBar: receiverEnd.pressureBar,
+        receiverStartMix: { oxygenPercent: receiverStart.oxygenPercent, heliumPercent: receiverStart.heliumPercent },
+        receiverEndMix: { oxygenPercent: receiverEnd.oxygenPercent, heliumPercent: receiverEnd.heliumPercent },
+        receiverVolumeL: receiverStart.volumeL,
+        title: `Salvage ${stage} into ${receiverStart.name} to ${receiverEnd.pressureBar.toFixed(1)} bar`,
+        recipeLabel: `Salvage into ${receiverStart.name}`,
+        description: `${verb} ${(sized.movedMoles * litresPerMole).toFixed(0)} L of cylinder gas into ${receiverStart.name}, from ${receiverStart.pressureBar.toFixed(1)} to ${receiverEnd.pressureBar.toFixed(1)} bar. Cylinder falls to ${tankPressureBar.toFixed(1)} bar and ${movedHeliumLitres.toFixed(0)} L of helium is recovered.`,
+        pressureReferenceTemperatureC: temperatureC,
+        resultingPressureBar: tankPressureBar,
+        resultingMix: { ...tankMix },
+        sourceOxygenPercent: tankMix.oxygenPercent,
+        sourceHeliumPercent: tankMix.heliumPercent,
+        badgeClass: SALVAGE_BADGE_CLASS
+      });
+      banks = banks.map(bank => (bank.id === receiverStart.id ? receiverEnd : bank));
+      receiver = receiverEnd;
+      remainingMoles -= sized.movedMoles;
+      movedMoles += sized.movedMoles;
+    }
+  }
+
+  return { steps, movedMoles, banks };
+}
+
+function salvageTransferRecord(step) {
+  return {
+    type: step.type,
+    stage: step.stage,
+    receiverBankId: step.receiverBankId,
+    receiverBankName: step.receiverBankName,
+    movedMoles: step.movedMoles,
+    movedHeliumLitres: step.movedHeliumLitres,
+    receiverStartPressureBar: step.receiverStartPressureBar,
+    receiverEndPressureBar: step.receiverEndPressureBar,
+    receiverStartMix: step.receiverStartMix,
+    receiverEndMix: step.receiverEndMix,
+    receiverVolumeL: step.receiverVolumeL,
+    resultingPressureBar: step.resultingPressureBar,
+    resultingMix: step.resultingMix
+  };
+}
+
+// Static blend with salvage: the baseline (vent-only) solve, then one re-solve per
+// ranked receiver prefix. The selector keeps the best variant that passes its gates.
+function optimizeBlendWithoutThermal(input) {
+  const baseline = solveBlendWithoutSalvage(input);
+  if (input._salvage === false || !baseline.feasible) return baseline;
+  const surplusMoles = baseline.blend.ventedMoles;
+  if (!(surplusMoles > SALVAGE_MOLE_TOLERANCE)) return baseline;
+
+  const { cylinder, physics, banks, settings } = input;
+  const { temperatureC } = physics;
+  const tankMix = {
+    oxygenPercent: cylinder.initialOxygenPercent,
+    heliumPercent: cylinder.initialHeliumPercent
+  };
+  const tankAtStart = { volumeL: cylinder.volumeL, pressureBar: cylinder.initialPressureBar, ...tankMix };
+  const retainedMoles = baseline.solution.x_cyl || 0;
+  const initialMoles = baseline.gas.initialMoles;
+  // The tank is the salvage source: its floor is the configured source minimum, not a bank's.
+  const minimumSourcePressureBar = minimumSourcePressureBarFor(settings, {});
+  const maxBoosterOutputPressureBar = boosterOutputLimitBar(settings);
+  const bankScoresOf = bank => leftoverAttractiveness({
+    oxygenPercent: bank.oxygenPercent,
+    heliumPercent: bank.heliumPercent,
+    pressureBar: bank.pressureBar,
+    volumeL: bank.volumeL,
+    maxPressureBar: bank.maxPressureBar,
+    temperatureC,
+    physics
+  });
+
+  const candidates = [];
+  for (const receiver of banks.filter(isSalvageReceiver)) {
+    const probe = salvageTransferMoles({
+      bank: receiver,
+      tank: tankAtStart,
+      surplusMoles,
+      physics,
+      minimumSourcePressureBar,
+      maxBoosterOutputPressureBar,
+      retainedMoles
+    });
+    if (probe.movedMoles <= SALVAGE_MOLE_TOLERANCE) continue;
+    candidates.push({
+      receiver,
+      transferredReceiver: applyTransferToBank(receiver, tankMix, probe.movedMoles, physics)
+    });
+  }
+  if (candidates.length === 0) return baseline;
+  const rankedReceiverIds = rankReceivers(candidates, bankScoresOf).map(candidate => candidate.receiver.id);
+
+  const variants = [];
+  for (let count = 1; count <= rankedReceiverIds.length; count++) {
+    const cascade = runSalvageCascade({
+      input,
+      initialMoles,
+      receiverIds: rankedReceiverIds.slice(0, count),
+      surplusMoles,
+      retainedMoles,
+      minimumSourcePressureBar,
+      maxBoosterOutputPressureBar
+    });
+    if (cascade.movedMoles <= SALVAGE_MOLE_TOLERANCE) continue;
+    const plan = {
+      steps: cascade.steps,
+      movedMoles: cascade.movedMoles,
+      banks: cascade.banks,
+      transfers: cascade.steps.map(salvageTransferRecord)
+    };
+    const result = solveBlendWithoutSalvage({ ...input, banks: cascade.banks, _salvagePlan: plan });
+    if (!result.feasible) continue;
+    variants.push({
+      result,
+      finalBanks: bankStatesAfterRecipe(result, cascade.banks, physics),
+      salvagedMoles: cascade.movedMoles,
+      resolvedSurplusMoles: initialMoles - (result.solution.x_cyl || 0),
+      lpCost: result.lpCost ?? null
+    });
+  }
+
+  const selected = selectSalvageVariant({
+    baseline: { finalBanks: bankStatesAfterRecipe(baseline, banks, physics) },
+    variants,
+    bankScoresOf,
+    physics
+  });
+  if (!selected) return baseline;
+  const output = { ...selected.result };
+  delete output.lpCost;
+  return output;
+}
+
+// Bank states once the recipe has drawn its gas. Draws are keyed by the enabled-bank
+// index that `solveBlendWithoutSalvage` uses for its variable names; the compressor
+// bank is appended after the real banks, so it never shifts these names.
+function bankStatesAfterRecipe(result, banks, physics) {
+  const names = bankVariableNames(banks.filter(bank => bank.enabled));
+  let enabledIndex = 0;
+  return banks.map(bank => {
+    if (!bank.enabled) return bank;
+    const drawnMoles = result.solution?.[names[enabledIndex++]] || 0;
+    return applyDrawToBank(bank, drawnMoles, physics);
+  });
 }
 
 const THERMAL_TARGET_TOLERANCE_BAR = 1e-5;
@@ -2840,6 +3092,15 @@ function optimizeThermalBlend(input, optimizeStatic) {
 }
 
 export function optimizeBlend(input) {
-  if (!input?.thermal) return optimizeBlendWithoutThermal(input);
-  return optimizeThermalBlend(input, optimizeBlendWithoutThermal);
+  return solveThermalWithSalvageFallback(input, optimizeBlendWithoutThermal);
+}
+
+// Thermal search with salvage; if salvage's winner has no feasible thermal plan, falls
+// back to the vent-only search. `optimizeStatic` is the static solver (injectable for tests).
+export function solveThermalWithSalvageFallback(input, optimizeStatic) {
+  if (!input?.thermal) return optimizeStatic(input);
+  const withSalvage = optimizeThermalBlend(input, optimizeStatic);
+  if (input._salvage === false || withSalvage.feasible) return withSalvage;
+  const baselineResult = optimizeThermalBlend({ ...input, _salvage: false }, optimizeStatic);
+  return baselineResult.feasible ? baselineResult : withSalvage;
 }

@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { optimizeBlend, isSafeSimulation, scheduleSafeThermalProtocol } from '../js/optimizer.js';
+import { optimizeBlend, isSafeSimulation, scheduleSafeThermalProtocol, solveThermalWithSalvageFallback } from '../js/optimizer.js';
 import { calcMolarDensity } from '../js/physics.js';
 import { calculatePressureAtTemperature } from '../js/thermodynamics.js';
 import { DEFAULT_BANKS } from '../js/bank-storage.js';
 import { DEFAULT_SETTINGS } from '../js/settings.js';
+import { SALVAGE_MIN_VALUE, applyDrawToBank, netStockValue } from '../js/salvage.js';
 
 const defaultInput = {
   cylinder: {
@@ -706,10 +707,45 @@ test('nitrox preset reports vented gas as equivalent litres at one bar', () => {
       targetHeliumPercent: 30
     }
   };
-  const result = optimizeBlend(input);
+  // Pins the no-salvage vented value; salvage behaviour has its own tests below.
+  const result = optimizeBlend({ ...input, _salvage: false });
 
   assert.equal(result.feasible, true);
   assert.ok(Math.abs(result.blend.ventedGasLitres - 838.377979816809) < 1e-8);
+});
+
+test('salvage gate uses net post-recipe bank states when the receiver is also a recipe source', () => {
+  const input = {
+    ...defaultInput,
+    cylinder: {
+      ...defaultInput.cylinder,
+      initialPressureBar: 100,
+      initialOxygenPercent: 32,
+      initialHeliumPercent: 0,
+      targetPressureBar: 220,
+      targetOxygenPercent: 21,
+      targetHeliumPercent: 30
+    }
+  };
+  const baseline = optimizeBlend({ ...input, _salvage: false });
+  const result = optimizeBlend(input);
+
+  assert.equal(result.feasible, true);
+  assert.ok(result.salvageTransfers.some(step => step.receiverBankId === 'bank-1845'));
+  assert.ok(result.solution.x_b2_Tx > 0, 'the recipe draws from the salvage receiver');
+  assert.ok(result.blend.ventedGasLitres < baseline.blend.ventedGasLitres);
+
+  const afterRecipe = (solution, banks) => {
+    let enabledIndex = 0;
+    return banks.map(bank => {
+      if (!bank.enabled) return bank;
+      const drawn = solution[`x_b${++enabledIndex}_${bank.name.split(' ')[0]}`] || 0;
+      return applyDrawToBank(bank, drawn, input.physics);
+    });
+  };
+  const baselineValue = netStockValue(afterRecipe(baseline.solution, input.banks), input.physics);
+  const variantValue = netStockValue(afterRecipe(result.solution, result.salvageBanks), input.physics);
+  assert.ok(variantValue - baselineValue >= SALVAGE_MIN_VALUE - 1e-9);
 });
 
 test('reports the maximum achievable pressure at the compressor ceiling', () => {
@@ -3293,4 +3329,171 @@ test('rejects invalid explicit hot-overfill values in safety helpers', () => {
     }),
     /hot overfill/i
   );
+});
+
+function leftoverBank({ id, oxygenPercent, heliumPercent, pressureBar, maxPressureBar = 200, volumeL = 50, enabled = true }) {
+  return {
+    id,
+    name: id,
+    volumeL,
+    pressureBar,
+    oxygenPercent,
+    heliumPercent,
+    maxPressureBar,
+    minimumPressureBar: 10,
+    enabled,
+    isCompressor: false
+  };
+}
+
+function drainSalvageInput(banks) {
+  return {
+    cylinder: {
+      volumeL: 12,
+      initialPressureBar: 150,
+      initialOxygenPercent: 21,
+      initialHeliumPercent: 35,
+      targetPressureBar: 100,
+      targetOxygenPercent: 21,
+      targetHeliumPercent: 35
+    },
+    physics: { model: 'vdw', temperatureC: 20 },
+    banks
+  };
+}
+
+test('salvage moves drained gas into an attractive leftover bank before the vent drain', () => {
+  const input = drainSalvageInput([leftoverBank({ id: 'bank-n', oxygenPercent: 32, heliumPercent: 0, pressureBar: 20 })]);
+  const baseline = optimizeBlend(drainSalvageInput([]));
+  const result = optimizeBlend(input);
+
+  assert.equal(result.feasible, true);
+  const salvageIndex = result.protocolSteps.findIndex(step => step.type === 'salvage');
+  const drainIndex = result.protocolSteps.findIndex(step => step.type === 'drain');
+  assert.ok(salvageIndex >= 0, 'expected a salvage step');
+  assert.ok(drainIndex < 0 || salvageIndex < drainIndex, 'salvage must precede the vent drain');
+  assert.ok(result.blend.heliumVentedLitres < baseline.blend.heliumVentedLitres);
+});
+
+test('salvage never fills a receiver already at its maximum pressure', () => {
+  const input = drainSalvageInput([leftoverBank({ id: 'bank-full', oxygenPercent: 32, heliumPercent: 0, pressureBar: 200, maxPressureBar: 200 })]);
+  const result = optimizeBlend(input);
+
+  assert.equal(result.feasible, true);
+  assert.equal(result.protocolSteps.some(step => step.type === 'salvage'), false);
+});
+
+test('salvage with no eligible receivers matches the vent-only result exactly', () => {
+  const input = drainSalvageInput([leftoverBank({ id: 'bank-off', oxygenPercent: 32, heliumPercent: 0, pressureBar: 20, enabled: false })]);
+  const result = optimizeBlend(input);
+
+  assert.deepEqual(result, optimizeBlend({ ...input, _salvage: false }));
+  assert.equal(result.protocolSteps.some(step => step.type === 'salvage'), false);
+});
+
+test('salvage can be disabled by the internal flag and falls back to the vent', () => {
+  const input = drainSalvageInput([leftoverBank({ id: 'bank-n', oxygenPercent: 32, heliumPercent: 0, pressureBar: 20 })]);
+  const disabled = optimizeBlend({ ...input, _salvage: false });
+  const ventOnly = optimizeBlend(drainSalvageInput([]));
+
+  assert.equal(disabled.protocolSteps.some(step => step.type === 'salvage'), false);
+  assert.equal(disabled.blend.heliumVentedLitres, ventOnly.blend.heliumVentedLitres);
+});
+
+test('default preservation case keeps the cylinder gas without salvage', () => {
+  const result = optimizeBlend(defaultInput);
+
+  assert.equal(result.feasible, true);
+  assert.equal(result.protocolSteps[0].type, 'keep');
+  assert.equal(result.protocolSteps.some(step => step.type === 'salvage'), false);
+});
+
+test('default input matches the salvage-off result apart from salvage-only fields', () => {
+  const withSalvage = optimizeBlend(defaultInput);
+  const withoutSalvage = optimizeBlend({ ...defaultInput, _salvage: false });
+  const { salvageTransfers, salvageBanks, ...rest } = withSalvage;
+
+  assert.deepEqual(rest, withoutSalvage);
+  assert.equal('lpCost' in withSalvage, false);
+  assert.equal('lpCost' in withoutSalvage, false);
+});
+
+test('salvage declines a receiver whose transfer would lose the target and vents instead', () => {
+  const baseline = optimizeBlend(drainSalvageInput([]));
+  const input = drainSalvageInput([leftoverBank({ id: 'bank-rich', oxygenPercent: 12, heliumPercent: 65, pressureBar: 150 })]);
+  const result = optimizeBlend(input);
+
+  assert.equal(result.feasible, true);
+  assert.equal(result.protocolSteps.some(step => step.type === 'salvage'), false);
+  assert.ok(Math.abs(result.blend.heliumVentedLitres - baseline.blend.heliumVentedLitres) < 1e-9);
+});
+
+test('thermal fallback returns the feasible vent baseline when the salvage winner is thermally infeasible', () => {
+  const input = {
+    ...drainSalvageInput([leftoverBank({ id: 'bank-src', oxygenPercent: 21, heliumPercent: 35, pressureBar: 40 })]),
+    thermal: {
+      tankMaterial: 'steel',
+      coolingMedium: 'air',
+      ambientTemperatureC: 20,
+      inletTemperatureC: 20,
+      targetMediumTemperatureC: 20,
+      targetInWaterTemperatureC: 20,
+      waitMode: 'minutes',
+      waitMinutes: 0
+    }
+  };
+  const withoutThermal = ({ thermal: ignored, ...rest }) => rest;
+  const staticSolve = candidate => (candidate._salvage === false
+    ? optimizeBlend(withoutThermal(candidate))
+    : { feasible: false, error: 'injected: salvage winner has no feasible thermal plan' });
+
+  assert.ok(
+    optimizeBlend(withoutThermal(input)).protocolSteps.some(step => step.type === 'salvage'),
+    'scenario must have a salvage winner in the static search'
+  );
+  const result = solveThermalWithSalvageFallback(input, staticSolve);
+  const expected = optimizeBlend({ ...input, _salvage: false });
+
+  assert.equal(result.feasible, true);
+  assert.equal(result.protocolSteps.some(step => step.type === 'salvage'), false);
+  assert.deepEqual(result.protocolSteps, expected.protocolSteps);
+  assert.deepEqual(result.blend, expected.blend);
+});
+
+test('salvage keeps the receiver end state consistent with the salvaged bank', () => {
+  const input = drainSalvageInput([leftoverBank({ id: 'bank-src', oxygenPercent: 21, heliumPercent: 35, pressureBar: 40 })]);
+  const result = optimizeBlend(input);
+
+  const salvageSteps = result.protocolSteps.filter(step => step.type === 'salvage');
+  assert.ok(salvageSteps.length > 0, 'expected a salvage step');
+  assert.equal(result.salvageTransfers.length, salvageSteps.length);
+  const last = salvageSteps[salvageSteps.length - 1];
+  const receiver = result.salvageBanks.find(bank => bank.id === last.receiverBankId);
+  assert.ok(Math.abs(receiver.pressureBar - last.receiverEndPressureBar) < 1e-9);
+  assert.equal(receiver.oxygenPercent, last.receiverEndMix.oxygenPercent);
+  assert.equal(receiver.heliumPercent, last.receiverEndMix.heliumPercent);
+});
+
+test('thermal salvage step cools the tank while its pressure falls', () => {
+  const input = {
+    ...drainSalvageInput([leftoverBank({ id: 'bank-n', oxygenPercent: 32, heliumPercent: 0, pressureBar: 20 })]),
+    thermal: {
+      tankMaterial: 'steel',
+      coolingMedium: 'air',
+      ambientTemperatureC: 20,
+      inletTemperatureC: 40,
+      targetMediumTemperatureC: 20,
+      targetInWaterTemperatureC: 20,
+      waitMode: 'minutes',
+      waitMinutes: 0
+    },
+    settings: { booster: { compressorInletFlowLPerMin: 100 } }
+  };
+  const result = optimizeBlend(input);
+
+  assert.equal(result.feasible, true);
+  const salvage = result.protocolSteps.find(step => step.type === 'salvage');
+  assert.ok(salvage?.thermal, 'expected a thermal salvage step');
+  assert.ok(salvage.thermal.temperatureAtTransferEndC < salvage.thermal.temperatureStartC);
+  assert.ok(salvage.resultingPressureBar < input.cylinder.initialPressureBar);
 });

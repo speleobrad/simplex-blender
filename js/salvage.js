@@ -147,6 +147,16 @@ export function applyTransferToBank(bank, tankMix, movedMoles, physics) {
   };
 }
 
+/** Bank state after the recipe draws `drawnMoles` of its gas. Mix and volume are unchanged. */
+export function applyDrawToBank(bank, drawnMoles, physics) {
+  if (!(drawnMoles > 0)) return bank;
+  const remainingMoles = Math.max(0, molesOf(bank, physics) - drawnMoles);
+  return {
+    ...bank,
+    pressureBar: pressureOfMoles(remainingMoles, bank.volumeL, bank.oxygenPercent, bank.heliumPercent, physics)
+  };
+}
+
 /** Price of the He and O2 free-gas litres held in enabled banks. */
 export function netStockValue(banks, physics) {
   let value = 0;
