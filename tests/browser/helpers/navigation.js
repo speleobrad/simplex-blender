@@ -10,7 +10,7 @@ const RESULT_PANELS = {
   Recipe: 'recipe',
   'Simplex diagram': 'ternary',
   'Thermal Graph': 'thermal',
-  'Tank summary': 'summary',
+  'Tanks and costs': 'summary',
   'In-water pressure': 'water-pressure'
 };
 

@@ -78,7 +78,7 @@ The result card has a horizontally scrollable tablist. **Recipe** is selected in
 1. **Recipe**
 2. **Diagram**
 3. **Thermal graphs**
-4. **Tank summary**
+4. **Tanks and costs**
 5. **In water pressure**
 
 Tabs use `aria-selected`, roving `tabindex`, and keyboard handling in `main.js`. Only the selected tab panel is visible.
@@ -98,9 +98,11 @@ The summary banner is split into two side-by-side regions on wide screens:
 
 Summary values use the app's semantic palette: neutral for expected measurements, green for benefits, amber for partial loss or mix mismatch, and rose for problems. Retained gas is rose at zero, neutral when partial, and green when complete; helium vented (and its vented-gas subline) is green when nothing is vented, amber when partial, and rose when the whole original mix is vented. Helium salvaged is neutral at zero and green when positive. Fill duration remains neutral; maximum temperature is rose. Hot-mix, ambient-settled, and in-water pressures turn rose when above the cylinder working pressure. In-water pressure is green only when it matches the requested target and remains within the working pressure.
 
+Blending shows a cost banner with **Total cost of fill**, **Reuse value**, and **Salvaged saving**. Reuse value is the helium retained in the original tank (the gate-adjusted retained litres behind the Retained gas tile) × the weighted pure-helium price. Salvaged saving is the avoided purchase: litres taken from non-pure banks × the recipe price per litre of building that bank's composition from pure gases (no discount, no subtraction of the bank's own price), so an unpriced leftover bank still counts. The label carries the title "Pure-gas cost avoided by using leftover mixes". A figure that cannot be computed shows a prompt naming the missing price. The banner is hidden in What-if.
+
 When thermal data exists, the summary shows values for each of those three states. The **Mixing steps** section then renders protocol cards. Each numbered card owns its step number, action title, and transfer-end receiver pressure. Step titles are normalized so a supplied title cannot produce duplicate numbering; titles with a transfer target are updated to the same transfer-end pressure shown in the result.
 
-When salvage applies, the first mixing step card is a salvage card. Its title names the stage, receiver bank, and receiver pressure, for example `Salvage: decant into Leftover N to 42.1 bar`, and the pressure follows the selected units. The card has no step number. Its details list the receiver bank, the helium moved, and the receiver's pressure and mix before and after the transfer. A salvage card has no interim-reading slot. The helium salvaged metric is unchanged; helium moved appears only on the card.
+When salvage applies, the first mixing step card is a salvage card. Its title names the stage, receiver bank, and receiver pressure, for example `Salvage: decant into Leftover N to 42.1 bar`, and the pressure follows the selected units. The card has no step number. Its details list the receiver bank, the helium moved, and the receiver's pressure and mix before and after the transfer. A salvage card has no interim-reading slot. The helium salvaged metric is unchanged; helium moved appears only on the card. Salvage transfers are not purchased gas, so they add no cost to the banner.
 
 The collapsed **Technical details** disclosure shows transfer metrics and their source/cooldown counterparts in two columns: rate / source leftover pressure, duration / cooloff period, pressure at transfer end / pressure after cooloff, and temperature at transfer end / temperature after cooloff. **Interim mix** appears in the last left-column row. Rows share a uniform height based on the tallest content in the block, with labels and values top-aligned; wait-only steps keep a single-column cooling layout with the same row sizing. Source leftover pressure at the configured booster minimum uses the warning color. Hot transfer pressure above working pressure uses warning color within the configured hot-overfill limit and problem color above that limit; settled pressure above working pressure uses problem color. Oxygen-rich boost steps include their **O₂ boost ratio**. When manual start readings are recorded, the planned start pressure and temperature are struck out beside the measured values, which use the warning color. When an automatic cylinder-limit cooloff extends a step's wait, the **Cooloff period** label and value use the warning color. The adjusted-cooloff warning appears once in that step's main card, in its own warning box; it is not repeated in Technical details or thermal-chart status. The actual-reading control is rendered inside the step it precedes, above that step's title. When thermal settling makes an equalization source endpoint lower than the receiver endpoint, the displayed operation is `Boost`.
 
@@ -113,7 +115,7 @@ For an unavailable requested pressure, the recipe still renders the maximum-pres
 #### Diagram tab
 
 The Diagram tab contains a square canvas showing the gas-composition trajectory. The chart includes the Air/O₂/He simplex, the complementary N₂/Air/He region, a direct-target dashed path, and the calculated mixing vector path with arrows.
-When the requested exact mix/pressure is unavailable but a partial maximum-pressure recipe exists, the chart and Tank summary use that partial recipe's trajectory and preserve the requested target mix as the goal/reference row. They remain empty only when no recipe datapoints exist.
+When the requested exact mix/pressure is unavailable but a partial maximum-pressure recipe exists, the chart and Tanks and costs use that partial recipe's trajectory and preserve the requested target mix as the goal/reference row. They remain empty only when no recipe datapoints exist.
 
 Controls:
 
@@ -122,7 +124,7 @@ Controls:
 - `+` zoom in.
 - Pointer hover reports gas fractions in the live coordinate readout.
 
-The canvas has a screen-reader description. The Tank summary tab provides the accessible tabular representation of the plotted data.
+The canvas has a screen-reader description. The Tanks and costs tab provides the accessible tabular representation of the plotted data.
 
 #### Thermal graphs tab
 
@@ -136,14 +138,16 @@ The tab contains synchronized SVG temperature and pressure histories over elapse
 
 Hovering either graph moves the shared guide/readout across both charts. Alternating step bands and caption rows separate transfer-plus-wait intervals. No completed protocol produces the empty-state status instead of chart data.
 
-#### Tank summary tab
+#### Tanks and costs tab
 
 The tab exposes accessible tables for:
 
-- **Reference mixes in the tank summary**: mix, O₂/He, start pressure, and end pressure.
+- **Reference mixes in Tanks and costs**: mix, O₂/He, start pressure, and end pressure.
 - **Blend trajectory**: stage, O₂/He, and pressure.
 
 The tab reports when feasible chart data is unavailable. The tables are the keyboard-operable/reference view of the Diagram data, including source-bank start/end pressure information where supplied by the calculation.
+
+The Costs section sits at the end of the pane. It has a gas table (volume in litres, price per litre, and cost for each finite bank), an operation table with Operation, Count, Fee, and Cost for Boost, Decant (includes equalize), and Top-up (includes compressor air; no litres are shown), and footer rows for total gas cost, operations cost, and total cost. The currency and units live in the column headers (`Volume (L)`, `Cost (€)`, `Fee (€)`). The gas Price header sits on two lines: `Price`, then the unit `(€/L)` kept on one line (`(€/cu ft)` imperial; `(per L)` / `(per cu ft)` when no symbol is set), so table cells hold numbers only. An unpriced bank shows "—" in its price and cost cells. A total with unpriced gas reads "(incomplete: … unpriced)". With no priced gas or fees for this fill it shows "No prices apply to this fill. Set bank prices in Inventory and fees in Settings → Costs."; with no feasible blend it shows "Costs appear when a feasible blend is available." With nothing priced at all, Inventory's suggestion reads "Nothing is priced yet. Set fees in Settings → Costs and a price on a pure oxygen or helium bank." Costs appear in the Blending and What-if Tanks and costs panes.
 
 #### In water pressure tab
 
@@ -170,11 +174,14 @@ The editable table has these columns:
 | Max pressure (unit) | Editable maximum pressure, displayed in the selected units. It must be 1–350 bar and at least the bank's current pressure; otherwise the edit is rejected with a message. Salvage uses it to limit how much gas a bank can receive. |
 | O₂% | Editable oxygen percentage. |
 | He% | Editable helium percentage. |
+| Price | Per L or Per cu ft, or Full tank basis (see below). Pure O₂ and He banks show no Calculate price. |
 | Del | Deletes the bank. |
 
 The **Add bank** button appends a new editable source row. Compressor Air is implicit and is not shown as a bank row. The table omits derived nitrogen, compressibility, and minimum-pressure columns.
 
-Below the table, **Transfer conditions** contains **Incoming gas temperature** in °C. It is shared by compressor and inventory transfers; source-specific equipment temperature modifiers still apply.
+The Price column shows each bank's stored price per litre (per cu ft in Imperial) with a basis select. **Per L** / **Per cu ft** enters the price directly. **Full tank** takes the price of one full tank, divides it once by the bank's free-gas litres, stores the per-litre result, and resets the basis to per-volume. Prices display 6 decimals. **Calculate price** prices a non-pure bank on demand from the weighted pure-bank prices from Inventory plus the flat fees in Settings → Costs, and the bank's volume, pressure, and composition, showing "Calculating…" while it runs. The result appears as an indicative price with its recipe cost; **Apply** (or **Replace** when a price is already set) stores it on the bank. The suggestion is discarded when the bank or its pricing inputs change.
+
+Below the table, **Transfer conditions** contains **Temperature of inventory gases** in °C, default 21 °C. It is shared by compressor and inventory transfers. Checking **Same as ambient** disables the field and makes it follow the ambient temperature. Source-specific equipment temperature modifiers still apply.
 
 ## Settings screen
 ### General
@@ -222,6 +229,10 @@ Contains separate Compressor, Booster, and Decanting hose sections.
 
 Creating a named equipment preset clones the current values without changing the active values. Removing the selected preset is disabled where removal is not allowed. A helper note explains that compressor Air and non-Air booster output have separate pressure limits.
 
+### Costs
+
+The Costs category sets the currency symbol, the leftover-gas discount percentage, and three flat fees per operation: **Boost**, **Decant (incl. equalize)**, and **Top-up (incl. compressor air)**. Fees are plain amounts with 2 decimals and are not unit-converted. All start at zero, and older saved costs in the per-litre shape load with zero fees. Pure O₂ and He prices are not set here; they come from pure banks in Inventory. Changes are drafts that persist on Save, like the other Settings categories.
+
 ### Preset management
 
 Supports loading compatible JSON from a local file or an editable online URL. The user selects the preset type (**Gas presets**, **Cylinder presets**, or **Equipment presets**), loads a source, reviews candidate entries, and imports only selected new entries. Status and candidate regions are live/visible during the operation. Duplicate and invalid candidates are represented in the review state rather than imported silently.
@@ -247,10 +258,10 @@ Settings, Inventory, theme, and onboarding state use separate browser-storage re
 - Equipment summary: `js/ui/equipment-summary.js`
 - Result and protocol rendering: `js/ui/results.js`
 - Thermal charts: `js/ui/thermal-charts.js`
-- Composition diagram and Tank summary data: `js/ui/ternary.js`
+- Composition diagram and Tanks and costs data: `js/ui/ternary.js`
 - Consent and guided tour: `js/ui/onboarding.js`
 - Storage fallback alert: `js/ui/storage-warning.js`
 
 ## What-if scenario
 
-- What-if places the single `Scenario start` state at the top of the Recipe summary banner, above the retained/vented gas metrics. The right-side result navigation includes Recipe, Thermal Graph, In-water pressure, Tank summary, and Simplex diagram. Recipe technical details are informational and What-if never exposes Record actual controls.
+- What-if places the single `Scenario start` state at the top of the Recipe summary banner, above the retained/vented gas metrics. The right-side result navigation includes Recipe, Thermal Graph, In-water pressure, Tanks and costs, and Simplex diagram. Recipe technical details are informational and What-if never exposes Record actual controls.

@@ -159,7 +159,8 @@ function blendFromLedger({ input, template, steps, trajectory, retainedFraction,
     ventedMoles,
     ventedGasLitres: ventedMoles * litresPerMole,
     heliumVentedLitres: ventedMoles * (cylinder.initialHeliumPercent / 100) * litresPerMole,
-    heliumSalvagedLitres: (retainedHeliumMoles + suppliedSalvagedHeliumMoles(steps, trajectory)) * litresPerMole
+    heliumSalvagedLitres: (retainedHeliumMoles + suppliedSalvagedHeliumMoles(steps, trajectory)) * litresPerMole,
+    heliumRetainedLitres: retainedMoles * (cylinder.initialHeliumPercent / 100) * litresPerMole
   };
 }
 
@@ -264,12 +265,18 @@ function applyReading(plan, input, readingsInput, index, reading) {
     return fail(suffix.error ?? 'No plan reaches the target from this reading.');
   }
   const suffixSteps = suffix.logicalPlan.protocolSteps.slice(firstIndex);
+  // Trajectory points and transfer numbers count sourceBankId steps only: salvage and drain add none.
   const prefixTransfers = prefix.filter(step => step?.sourceBankId).length;
   let suffixTransfer = prefixTransfers;
+  // Each optimizer solve numbers its cost operations from op-1; namespace the suffix's so they stay
+  // unique against the prefix. Salvage steps carry no costOperationId and are left untouched.
   const renumberedSuffix = suffixSteps.map(candidate => {
     if (!candidate?.sourceBankId) return candidate;
     suffixTransfer += 1;
-    return renumberStep(candidate, suffixTransfer);
+    const renumbered = renumberStep(candidate, suffixTransfer);
+    return renumbered.costOperationId
+      ? { ...renumbered, costOperationId: `r${index}-${renumbered.costOperationId}` }
+      : renumbered;
   });
   if (renumberedSuffix.length === 0) return fail('No steps remain to plan from this reading.');
   const mergedSteps = [...prefix, ...renumberedSuffix];

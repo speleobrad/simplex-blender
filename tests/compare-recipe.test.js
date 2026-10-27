@@ -530,3 +530,46 @@ test('rejects a selected supply bank without a name', () => {
   assert.equal(result.valid, false);
   assert.ok(result.errors.some(error => error.field === 'bankId'));
 });
+
+const planCompare = rows => buildCompareProtocol(
+  validateCompareRecipe(rows, { cylinder, banks, physics, settings }).normalizedRows,
+  { cylinder, banks, physics, settings }
+);
+const compressorRow = { id: 'air', type: 'add', bankId: 'compressor-air', pressureAddedBar: 150, targetPressureBar: 200, pressureInputMode: 'target' };
+const heliumRow = { id: 'add', type: 'add', bankId: 'he-bank', pressureAddedBar: 150, targetPressureBar: 200, pressureInputMode: 'target' };
+
+test('compare steps carry cost fields; compressor add is topUp', () => {
+  const protocol = planCompare([compressorRow]);
+  const costed = protocol.protocolSteps.filter(step => step.costOperation);
+  assert.equal(costed.length, 1);
+  assert.equal(costed[0].costOperation, 'topUp');
+  for (const step of costed) {
+    assert.ok(step.sourceConsumedMoles > 0);
+    assert.match(step.costOperationId, /^op-\d+$/);
+  }
+});
+test('equalize then boost are two operations whose moles sum to the required moles', () => {
+  const protocol = planCompare([heliumRow]);
+  const [equalize, boost] = protocol.protocolSteps.filter(step => step.costOperation);
+  assert.equal(equalize.costOperation, 'equalize');
+  assert.equal(boost.costOperation, 'boost');
+  assert.notEqual(equalize.costOperationId, boost.costOperationId);
+  const requiredMoles = calcMolarDensity(200, 0, 100, physics.temperatureC, false) * 40
+    - calcMolarDensity(protocol.protocolSteps.at(-1).sourceEndPressureBar, 0, 100, physics.temperatureC, false) * 40;
+  assert.ok(Math.abs(equalize.sourceConsumedMoles + boost.sourceConsumedMoles - requiredMoles) < 1e-6);
+});
+test('source consumed moles match the finite source pressure drop', () => {
+  const protocol = planCompare([heliumRow]);
+  const consumed = protocol.protocolSteps.filter(step => step.costOperation).reduce((sum, step) => sum + step.sourceConsumedMoles, 0);
+  const bankStart = calcMolarDensity(200, 0, 100, physics.temperatureC, false) * 40;
+  const bankEnd = calcMolarDensity(protocol.protocolSteps.at(-1).sourceEndPressureBar, 0, 100, physics.temperatureC, false) * 40;
+  assert.ok(Math.abs(consumed - (bankStart - bankEnd)) < 1e-6);
+});
+
+test('compare summary reports retained helium ungated for a 98% helium initial mix', () => {
+  const heliumRich = { ...cylinder, initialPressureBar: 80, initialOxygenPercent: 0, initialHeliumPercent: 98 };
+  const result = buildCompareProtocol([{ id: 'keep', type: 'keep' }], { cylinder: heliumRich, banks: [], physics, settings });
+  assert.equal(result.summary.heliumSalvagedLitres, 0);
+  // Ideal gas, nothing vented: retained He litres = 80 bar × 12 L × 0.98.
+  assert.ok(Math.abs(result.summary.heliumRetainedLitres - 80 * 12 * 0.98) < 1e-6, `${result.summary.heliumRetainedLitres}`);
+});

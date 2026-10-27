@@ -3,7 +3,7 @@ import { assertContained, assertInsideViewport, assertNoUnexpectedOverlap } from
 import { cancelSettings, openSettingsCategory, saveSettings, settingsDialog } from './helpers/settings.js';
 import { acceptConsent, completeOrExitTour } from './helpers/onboarding.js';
 
-const categories = ['general', 'gas-presets', 'cylinder-presets', 'equipment', 'preset-management'];
+const categories = ['general', 'gas-presets', 'cylinder-presets', 'equipment', 'costs', 'preset-management'];
 
 test.describe('settings categories and drafts', () => {
   test('navigates every settings category and keeps one active pane', async ({ appPage }) => {
@@ -32,6 +32,58 @@ test.describe('settings categories and drafts', () => {
     await expect(model).toHaveValue('ideal');
     await cancelSettings(page);
   });
+  test('saves flat operation fees at two decimals across reload and discards them on Cancel', async ({ appPage }) => {
+    const page = await appPage.goto('tourSeen');
+    const costs = await openSettingsCategory(page, 'costs');
+    await costs.getByRole('textbox', { name: 'Currency symbol', exact: true }).fill('€');
+    await costs.getByRole('spinbutton', { name: 'Leftover gas discount (%)', exact: true }).fill('12.5');
+    await costs.getByRole('spinbutton', { name: 'Boost (per operation)', exact: true }).fill('1.5');
+    await costs.getByRole('spinbutton', { name: 'Decant incl. equalize (per operation)', exact: true }).fill('0.5');
+    await costs.getByRole('spinbutton', { name: 'Top-up (per operation, includes compressor air)', exact: true }).fill('5.126');
+    await saveSettings(page);
+
+    await page.evaluate(() => { window.name = '__skipStorageSeed'; });
+    await page.reload();
+    const persisted = await openSettingsCategory(page, 'costs');
+    await expect(persisted.getByRole('textbox', { name: 'Currency symbol', exact: true })).toHaveValue('€');
+    await expect(persisted.getByRole('spinbutton', { name: 'Leftover gas discount (%)', exact: true })).toHaveValue('12.5');
+    await expect(persisted.getByRole('spinbutton', { name: 'Boost (per operation)', exact: true })).toHaveValue('1.50');
+    await expect(persisted.getByRole('spinbutton', { name: 'Decant incl. equalize (per operation)', exact: true })).toHaveValue('0.50');
+    await expect(persisted.getByRole('spinbutton', { name: 'Top-up (per operation, includes compressor air)', exact: true })).toHaveValue('5.13');
+    await persisted.getByRole('spinbutton', { name: 'Boost (per operation)', exact: true }).fill('9');
+    await cancelSettings(page);
+
+    const reopened = await openSettingsCategory(page, 'costs');
+    await expect(reopened.getByRole('spinbutton', { name: 'Boost (per operation)', exact: true })).toHaveValue('1.50');
+    await cancelSettings(page);
+  });
+
+  test('loads legacy per-litre cost settings with zero flat fees and keeps the symbol and discount', async ({ appPage }) => {
+    const page = await appPage.goto('tourSeen');
+    await openSettingsCategory(page, 'general');
+    await saveSettings(page);
+    await page.evaluate(() => {
+      const settings = JSON.parse(localStorage.getItem('simplex-gas-remixer-settings'));
+      settings.costs = {
+        currencySymbol: '$',
+        leftoverDiscountPercent: 7,
+        pricePerLitre: { oxygen: 0.02, helium: 0.05 },
+        operationPrices: { boostPerLitre: 1, decantPerLitre: 1, equalizePerLitre: 1, topUpPerOperation: 1 }
+      };
+      localStorage.setItem('simplex-gas-remixer-settings', JSON.stringify(settings));
+    });
+    await page.evaluate(() => { window.name = '__skipStorageSeed'; });
+    await page.reload();
+
+    const costs = await openSettingsCategory(page, 'costs');
+    await expect(costs.getByRole('textbox', { name: 'Currency symbol', exact: true })).toHaveValue('$');
+    await expect(costs.getByRole('spinbutton', { name: 'Leftover gas discount (%)', exact: true })).toHaveValue('7');
+    await expect(costs.getByRole('spinbutton', { name: 'Boost (per operation)', exact: true })).toHaveValue('0.00');
+    await expect(costs.getByRole('spinbutton', { name: 'Decant incl. equalize (per operation)', exact: true })).toHaveValue('0.00');
+    await expect(costs.getByRole('spinbutton', { name: 'Top-up (per operation, includes compressor air)', exact: true })).toHaveValue('0.00');
+    await cancelSettings(page);
+  });
+
   test('restores derived calculator state after canceling unit and cylinder drafts', async ({ appPage }) => {
     const page = await appPage.goto('tourSeen');
     const general = await openSettingsCategory(page, 'general');

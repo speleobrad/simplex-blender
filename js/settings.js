@@ -5,6 +5,7 @@ import {
   validateCylinderPreset,
   validateGasPreset
 } from './preset-validation.js';
+import { validateCostSettings } from './input-validation.js';
 const STORAGE_KEY = 'simplex-gas-remixer-settings';
 
 export function normalizePresetName(name) {
@@ -24,6 +25,11 @@ export const DEFAULT_SETTINGS = Object.freeze({
   pressureLimitMode: 'hard-stop',
   pressureWarningUnlocked: false,
   interimPressureTolerancePercent: 3,
+  costs: Object.freeze({
+    currencySymbol: '',
+    leftoverDiscountPercent: 0,
+    operationPrices: Object.freeze({ boost: 0, decant: 0, topUp: 0 })
+  }),
   physics: Object.freeze({ model: 'vdw' }),
   gasPresets: Object.freeze([
     Object.freeze({ name: 'Air', oxygenPercent: 21, heliumPercent: 0 }),
@@ -166,6 +172,7 @@ export function copySettings(settings) {
     pressureLimitMode: settings.pressureLimitMode,
     pressureWarningUnlocked: settings.pressureWarningUnlocked,
     interimPressureTolerancePercent: settings.interimPressureTolerancePercent,
+    costs: copyCosts(settings.costs),
     physics: { model: settings.physics.model },
     gasPresets: settings.gasPresets.map(preset => ({ ...preset })),
     compressorPresets: settings.compressorPresets.map(preset => ({ ...preset })),
@@ -253,6 +260,28 @@ function addDefaultInterimPressureTolerance(settings) {
     interimPressureTolerancePercent: Object.hasOwn(settings ?? {}, 'interimPressureTolerancePercent')
       ? settings.interimPressureTolerancePercent
       : DEFAULT_SETTINGS.interimPressureTolerancePercent
+  };
+}
+
+export function addDefaultCosts(settings) {
+  return {
+    ...settings,
+    costs: copyCosts(settings?.costs ?? DEFAULT_SETTINGS.costs)
+  };
+}
+
+// Missing flat fees (including legacy per-litre settings) load as 0; present values are validated.
+const feeOrZero = value => (value === undefined ? 0 : value);
+
+function copyCosts(costs) {
+  return {
+    currencySymbol: typeof costs?.currencySymbol === 'string' ? costs.currencySymbol.trim() : costs?.currencySymbol,
+    leftoverDiscountPercent: costs?.leftoverDiscountPercent,
+    operationPrices: {
+      boost: feeOrZero(costs?.operationPrices?.boost),
+      decant: feeOrZero(costs?.operationPrices?.decant),
+      topUp: feeOrZero(costs?.operationPrices?.topUp)
+    }
   };
 }
 
@@ -388,6 +417,7 @@ export function validateSettings(settings) {
     cylinderNames.add(normalizedName);
     errors.push(...presetErrors);
   }
+  errors.push(...validateCostSettings(settings.costs));
   return errors;
 }
 
@@ -459,7 +489,7 @@ export function loadSettings(storage, onFallback = () => {}) {
     return copySettings(DEFAULT_SETTINGS);
   }
 
-  const normalized = addDefaultInterimPressureTolerance(addDefaultEquipmentPresets(addDefaultCylinderPresets(addDefaultPhysics(addDefaultPressureLimitPolicy(addDefaultUnits(addDefaultBooster(saved)))))));
+  const normalized = addDefaultCosts(addDefaultInterimPressureTolerance(addDefaultEquipmentPresets(addDefaultCylinderPresets(addDefaultPhysics(addDefaultPressureLimitPolicy(addDefaultUnits(addDefaultBooster(saved))))))));
   const errors = validateSettings(normalized);
   if (errors.length > 0) {
     onFallback(new RangeError(errors.join(' ')));
@@ -469,7 +499,7 @@ export function loadSettings(storage, onFallback = () => {}) {
 }
 
 export function saveSettings(settings, storage) {
-  const normalized = addDefaultInterimPressureTolerance(addDefaultEquipmentPresets(addDefaultCylinderPresets(addDefaultPhysics(addDefaultPressureLimitPolicy(addDefaultUnits(addDefaultBooster(settings)))))));
+  const normalized = addDefaultCosts(addDefaultInterimPressureTolerance(addDefaultEquipmentPresets(addDefaultCylinderPresets(addDefaultPhysics(addDefaultPressureLimitPolicy(addDefaultUnits(addDefaultBooster(settings))))))));
   const errors = validateSettings(normalized);
   if (errors.length > 0) throw new RangeError(errors.join(' '));
   storage.setItem(STORAGE_KEY, JSON.stringify(copySettings(normalized)));

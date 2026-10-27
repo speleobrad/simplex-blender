@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateCalculatorInputs, validateSupplyBankInput } from '../js/input-validation.js';
+import { validateCalculatorInputs, validateCostSettings, validateSupplyBankInput } from '../js/input-validation.js';
 
 const defaultCylinder = {
   volumeL: 12,
@@ -339,6 +339,39 @@ test('Warning mode bypasses only cylinder ceilings, not supported calculator inp
   assert.doesNotMatch(warningInvalidHotErrors.join(' '), /measured.*hot overfill/i);
 });
 
+const validCosts = () => ({
+  currencySymbol: '€',
+  leftoverDiscountPercent: 20,
+  operationPrices: { boost: 0.5, decant: 0, topUp: 5 }
+});
+test('valid cost settings pass', () => assert.deepEqual(validateCostSettings(validCosts()), []));
+test('flat fees accept zero and the 1,000,000 ceiling', () => {
+  const c = validCosts(); c.operationPrices = { boost: 0, decant: 1_000_000, topUp: 0.01 };
+  assert.deepEqual(validateCostSettings(c), []);
+});
+test('cost settings reject negative, non-finite, missing, oversized fees and bad discount', () => {
+  for (const mutate of [
+    c => { c.operationPrices.boost = -1; },
+    c => { c.operationPrices.decant = NaN; },
+    c => { c.operationPrices.topUp = 1_000_001; },
+    c => { delete c.operationPrices.boost; },
+    c => { c.operationPrices.topUp = '5'; },
+    c => { c.leftoverDiscountPercent = 101; },
+    c => { c.currencySymbol = 'WAYTOOLONGSYMBOL'; },
+    c => { c.currencySymbol = 5; }
+  ]) {
+    const c = validCosts(); mutate(c);
+    assert.ok(validateCostSettings(c).length > 0);
+  }
+});
+
+test('supply bank price must be a non-negative finite number or null', () => {
+  const bank = { id: 'b', name: 'B', volumeL: 10, pressureBar: 100, maxPressureBar: 200, oxygenPercent: 100, heliumPercent: 0, enabled: true };
+  assert.deepEqual(validateSupplyBankInput({ ...bank, pricePerLitre: 0.5 }), []);
+  assert.deepEqual(validateSupplyBankInput({ ...bank, pricePerLitre: null }), []);
+  assert.ok(validateSupplyBankInput({ ...bank, pricePerLitre: -1 }).length > 0);
+  assert.ok(validateSupplyBankInput({ ...bank, pricePerLitre: 'x' }).length > 0);
+});
 test('supply bank maximum pressure must be 1–350 bar and at least the current pressure', () => {
   const bank = { id: 'bank-max', name: 'Max', volumeL: 10, pressureBar: 150, maxPressureBar: 200, oxygenPercent: 0, heliumPercent: 100, enabled: true };
   const message = 'Supply bank maximum pressure must be 1–350 bar and at least the current pressure.';

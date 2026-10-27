@@ -75,6 +75,7 @@
           <button type="button" data-action="select-settings-category" data-settings-category="gas-presets" aria-controls="settings-pane-gas-presets" aria-selected="false" class="settings-category-button shrink-0 rounded-lg border border-transparent px-3 py-2 text-left text-xs font-semibold text-slate-400 transition hover:border-ocean-700 hover:bg-ocean-800/70 hover:text-slate-200">Gas presets</button>
           <button type="button" data-action="select-settings-category" data-settings-category="cylinder-presets" aria-controls="settings-pane-cylinder-presets" aria-selected="false" class="settings-category-button shrink-0 rounded-lg border border-transparent px-3 py-2 text-left text-xs font-semibold text-slate-400 transition hover:border-ocean-700 hover:bg-ocean-800/70 hover:text-slate-200">Cylinder presets</button>
           <button type="button" id="settings-category-equipment" data-action="select-settings-category" data-settings-category="equipment" aria-controls="settings-pane-equipment" aria-selected="false" class="settings-category-button shrink-0 rounded-lg border border-transparent px-3 py-2 text-left text-xs font-semibold text-slate-400 transition hover:border-ocean-700 hover:bg-ocean-800/70 hover:text-slate-200">Equipment</button>
+          <button type="button" data-action="select-settings-category" data-settings-category="costs" aria-controls="settings-pane-costs" aria-selected="false" class="settings-category-button shrink-0 rounded-lg border border-transparent px-3 py-2 text-left text-xs font-semibold text-slate-400 transition hover:border-ocean-700 hover:bg-ocean-800/70 hover:text-slate-200">Costs</button>
           <button type="button" data-action="select-settings-category" data-settings-category="preset-management" aria-controls="settings-pane-preset-management" aria-selected="false" class="settings-category-button shrink-0 rounded-lg border border-transparent px-3 py-2 text-left text-xs font-semibold text-slate-400 transition hover:border-ocean-700 hover:bg-ocean-800/70 hover:text-slate-200">Preset management</button>
         </nav>
         </div>
@@ -119,6 +120,35 @@
                 <label for="settings-interim-pressure-tolerance" class="block text-xs text-slate-400">Interim pressure tolerance (%)</label>
                 <input id="settings-interim-pressure-tolerance" type="number" min="0.5" max="10" step="0.5" data-settings-collection="general" data-settings-field="interimPressureTolerancePercent" aria-label="Interim pressure tolerance percent" aria-describedby="settings-interim-pressure-tolerance-help" class="mt-1 w-24 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 font-mono text-xs text-slate-100">
                 <p id="settings-interim-pressure-tolerance-help" class="mt-1 text-[10px] text-slate-500">A recorded interim pressure must be within this percentage of the planned pressure at the recorded temperature. Applies to Optimize readings only.</p>
+              </div>
+            </div>
+          </section>
+
+          <section id="settings-pane-costs" aria-labelledby="settings-pane-costs-title" class="hidden">
+            <h3 id="settings-pane-costs-title" class="mb-2 text-sm font-semibold text-slate-200">Costs</h3>
+            <p id="settings-costs-help" class="mb-3 text-[10px] text-slate-500">Each fee is charged once per operation in the currency above. Fees are money and are not affected by the Units setting.</p>
+            <div class="space-y-4">
+              <div>
+                <label for="settings-cost-currency" class="block text-xs text-slate-400">Currency symbol</label>
+                <input id="settings-cost-currency" type="text" maxlength="8" data-settings-collection="costs" data-settings-field="currencySymbol" class="mt-1 w-24 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 font-mono text-xs text-slate-100">
+              </div>
+              <div>
+                <label for="settings-cost-discount" class="block text-xs text-slate-400">Leftover gas discount (%)</label>
+                <input id="settings-cost-discount" type="number" min="0" max="100" step="any" data-settings-collection="costs" data-settings-field="leftoverDiscountPercent" class="mt-1 w-24 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 font-mono text-xs text-slate-100">
+              </div>
+              <div class="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label for="settings-cost-boost" class="block text-xs text-slate-400">Boost (per operation)</label>
+                  <input id="settings-cost-boost" type="number" min="0" max="1000000" step="0.01" data-settings-collection="costs" data-settings-field="operationPrices.boost" aria-describedby="settings-costs-help" class="mt-1 w-24 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 font-mono text-xs text-slate-100">
+                </div>
+                <div>
+                  <label for="settings-cost-decant" class="block text-xs text-slate-400">Decant incl. equalize (per operation)</label>
+                  <input id="settings-cost-decant" type="number" min="0" max="1000000" step="0.01" data-settings-collection="costs" data-settings-field="operationPrices.decant" aria-describedby="settings-costs-help" class="mt-1 w-24 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 font-mono text-xs text-slate-100">
+                </div>
+                <div>
+                  <label for="settings-cost-topup" class="block text-xs text-slate-400">Top-up (per operation, includes compressor air)</label>
+                  <input id="settings-cost-topup" type="number" min="0" max="1000000" step="0.01" data-settings-collection="costs" data-settings-field="operationPrices.topUp" aria-describedby="settings-costs-help" class="mt-1 w-24 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 font-mono text-xs text-slate-100">
+                </div>
               </div>
             </div>
           </section>
@@ -470,7 +500,7 @@
               In-water pressure
             </button>
             <button id="tab-btn-summary" role="tab" aria-selected="false" aria-controls="tab-pane-summary" tabindex="-1" data-action="select-tab" data-tab="summary" class="shrink-0 px-3.5 py-2 rounded-lg text-xs font-semibold text-slate-400 hover:text-slate-200 transition">
-              Tank summary
+              Tanks and costs
             </button>
             <button id="tab-btn-ternary" role="tab" aria-selected="false" aria-controls="tab-pane-ternary" tabindex="-1" data-action="select-tab" data-tab="ternary" class="shrink-0 px-3.5 py-2 rounded-lg text-xs font-semibold text-slate-400 hover:text-slate-200 transition">
               Simplex diagram
@@ -535,6 +565,20 @@
                 <div id="res-in-water-temperature" data-summary-metric="temperature" class="summary-banner-temperature mt-0.5 text-base font-bold font-mono text-amber-300 lg:mt-[2.125rem]">—</div>
               </div>
             </div>
+            <div data-result-key="cost-banner" data-blending-only aria-label="Fill costs" class="col-span-full grid grid-cols-1 gap-3 border-t border-ocean-800 pt-3 text-right sm:grid-cols-3">
+              <div>
+                <div class="summary-banner-label text-[10px] uppercase text-slate-400 font-mono">Total cost of fill</div>
+                <div data-result-key="cost-fill-total" class="text-base font-bold font-mono text-slate-100 mt-0.5">—</div>
+              </div>
+              <div>
+                <div class="summary-banner-label text-[10px] uppercase text-slate-400 font-mono">Reuse value</div>
+                <div data-result-key="cost-saved" class="text-base font-bold font-mono text-emerald-400 mt-0.5">—</div>
+              </div>
+              <div>
+                <div class="summary-banner-label text-[10px] uppercase text-slate-400 font-mono" title="Pure-gas cost avoided by using leftover mixes">Salvaged saving</div>
+                <div data-result-key="cost-salvaged" title="Pure-gas cost avoided by using leftover mixes" aria-description="Pure-gas cost avoided by using leftover mixes" class="text-base font-bold font-mono text-emerald-400 mt-0.5">—</div>
+              </div>
+            </div>
           </div>
           <div id="compare-summary" hidden class="rounded-xl border border-ocean-700/80 bg-gradient-to-r from-ocean-850 to-ocean-900 p-4 text-center">
             <div class="grid grid-cols-1 gap-3 text-xs sm:grid-cols-3">
@@ -585,7 +629,7 @@
             <canvas id="ternary-canvas" role="img" aria-label="Gas composition ternary diagram" aria-describedby="ternary-chart-description" class="w-full h-full block cursor-crosshair"></canvas>
           </div>
           <p id="ternary-chart-description" class="sr-only">
-            The solid region connects Air, pure oxygen, and pure helium. The dotted boundary includes pure nitrogen. A dashed line connects the initial and scenario endpoint mixes; arrows show the blend sequence. Open the Tank summary tab for the plotted mix and stage values.
+            The solid region connects Air, pure oxygen, and pure helium. The dotted boundary includes pure nitrogen. A dashed line connects the initial and scenario endpoint mixes; arrows show the blend sequence. Open the Tanks and costs tab for the plotted mix and stage values.
           </p>
 
           <!-- Trajectory Legend & Step Path Info -->
@@ -620,12 +664,12 @@
 
         <div id="tab-pane-summary" role="tabpanel" aria-labelledby="tab-btn-summary" class="pt-4 hidden flex flex-col gap-4" hidden>
           <div>
-            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300">Tank summary</h3>
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300">Tanks and costs</h3>
             <p id="ternary-data-status" class="py-2 text-slate-400 text-xs">Chart data appears when a feasible blend is available.</p>
           </div>
           <div class="grid gap-4 overflow-x-auto pb-2">
             <table class="min-w-full text-left font-mono text-xs">
-              <caption class="py-2 text-left font-sans text-slate-300">Reference mixes in the tank summary</caption>
+              <caption class="py-2 text-left font-sans text-slate-300">Reference mixes in Tanks and costs</caption>
               <thead>
                 <tr class="text-slate-400">
                   <th scope="col" class="px-2 py-1">Mix</th>
@@ -648,6 +692,60 @@
               <tbody id="ternary-data-trajectory"></tbody>
             </table>
           </div>
+          <section data-result-key="cost-summary" aria-label="Costs" class="min-w-0">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300">Costs</h3>
+            <p data-result-key="cost-status" class="py-2 text-slate-400 text-xs">Costs appear when a feasible blend is available.</p>
+            <div data-result-key="cost-tables" class="min-w-0 max-w-full overflow-x-auto pb-2" hidden>
+              <table class="mb-4 w-full min-w-[30rem] table-fixed text-left font-mono text-xs">
+                <caption class="py-2 text-left font-sans text-slate-300">Gas cost</caption>
+                <colgroup><col class="w-[20%]"><col class="w-1/4"><col class="w-[28%]"><col class="w-[27%]"></colgroup>
+                <thead>
+                  <tr class="text-slate-400">
+                    <th scope="col" class="px-2 py-1 text-left">Source</th>
+                    <th scope="col" class="px-2 py-1 text-right whitespace-nowrap" data-result-key="cost-gas-volume-heading">Volume (L)</th>
+                    <th scope="col" class="px-2 py-1 text-right" data-result-key="cost-gas-price-heading"><span class="block">Price</span> <span class="block whitespace-nowrap">(per&nbsp;L)</span></th>
+                    <th scope="col" class="px-2 py-1 text-right whitespace-nowrap" data-result-key="cost-gas-cost-heading">Cost</th>
+                  </tr>
+                </thead>
+                <tbody data-result-key="cost-gas-body"></tbody>
+                <tfoot>
+                  <tr class="text-slate-100">
+                    <th scope="row" class="px-2 py-1 text-left">Total gas cost</th>
+                    <td class="px-2 py-1"></td>
+                    <td class="px-2 py-1"></td>
+                    <td class="px-2 py-1 text-right" data-result-key="cost-gas-total">—</td>
+                  </tr>
+                </tfoot>
+              </table>
+              <table class="mb-4 w-full min-w-[30rem] table-fixed text-left font-mono text-xs">
+                <caption class="py-2 text-left font-sans text-slate-300">Operation cost</caption>
+                <colgroup><col class="w-[20%]"><col class="w-1/4"><col class="w-[28%]"><col class="w-[27%]"></colgroup>
+                <thead>
+                  <tr class="text-slate-400">
+                    <th scope="col" class="px-2 py-1 text-left">Operation</th>
+                    <th scope="col" class="px-2 py-1 text-right">Count</th>
+                    <th scope="col" class="px-2 py-1 text-right whitespace-nowrap" data-result-key="cost-operation-fee-heading">Fee</th>
+                    <th scope="col" class="px-2 py-1 text-right whitespace-nowrap" data-result-key="cost-operation-cost-heading">Cost</th>
+                  </tr>
+                </thead>
+                <tbody data-result-key="cost-operations-body"></tbody>
+                <tfoot>
+                  <tr class="text-slate-100">
+                    <th scope="row" class="px-2 py-1 text-left">Operations cost</th>
+                    <td class="px-2 py-1"></td>
+                    <td class="px-2 py-1"></td>
+                    <td class="px-2 py-1 text-right" data-result-key="cost-operations-total">—</td>
+                  </tr>
+                  <tr class="border-t border-ocean-800 text-slate-100">
+                    <th scope="row" class="px-2 py-1 text-left">Total cost</th>
+                    <td class="px-2 py-1"></td>
+                    <td class="px-2 py-1"></td>
+                    <td class="px-2 py-1 text-right" data-result-key="cost-total"></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </section>
         </div>
 
 
@@ -712,6 +810,7 @@
                 <th id="inventory-max-pressure-heading" class="py-2 px-1">Max pressure</th>
                 <th class="py-2 px-1 text-emerald-400">O₂%</th>
                 <th class="py-2 px-1 text-amber-400">He%</th>
+                <th id="inventory-price-heading" class="py-2 px-1">Price</th>
                 <th class="py-2 px-1 text-center">Del</th>
               </tr>
             </thead>
@@ -719,15 +818,20 @@
               <!-- Rendered via JS -->
             </tbody>
           </table>
+          <p id="bank-price-status" class="sr-only" aria-live="polite" tabindex="-1"></p>
         </div>
         <section class="mb-3 rounded-xl border border-ocean-800/80 bg-ocean-950/60 p-3 font-sans">
           <h3 class="text-xs font-semibold text-slate-200">Transfer conditions</h3>
           <div class="mt-2 max-w-xs text-xs">
             <label for="inlet-gas-temperature" class="mb-1 block text-slate-400 font-medium">Temperature of inventory gases</label>
             <div class="flex items-center gap-2">
-              <input type="number" id="inlet-gas-temperature" value="25" min="5" max="40" step="0.1" data-recalculate="input" class="w-28 rounded-lg border border-ocean-700 bg-ocean-900 px-2 py-1.5 font-mono text-xs text-slate-100 focus:border-cyan-400 focus:outline-none">
+              <input type="number" id="inlet-gas-temperature" value="21" min="5" max="40" step="0.1" data-recalculate="input" class="w-28 rounded-lg border border-ocean-700 bg-ocean-900 px-2 py-1.5 font-mono text-xs text-slate-100 focus:border-cyan-400 focus:outline-none">
               <span class="font-mono text-slate-400">°C</span>
             </div>
+            <label class="mt-1 flex items-center gap-2 text-slate-400">
+              <input type="checkbox" id="inlet-gas-same-as-ambient" data-recalculate="change" class="rounded bg-ocean-900 border-ocean-700 text-cyan-500 focus:ring-0">
+              <span>Same as ambient</span>
+            </label>
             <p class="mt-1 text-[10px] text-slate-500">The temperature at which inventory gases are assumed to be stored; compressor and source-specific temperature modifiers still apply.</p>
           </div>
         </section>

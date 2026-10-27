@@ -6,6 +6,7 @@ import {
   formatUnitValue,
   formatInputValue,
   materialLabel,
+  unitLabel,
   IMPERIAL_UNITS,
   METRIC_UNITS
 } from '../js/units.js';
@@ -42,4 +43,13 @@ test('formats pressure inputs to one decimal place in PSI', () => {
   assert.equal(formatInputValue(200, 'pressureBar', IMPERIAL_UNITS), '2900.8');
   assert.equal(formatInputValue(350, 'pressureBar', IMPERIAL_UNITS), '5076.3');
   assert.equal(formatInputValue(200, 'pressureBar', METRIC_UNITS), '200');
+});
+
+test('price per litre converts to price per cubic foot and back', () => {
+  assert.equal(convertToDisplay(0.02, 'pricePerVolumeL', 'metric'), 0.02);
+  const perCubicFoot = convertToDisplay(0.02, 'pricePerVolumeL', 'imperial');
+  assert.ok(Math.abs(perCubicFoot - 0.02 * 28.316846592) < 1e-12);
+  assert.ok(Math.abs(convertFromDisplay(perCubicFoot, 'pricePerVolumeL', 'imperial') - 0.02) < 1e-12);
+  assert.equal(unitLabel('pricePerVolumeL', 'metric'), '/L');
+  assert.equal(unitLabel('pricePerVolumeL', 'imperial'), '/cu ft');
 });

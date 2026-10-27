@@ -1,13 +1,19 @@
 import { getSelectedGasPreset, sortGasPresetEntries } from '../settings.js';
 import { convertToDisplay, unitLabel } from '../units.js';
+import { formatMoney } from '../currency-format.js';
+import { isPureComposition } from '../pure-prices.js';
 const COLUMN_CLASSES = {
   name: 'py-2 px-2 min-w-32',
   volumeL: 'py-2 px-1',
   pressureBar: 'py-2 px-1',
   maxPressureBar: 'py-2 px-1',
   oxygenPercent: 'py-2 px-1',
-  heliumPercent: 'py-2 px-1'
+  heliumPercent: 'py-2 px-1',
+  pricePerLitre: 'py-2 px-1 align-top'
 };
+
+export const PRICE_BASIS_PER_VOLUME = 'per-volume';
+export const PRICE_BASIS_FULL_TANK = 'full-tank';
 
 function bankFieldDefinition(key, units) {
   const definitions = {
@@ -16,7 +22,8 @@ function bankFieldDefinition(key, units) {
     pressureBar: { key: 'pressureBar', quantity: 'pressureBar', label: `pressure in ${unitLabel('pressureBar', units)}`, type: 'number', min: 1, max: 350, step: 5, className: 'w-28 min-w-0 bg-ocean-950/60 border border-ocean-800 rounded px-2 py-1 font-mono text-xs text-slate-100' },
     maxPressureBar: { key: 'maxPressureBar', quantity: 'pressureBar', label: `max pressure in ${unitLabel('pressureBar', units)}`, type: 'number', min: 1, max: 350, step: 5, className: 'w-28 min-w-0 bg-ocean-950/60 border border-ocean-800 rounded px-2 py-1 font-mono text-xs text-slate-100' },
     oxygenPercent: { key: 'oxygenPercent', label: 'oxygen percentage', type: 'number', min: 0, max: 100, step: 1, className: 'w-20 bg-emerald-950/40 border border-emerald-900/60 rounded px-1 py-1 text-center text-emerald-400 font-bold' },
-    heliumPercent: { key: 'heliumPercent', label: 'helium percentage', type: 'number', min: 0, max: 100, step: 1, className: 'w-20 bg-amber-950/40 border border-amber-900/60 rounded px-1 py-1 text-center text-amber-400 font-bold' }
+    heliumPercent: { key: 'heliumPercent', label: 'helium percentage', type: 'number', min: 0, max: 100, step: 1, className: 'w-20 bg-amber-950/40 border border-amber-900/60 rounded px-1 py-1 text-center text-amber-400 font-bold' },
+    pricePerLitre: { key: 'pricePerLitre', label: `price per ${unitLabel('pricePerVolumeL', units)}`, type: 'number', min: 0, max: 1000000, step: 'any', className: 'w-24 min-w-0 bg-ocean-950/60 border border-ocean-800 rounded px-2 py-1 font-mono text-xs text-slate-100' }
   };
   return definitions[key];
 }
@@ -28,19 +35,32 @@ function makeCell(className, child) {
   return cell;
 }
 
-function makeBankInput(bank, field, units) {
+function makeBankInput(bank, field, units, { fullTank = false } = {}) {
   const input = document.createElement('input');
   input.type = field.type;
   const displayQuantity = field.quantity ?? null;
-  input.value = displayQuantity ? convertToDisplay(bank[field.key], displayQuantity, units) : bank[field.key];
+  const toDisplay = value => (displayQuantity ? convertToDisplay(value, displayQuantity, units) : value);
+  if (field.key === 'pricePerLitre') {
+    // Full-tank mode is a currency entry: the input starts empty and the stored per-litre price is shown after commit.
+    input.value = fullTank ? '' : formatBankPrice(bank.pricePerLitre, units);
+    input.placeholder = fullTank ? 'Full tank price' : 'Not set';
+  } else {
+    input.value = toDisplay(bank[field.key]);
+  }
   input.className = field.className;
   input.dataset.bankId = bank.id;
   input.dataset.bankField = field.key;
-  if (field.min !== undefined) input.min = displayQuantity ? convertToDisplay(field.min, displayQuantity, units) : field.min;
-  if (field.max !== undefined) input.max = displayQuantity ? convertToDisplay(field.max, displayQuantity, units) : field.max;
-  if (field.step !== undefined) input.step = displayQuantity ? convertToDisplay(field.step, displayQuantity, units) : field.step;
-  input.setAttribute('aria-label', `${bank.name} ${field.label}`);
+  if (field.min !== undefined) input.min = toDisplay(field.min);
+  if (field.max !== undefined) input.max = toDisplay(field.max);
+  if (field.step !== undefined) input.step = typeof field.step === 'number' ? toDisplay(field.step) : field.step;
+  input.setAttribute('aria-label', fullTank ? `${bank.name} full tank price` : `${bank.name} ${field.label}`);
   return input;
+}
+
+/** Stored per-litre price as the text shown in the inventory price input, to 6 decimals; empty when unpriced. */
+export function formatBankPrice(pricePerLitre, units) {
+  if (pricePerLitre === null || pricePerLitre === undefined) return '';
+  return convertToDisplay(pricePerLitre, 'pricePerVolumeL', units).toFixed(6);
 }
 
 function makeGasPresetSelect(bank, gasPresets) {
@@ -73,14 +93,91 @@ function makeBankNameControl(bank, gasPresets, units) {
   return control;
 }
 
+function makePriceBasisSelect(bank, basis, units) {
+  const select = document.createElement('select');
+  select.className = 'w-24 rounded border border-ocean-800 bg-ocean-950 px-1 py-0.5 text-[10px] text-slate-400';
+  select.dataset.action = 'select-bank-price-basis';
+  select.dataset.bankId = bank.id;
+  select.setAttribute('aria-label', `Price basis for ${bank.name}`);
 
-export function renderSupplyBanks(banks, gasPresets, units = 'metric') {
+  const perVolume = document.createElement('option');
+  perVolume.value = PRICE_BASIS_PER_VOLUME;
+  perVolume.textContent = `Per ${unitLabel('volumeL', units)}`;
+  const fullTank = document.createElement('option');
+  fullTank.value = PRICE_BASIS_FULL_TANK;
+  fullTank.textContent = 'Full tank';
+  select.append(perVolume, fullTank);
+  select.value = basis;
+  return select;
+}
+
+function formatAmount(value) {
+  return String(Number(value.toPrecision(6)));
+}
+
+export function formatSuggestionNote(bank, suggestion, units, currencySymbol, leftoverDiscountPercent = 0) {
+  if (suggestion.status === 'calculating') return 'Calculating…';
+  if (suggestion.status === 'failed') return suggestion.reason;
+  const perVolume = unitLabel('volumeL', units);
+  const money = (amount, digits) => formatMoney(amount, currencySymbol, digits);
+  const price = pricePerLitre => `${money(convertToDisplay(pricePerLitre, 'pricePerVolumeL', units), 6)} per ${perVolume}`;
+  const litres = formatAmount(convertToDisplay(suggestion.litres, 'volumeL', units));
+  const discountNote = leftoverDiscountPercent > 0 ? ` after ${leftoverDiscountPercent}% leftover discount` : '';
+  let text = `Indicative price ${price(suggestion.pricePerLitre)}${discountNote} (recipe cost ${money(suggestion.recipeCost, 2)} for ${litres} ${perVolume}).`;
+  if (bank.pricePerLitre !== null && bank.pricePerLitre !== undefined) text += ` Current price ${price(bank.pricePerLitre)}.`;
+  return text;
+}
+
+function makePriceControl(bank, units, { suggestion, currencySymbol, leftoverDiscountPercent, basis }) {
+  const control = document.createElement('div');
+  control.className = 'flex min-w-32 flex-col items-start gap-1';
+  control.append(
+    makeBankInput(bank, bankFieldDefinition('pricePerLitre', units), units, { fullTank: basis === PRICE_BASIS_FULL_TANK }),
+    makePriceBasisSelect(bank, basis, units)
+  );
+
+  // Pure oxygen and helium banks take their price by hand: their per-litre price is the pure-gas price itself.
+  if (isPureComposition(bank)) return control;
+
+  const calculate = document.createElement('button');
+  calculate.type = 'button';
+  calculate.textContent = 'Calculate price';
+  calculate.disabled = suggestion?.status === 'calculating';
+  calculate.className = 'rounded border border-cyan-700 px-2 py-0.5 text-[11px] text-cyan-300 hover:border-cyan-400 disabled:cursor-wait disabled:opacity-50';
+  calculate.dataset.action = 'calculate-bank-price';
+  calculate.dataset.bankId = bank.id;
+  calculate.setAttribute('aria-label', `Calculate price for ${bank.name}`);
+
+  const note = document.createElement('p');
+  note.className = 'text-[11px] text-slate-400';
+  note.dataset.bankNote = bank.id;
+  note.textContent = suggestion ? formatSuggestionNote(bank, suggestion, units, currencySymbol, leftoverDiscountPercent) : '';
+
+  control.append(calculate, note);
+  if (suggestion?.status === 'ok') {
+    const priced = bank.pricePerLitre !== null && bank.pricePerLitre !== undefined;
+    const apply = document.createElement('button');
+    apply.type = 'button';
+    apply.textContent = priced ? 'Replace' : 'Apply';
+    apply.className = 'rounded border border-emerald-700 px-2 py-0.5 text-[11px] text-emerald-300 hover:border-emerald-400';
+    apply.dataset.action = 'apply-bank-price';
+    apply.dataset.bankId = bank.id;
+    apply.setAttribute('aria-label', `${apply.textContent} suggested price for ${bank.name}`);
+    control.append(apply);
+  }
+  return control;
+}
+
+
+export function renderSupplyBanks(banks, gasPresets, units = 'metric', { suggestions = {}, currencySymbol = '', leftoverDiscountPercent = 0, priceBasis = {} } = {}) {
   const tbody = document.getElementById('tanks-tbody');
   if (!tbody) return;
   const volumeHeading = document.getElementById('inventory-volume-heading');
   const pressureHeading = document.getElementById('inventory-pressure-heading');
   if (volumeHeading) volumeHeading.textContent = `Volume (${unitLabel('volumeL', units)})`;
   if (pressureHeading) pressureHeading.textContent = `Pressure (${unitLabel('pressureBar', units)})`;
+  const priceHeading = document.getElementById('inventory-price-heading');
+  if (priceHeading) priceHeading.textContent = `Price (${unitLabel('pricePerVolumeL', units)})`;
   const maxPressureHeading = document.getElementById('inventory-max-pressure-heading');
   if (maxPressureHeading) maxPressureHeading.textContent = `Max pressure (${unitLabel('pressureBar', units)})`;
 
@@ -103,6 +200,12 @@ export function renderSupplyBanks(banks, gasPresets, units = 'metric') {
         : makeBankInput(bank, bankFieldDefinition(key, units), units);
       row.append(makeCell(COLUMN_CLASSES[key], child));
     }
+    row.append(makeCell(COLUMN_CLASSES.pricePerLitre, makePriceControl(bank, units, {
+      suggestion: suggestions[bank.id],
+      currencySymbol,
+      leftoverDiscountPercent,
+      basis: priceBasis[bank.id] ?? PRICE_BASIS_PER_VOLUME
+    })));
 
     const remove = document.createElement('button');
     remove.type = 'button';

@@ -40,6 +40,7 @@ import { convertFromDisplay, convertToDisplay, formatInputValue, materialLabel, 
 import { resetApplicationState } from './factory-reset.js';
 import { analyzePresetSource, mergeSelectedPresets, PRESET_IMPORT_DEFAULT_URLS } from './preset-import.js';
 import { loadSupplyBanks, saveSupplyBanks } from './bank-storage.js';
+import { priceBankByRecipe } from './bank-pricing.js';
 import { loadTheme, saveTheme } from './theme.js';
 import { setPrimaryScreen } from './navigation.js';
 import { setResultTab } from './result-tabs.js';
@@ -48,14 +49,19 @@ import { loadAnalytics } from './analytics.js';
 import { createOnboardingController } from './ui/onboarding.js';
 import { renderCompareRecipe } from './ui/compare-recipe.js';
 import { renderPressureLimitWarnings, renderResults } from './ui/results.js';
-import { renderSettingsDialog, renderPresetOptions } from './ui/settings-dialog.js';
+import { renderSettingsDialog, renderPresetOptions, parseCostNumber, setCostField } from './ui/settings-dialog.js';
 import { renderEquipmentSummary } from './ui/equipment-summary.js';
-import { renderSupplyBanks } from './ui/supply-banks.js';
+import { formatBankPrice, formatSuggestionNote, PRICE_BASIS_FULL_TANK, renderSupplyBanks } from './ui/supply-banks.js';
+import { formatMoney } from './currency-format.js';
+import { bankFreeGasLitres, pricePerLitreFromFullTank, pureGasPrices } from './pure-prices.js';
 import { renderStorageWarning } from './ui/storage-warning.js';
 import { renderThermalCharts } from './ui/thermal-charts.js';
 import { changeTernaryZoom, clearTernaryDiagram, observeTernaryCanvas, renderTernaryDiagram } from './ui/ternary.js';
 import { renderWhatIfScenarioEditor } from './ui/what-if-scenario.js';
 import { getResultTabs } from './ui/result-panel.js';
+import { computeFillCost } from './cost.js';
+import { renderCostBanner, renderCostSummary } from './ui/cost-summary.js';
+import { computeSavings } from './savings.js';
 
 const settingsStorage = {
   getItem: key => window.localStorage.getItem(key),
@@ -110,6 +116,8 @@ const state = {
   banksLoadFailure,
   bankSaveFailure: null,
   bankInputFailure: null,
+  bankSuggestions: {},
+  bankPriceBasis: {},
   activeScreen: 'blending',
   activeTab: 'recipe',
   interimMeasurements: [],
@@ -121,6 +129,7 @@ const state = {
   compareErrors: [],
   lastCompareInput: null,
   lastCompareResult: null,
+  blendingCostSource: 'optimize',
   compareHasRun: false,
   whatIfScenario: createWhatIfScenario(),
   whatIfErrors: [],
@@ -273,6 +282,179 @@ function persistSupplyBanks() {
   updateStorageWarning();
 }
 
+function currentPhysicsForBanks() {
+  return {
+    model: state.settings.physics.model,
+    temperatureC: canonicalNumberValue('ambient-temperature', 'temperatureC')
+  };
+}
+
+function effectiveInletTemperatureC() {
+  return byId('inlet-gas-same-as-ambient').checked
+    ? canonicalNumberValue('ambient-temperature', 'temperatureC')
+    : canonicalNumberValue('inlet-gas-temperature', 'temperatureC');
+}
+
+function syncInletGasTemperatureControl() {
+  const sameAsAmbient = byId('inlet-gas-same-as-ambient').checked;
+  const input = byId('inlet-gas-temperature');
+  input.disabled = sameAsAmbient;
+  if (sameAsAmbient) input.value = byId('ambient-temperature').value;
+}
+
+function bankPricingSignature(bank) {
+  return JSON.stringify({
+    volumeL: bank.volumeL,
+    pressureBar: bank.pressureBar,
+    oxygenPercent: bank.oxygenPercent,
+    heliumPercent: bank.heliumPercent,
+    costs: state.settings.costs,
+    booster: state.settings.booster,
+    pressureLimitMode: state.settings.pressureLimitMode,
+    physics: currentPhysicsForBanks(),
+    inventoryGasPrices: pureGasPrices({
+      banks: state.banks,
+      physics: currentPhysicsForBanks(),
+      inventoryTemperatureC: effectiveInletTemperatureC()
+    }),
+    inventoryTemperatureC: effectiveInletTemperatureC()
+  });
+}
+
+function bankSuggestionFor(bank) {
+  const suggestion = state.bankSuggestions[bank.id];
+  if (!suggestion) return null;
+  if (suggestion.signature === bankPricingSignature(bank)) return suggestion;
+  delete state.bankSuggestions[bank.id];
+  return null;
+}
+
+/** Bank whose Calculate or Apply control must regain focus once the table is rebuilt. */
+let pendingBankFocus = null;
+
+function announceBankPrice(message) {
+  byId('bank-price-status').textContent = message;
+}
+
+function restoreBankPriceFocus() {
+  if (!pendingBankFocus) return;
+  const status = byId('bank-price-status');
+  const calculate = [...document.querySelectorAll('#tanks-tbody [data-action="calculate-bank-price"]')]
+    .find(button => button.dataset.bankId === pendingBankFocus);
+  const active = document.activeElement;
+  if (!calculate || (active && active !== document.body && active !== status && active !== calculate)) {
+    pendingBankFocus = null;
+    return;
+  }
+  if (calculate.disabled) {
+    status.focus();
+    return;
+  }
+  calculate.focus();
+}
+
+function renderBankTable() {
+  const suggestions = {};
+  for (const bank of state.banks) {
+    const suggestion = bankSuggestionFor(bank);
+    if (suggestion) suggestions[bank.id] = suggestion;
+  }
+  for (const bankId of Object.keys(state.bankSuggestions)) {
+    if (!state.banks.some(bank => bank.id === bankId)) delete state.bankSuggestions[bankId];
+  }
+  renderSupplyBanks(state.banks, state.settings.gasPresets, state.settings.units, {
+    suggestions,
+    currencySymbol: state.settings.costs.currencySymbol,
+    leftoverDiscountPercent: state.settings.costs.leftoverDiscountPercent,
+    priceBasis: state.bankPriceBasis
+  });
+  restoreBankPriceFocus();
+}
+
+function rejectBankEdit(bank, message) {
+  state.bankInputFailure = { bankId: bank.id, message: `${bank.name}: ${message}` };
+  updateStorageWarning();
+}
+
+function commitBankUpdate(bank, updatedBank) {
+  if (updatedBank.oxygenPercent === 21 && updatedBank.heliumPercent === 0) {
+    return 'Air is supplied by the compressor and cannot be a finite supply bank.';
+  }
+  const errors = validateSupplyBankInput(updatedBank);
+  if (errors.length > 0) return errors[0];
+  clearBankInputFailure(bank.id);
+  Object.assign(bank, updatedBank);
+  delete state.bankSuggestions[bank.id];
+  persistSupplyBanks();
+  recalculate();
+  return null;
+}
+
+function calculateBankPrice(bankId) {
+  const bank = state.banks.find(candidate => candidate.id === bankId);
+  if (!bank) return;
+  pendingBankFocus = bank.id;
+  state.bankSuggestions[bank.id] = { status: 'calculating', signature: bankPricingSignature(bank) };
+  announceBankPrice(`Calculating price for ${bank.name}…`);
+  renderBankTable();
+  setTimeout(() => finishBankPriceCalculation(bank.id), 0);
+}
+
+function finishBankPriceCalculation(bankId) {
+  const pending = state.bankSuggestions[bankId];
+  const bank = state.banks.find(candidate => candidate.id === bankId);
+  if (!bank || pending?.status !== 'calculating') {
+    pendingBankFocus = null;
+    return;
+  }
+  const signature = bankPricingSignature(bank);
+  if (pending.signature !== signature) {
+    delete state.bankSuggestions[bankId];
+    announceBankPrice(`Price calculation for ${bank.name} was discarded.`);
+    renderBankTable();
+    pendingBankFocus = null;
+    return;
+  }
+  let result;
+  try {
+    result = priceBankByRecipe({
+      bank,
+      costs: state.settings.costs,
+      settings: state.settings,
+      physics: currentPhysicsForBanks(),
+      inventoryBanks: state.banks,
+      inventoryTemperatureC: effectiveInletTemperatureC()
+    });
+  } catch (error) {
+    delete state.bankSuggestions[bankId];
+    announceBankPrice(`Price calculation for ${bank.name} failed.`);
+    renderBankTable();
+    pendingBankFocus = null;
+    throw error;
+  }
+  state.bankSuggestions[bankId] = result.ok
+    ? { status: 'ok', pricePerLitre: result.pricePerLitre, recipeCost: result.recipeCost, litres: result.litres, signature }
+    : { status: 'failed', reason: result.reason, signature };
+  announceBankPrice(`${bank.name}: ${formatSuggestionNote(bank, state.bankSuggestions[bankId], state.settings.units, state.settings.costs.currencySymbol, state.settings.costs.leftoverDiscountPercent)}`);
+  renderBankTable();
+  pendingBankFocus = null;
+}
+
+function applyBankPrice(bankId) {
+  const bank = state.banks.find(candidate => candidate.id === bankId);
+  if (!bank) return;
+  pendingBankFocus = bank.id;
+  const suggestion = bankSuggestionFor(bank);
+  if (suggestion?.status !== 'ok') {
+    renderBankTable();
+    pendingBankFocus = null;
+    return;
+  }
+  const error = commitBankUpdate(bank, { ...bank, pricePerLitre: suggestion.pricePerLitre });
+  pendingBankFocus = null;
+  if (error) rejectBankEdit(bank, error);
+}
+
 function applyTheme(theme) {
   const isLight = theme === 'light';
   document.documentElement.dataset.theme = theme;
@@ -306,7 +488,7 @@ function toggleTheme() {
 
 
 function setSettingsCategory(category) {
-  const categories = ['general', 'gas-presets', 'cylinder-presets', 'equipment', 'preset-management'];
+  const categories = ['general', 'gas-presets', 'cylinder-presets', 'equipment', 'costs', 'preset-management'];
   if (!categories.includes(category)) return;
   state.settingsCategory = category;
   for (const candidate of categories) {
@@ -596,6 +778,13 @@ function updateSettingsDraft(input, eventType) {
   const collection = input.dataset.settingsCollection;
   const index = Number(input.dataset.settingsIndex);
   const field = input.dataset.settingsField;
+  if (collection === 'costs') {
+    const value = field === 'currencySymbol' ? input.value : parseCostNumber(input.value);
+    const isFee = field.startsWith('operationPrices.');
+    setCostField(state.settingsDraft.costs, field, isFee && Number.isFinite(value) ? Math.round(value * 100) / 100 : value);
+    persistSettingsDraft();
+    return;
+  }
   const quantity = {
     volumeL: 'volumeL',
     massKg: 'massKg',
@@ -881,7 +1070,7 @@ function readInput() {
       ambientTemperatureC: canonicalNumberValue('ambient-temperature', 'temperatureC'),
       targetInWaterTemperatureC: canonicalNumberValue('target-temperature', 'temperatureC'),
       targetMediumTemperatureC: canonicalNumberValue('wait-target-temperature', 'temperatureC'),
-      inletTemperatureC: canonicalNumberValue('inlet-gas-temperature', 'temperatureC'),
+      inletTemperatureC: effectiveInletTemperatureC(),
       waitMode: byId('wait-mode').value,
       waitMinutes: numberValue('wait-minutes'),
       interimMeasurements: state.interimMeasurements,
@@ -983,7 +1172,7 @@ function whatIfCurrentSharedSignature() {
     settings: state.settings,
     banks: state.banks,
     cylinderPresetName: state.whatIfScenario.start?.cylinderPresetName,
-    inletTemperatureC: canonicalNumberValue('inlet-gas-temperature', 'temperatureC')
+    inletTemperatureC: effectiveInletTemperatureC()
   });
 }
 
@@ -998,7 +1187,7 @@ function scenarioInputForCurrentDraft() {
   return buildWhatIfInput(state.whatIfScenario, {
     settings: state.settings,
     banks: state.banks,
-    inletTemperatureC: canonicalNumberValue('inlet-gas-temperature', 'temperatureC')
+    inletTemperatureC: effectiveInletTemperatureC()
   });
 }
 
@@ -1305,15 +1494,72 @@ function collectPressureWarnings(input, observations) {
   });
 }
 
+function blendingCostSource() {
+  if (state.blendingCostSource === 'compare') {
+    const compare = state.lastCompareResult?.compare;
+    if (!compare || !state.lastCompareInput) return null;
+    return { steps: compare.protocolSteps, temperatureC: state.lastCompareInput.physics?.temperatureC };
+  }
+  if (!state.lastResult || !state.lastInput || state.lastResult.feasible === false) return null;
+  return { steps: state.lastResult.protocolSteps, temperatureC: state.lastInput.physics?.temperatureC };
+}
+
+function whatIfCostSource() {
+  const result = state.whatIfScenario.result;
+  if (!result?.compare) return null;
+  return { steps: result.compare.protocolSteps, temperatureC: result.input?.physics?.temperatureC };
+}
+
+function deriveFillCost(source) {
+  if (!source || !Array.isArray(source.steps)) return null;
+  return computeFillCost({
+    steps: source.steps,
+    banks: state.banks,
+    costs: state.settings.costs,
+    temperatureC: source.temperatureC
+  });
+}
+
+/** Savings against pure-gas and bank prices for the optimize result; null while a compare result is shown. */
+function blendingSavings() {
+  if (state.blendingCostSource === 'compare' || !state.lastResult || !state.lastInput) return null;
+  return computeSavings({
+    result: state.lastResult,
+    banks: state.banks,
+    costs: state.settings.costs,
+    settings: state.settings,
+    physics: state.lastInput.physics,
+    inventoryTemperatureC: effectiveInletTemperatureC()
+  });
+}
+
+/**
+ * Re-derive the Costs section of every result host from its stored final steps, the current banks and
+ * the current settings. Quantities come from the run; prices are never frozen into a result.
+ */
+function refreshCostSummaries() {
+  const display = { units: state.settings.units, currencySymbol: state.settings.costs.currencySymbol };
+  const blending = document.querySelector('[data-result-host="blending"]');
+  if (blending) {
+    const cost = deriveFillCost(blendingCostSource());
+    renderCostSummary(cost, { root: blending, ...display });
+    renderCostBanner(cost, blendingSavings(), { root: blending, currencySymbol: display.currencySymbol });
+  }
+  const whatIf = byId('what-if-result-host');
+  if (whatIf) renderCostSummary(deriveFillCost(whatIfCostSource()), { root: whatIf, ...display });
+}
+
 function renderCompareResult() {
   const compare = state.lastCompareResult?.compare;
   if (!compare) {
     clearTernaryDiagram(document.querySelector('[data-result-host="blending"] [data-result-key="ternary-canvas"]'));
     return;
   }
+  state.blendingCostSource = 'compare';
   renderResults(state.lastCompareResult, state.lastCompareInput);
   renderThermalCharts(state.lastCompareResult, state.lastCompareInput, state.settings.units);
   renderTernary();
+  refreshCostSummaries();
 }
 
 function renderWhatIfResult() {
@@ -1350,6 +1596,7 @@ function renderWhatIfResult() {
     root.querySelector?.('[data-result-key="steps-container"]')?.replaceChildren();
     root.querySelector?.('[data-result-key="water-pressure-container"]')?.replaceChildren();
     root.querySelector?.('[data-result-key="scenario-summary-content"]')?.replaceChildren();
+    refreshCostSummaries();
     return;
   }
   renderResults(result, result.input, { root, mode: 'what-if' });
@@ -1371,6 +1618,7 @@ function renderWhatIfResult() {
       status.textContent = 'Scenario result is out of date. Update the scenario inputs.';
     }
   }
+  refreshCostSummaries();
 }
 
 function scenarioError(field, message, rowId = null) {
@@ -1574,7 +1822,8 @@ function runCompare() {
 }
 
 function recalculate() {
-  renderSupplyBanks(state.banks, state.settings.gasPresets);
+  syncInletGasTemperatureControl();
+  renderBankTable();
   renderEquipmentSummary(state.settings);
   if (state.activeScreen === 'what-if') {
     runWhatIf();
@@ -1605,14 +1854,16 @@ function recalculate() {
   };
   state.lastInput = input;
   state.lastResult = resultWithWarnings;
+  state.blendingCostSource = 'optimize';
 
-  renderSupplyBanks(state.banks, state.settings.gasPresets, state.settings.units);
+  renderBankTable();
   renderEquipmentSummary(state.settings, state.settings.units);
   renderResults(resultWithWarnings, input);
 
   renderThermalCharts(resultWithWarnings, input, state.settings.units);
   if (ternaryData()) renderTernary();
   else clearTernaryDiagram(document.querySelector('[data-result-host="blending"] [data-result-key="ternary-canvas"]'));
+  refreshCostSummaries();
 }
 
 function selectScreen(screenId) {
@@ -1687,6 +1938,7 @@ function removeBank(bankId) {
   const index = state.banks.findIndex(bank => bank.id === bankId);
   if (index < 0) return;
   clearBankInputFailure(bankId);
+  delete state.bankSuggestions[bankId];
   state.banks.splice(index, 1);
   persistSupplyBanks();
   recalculate();
@@ -1725,6 +1977,7 @@ function selectBankGasPreset(select) {
   applyGasPresetToBank(bank, preset);
   bank.gasPresetName = preset.name;
   clearBankInputFailure(bank.id);
+  delete state.bankSuggestions[bank.id];
   persistSupplyBanks();
   recalculate();
 }
@@ -1738,11 +1991,45 @@ function bankFieldQuantity(bankField) {
 
 function restoreBankInputValue(input, bank) {
   const { bankField } = input.dataset;
+  if (bankField === 'pricePerLitre') {
+    input.value = state.bankPriceBasis[bank.id] === PRICE_BASIS_FULL_TANK ? '' : formatBankPrice(bank.pricePerLitre, state.settings.units);
+    return;
+  }
   const quantity = bankFieldQuantity(bankField);
   const value = quantity
     ? convertToDisplay(bank[bankField], quantity, state.settings.units)
     : bank[bankField];
   input.value = String(value);
+}
+
+function updateBankFromFullTankInput(input, bank) {
+  if (input.validity?.badInput) {
+    restoreBankInputValue(input, bank);
+    clearBankInputFailure(bank.id);
+    return;
+  }
+  if (input.value.trim() === '') {
+    clearBankInputFailure(bank.id);
+    return;
+  }
+  const tankPrice = Number.parseFloat(input.value);
+  const freeGasLitres = bankFreeGasLitres(bank, currentPhysicsForBanks(), effectiveInletTemperatureC());
+  const pricePerLitre = Number.isFinite(tankPrice) ? pricePerLitreFromFullTank(tankPrice, freeGasLitres) : null;
+  if (pricePerLitre === null) {
+    restoreBankInputValue(input, bank);
+    rejectBankEdit(bank, 'Enter a non-negative full tank price for a bank that holds gas.');
+    return;
+  }
+  const previousBasis = state.bankPriceBasis[bank.id];
+  delete state.bankPriceBasis[bank.id];
+  const error = commitBankUpdate(bank, { ...bank, pricePerLitre });
+  if (error) {
+    state.bankPriceBasis[bank.id] = previousBasis;
+    restoreBankInputValue(input, bank);
+    rejectBankEdit(bank, error);
+    return;
+  }
+  announceBankPrice(`Stored ${formatBankPrice(pricePerLitre, state.settings.units)} per ${unitLabel('volumeL', state.settings.units)} from full tank price ${formatMoney(tankPrice, state.settings.costs.currencySymbol, 2)}`);
 }
 
 function updateBankFromInput(input) {
@@ -1753,6 +2040,26 @@ function updateBankFromInput(input) {
   const updatedBank = { ...bank };
   if (bankField === 'name') {
     updatedBank.name = input.value;
+  } else if (bankField === 'pricePerLitre' && state.bankPriceBasis[bank.id] === PRICE_BASIS_FULL_TANK) {
+    updateBankFromFullTankInput(input, bank);
+    return;
+  } else if (bankField === 'pricePerLitre') {
+    if (input.validity?.badInput) {
+      restoreBankInputValue(input, bank);
+      clearBankInputFailure(bank.id);
+      return;
+    }
+    if (input.value.trim() === '') {
+      updatedBank.pricePerLitre = null;
+    } else {
+      const value = Number.parseFloat(input.value);
+      if (!Number.isFinite(value)) {
+        restoreBankInputValue(input, bank);
+        clearBankInputFailure(bank.id);
+        return;
+      }
+      updatedBank.pricePerLitre = convertFromDisplay(value, 'pricePerVolumeL', state.settings.units);
+    }
   } else {
     const value = Number.parseFloat(input.value);
     if (!Number.isFinite(value)) {
@@ -1767,27 +2074,11 @@ function updateBankFromInput(input) {
     if (bankField === 'oxygenPercent' || bankField === 'heliumPercent') updatedBank.gasPresetName = null;
   }
 
-  if (updatedBank.oxygenPercent === 21 && updatedBank.heliumPercent === 0) {
+  const error = commitBankUpdate(bank, updatedBank);
+  if (error) {
     restoreBankInputValue(input, bank);
-    state.bankInputFailure = {
-      bankId: bank.id,
-      message: `${bank.name}: Air is supplied by the compressor and cannot be a finite supply bank.`
-    };
-    updateStorageWarning();
-    return;
+    rejectBankEdit(bank, error);
   }
-
-  const errors = validateSupplyBankInput(updatedBank);
-  if (errors.length > 0) {
-    restoreBankInputValue(input, bank);
-    state.bankInputFailure = { bankId: bank.id, message: `${bank.name}: ${errors[0]}` };
-    updateStorageWarning();
-    return;
-  }
-  clearBankInputFailure(bank.id);
-  Object.assign(bank, updatedBank);
-  persistSupplyBanks();
-  recalculate();
 }
 
 function updateWhatIfField(input, rerender) {
@@ -1976,10 +2267,19 @@ function handleInputOrChange(event) {
     selectBankGasPreset(target);
     return;
   }
+  if (target.dataset.action === 'select-bank-price-basis') {
+    const { bankId } = target.dataset;
+    if (target.value === PRICE_BASIS_FULL_TANK) state.bankPriceBasis[bankId] = PRICE_BASIS_FULL_TANK;
+    else delete state.bankPriceBasis[bankId];
+    renderBankTable();
+    document.querySelector(`#tanks-tbody [data-action="select-bank-price-basis"][data-bank-id="${bankId}"]`)?.focus();
+    return;
+  }
   if (target.dataset.action === 'toggle-bank') {
     const bank = state.banks.find(candidate => candidate.id === target.dataset.bankId);
     if (bank) {
       bank.enabled = target.checked;
+      delete state.bankSuggestions[bank.id];
       persistSupplyBanks();
       recalculate();
     }
@@ -2170,6 +2470,12 @@ function handleClick(event) {
       break;
     case 'remove-bank':
       removeBank(actionElement.dataset.bankId);
+      break;
+    case 'calculate-bank-price':
+      calculateBankPrice(actionElement.dataset.bankId);
+      break;
+    case 'apply-bank-price':
+      applyBankPrice(actionElement.dataset.bankId);
       break;
     case 'open-settings':
       openSettings();

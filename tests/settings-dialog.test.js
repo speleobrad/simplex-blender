@@ -1,7 +1,7 @@
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
-import { renderSettingsDialog } from '../js/ui/settings-dialog.js';
+import { parseCostNumber, renderSettingsDialog } from '../js/ui/settings-dialog.js';
 
 class FakeElement {
   constructor(tagName = 'div') {
@@ -108,6 +108,11 @@ function createFakeDocument() {
     'settings-booster-max-output-pressure',
     'settings-booster-temperature-modifier',
     'settings-compressor-temperature-modifier',
+    'settings-cost-currency',
+    'settings-cost-discount',
+    'settings-cost-boost',
+    'settings-cost-decant',
+    'settings-cost-topup',
   ]) {
     elements.set(id, new FakeElement());
   }
@@ -428,4 +433,84 @@ test('renders working-pressure labels and bounds in selected imperial units', ()
     assert.ok(Math.abs(Number(input.max) - 5076.32) < 1e-9);
     assert.match(input.attributes.get('aria-label'), /working pressure in psi/i);
   }
+});
+
+function settingsWithCosts(units = 'metric') {
+  return {
+    ...settingsWithEquipmentPresets(),
+    units,
+    costs: {
+      currencySymbol: '€',
+      leftoverDiscountPercent: 12.5,
+      operationPrices: { boost: 1.5, decant: 0.5, topUp: 5.126 }
+    }
+  };
+}
+
+test('renders the costs pane with the symbol, discount and flat fees to two decimals', () => {
+  const { document, elements } = createFakeDocument();
+  globalThis.document = document;
+
+  renderSettingsDialog(settingsWithCosts('metric'));
+
+  assert.equal(elements.get('settings-cost-currency').value, '€');
+  assert.equal(elements.get('settings-cost-discount').value, '12.5');
+  assert.equal(elements.get('settings-cost-boost').value, '1.50');
+  assert.equal(elements.get('settings-cost-decant').value, '0.50');
+  assert.equal(elements.get('settings-cost-topup').value, '5.13');
+  assert.equal(elements.get('settings-cost-boost').attributes.get('aria-label'), 'Boost (per operation)');
+  assert.equal(elements.get('settings-cost-decant').attributes.get('aria-label'), 'Decant incl. equalize (per operation)');
+  assert.equal(elements.get('settings-cost-topup').attributes.get('aria-label'), 'Top-up (per operation, includes compressor air)');
+});
+
+test('shows identical flat fees in metric and imperial units because fees are never unit-converted', () => {
+  const metric = createFakeDocument();
+  globalThis.document = metric.document;
+  renderSettingsDialog(settingsWithCosts('metric'));
+  const imperial = createFakeDocument();
+  globalThis.document = imperial.document;
+  renderSettingsDialog(settingsWithCosts('imperial'));
+
+  for (const id of ['settings-cost-boost', 'settings-cost-decant', 'settings-cost-topup', 'settings-cost-discount']) {
+    assert.equal(imperial.elements.get(id).value, metric.elements.get(id).value);
+  }
+});
+
+test('parses typed cost numbers without unit conversion and maps empty or non-numeric text to NaN', () => {
+  assert.equal(parseCostNumber(' 1.5 '), 1.5);
+  assert.equal(parseCostNumber('0.25'), 0.25);
+  assert.equal(parseCostNumber('10'), 10);
+  assert.ok(Number.isNaN(parseCostNumber('')));
+  assert.ok(Number.isNaN(parseCostNumber('   ')));
+  assert.ok(Number.isNaN(parseCostNumber('abc')));
+});
+
+test('provides a Costs pane with symbol, discount and three flat fees and no per-litre inputs', () => {
+  const markup = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const pane = markup.match(/<section id="settings-pane-costs"[\s\S]*?<\/section>/)?.[0] ?? '';
+
+  assert.match(markup, /<button\b[^>]*data-settings-category="costs"[^>]*>Costs<\/button>/);
+  assert.ok(markup.indexOf('data-settings-category="costs"') < markup.indexOf('data-settings-category="preset-management"'));
+  assert.match(pane, /aria-labelledby="settings-pane-costs-title"/);
+  assert.match(pane, /class="hidden"/);
+  for (const id of [
+    'settings-cost-currency',
+    'settings-cost-discount',
+    'settings-cost-boost',
+    'settings-cost-decant',
+    'settings-cost-topup'
+  ]) {
+    assert.match(pane, new RegExp(`<input id="${id}"[^>]*data-settings-collection="costs"`));
+  }
+  for (const id of ['settings-cost-boost', 'settings-cost-decant', 'settings-cost-topup']) {
+    const tag = pane.match(new RegExp(`<input id="${id}"[^>]*>`))?.[0] ?? '';
+    assert.match(tag, /type="number"/);
+    assert.match(tag, /min="0"/);
+    assert.match(tag, /step="0\.01"/);
+  }
+  assert.match(pane, /<label for="settings-cost-boost"[^>]*>Boost \(per operation\)<\/label>/);
+  assert.match(pane, /<label for="settings-cost-decant"[^>]*>Decant incl\. equalize \(per operation\)<\/label>/);
+  assert.match(pane, /<label for="settings-cost-topup"[^>]*>Top-up \(per operation, includes compressor air\)<\/label>/);
+  assert.match(pane, /Leftover gas discount \(%\)/);
+  assert.doesNotMatch(pane, /pricePerLitre|per litre|settings-cost-price|equalize-per|Oxygen price|Helium price/i);
 });

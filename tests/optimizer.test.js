@@ -4,6 +4,7 @@ import { optimizeBlend, isSafeSimulation, scheduleSafeThermalProtocol, solveTher
 import * as optimizerModule from '../js/optimizer.js';
 import { calcMolarDensity } from '../js/physics.js';
 import { calculatePressureAtTemperature } from '../js/thermodynamics.js';
+import { computeFillCost } from '../js/cost.js';
 import { DEFAULT_BANKS } from '../js/bank-storage.js';
 import { DEFAULT_SETTINGS } from '../js/settings.js';
 
@@ -1942,67 +1943,69 @@ test('optimizeBlend returns a feasible split protocol with safe endpoints and ta
     assert.ok(pressures.every(pressure => pressure <= 100 + 1e-7), step.title);
   }
 });
-test('two scheduler-split transfers preserve stage order, inventories, and thermal safety', () => {
-  const workingPressureBar = 99.01;
-  const targetPressureBar = 99;
-  const result = optimizeBlend({
-    cylinder: {
+const schedulerSplitInput = {
+  cylinder: {
+    volumeL: 12,
+    initialPressureBar: 95,
+    initialOxygenPercent: 0,
+    initialHeliumPercent: 0,
+    targetPressureBar: 99,
+    targetOxygenPercent: 4,
+    targetHeliumPercent: 0.2,
+    workingPressureBar: 99.01,
+    hotOverfillPercent: 0
+  },
+  physics: { model: 'ideal', temperatureC: 20 },
+  thermal: {
+    tankMaterial: 'steel',
+    coolingMedium: 'air',
+    ambientTemperatureC: 20,
+    inletTemperatureC: 40,
+    targetMediumTemperatureC: 20,
+    targetInWaterTemperatureC: 20,
+    waitMode: 'minutes',
+    waitMinutes: 0
+  },
+  settings: {
+    booster: {
+      otherBoostBpm: 50,
+      oxygenBoostBpm: 50,
+      otherDecantRateBarPerMin: 5,
+      oxygenDecantRateBarPerMin: 5,
+      cylinderVolumeCm3: 9,
+      minimumSourcePressureBar: 0
+    }
+  },
+  banks: [
+    {
+      id: 'o2',
+      name: 'Oxygen',
       volumeL: 12,
-      initialPressureBar: 95,
-      initialOxygenPercent: 0,
-      initialHeliumPercent: 0,
-      targetPressureBar,
-      targetOxygenPercent: 4,
-      targetHeliumPercent: 0.2,
-      workingPressureBar,
-      hotOverfillPercent: 0
+      pressureBar: 300,
+      maxPressureBar: 350,
+      minimumPressureBar: 0,
+      oxygenPercent: 100,
+      heliumPercent: 0,
+      enabled: true
     },
-    physics: { model: 'ideal', temperatureC: 20 },
-    thermal: {
-      tankMaterial: 'steel',
-      coolingMedium: 'air',
-      ambientTemperatureC: 20,
-      inletTemperatureC: 40,
-      targetMediumTemperatureC: 20,
-      targetInWaterTemperatureC: 20,
-      waitMode: 'minutes',
-      waitMinutes: 0
-    },
-    settings: {
-      booster: {
-        otherBoostBpm: 50,
-        oxygenBoostBpm: 50,
-        otherDecantRateBarPerMin: 5,
-        oxygenDecantRateBarPerMin: 5,
-        cylinderVolumeCm3: 9,
-        minimumSourcePressureBar: 0
-      }
-    },
-    banks: [
-      {
-        id: 'o2',
-        name: 'Oxygen',
-        volumeL: 12,
-        pressureBar: 300,
-        maxPressureBar: 350,
-        minimumPressureBar: 0,
-        oxygenPercent: 100,
-        heliumPercent: 0,
-        enabled: true
-      },
-      {
-        id: 'he',
-        name: 'Helium',
-        volumeL: 12,
-        pressureBar: 300,
-        maxPressureBar: 350,
-        minimumPressureBar: 0,
-        oxygenPercent: 0,
-        heliumPercent: 100,
-        enabled: true
-      }
-    ]
-  });
+    {
+      id: 'he',
+      name: 'Helium',
+      volumeL: 12,
+      pressureBar: 300,
+      maxPressureBar: 350,
+      minimumPressureBar: 0,
+      oxygenPercent: 0,
+      heliumPercent: 100,
+      enabled: true
+    }
+  ]
+};
+
+test('two scheduler-split transfers preserve stage order, inventories, and thermal safety', () => {
+  const workingPressureBar = schedulerSplitInput.cylinder.workingPressureBar;
+  const targetPressureBar = schedulerSplitInput.cylinder.targetPressureBar;
+  const result = optimizeBlend(schedulerSplitInput);
 
   assert.equal(result.feasible, true, result.error);
   assert.ok(Math.abs(result.thermal.finalAmbientPressureBar - targetPressureBar) < 1e-5);
@@ -2246,6 +2249,28 @@ test('excludes helium from an initial mix that is 98% helium or richer', () => {
 
   assert.equal(result.feasible, true);
   assert.equal(result.blend.heliumSalvagedLitres, 0);
+});
+
+test('reports retained helium ungated, even for an initial mix 98% helium or richer', () => {
+  const result = optimizeBlend({
+    cylinder: {
+      volumeL: 12,
+      initialPressureBar: 80,
+      initialOxygenPercent: 0,
+      initialHeliumPercent: 98,
+      targetPressureBar: 80,
+      targetOxygenPercent: 0,
+      targetHeliumPercent: 98
+    },
+    physics: { model: 'ideal', temperatureC: 20 },
+    banks: [],
+    settings: DEFAULT_SETTINGS
+  });
+
+  assert.equal(result.feasible, true);
+  assert.equal(result.blend.heliumSalvagedLitres, 0);
+  // Ideal gas, nothing vented: retained moles = 80 bar × 12 L / (R × T), so retained He litres = 80 × 12 × 0.98.
+  assert.ok(Math.abs(result.blend.heliumRetainedLitres - 80 * 12 * 0.98) < 1e-6, `${result.blend.heliumRetainedLitres}`);
 });
 
 
@@ -3321,6 +3346,65 @@ test('rejects invalid explicit hot-overfill values in safety helpers', () => {
   );
 });
 
+const defaultRecipeInput = {
+  cylinder: {
+    volumeL: 11.1, initialPressureBar: 45, targetPressureBar: 195,
+    initialOxygenPercent: 21, initialHeliumPercent: 0,
+    targetOxygenPercent: 18, targetHeliumPercent: 45,
+    workingPressureBar: 207, hotOverfillPercent: 2
+  },
+  physics: { model: 'vdw', temperatureC: 21 },
+  banks: DEFAULT_BANKS.map(bank => ({ ...bank })),
+  thermal: {
+    tankMaterial: 'aluminum', coolingMedium: 'air', ambientTemperatureC: 21, inletTemperatureC: 25,
+    targetMediumTemperatureC: 21, targetInWaterTemperatureC: 10,
+    waitMode: 'minutes', waitMinutes: 5, interimMeasurements: []
+  },
+  settings: DEFAULT_SETTINGS
+};
+
+test('optimizer steps carry cost contract fields', () => {
+  const result = optimizeBlend(defaultRecipeInput);
+  const transfers = result.protocolSteps.filter(s => s.type === 'boost' || s.type === 'decant');
+  assert.ok(transfers.length > 0);
+  for (const step of transfers) {
+    assert.ok(Number.isFinite(step.sourceConsumedMoles) && step.sourceConsumedMoles > 0);
+    assert.match(step.costOperationId, /^op-\d+$/);
+    assert.ok(['boost', 'decant', 'topUp'].includes(step.costOperation));
+    assert.equal(step.costOperation === 'topUp', step.sourceBankId === 'compressor-air');
+  }
+});
+test('a thermally split transfer shares one operation id and its moles sum to the whole', () => {
+  const result = optimizeBlend(schedulerSplitInput);
+  const stages = result.protocolSteps.filter(s => s._thermalSplit);
+  assert.equal(stages.length, 4);
+  assert.equal(stages[0].costOperationId, stages[1].costOperationId);
+  assert.equal(stages[2].costOperationId, stages[3].costOperationId);
+  assert.notEqual(stages[0].costOperationId, stages[2].costOperationId);
+  assert.ok(stages.every(s => s.sourceConsumedMoles > 0));
+});
+test('operation ids are unique per operation', () => {
+  const ids = optimizeBlend(defaultRecipeInput).protocolSteps.filter(s => s.costOperationId)
+    .filter(s => !/safe stage/.test(s.title ?? '')).map(s => s.costOperationId);
+  assert.ok(ids.length > 0);
+  assert.equal(new Set(ids).size, ids.length);
+});
+
+test('scheduler-split stages sum to the logical protocol step moles per cost operation', () => {
+  const result = optimizeBlend(schedulerSplitInput);
+  assert.equal(result.feasible, true, result.error);
+  const splitStages = result.protocolSteps.filter(step => step._thermalSplit);
+  assert.ok(splitStages.length > 0);
+  const ids = [...new Set(splitStages.map(step => step.costOperationId))];
+  for (const id of ids) {
+    const summed = splitStages
+      .filter(step => step.costOperationId === id)
+      .reduce((total, step) => total + step.sourceConsumedMoles, 0);
+    const logical = result.logicalPlan.protocolSteps.find(step => step.costOperationId === id);
+    assert.ok(logical, `logical step for ${id}`);
+    assert.ok(Math.abs(summed - logical.sourceConsumedMoles) <= 1e-9 * Math.max(1, logical.sourceConsumedMoles), id);
+  }
+});
 function leftoverBank({ id, oxygenPercent, heliumPercent, pressureBar, maxPressureBar = 200, volumeL = 50, enabled = true }) {
   return {
     id,
@@ -3639,6 +3723,27 @@ const shallowDeepInput = {
 };
 const salvageReceivers = result => result.protocolSteps.filter(step => step.type === 'salvage').map(step => step.receiverBankId);
 
+
+test('a salvage plan costs only its purchased transfers: salvage adds no gas line, no fee and no operation id', () => {
+  const result = optimizeBlend(salvageThenDecantInput({ thermal: SALVAGE_THERMAL }));
+  assert.equal(result.feasible, true);
+  assert.equal(result.salvageTransfers.length, 1);
+
+  const salvage = result.protocolSteps.filter(step => step.type === 'salvage');
+  assert.equal(salvage.length, 1);
+  for (const step of salvage) {
+    assert.equal(step.costOperation, undefined);
+    assert.equal(step.costOperationId, undefined);
+  }
+
+  const costs = { currencySymbol: '', leftoverDiscountPercent: 0, operationPrices: { boost: 2, decant: 1, topUp: 5 } };
+  const banks = salvageThenDecantInput().banks;
+  const withSalvage = computeFillCost({ steps: result.protocolSteps, banks, costs, temperatureC: 20 });
+  const purchasedOnly = computeFillCost({ steps: result.protocolSteps.filter(step => step.type !== 'salvage'), banks, costs, temperatureC: 20 });
+  assert.deepEqual(withSalvage, purchasedOnly);
+  assert.ok(withSalvage.total > 0);
+  assert.ok(withSalvage.gasLines.every(line => line.sourceBankId !== 'bank-n'));
+});
 test('salvage near tie goes to the receiver that can still reach more standard mixes', () => {
   const result = optimizeBlend(shallowDeepInput);
   assert.equal(result.feasible, true);

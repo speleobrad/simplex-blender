@@ -31,6 +31,57 @@ function formatSettingNumber(value) {
   return Number.isFinite(Number(value)) ? Number(value).toFixed(2) : String(value);
 }
 
+const COST_FIELDS = [
+  { id: 'settings-cost-currency', field: 'currencySymbol', kind: 'text', label: 'Currency symbol' },
+  { id: 'settings-cost-discount', field: 'leftoverDiscountPercent', kind: 'number', label: 'Leftover gas discount (%)' },
+  { id: 'settings-cost-boost', field: 'operationPrices.boost', kind: 'fee', label: 'Boost (per operation)' },
+  { id: 'settings-cost-decant', field: 'operationPrices.decant', kind: 'fee', label: 'Decant incl. equalize (per operation)' },
+  { id: 'settings-cost-topup', field: 'operationPrices.topUp', kind: 'fee', label: 'Top-up (per operation, includes compressor air)' }
+];
+
+/** Read a dotted Settings costs path such as `operationPrices.boost`. */
+export function getCostField(costs, field) {
+  return field.split('.').reduce((value, key) => value?.[key], costs);
+}
+
+/** Write a dotted Settings costs path; the owning objects must already exist. */
+export function setCostField(costs, field, value) {
+  const keys = field.split('.');
+  const last = keys.pop();
+  keys.reduce((owner, key) => owner[key], costs)[last] = value;
+}
+
+/**
+ * Parse a typed cost number (a flat operation fee or the leftover discount). Fees are money
+ * per operation, so they are never unit-converted. Empty or non-numeric text becomes NaN so
+ * validation rejects it.
+ */
+export function parseCostNumber(text) {
+  const trimmed = String(text ?? '').trim();
+  if (trimmed === '') return Number.NaN;
+  return Number(trimmed);
+}
+
+function formatCostInput(value) {
+  if (typeof value === 'string') return value;
+  return Number.isFinite(value) ? String(Number(value.toPrecision(6))) : '';
+}
+
+function formatCostFee(value) {
+  return Number.isFinite(value) ? value.toFixed(2) : '';
+}
+
+function renderCostsPane(settings) {
+  if (!settings.costs) return;
+  for (const { id, field, kind, label } of COST_FIELDS) {
+    const input = document.getElementById(id);
+    if (!input) continue;
+    const stored = getCostField(settings.costs, field);
+    input.value = kind === 'fee' ? formatCostFee(stored) : formatCostInput(stored);
+    input.setAttribute('aria-label', label);
+  }
+}
+
 function createPresetInput({ value, type, collection, index, field, label, min, max, step }) {
   const input = document.createElement('input');
   input.type = type;
@@ -528,6 +579,7 @@ export function renderSettingsDialog(settings, importState) {
       input.classList.toggle('text-emerald-300', Number(value) < 0);
     }
   }
+  renderCostsPane(settings);
   renderPresetImport(settings, importState);
 }
 

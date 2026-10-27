@@ -1,6 +1,7 @@
 import { test, expect } from './fixtures/app-fixtures.js';
 import { openWhatIf, fillWhatIfStart, setWhatIfRow, runWhatIf, assertWhatIfResultPanelExclusive } from './helpers/blending.js';
 import { openSettingsCategory, saveSettings } from './helpers/settings.js';
+import { editBank, setPurePrices } from './helpers/inventory.js';
 async function load(appPage) { return appPage.goto('tourSeen'); }
 
 async function warningSettings(page) {
@@ -221,7 +222,7 @@ async function warningSettings(page) {
     await expect(recipe).toContainText(/Compressor Air|Add gas|Top-up/i);
     await expect(recipe).toContainText(/Wait|Cooloff period/i);
     await expect(recipe).toContainText(/Pressure after cooloff|Temperature after cooloff|Pressure at transfer end/i);
-    for (const tab of ['Thermal Graph', 'In-water pressure', 'Tank summary', 'Simplex diagram']) {
+    for (const tab of ['Thermal Graph', 'In-water pressure', 'Tanks and costs', 'Simplex diagram']) {
       const panel = await assertWhatIfResultPanelExclusive(page, tab);
       await expect(panel).toContainText(/(?:temperature|pressure|stage|trajectory|unavailable|diagram|table)/i);
     }
@@ -334,4 +335,54 @@ test('identifies a selected finite bank after it is disabled', async ({ appPage 
   await page.getByRole('tab', { name: 'What-if', exact: true }).click();
   await runWhatIf(page);
   await expect(page.locator('#screen-what-if')).toContainText(/disabled|unavailable|bank|invalid/i);
+});
+
+test.describe('fill costs in What-if', () => {
+  test('prompts for Settings Costs when the used gas has no price', async ({ appPage }) => {
+    const page = await load(appPage);
+    const costs = await openSettingsCategory(page, 'costs');
+    await costs.getByRole('textbox', { name: 'Currency symbol', exact: true }).fill('€');
+    await saveSettings(page);
+    await setPurePrices(page, { helium: 0.02 });
+    await openWhatIf(page);
+    await runWhatIf(page);
+    await page.locator('#what-if-result-host').getByRole('tab', { name: 'Tanks and costs', exact: true }).click();
+
+    const section = page.locator('#what-if-result-host [data-result-key="cost-summary"]');
+    await expect(section).toContainText('No prices apply to this fill. Set bank prices in Inventory and fees in Settings → Costs.');
+    await expect(page.locator('#what-if-result-host [data-result-key="cost-banner"]')).toHaveCount(0);
+  });
+
+  test('refreshes the What-if Costs total after an Inventory price edit without re-running', async ({ appPage }) => {
+    const page = await load(appPage);
+    await openWhatIf(page);
+    await runWhatIf(page);
+    await page.locator('#what-if-result-host').getByRole('tab', { name: 'Tanks and costs', exact: true }).click();
+    const section = page.locator('#what-if-result-host [data-result-key="cost-summary"]');
+    await expect(section.locator('[data-result-key="cost-status"]')).toHaveText('No prices apply to this fill. Set bank prices in Inventory and fees in Settings → Costs.');
+
+    const costs = await openSettingsCategory(page, 'costs');
+    await costs.getByRole('textbox', { name: 'Currency symbol', exact: true }).fill('CHF');
+    await saveSettings(page);
+    await setPurePrices(page, { oxygen: 0.02 });
+
+    await expect(section.locator('[data-result-key="cost-total"]')).toHaveText(/^\d+\.\d{2}$/);
+    await expect(section.locator('[data-result-key="cost-total"]')).not.toContainText('incomplete');
+  });
+});
+
+test.describe('What-if and Inventory price edits', () => {
+  test('a bank price edit does not mark What-if out of date', async ({ appPage }) => {
+    const page = await load(appPage);
+    await openWhatIf(page);
+    await runWhatIf(page);
+    const host = page.locator('#what-if-result-host');
+
+    await editBank(page, 0, { pricePerLitre: 0.02 });
+    await page.getByRole('tab', { name: 'Blending', exact: true }).click();
+    await openWhatIf(page);
+    await runWhatIf(page);
+    await expect(host.locator('[data-what-if-stale-status]')).toBeHidden();
+    await expect(host).not.toContainText('Out of date');
+  });
 });

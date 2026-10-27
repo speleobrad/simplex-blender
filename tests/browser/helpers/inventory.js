@@ -6,8 +6,14 @@ const FIELD_NAMES = {
   pressureBar: /(?<!max )pressure in bar$/i,
   maxPressureBar: /max pressure in bar$/i,
   oxygenPercent: /oxygen percentage$/i,
-  heliumPercent: /helium percentage$/i
+  heliumPercent: /helium percentage$/i,
+  pricePerLitre: /price per \/(?:L|cu ft)$/i
 };
+
+/** The per-row price input, labelled in the display unit. */
+export function bankPrice(row) {
+  return row.getByRole('spinbutton', { name: FIELD_NAMES.pricePerLitre });
+}
 
 function bankPanel(page) {
   return page.locator('#supply-banks-section');
@@ -64,6 +70,14 @@ export async function removeBank(page, rowIndex) {
   const count = await rows.count();
   await bankRow(page, rowIndex).getByRole('button', { name: /^Remove /i }).click();
   await expect(rows).toHaveCount(count - 1);
+}
+
+/** Price the default pure banks in Inventory (row 0 pure Helium, row 1 pure Oxygen), per litre. */
+export async function setPurePrices(page, { oxygen, helium } = {}) {
+  await page.getByRole('tab', { name: 'Inventory', exact: true }).click();
+  if (oxygen !== undefined) await editBank(page, 1, { pricePerLitre: oxygen });
+  if (helium !== undefined) await editBank(page, 0, { pricePerLitre: helium });
+  await page.getByRole('tab', { name: 'Blending', exact: true }).click();
 }
 
 export { bankPanel, bankRows };

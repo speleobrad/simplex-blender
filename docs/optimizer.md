@@ -59,3 +59,11 @@ Each cylinder preset defines a working-pressure limit and a hot-overfill percent
 These are operational estimates, not a pressure guarantee: actual heating, transfer rate, and cooling depend on equipment condition, gas flow, fill technique, and the surrounding environment. The optimizer does not use the estimates to relax gas composition, supply capacity, equipment ceilings, or transfer-safety constraints.
 
 If the requested pressure is unreachable, the optimizer reports the maximum pressure under the active non-cylinder constraints for the exact target mix and its recipe. In Hard stop this is bounded by the cylinder policy; in Warning it may exceed cylinder limits and is not a safety guarantee. If no positive amount exists, the UI explains why and shows no recipe. See [Gas Physics](gas-physics.md) for the density calculations and [Architecture](architecture.md) for module flow.
+
+## Cost operation fields
+
+Each executed transfer step carries three cost fields that the planner stamps and that `js/cost.js` reads; the optimizer never reads a price. `sourceConsumedMoles` records the moles drawn from the source for that step. `costOperation` is `topUp` for compressor Air, `decant` for a decant stage, and `boost` otherwise, and it selects the flat fee line. `equalize` is never emitted by the optimizer; the Compare planner emits it and `js/cost.js` charges it under `decant`. `costOperationId` is `op-N`, numbered from 1 within each `optimizeBlend` call, so each flat fee is charged once per distinct ID.
+
+With interim readings, `js/plan-with-readings.js` prefixes the IDs of each re-planned segment with `r<index>-`, so IDs stay distinct across a reading boundary. The Compare planner numbers its operations with the same `op-N` scheme.
+
+In the tested EAN 32 (32/0) recipe at 150 bar, the bank is priced as one compressor top-up followed by an O₂ decant with no boost (`tests/bank-pricing.test.js`). Pure O₂ and He banks are refused by `priceBankByRecipe` and have no Calculate price. A non-pure 200 L bank at 350 bar cannot be priced under default equipment; raising the booster limit to 350 bar makes it priceable.

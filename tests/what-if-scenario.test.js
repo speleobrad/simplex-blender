@@ -229,3 +229,45 @@ test('shared signatures change when What-if equipment or pressure policy changes
   assert.notEqual(signature, changedPolicy);
   assert.notEqual(signature, changedInlet);
 });
+test('What-if scenario transfers keep cost operation fields through simulation', () => {
+  const settings = {
+    physics: { model: 'ideal' },
+    cylinderPresets: [{ name: 'Catalina S80', volumeL: 11.1, material: 'aluminum', massKg: 14.3, workingPressureBar: 207, hotOverfillPercent: 2 }],
+    booster: { drainingRateBarPerMin: 5, oxygenDecantRateBarPerMin: 5, otherDecantRateBarPerMin: 5, oxygenBoostBpm: 35, otherBoostBpm: 50, compressorInletFlowLPerMin: 100 }
+  };
+  const banks = [{ id: 'bank-oxygen', name: 'Oxygen', volumeL: 50, pressureBar: 200, oxygenPercent: 100, heliumPercent: 0, enabled: true }];
+  const scenario = { ...createWhatIfScenario(), initialized: true, start: snapshotWhatIfFromBlending(blendingInput) };
+  const input = buildWhatIfInput(scenario, { settings, banks, inletTemperatureC: 25 });
+  const validation = validateCompareRecipe(scenario.rows, { cylinder: input.cylinder, banks: input.banks, physics: input.physics, settings: input.settings });
+  assert.equal(validation.valid, true);
+  const protocol = buildCompareProtocol(validation.normalizedRows, {
+    cylinder: input.cylinder,
+    physics: input.physics,
+    thermal: input.thermal,
+    banks: input.banks,
+    settings: input.settings
+  });
+  const simulation = simulateCompareProtocol({
+    protocolSteps: protocol.protocolSteps,
+    cylinder: input.cylinder,
+    physics: input.physics,
+    thermal: input.thermal,
+    settings: input.settings
+  });
+  const costed = simulation.protocolSteps.filter(step => step.costOperation);
+  assert.ok(costed.length > 0);
+  for (const step of costed) {
+    assert.match(step.costOperationId, /^op-\d+$/);
+    assert.ok(step.sourceConsumedMoles > 0);
+  }
+});
+
+test('what-if shared signature ignores bank cost prices but not bank pressure', () => {
+  const settings = { physics: { model: 'ideal' }, cylinderPresets: [], booster: {}, pressureLimitMode: 'hard-stop' };
+  const bank = { id: 'o2', pressureBar: 200, pricePerLitre: 0.02 };
+  const shared = (banks, s = settings) => whatIfSharedInputSignature({ settings: s, banks, cylinderPresetName: 'X', inletTemperatureC: 25 });
+  assert.equal(shared([bank]), shared([{ ...bank, pricePerLitre: 3 }]));
+  assert.equal(shared([bank]), shared([{ ...bank, pricePerLitre: undefined }]));
+  assert.notEqual(shared([bank]), shared([{ ...bank, pressureBar: 180 }]));
+  assert.notEqual(shared([bank]), shared([bank], { ...settings, booster: { otherBoostBpm: 9 } }));
+});
