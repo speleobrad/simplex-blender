@@ -49,13 +49,15 @@ export function interimPressureWithinTolerance({ measuredBar, plannedBar, tolera
   return Math.abs(measuredBar - plannedBar) <= (tolerancePercent / 100) * plannedBar;
 }
 
-// Gas can only sit below ambient after a pressure-lowering drain. Waits and keeps
-// carry that state forward; any other step (boost, decant, top-up, equalize) clears it.
+// Gas can only sit below ambient after a pressure-lowering transfer out of the working
+// tank: a drain, or a salvage decant or booster. Waits and keeps carry that state
+// forward; any other step (boost, decant, top-up, equalize) clears it.
+const COOLING_RATE_SOURCES = new Set(['draining-rate', 'salvage-decant', 'salvage-booster']);
 export function gasCanBeBelowAmbient(protocolSteps, stepIndex) {
   let belowAmbient = false;
   for (const step of protocolSteps.slice(0, stepIndex)) {
     const rateSource = step?.thermal?.rateSource;
-    if (rateSource === 'draining-rate') {
+    if (COOLING_RATE_SOURCES.has(rateSource)) {
       belowAmbient = true;
     } else if (step?.type === 'wait' || step?.type === 'keep' || (step?.type === 'drain' && rateSource === 'none')) {
       continue;

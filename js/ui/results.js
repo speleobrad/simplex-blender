@@ -306,6 +306,62 @@ function renderManualReading(plannedValue, actualValue, formatter) {
   return value;
 }
 
+function renderDetailGrid(rows, className, { stacked = false } = {}) {
+  const grid = document.createElement('dl');
+  grid.className = className;
+  for (const [label, value, color = SUMMARY_COLORS.neutral] of rows) {
+    const cell = document.createElement('div');
+    const isEmpty = !label && !value;
+    if (isEmpty) cell.setAttribute('aria-hidden', 'true');
+    cell.className = stacked
+      ? 'flex min-w-0 flex-col gap-0.5 sm:flex-row sm:items-start sm:justify-between sm:gap-2'
+      : `${isEmpty ? 'hidden sm:flex ' : 'flex '}min-w-0 items-start justify-between gap-2`;
+    const term = document.createElement('dt');
+    const labelColor = color === true
+      ? TECHNICAL_COLORS.warning
+      : color === false || color === TECHNICAL_COLORS.neutral
+        ? 'text-slate-500'
+        : color;
+    term.className = `min-w-0 flex-1 text-left font-medium ${labelColor}`;
+    term.textContent = label;
+    const description = document.createElement('dd');
+    const valueColor = color === true
+      ? TECHNICAL_COLORS.warning
+      : color === false || color === TECHNICAL_COLORS.neutral
+        ? TECHNICAL_COLORS.neutral
+        : color;
+    description.className = stacked
+      ? `min-w-0 break-words text-left sm:text-right font-mono ${valueColor}`
+      : `min-w-0 text-right font-mono ${valueColor}`;
+    if (typeof value === 'string') {
+      description.textContent = value;
+    } else if (value) {
+      description.append(value);
+    }
+    cell.append(term, description);
+    grid.append(cell);
+  }
+  return grid;
+}
+
+function renderSalvageDetails(step, units = 'metric') {
+  const pressure = value => Number.isFinite(value) ? formatUnitValue(value, 'pressureBar', units) : '—';
+  const mix = value => value ? `Tx ${value.oxygenPercent.toFixed(1)}/${value.heliumPercent.toFixed(1)}` : '—';
+  const moved = Number.isFinite(step.movedHeliumLitres)
+    ? formatUnitValue(step.movedHeliumLitres, 'volumeL', units, 0)
+    : '—';
+  const rows = [
+    ['Receiver', step.receiverBankName ?? '—'],
+    ['Helium moved', moved],
+    ['Receiver before', `${pressure(step.receiverStartPressureBar)} · ${mix(step.receiverStartMix)}`],
+    ['Receiver after', `${pressure(step.receiverEndPressureBar)} · ${mix(step.receiverEndMix)}`]
+  ];
+  const box = document.createElement('div');
+  box.className = 'mt-2 rounded-lg border border-ocean-800/80 bg-ocean-950/50 px-3 py-2 text-[11px] text-slate-400';
+  box.append(renderDetailGrid(rows, 'grid grid-cols-1 sm:grid-cols-2 auto-rows-fr gap-x-4', { stacked: true }));
+  return box;
+}
+
 function renderThermalDetails(
   thermal,
   isFinalStep,
@@ -356,39 +412,6 @@ function renderThermalDetails(
         : null
     ].filter(Boolean)
     : [];
-  const renderGrid = (rows, className) => {
-    const grid = document.createElement('dl');
-    grid.className = className;
-    for (const [label, value, color = SUMMARY_COLORS.neutral] of rows) {
-      const cell = document.createElement('div');
-      const isEmpty = !label && !value;
-      if (isEmpty) cell.setAttribute('aria-hidden', 'true');
-      cell.className = `${isEmpty ? 'hidden sm:flex ' : 'flex '}min-w-0 items-start justify-between gap-2`;
-      const term = document.createElement('dt');
-      const labelColor = color === true
-        ? TECHNICAL_COLORS.warning
-        : color === false || color === TECHNICAL_COLORS.neutral
-          ? 'text-slate-500'
-          : color;
-      term.className = `min-w-0 flex-1 text-left font-medium ${labelColor}`;
-      term.textContent = label;
-      const description = document.createElement('dd');
-      const valueColor = color === true
-        ? TECHNICAL_COLORS.warning
-        : color === false || color === TECHNICAL_COLORS.neutral
-          ? TECHNICAL_COLORS.neutral
-          : color;
-      description.className = `min-w-0 text-right font-mono ${valueColor}`;
-      if (typeof value === 'string') {
-        description.textContent = value;
-      } else if (value) {
-        description.append(value);
-      }
-      cell.append(term, description);
-      grid.append(cell);
-    }
-    return grid;
-  };
 
   if (isWaitOnly) {
     const rows = [
@@ -407,7 +430,7 @@ function renderThermalDetails(
       rows.push(['Source leftover pressure', pressure(step.sourceEndPressureBar), sourceMinimumColor(step)]);
     }
     rows.push(...manualRows);
-    details.append(renderGrid(rows, 'mt-2 grid grid-cols-1 auto-rows-fr'));
+    details.append(renderDetailGrid(rows, 'mt-2 grid grid-cols-1 auto-rows-fr'));
     return details;
   }
 
@@ -450,7 +473,7 @@ function renderThermalDetails(
     rightRows.push(...manualRows.map(() => ['', '']));
   }
   const rows = leftRows.flatMap((left, index) => [left, rightRows[index]]);
-  details.append(renderGrid(rows, 'mt-2 grid grid-cols-1 sm:grid-cols-2 auto-rows-fr gap-x-4'));
+  details.append(renderDetailGrid(rows, 'mt-2 grid grid-cols-1 sm:grid-cols-2 auto-rows-fr gap-x-4'));
   return details;
 }
 
@@ -560,10 +583,13 @@ function displayStepTitle(step, index, units = 'metric') {
     && step.sourceEndPressureBar < settledPressureBar - 1e-6) {
     title = title.replace(/^Equalize\b/i, 'Boost');
   }
-  const transferPressureBar = step.thermal?.pressureAtTransferEndBar;
+  const transferPressureBar = step.type === 'salvage'
+    ? step.receiverEndPressureBar
+    : step.thermal?.pressureAtTransferEndBar;
   if (Number.isFinite(transferPressureBar)) {
     title = title.replace(/to [0-9]+(?:\.[0-9]+)? bar$/i, `to ${formatUnitValue(transferPressureBar, 'pressureBar', units)}`);
   }
+  if (step.type === 'salvage') return title; // salvage cards are unnumbered; the title names the stage and receiver
   return `Step ${protocolStepNumber(step, index)}: ${title}`;
 }
 
@@ -592,9 +618,12 @@ function renderProtocol(protocolSteps, alertMessage = null, calculation = null, 
       : hasStepMeasurementIndex
         ? step._measurementIndex
         : index;
+    const storedReading = calculation?.thermal?.interimMeasurements?.[interimMeasurementIndex] ?? null;
     if (showInterimMeasurements
       && index > 0
       && step.type !== 'keep'
+      && step.type !== 'salvage'
+      && (step.type !== 'drain' || storedReading !== null)
       && Number.isInteger(interimMeasurementIndex)) {
       const measurements = calculation?.thermal?.interimMeasurements ?? [];
       const measurement = measurements[interimMeasurementIndex] ?? null;
@@ -636,6 +665,7 @@ function renderProtocol(protocolSteps, alertMessage = null, calculation = null, 
       measurement
     );
     if (thermalDetails) details.append(thermalDetails);
+    if (step.type === 'salvage') details.append(renderSalvageDetails(step, units));
 
     const result = document.createElement('div');
     result.className = 'text-right font-mono shrink-0';

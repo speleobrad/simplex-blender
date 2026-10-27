@@ -1925,6 +1925,7 @@ function addBank() {
     name: 'New Mix',
     volumeL: 50,
     pressureBar: 200,
+    maxPressureBar: 200,
     oxygenPercent: defaultGas.oxygenPercent,
     heliumPercent: defaultGas.heliumPercent,
     enabled: true
@@ -1982,13 +1983,19 @@ function selectBankGasPreset(select) {
 }
 
 
+function bankFieldQuantity(bankField) {
+  if (bankField === 'volumeL') return 'volumeL';
+  if (bankField === 'pressureBar' || bankField === 'maxPressureBar') return 'pressureBar';
+  return null;
+}
+
 function restoreBankInputValue(input, bank) {
   const { bankField } = input.dataset;
   if (bankField === 'pricePerLitre') {
     input.value = state.bankPriceBasis[bank.id] === PRICE_BASIS_FULL_TANK ? '' : formatBankPrice(bank.pricePerLitre, state.settings.units);
     return;
   }
-  const quantity = bankField === 'volumeL' ? 'volumeL' : bankField === 'pressureBar' ? 'pressureBar' : null;
+  const quantity = bankFieldQuantity(bankField);
   const value = quantity
     ? convertToDisplay(bank[bankField], quantity, state.settings.units)
     : bank[bankField];
@@ -2060,7 +2067,7 @@ function updateBankFromInput(input) {
       clearBankInputFailure(bank.id);
       return;
     }
-    const quantity = bankField === 'volumeL' ? 'volumeL' : bankField === 'pressureBar' ? 'pressureBar' : null;
+    const quantity = bankFieldQuantity(bankField);
     updatedBank[bankField] = quantity
       ? convertFromDisplay(value, quantity, state.settings.units)
       : value;

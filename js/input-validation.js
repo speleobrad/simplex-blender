@@ -178,6 +178,11 @@ export function validateSupplyBankInput(bank) {
       return ['Supply bank volume must be 1–200 L; pressure 1–350 bar.'];
     }
   }
+  if (!Number.isFinite(bank.maxPressureBar)
+    || bank.maxPressureBar < 1 || bank.maxPressureBar > 350
+    || bank.maxPressureBar < bank.pressureBar) {
+    return ['Supply bank maximum pressure must be 1–350 bar and at least the current pressure.'];
+  }
   if (!isValidGasComposition(bank.oxygenPercent, bank.heliumPercent)) {
     return [`${bank.name} gas composition must total at most 100% O₂ and He.`];
   }

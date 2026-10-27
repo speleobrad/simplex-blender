@@ -21,6 +21,7 @@ function virtualBanks(gasId, composition, count, price) {
     name: `Virtual ${gasId} ${index + 1}`,
     volumeL: VIRTUAL_BANK_VOLUME_L,
     pressureBar: VIRTUAL_BANK_PRESSURE_BAR,
+    maxPressureBar: VIRTUAL_BANK_PRESSURE_BAR,
     enabled: true,
     pricePerLitre: price,
     ...composition

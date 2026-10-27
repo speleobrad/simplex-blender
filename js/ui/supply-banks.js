@@ -6,16 +6,11 @@ const COLUMN_CLASSES = {
   name: 'py-2 px-2 min-w-32',
   volumeL: 'py-2 px-1',
   pressureBar: 'py-2 px-1',
+  maxPressureBar: 'py-2 px-1',
   oxygenPercent: 'py-2 px-1',
   heliumPercent: 'py-2 px-1',
   pricePerLitre: 'py-2 px-1 align-top'
 };
-
-export const BANK_FIELD_QUANTITIES = Object.freeze({
-  volumeL: 'volumeL',
-  pressureBar: 'pressureBar',
-  pricePerLitre: 'pricePerVolumeL'
-});
 
 export const PRICE_BASIS_PER_VOLUME = 'per-volume';
 export const PRICE_BASIS_FULL_TANK = 'full-tank';
@@ -23,8 +18,9 @@ export const PRICE_BASIS_FULL_TANK = 'full-tank';
 function bankFieldDefinition(key, units) {
   const definitions = {
     name: { key: 'name', label: 'bank name', type: 'text', className: 'w-full min-w-0 bg-transparent border-b border-transparent hover:border-ocean-700 focus:border-cyan-400 focus:bg-ocean-900 rounded px-1 text-slate-200' },
-    volumeL: { key: 'volumeL', label: `volume in ${unitLabel('volumeL', units)}`, type: 'number', min: 1, max: 200, step: 1, className: `${units === 'imperial' ? 'w-40' : 'w-28'} min-w-0 bg-ocean-950/60 border border-ocean-800 rounded px-2 py-1 font-mono text-xs text-slate-100` },
-    pressureBar: { key: 'pressureBar', label: `pressure in ${unitLabel('pressureBar', units)}`, type: 'number', min: 1, max: 350, step: 5, className: 'w-28 min-w-0 bg-ocean-950/60 border border-ocean-800 rounded px-2 py-1 font-mono text-xs text-slate-100' },
+    volumeL: { key: 'volumeL', quantity: 'volumeL', label: `volume in ${unitLabel('volumeL', units)}`, type: 'number', min: 1, max: 200, step: 1, className: `${units === 'imperial' ? 'w-40' : 'w-28'} min-w-0 bg-ocean-950/60 border border-ocean-800 rounded px-2 py-1 font-mono text-xs text-slate-100` },
+    pressureBar: { key: 'pressureBar', quantity: 'pressureBar', label: `pressure in ${unitLabel('pressureBar', units)}`, type: 'number', min: 1, max: 350, step: 5, className: 'w-28 min-w-0 bg-ocean-950/60 border border-ocean-800 rounded px-2 py-1 font-mono text-xs text-slate-100' },
+    maxPressureBar: { key: 'maxPressureBar', quantity: 'pressureBar', label: `max pressure in ${unitLabel('pressureBar', units)}`, type: 'number', min: 1, max: 350, step: 5, className: 'w-28 min-w-0 bg-ocean-950/60 border border-ocean-800 rounded px-2 py-1 font-mono text-xs text-slate-100' },
     oxygenPercent: { key: 'oxygenPercent', label: 'oxygen percentage', type: 'number', min: 0, max: 100, step: 1, className: 'w-20 bg-emerald-950/40 border border-emerald-900/60 rounded px-1 py-1 text-center text-emerald-400 font-bold' },
     heliumPercent: { key: 'heliumPercent', label: 'helium percentage', type: 'number', min: 0, max: 100, step: 1, className: 'w-20 bg-amber-950/40 border border-amber-900/60 rounded px-1 py-1 text-center text-amber-400 font-bold' },
     pricePerLitre: { key: 'pricePerLitre', label: `price per ${unitLabel('pricePerVolumeL', units)}`, type: 'number', min: 0, max: 1000000, step: 'any', className: 'w-24 min-w-0 bg-ocean-950/60 border border-ocean-800 rounded px-2 py-1 font-mono text-xs text-slate-100' }
@@ -42,8 +38,8 @@ function makeCell(className, child) {
 function makeBankInput(bank, field, units, { fullTank = false } = {}) {
   const input = document.createElement('input');
   input.type = field.type;
-  const quantity = BANK_FIELD_QUANTITIES[field.key] ?? null;
-  const toDisplay = value => (quantity ? convertToDisplay(value, quantity, units) : value);
+  const displayQuantity = field.quantity ?? null;
+  const toDisplay = value => (displayQuantity ? convertToDisplay(value, displayQuantity, units) : value);
   if (field.key === 'pricePerLitre') {
     // Full-tank mode is a currency entry: the input starts empty and the stored per-litre price is shown after commit.
     input.value = fullTank ? '' : formatBankPrice(bank.pricePerLitre, units);
@@ -182,6 +178,8 @@ export function renderSupplyBanks(banks, gasPresets, units = 'metric', { suggest
   if (pressureHeading) pressureHeading.textContent = `Pressure (${unitLabel('pressureBar', units)})`;
   const priceHeading = document.getElementById('inventory-price-heading');
   if (priceHeading) priceHeading.textContent = `Price (${unitLabel('pricePerVolumeL', units)})`;
+  const maxPressureHeading = document.getElementById('inventory-max-pressure-heading');
+  if (maxPressureHeading) maxPressureHeading.textContent = `Max pressure (${unitLabel('pressureBar', units)})`;
 
   const rows = banks.map(bank => {
     const row = document.createElement('tr');
@@ -196,7 +194,7 @@ export function renderSupplyBanks(banks, gasPresets, units = 'metric', { suggest
     enabled.setAttribute('aria-label', `Use ${bank.name}`);
     row.append(makeCell('py-2 px-2', enabled));
 
-    for (const key of ['name', 'volumeL', 'pressureBar', 'oxygenPercent', 'heliumPercent']) {
+    for (const key of ['name', 'volumeL', 'pressureBar', 'maxPressureBar', 'oxygenPercent', 'heliumPercent']) {
       const child = key === 'name'
         ? makeBankNameControl(bank, gasPresets, units)
         : makeBankInput(bank, bankFieldDefinition(key, units), units);

@@ -35,7 +35,7 @@ test.describe('inventory supply banks', () => {
 
     await expect(row.getByRole('textbox', { name: /bank name$/i })).toHaveValue('Browser test bank');
     await expect(row.getByRole('spinbutton', { name: /volume in (?:litres|L)$/i })).toHaveValue('32');
-    await expect(row.getByRole('spinbutton', { name: /pressure in bar$/i })).toHaveValue('180');
+    await expect(row.getByRole('spinbutton', { name: /(?<!max )pressure in bar$/i })).toHaveValue('180');
     await expect(row.getByRole('spinbutton', { name: /oxygen percentage$/i })).toHaveValue('36');
     await expect(row.getByRole('spinbutton', { name: /helium percentage$/i })).toHaveValue('24');
     await expect(row.getByRole('checkbox', { name: /Use Browser test bank/i })).not.toBeChecked();
@@ -62,6 +62,25 @@ test.describe('inventory supply banks', () => {
     await oxygen.blur();
     await expect(page.getByRole('alert')).toBeHidden();
     await expect(oxygen).toHaveValue('34');
+  });
+
+  test('edits max pressure, rejects a max below current pressure, and keeps the accepted value', async ({ appPage }) => {
+    const page = await appPage.goto('tourSeen');
+    const rowIndex = await bankRows(page).count();
+    const row = await addBank(page);
+    await editBank(page, rowIndex, { pressureBar: 180 });
+    const maxPressure = row.getByRole('spinbutton', { name: /max pressure in bar$/i });
+    await expect(maxPressure).toHaveValue('200');
+
+    await maxPressure.fill('150');
+    await maxPressure.blur();
+    await expect(page.getByRole('alert')).toContainText('Inventory edit rejected');
+    await expect(maxPressure).toHaveValue('200');
+
+    await maxPressure.fill('250');
+    await maxPressure.blur();
+    await expect(page.getByRole('alert')).toBeHidden();
+    await expect(maxPressure).toHaveValue('250');
   });
 
   test('restores rejected imperial bank volumes in their display units', async ({ appPage }) => {
@@ -162,7 +181,7 @@ test.describe('inventory supply banks', () => {
     const persisted = bankRows(page).nth(index);
     await expect(persisted.getByRole('textbox', { name: /bank name$/i })).toHaveValue('Persistent reserve');
     await expect(persisted.getByRole('spinbutton', { name: /volume in (?:litres|L)$/i })).toHaveValue('44');
-    await expect(persisted.getByRole('spinbutton', { name: /pressure in bar$/i })).toHaveValue('145');
+    await expect(persisted.getByRole('spinbutton', { name: /(?<!max )pressure in bar$/i })).toHaveValue('145');
     await assertNoFiniteAir(page);
   });
   test('allows selecting configured compressor and booster presets from Inventory', async ({ appPage }) => {

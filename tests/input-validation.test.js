@@ -366,9 +366,18 @@ test('cost settings reject negative, non-finite, missing, oversized fees and bad
 });
 
 test('supply bank price must be a non-negative finite number or null', () => {
-  const bank = { id: 'b', name: 'B', volumeL: 10, pressureBar: 100, oxygenPercent: 100, heliumPercent: 0, enabled: true };
+  const bank = { id: 'b', name: 'B', volumeL: 10, pressureBar: 100, maxPressureBar: 200, oxygenPercent: 100, heliumPercent: 0, enabled: true };
   assert.deepEqual(validateSupplyBankInput({ ...bank, pricePerLitre: 0.5 }), []);
   assert.deepEqual(validateSupplyBankInput({ ...bank, pricePerLitre: null }), []);
   assert.ok(validateSupplyBankInput({ ...bank, pricePerLitre: -1 }).length > 0);
   assert.ok(validateSupplyBankInput({ ...bank, pricePerLitre: 'x' }).length > 0);
+});
+test('supply bank maximum pressure must be 1–350 bar and at least the current pressure', () => {
+  const bank = { id: 'bank-max', name: 'Max', volumeL: 10, pressureBar: 150, maxPressureBar: 200, oxygenPercent: 0, heliumPercent: 100, enabled: true };
+  const message = 'Supply bank maximum pressure must be 1–350 bar and at least the current pressure.';
+  for (const maxPressureBar of [0, 351, Number.NaN, Number.POSITIVE_INFINITY, 149]) {
+    assert.deepEqual(validateSupplyBankInput({ ...bank, maxPressureBar }), [message]);
+  }
+  assert.deepEqual(validateSupplyBankInput({ ...bank, maxPressureBar: 150 }), []);
+  assert.deepEqual(validateSupplyBankInput({ ...bank, maxPressureBar: 350 }), []);
 });

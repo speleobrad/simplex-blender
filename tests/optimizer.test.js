@@ -1,8 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { optimizeBlend, isSafeSimulation, scheduleSafeThermalProtocol } from '../js/optimizer.js';
+import { optimizeBlend, isSafeSimulation, scheduleSafeThermalProtocol, solveThermalWithSalvageFallback } from '../js/optimizer.js';
+import * as optimizerModule from '../js/optimizer.js';
 import { calcMolarDensity } from '../js/physics.js';
 import { calculatePressureAtTemperature } from '../js/thermodynamics.js';
+import { computeFillCost } from '../js/cost.js';
 import { DEFAULT_BANKS } from '../js/bank-storage.js';
 import { DEFAULT_SETTINGS } from '../js/settings.js';
 
@@ -18,9 +20,9 @@ const defaultInput = {
   },
   physics: { model: 'vdw', temperatureC: 20 },
   banks: [
-    { id: 'bank-he', name: 'Pure Helium', volumeL: 50, pressureBar: 200, minimumPressureBar: 15, oxygenPercent: 0, heliumPercent: 100, enabled: true },
-    { id: 'bank-1845', name: 'Tx 18/45 Bank', volumeL: 50, pressureBar: 200, minimumPressureBar: 20, oxygenPercent: 18, heliumPercent: 45, enabled: true },
-    { id: 'bank-o2', name: 'Pure Oxygen', volumeL: 40, pressureBar: 180, minimumPressureBar: 10, oxygenPercent: 100, heliumPercent: 0, enabled: true }
+    { id: 'bank-he', name: 'Pure Helium', volumeL: 50, pressureBar: 200, maxPressureBar: 350, minimumPressureBar: 15, oxygenPercent: 0, heliumPercent: 100, enabled: true },
+    { id: 'bank-1845', name: 'Tx 18/45 Bank', volumeL: 50, pressureBar: 200, maxPressureBar: 350, minimumPressureBar: 20, oxygenPercent: 18, heliumPercent: 45, enabled: true },
+    { id: 'bank-o2', name: 'Pure Oxygen', volumeL: 40, pressureBar: 180, maxPressureBar: 350, minimumPressureBar: 10, oxygenPercent: 100, heliumPercent: 0, enabled: true }
   ],
   settings: {
     booster: {
@@ -67,10 +69,10 @@ test('safety fallback preserves working gas and uses available premixes before p
     },
     physics: { model: 'vdw', temperatureC: 20 },
     banks: [
-      { id: 'he', name: 'Pure Helium', volumeL: 50, pressureBar: 200, minimumPressureBar: 15, oxygenPercent: 0, heliumPercent: 100, enabled: true },
-      { id: 'o2', name: 'Pure Oxygen', volumeL: 40, pressureBar: 180, minimumPressureBar: 10, oxygenPercent: 100, heliumPercent: 0, enabled: true },
-      { id: '1845', name: '18/45', volumeL: 18, pressureBar: 200, minimumPressureBar: 20, oxygenPercent: 18, heliumPercent: 45, enabled: true },
-      { id: '770', name: '7/70', volumeL: 50, pressureBar: 200, minimumPressureBar: 20, oxygenPercent: 7, heliumPercent: 70, enabled: true }
+      { id: 'he', name: 'Pure Helium', volumeL: 50, pressureBar: 200, maxPressureBar: 350, minimumPressureBar: 15, oxygenPercent: 0, heliumPercent: 100, enabled: true },
+      { id: 'o2', name: 'Pure Oxygen', volumeL: 40, pressureBar: 180, maxPressureBar: 350, minimumPressureBar: 10, oxygenPercent: 100, heliumPercent: 0, enabled: true },
+      { id: '1845', name: '18/45', volumeL: 18, pressureBar: 200, maxPressureBar: 350, minimumPressureBar: 20, oxygenPercent: 18, heliumPercent: 45, enabled: true },
+      { id: '770', name: '7/70', volumeL: 50, pressureBar: 200, maxPressureBar: 350, minimumPressureBar: 20, oxygenPercent: 7, heliumPercent: 70, enabled: true }
     ],
     settings: {
       booster: {
@@ -107,6 +109,7 @@ function equalGasTransferInput({ initialPressureBar, targetPressureBar, bankPres
       volumeL: 10,
       pressureBar: bankPressureBar,
       minimumPressureBar: 0,
+      maxPressureBar: 350,
       oxygenPercent: 0,
       heliumPercent: 0,
       enabled: true
@@ -157,6 +160,7 @@ test('rejects finite Air banks in favor of the implicit compressor source', () =
       name: 'Air bank',
       volumeL: 10,
       pressureBar: 200,
+      maxPressureBar: 350,
       oxygenPercent: 21,
       heliumPercent: 0,
       enabled: true
@@ -209,6 +213,7 @@ test('non-Air boost cannot end above the booster output ceiling', () => {
       name: 'Helium',
       volumeL: 50,
       pressureBar: 150,
+      maxPressureBar: 350,
       oxygenPercent: 0,
       heliumPercent: 100,
       enabled: true
@@ -242,6 +247,7 @@ test('non-Air decant can exceed the booster output ceiling', () => {
       name: 'Helium',
       volumeL: 100,
       pressureBar: 300,
+      maxPressureBar: 350,
       oxygenPercent: 0,
       heliumPercent: 100,
       enabled: true
@@ -276,6 +282,7 @@ test('uses one booster minimum source pressure for every supply bank', () => {
       name: 'Helium',
       volumeL: 10,
       pressureBar: 100,
+      maxPressureBar: 350,
       oxygenPercent: 0,
       heliumPercent: 100,
       enabled: true
@@ -304,6 +311,7 @@ test('formats equalising and top-up protocol stages with source leftovers and in
       name: 'Nitrox source',
       volumeL: 10,
       pressureBar: 120,
+      maxPressureBar: 350,
       minimumPressureBar: 0,
       oxygenPercent: 20,
       heliumPercent: 0,
@@ -337,6 +345,7 @@ test('counts helium from non-pure supply gas as salvaged helium', () => {
       name: 'Helium mix',
       volumeL: 10,
       pressureBar: 200,
+      maxPressureBar: 350,
       oxygenPercent: 0,
       heliumPercent: 50,
       enabled: true
@@ -582,6 +591,7 @@ test('shows tiny required drains with a nonzero pressure change', () => {
       name: 'Pure Oxygen',
       volumeL: 10,
       pressureBar: 100,
+      maxPressureBar: 350,
       minimumPressureBar: 0,
       oxygenPercent: 100,
       heliumPercent: 0,
@@ -685,7 +695,7 @@ test('trajectory records source-bank pressure ranges for each transfer stage', (
 });
 
 
-test('nitrox preset reports vented gas as equivalent litres at one bar', () => {
+test('nitrox preset vents the surplus and keeps the cylinder retained gas', () => {
   const input = {
     ...defaultInput,
     cylinder: {
@@ -699,8 +709,33 @@ test('nitrox preset reports vented gas as equivalent litres at one bar', () => {
     }
   };
   const result = optimizeBlend(input);
+  const baseline = optimizeBlend({ ...input, _salvage: false });
+
+  // Salvage into bank-1845 (the recipe's own draw source) would move 34.4 mol but cut the
+  // retained cylinder gas (11.60 mol vs 17.77 mol), so the retention gate keeps vent-only.
+  assert.equal(result.feasible, true);
+  assert.equal(result.salvageTransfers, undefined);
+  assert.ok(Math.abs(result.blend.ventedGasLitres - 838.377979816809) < 1e-8);
+  assert.ok(result.solution.x_cyl >= baseline.solution.x_cyl * (1 - 1e-9));
+});
+
+test('vent-only mode keeps 838.38 L vented for the nitrox preset', () => {
+  const input = {
+    ...defaultInput,
+    cylinder: {
+      ...defaultInput.cylinder,
+      initialPressureBar: 100,
+      initialOxygenPercent: 32,
+      initialHeliumPercent: 0,
+      targetPressureBar: 220,
+      targetOxygenPercent: 21,
+      targetHeliumPercent: 30
+    }
+  };
+  const result = optimizeBlend({ ...input, _salvage: false });
 
   assert.equal(result.feasible, true);
+  assert.equal(result.salvageTransfers, undefined);
   assert.ok(Math.abs(result.blend.ventedGasLitres - 838.377979816809) < 1e-8);
 });
 
@@ -780,8 +815,8 @@ test('reports helium shortage as required source-bank pressure and names the dep
     },
     physics: { model: 'ideal', temperatureC: 20 },
     banks: [
-      { id: 'he', name: 'Pure Helium', volumeL: 1, pressureBar: 10, minimumPressureBar: 0, oxygenPercent: 0, heliumPercent: 100, enabled: true },
-      { id: 'o2', name: 'Pure Oxygen', volumeL: 10, pressureBar: 100, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true },
+      { id: 'he', name: 'Pure Helium', volumeL: 1, pressureBar: 10, maxPressureBar: 350, minimumPressureBar: 0, oxygenPercent: 0, heliumPercent: 100, enabled: true },
+      { id: 'o2', name: 'Pure Oxygen', volumeL: 10, pressureBar: 100, maxPressureBar: 350, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true },
     ]
   });
 
@@ -818,8 +853,8 @@ test('converts required source-bank pressure with the selected real-gas model', 
     },
     physics: { model: 'vdw', temperatureC: 20 },
     banks: [
-      { id: 'he', name: 'Pure Helium', volumeL: 1, pressureBar: 10, minimumPressureBar: 0, oxygenPercent: 0, heliumPercent: 100, enabled: true },
-      { id: 'o2', name: 'Pure Oxygen', volumeL: 10, pressureBar: 100, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true },
+      { id: 'he', name: 'Pure Helium', volumeL: 1, pressureBar: 10, maxPressureBar: 350, minimumPressureBar: 0, oxygenPercent: 0, heliumPercent: 100, enabled: true },
+      { id: 'o2', name: 'Pure Oxygen', volumeL: 10, pressureBar: 100, maxPressureBar: 350, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true },
     ]
   });
 
@@ -845,8 +880,8 @@ test('does not present an out-of-range real-gas source pressure as exact', () =>
     },
     physics: { model: 'vdw', temperatureC: 20 },
     banks: [
-      { id: 'he', name: 'Pure Helium', volumeL: 1, pressureBar: 10, minimumPressureBar: 0, oxygenPercent: 0, heliumPercent: 100, enabled: true },
-      { id: 'o2', name: 'Pure Oxygen', volumeL: 10, pressureBar: 100, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true },
+      { id: 'he', name: 'Pure Helium', volumeL: 1, pressureBar: 10, maxPressureBar: 350, minimumPressureBar: 0, oxygenPercent: 0, heliumPercent: 100, enabled: true },
+      { id: 'o2', name: 'Pure Oxygen', volumeL: 10, pressureBar: 100, maxPressureBar: 350, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true },
     ]
   });
 
@@ -873,6 +908,7 @@ test('does not label an unused trace bank as exhausted', () => {
       name: 'Trace helium bank',
       volumeL: 1,
       pressureBar: 1,
+      maxPressureBar: 350,
       minimumPressureBar: 0,
       oxygenPercent: 0,
       heliumPercent: 100,
@@ -928,8 +964,8 @@ test('maximum-pressure fallback uses complementary banks to preserve the exact t
     },
     physics: { model: 'ideal', temperatureC: 20 },
     banks: [
-      { id: 'he', name: 'Helium bank', volumeL: 10, pressureBar: 100, minimumPressureBar: 0, oxygenPercent: 0, heliumPercent: 100, enabled: true },
-      { id: 'nitrogen', name: 'Nitrogen bank', volumeL: 10, pressureBar: 100, minimumPressureBar: 0, oxygenPercent: 0, heliumPercent: 0, enabled: true }
+      { id: 'he', name: 'Helium bank', volumeL: 10, pressureBar: 100, maxPressureBar: 350, minimumPressureBar: 0, oxygenPercent: 0, heliumPercent: 100, enabled: true },
+      { id: 'nitrogen', name: 'Nitrogen bank', volumeL: 10, pressureBar: 100, maxPressureBar: 350, minimumPressureBar: 0, oxygenPercent: 0, heliumPercent: 0, enabled: true }
     ],
     settings: {
       booster: {
@@ -964,6 +1000,7 @@ test('keeps a sub-0.05-mol bank contribution in the fallback recipe', () => {
       name: 'Oxygen bank',
       volumeL: 200,
       pressureBar: 100,
+      maxPressureBar: 350,
       minimumPressureBar: 0,
       oxygenPercent: 100,
       heliumPercent: 0,
@@ -994,8 +1031,8 @@ test('uses a larger interchangeable oxygen bank when it keeps the maximum recipe
     },
     physics: { model: 'ideal', temperatureC: 20 },
     banks: [
-      { id: 'small-oxygen', name: 'Small oxygen bank', volumeL: 10, pressureBar: 80, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true },
-      { id: 'large-oxygen', name: 'Large oxygen bank', volumeL: 100, pressureBar: 80, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true }
+      { id: 'small-oxygen', name: 'Small oxygen bank', volumeL: 10, pressureBar: 80, maxPressureBar: 350, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true },
+      { id: 'large-oxygen', name: 'Large oxygen bank', volumeL: 100, pressureBar: 80, maxPressureBar: 350, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true }
     ]
   });
 
@@ -1017,8 +1054,8 @@ test('searches an alternative high-pressure source instead of overstating an uns
     },
     physics: { model: 'ideal', temperatureC: 20 },
     banks: [
-      { id: 'low-pressure', name: 'Low-pressure large bank', volumeL: 100, pressureBar: 20, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true },
-      { id: 'high-pressure', name: 'High-pressure small bank', volumeL: 10, pressureBar: 100, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true }
+      { id: 'low-pressure', name: 'Low-pressure large bank', volumeL: 100, pressureBar: 20, maxPressureBar: 350, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true },
+      { id: 'high-pressure', name: 'High-pressure small bank', volumeL: 10, pressureBar: 100, maxPressureBar: 350, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true }
     ]
   });
 
@@ -1040,8 +1077,8 @@ test('splits oxygen transfers when neither full-bank allocation is safe', () => 
     },
     physics: { model: 'ideal', temperatureC: 20 },
     banks: [
-      { id: 'oxygen-a', name: 'Oxygen A', volumeL: 10, pressureBar: 100, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true },
-      { id: 'oxygen-b', name: 'Oxygen B', volumeL: 10, pressureBar: 100, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true }
+      { id: 'oxygen-a', name: 'Oxygen A', volumeL: 10, pressureBar: 100, maxPressureBar: 350, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true },
+      { id: 'oxygen-b', name: 'Oxygen B', volumeL: 10, pressureBar: 100, maxPressureBar: 350, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true }
     ]
   });
 
@@ -1065,8 +1102,8 @@ test('searches uneven oxygen-bank splits when an equal split fails the 4:1 limit
     },
     physics: { model: 'ideal', temperatureC: 20 },
     banks: [
-      { id: 'oxygen-a', name: 'Oxygen A', volumeL: 20, pressureBar: 90, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true },
-      { id: 'oxygen-b', name: 'Oxygen B', volumeL: 10, pressureBar: 90, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true }
+      { id: 'oxygen-a', name: 'Oxygen A', volumeL: 20, pressureBar: 90, maxPressureBar: 350, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true },
+      { id: 'oxygen-b', name: 'Oxygen B', volumeL: 10, pressureBar: 90, maxPressureBar: 350, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true }
     ]
   });
 
@@ -1089,8 +1126,8 @@ test('finds a narrow safe bank split outside the fixed-share samples', () => {
     },
     physics: { model: 'ideal', temperatureC: 20 },
     banks: [
-      { id: 'oxygen-a', name: 'Low-pressure oxygen', volumeL: 10, pressureBar: 55, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true },
-      { id: 'oxygen-b', name: 'High-pressure oxygen', volumeL: 10, pressureBar: 145, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true }
+      { id: 'oxygen-a', name: 'Low-pressure oxygen', volumeL: 10, pressureBar: 55, maxPressureBar: 350, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true },
+      { id: 'oxygen-b', name: 'High-pressure oxygen', volumeL: 10, pressureBar: 145, maxPressureBar: 350, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true }
     ]
   });
 
@@ -1117,6 +1154,7 @@ test('allows a later non-Air transfer after compressor Air reaches its ceiling',
       name: 'Oxygen source',
       volumeL: 100,
       pressureBar: 200,
+      maxPressureBar: 350,
       minimumPressureBar: 0,
       oxygenPercent: 100,
       heliumPercent: 0,
@@ -1150,8 +1188,8 @@ test('ignores oxygen inventory in air when the exact target contains no nitrogen
     },
     physics: { model: 'ideal', temperatureC: 20 },
     banks: [
-      { id: 'oxygen-a', name: 'Oxygen A', volumeL: 2, pressureBar: 100, minimumPressureBar: 45, oxygenPercent: 100, heliumPercent: 0, enabled: true },
-      { id: 'oxygen-b', name: 'Oxygen B', volumeL: 10, pressureBar: 240, minimumPressureBar: 45, oxygenPercent: 100, heliumPercent: 0, enabled: true },
+      { id: 'oxygen-a', name: 'Oxygen A', volumeL: 2, pressureBar: 100, maxPressureBar: 350, minimumPressureBar: 45, oxygenPercent: 100, heliumPercent: 0, enabled: true },
+      { id: 'oxygen-b', name: 'Oxygen B', volumeL: 10, pressureBar: 240, maxPressureBar: 350, minimumPressureBar: 45, oxygenPercent: 100, heliumPercent: 0, enabled: true },
     ]
   });
 
@@ -1179,6 +1217,7 @@ test('drains small amounts of cylinder gas when fallback fractions require it', 
       name: 'Oxygen bank',
       volumeL: 10,
       pressureBar: 100,
+      maxPressureBar: 350,
       minimumPressureBar: 66.8,
       oxygenPercent: 100,
       heliumPercent: 0,
@@ -1188,6 +1227,7 @@ test('drains small amounts of cylinder gas when fallback fractions require it', 
       name: 'Helium bank',
       volumeL: 10,
       pressureBar: 100,
+      maxPressureBar: 350,
       minimumPressureBar: 0,
       oxygenPercent: 0,
       heliumPercent: 100,
@@ -1220,6 +1260,7 @@ test('does not display moles for small fallback transfers', () => {
       name: 'Oxygen bank',
       volumeL: 200,
       pressureBar: 100,
+      maxPressureBar: 350,
       minimumPressureBar: 0,
       oxygenPercent: 100,
       heliumPercent: 0,
@@ -1229,6 +1270,7 @@ test('does not display moles for small fallback transfers', () => {
       name: 'Helium bank',
       volumeL: 10,
       pressureBar: 100,
+      maxPressureBar: 350,
       minimumPressureBar: 0,
       oxygenPercent: 0,
       heliumPercent: 100,
@@ -1277,6 +1319,7 @@ function oxygenTransferInput(sourcePressureBar, sourceOxygenPercent = 100) {
       name: 'Oxygen source',
       volumeL: 10,
       pressureBar: sourcePressureBar,
+      maxPressureBar: 350,
       minimumPressureBar: 0,
       oxygenPercent: sourceOxygenPercent,
       heliumPercent: 0,
@@ -1311,6 +1354,7 @@ test('checks oxygen transfer after compressor Air is staged first', () => {
       name: 'Oxygen source',
       volumeL: 10,
       pressureBar: 110,
+      maxPressureBar: 350,
       oxygenPercent: 100,
       heliumPercent: 0,
       enabled: true
@@ -1370,6 +1414,7 @@ test('reports the configured minimum when a finite boost source is exhausted', (
       name: 'Oxygen bank',
       volumeL: 10,
       pressureBar: 100,
+      maxPressureBar: 350,
       minimumPressureBar: 0,
       oxygenPercent: 100,
       heliumPercent: 0,
@@ -1658,6 +1703,7 @@ test('thermal trajectory maps each bank point to its corresponding transfer stat
         name: 'Oxygen',
         volumeL: 12,
         pressureBar: 300,
+        maxPressureBar: 350,
         minimumPressureBar: 0,
         oxygenPercent: 100,
         heliumPercent: 0,
@@ -1668,6 +1714,7 @@ test('thermal trajectory maps each bank point to its corresponding transfer stat
         name: 'Helium',
         volumeL: 12,
         pressureBar: 300,
+        maxPressureBar: 350,
         minimumPressureBar: 0,
         oxygenPercent: 0,
         heliumPercent: 100,
@@ -1853,6 +1900,7 @@ test('optimizeBlend returns a feasible split protocol with safe endpoints and ta
       name: 'Nitrogen',
       volumeL: 12,
       pressureBar: 300,
+      maxPressureBar: 350,
       minimumPressureBar: 0,
       oxygenPercent: 0,
       heliumPercent: 0,
@@ -1934,6 +1982,7 @@ const schedulerSplitInput = {
       name: 'Oxygen',
       volumeL: 12,
       pressureBar: 300,
+      maxPressureBar: 350,
       minimumPressureBar: 0,
       oxygenPercent: 100,
       heliumPercent: 0,
@@ -1944,6 +1993,7 @@ const schedulerSplitInput = {
       name: 'Helium',
       volumeL: 12,
       pressureBar: 300,
+      maxPressureBar: 350,
       minimumPressureBar: 0,
       oxygenPercent: 0,
       heliumPercent: 100,
@@ -2118,7 +2168,7 @@ test('projects a below-ambient water target after ambient settling', () => {
       targetTemperatureC: 15
     },
     banks: [
-      { id: '1845', name: '18/45', volumeL: 50, pressureBar: 200, minimumPressureBar: 20, oxygenPercent: 18, heliumPercent: 45, enabled: true }
+      { id: '1845', name: '18/45', volumeL: 50, pressureBar: 200, maxPressureBar: 350, minimumPressureBar: 20, oxygenPercent: 18, heliumPercent: 45, enabled: true }
     ],
     settings: {
       booster: {
@@ -2405,7 +2455,7 @@ test('normalizes the requested in-water target and reports all thermal states', 
       inletTemperatureC: 25, targetMediumTemperatureC: 25, targetInWaterTemperatureC: 10,
       waitMode: 'minutes', waitMinutes: 10
     },
-    banks: [{ id: '1845', name: '18/45', volumeL: 50, pressureBar: 200, minimumPressureBar: 20, oxygenPercent: 18, heliumPercent: 45, enabled: true }],
+    banks: [{ id: '1845', name: '18/45', volumeL: 50, pressureBar: 200, maxPressureBar: 350, minimumPressureBar: 20, oxygenPercent: 18, heliumPercent: 45, enabled: true }],
     settings: { booster: { minimumSourcePressureBar: 0, maxCompressorPressureBar: 350, maxBoosterOutputPressureBar: 350, cylinderVolumeCm3: 9, oxygenBoostBpm: 50, otherBoostBpm: 50, oxygenDecantRateBarPerMin: 5, otherDecantRateBarPerMin: 5, compressorInletFlowLPerMin: 100 } }
   });
   assert.equal(result.feasible, true);
@@ -2436,8 +2486,8 @@ test('thermal initial infeasibility preserves requested target and maximum fallb
     cylinder: { ...defaultInput.cylinder, targetPressureBar: 200, targetOxygenPercent: 15, targetHeliumPercent: 55 },
     thermal: thermalFailureFixture,
     banks: [
-      { id: 'he', name: 'Pure Helium', volumeL: 1, pressureBar: 10, minimumPressureBar: 0, oxygenPercent: 0, heliumPercent: 100, enabled: true },
-      { id: 'o2', name: 'Pure Oxygen', volumeL: 10, pressureBar: 100, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true }
+      { id: 'he', name: 'Pure Helium', volumeL: 1, pressureBar: 10, maxPressureBar: 350, minimumPressureBar: 0, oxygenPercent: 0, heliumPercent: 100, enabled: true },
+      { id: 'o2', name: 'Pure Oxygen', volumeL: 10, pressureBar: 100, maxPressureBar: 350, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true }
     ]
   });
   assert.equal(result.feasible, false);
@@ -2453,8 +2503,8 @@ test('thermal floor infeasibility prefixes the requested in-water pressure', () 
     cylinder: { ...defaultInput.cylinder, targetPressureBar: 300, targetOxygenPercent: 15, targetHeliumPercent: 55 },
     thermal: thermalFailureFixture,
     banks: [
-      { id: 'he', name: 'Pure Helium', volumeL: 1, pressureBar: 10, minimumPressureBar: 0, oxygenPercent: 0, heliumPercent: 100, enabled: true },
-      { id: 'o2', name: 'Pure Oxygen', volumeL: 10, pressureBar: 100, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true }
+      { id: 'he', name: 'Pure Helium', volumeL: 1, pressureBar: 10, maxPressureBar: 350, minimumPressureBar: 0, oxygenPercent: 0, heliumPercent: 100, enabled: true },
+      { id: 'o2', name: 'Pure Oxygen', volumeL: 10, pressureBar: 100, maxPressureBar: 350, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true }
     ]
   });
   assert.equal(result.feasible, false);
@@ -3253,8 +3303,8 @@ test('hot overfill preserves the requested ambient and target pressure at safe e
       }
     },
     banks: [
-      { id: 'o2', name: 'Oxygen', volumeL: 12, pressureBar: 300, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true },
-      { id: 'he', name: 'Helium', volumeL: 12, pressureBar: 300, minimumPressureBar: 0, oxygenPercent: 0, heliumPercent: 100, enabled: true }
+      { id: 'o2', name: 'Oxygen', volumeL: 12, pressureBar: 300, maxPressureBar: 350, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true },
+      { id: 'he', name: 'Helium', volumeL: 12, pressureBar: 300, maxPressureBar: 350, minimumPressureBar: 0, oxygenPercent: 0, heliumPercent: 100, enabled: true }
     ]
   });
 
@@ -3354,4 +3404,383 @@ test('scheduler-split stages sum to the logical protocol step moles per cost ope
     assert.ok(logical, `logical step for ${id}`);
     assert.ok(Math.abs(summed - logical.sourceConsumedMoles) <= 1e-9 * Math.max(1, logical.sourceConsumedMoles), id);
   }
+});
+function leftoverBank({ id, oxygenPercent, heliumPercent, pressureBar, maxPressureBar = 200, volumeL = 50, enabled = true }) {
+  return {
+    id,
+    name: id,
+    volumeL,
+    pressureBar,
+    oxygenPercent,
+    heliumPercent,
+    maxPressureBar,
+    minimumPressureBar: 10,
+    enabled,
+    isCompressor: false
+  };
+}
+
+function drainSalvageInput(banks) {
+  return {
+    cylinder: {
+      volumeL: 12,
+      initialPressureBar: 150,
+      initialOxygenPercent: 21,
+      initialHeliumPercent: 35,
+      targetPressureBar: 100,
+      targetOxygenPercent: 21,
+      targetHeliumPercent: 35
+    },
+    physics: { model: 'vdw', temperatureC: 20 },
+    banks
+  };
+}
+
+test('salvage moves drained gas into an attractive leftover bank before the vent drain', () => {
+  const input = drainSalvageInput([leftoverBank({ id: 'bank-n', oxygenPercent: 32, heliumPercent: 0, pressureBar: 20 })]);
+  const baseline = optimizeBlend(drainSalvageInput([]));
+  const result = optimizeBlend(input);
+
+  assert.equal(result.feasible, true);
+  const salvageIndex = result.protocolSteps.findIndex(step => step.type === 'salvage');
+  const drainIndex = result.protocolSteps.findIndex(step => step.type === 'drain');
+  assert.ok(salvageIndex >= 0, 'expected a salvage step');
+  assert.ok(drainIndex < 0 || salvageIndex < drainIndex, 'salvage must precede the vent drain');
+  assert.ok(result.blend.heliumVentedLitres < baseline.blend.heliumVentedLitres);
+});
+
+test('partial salvage is followed by the vent drain down to the retained pressure', () => {
+  // The receiver's 30 bar ceiling caps the salvage below the surplus, so the tank is still
+  // above its retained pressure after the salvage steps and the drain follows them.
+  const input = drainSalvageInput([leftoverBank({ id: 'bank-n', oxygenPercent: 32, heliumPercent: 0, pressureBar: 20, maxPressureBar: 30 })]);
+  const result = optimizeBlend(input);
+
+  assert.equal(result.feasible, true);
+  const types = result.protocolSteps.map(step => step.type);
+  const salvageIndex = types.lastIndexOf('salvage');
+  const drainIndex = types.indexOf('drain');
+  assert.ok(salvageIndex >= 0, 'expected a salvage step');
+  assert.equal(drainIndex, salvageIndex + 1, 'the drain follows the salvage steps');
+  assert.equal(types.includes('keep'), false, 'no keep when the drain runs');
+  const salvagePressure = result.protocolSteps[salvageIndex].resultingPressureBar;
+  const drainPressure = result.protocolSteps[drainIndex].resultingPressureBar;
+  assert.ok(salvagePressure > drainPressure + 1, 'the drain starts above its retained pressure');
+  assert.ok(Math.abs(drainPressure - 100) < 0.01, 'the drain ends at the retained pressure');
+  const salvageTitle = result.protocolSteps[salvageIndex].title;
+  assert.match(salvageTitle, /^Salvage: (decant|boost) into .+ to [0-9]+\.[0-9] bar$/);
+});
+
+test('salvage never fills a receiver already at its maximum pressure', () => {
+  const input = drainSalvageInput([leftoverBank({ id: 'bank-full', oxygenPercent: 32, heliumPercent: 0, pressureBar: 200, maxPressureBar: 200 })]);
+  const result = optimizeBlend(input);
+
+  assert.equal(result.feasible, true);
+  assert.equal(result.protocolSteps.some(step => step.type === 'salvage'), false);
+});
+
+test('salvage with no eligible receivers matches the vent-only result exactly', () => {
+  const input = drainSalvageInput([leftoverBank({ id: 'bank-off', oxygenPercent: 32, heliumPercent: 0, pressureBar: 20, enabled: false })]);
+  const result = optimizeBlend(input);
+
+  assert.deepEqual(result, optimizeBlend({ ...input, _salvage: false }));
+  assert.equal(result.protocolSteps.some(step => step.type === 'salvage'), false);
+});
+
+test('salvage can be disabled by the internal flag and falls back to the vent', () => {
+  const input = drainSalvageInput([leftoverBank({ id: 'bank-n', oxygenPercent: 32, heliumPercent: 0, pressureBar: 20 })]);
+  const disabled = optimizeBlend({ ...input, _salvage: false });
+  const ventOnly = optimizeBlend(drainSalvageInput([]));
+
+  assert.equal(disabled.protocolSteps.some(step => step.type === 'salvage'), false);
+  assert.equal(disabled.blend.heliumVentedLitres, ventOnly.blend.heliumVentedLitres);
+});
+
+test('default preservation case keeps the cylinder gas without salvage', () => {
+  const result = optimizeBlend(defaultInput);
+
+  assert.equal(result.feasible, true);
+  assert.equal(result.protocolSteps[0].type, 'keep');
+  assert.equal(result.protocolSteps.some(step => step.type === 'salvage'), false);
+});
+
+test('default input matches the salvage-off result apart from salvage-only fields', () => {
+  const withSalvage = optimizeBlend(defaultInput);
+  const withoutSalvage = optimizeBlend({ ...defaultInput, _salvage: false });
+  const { salvageTransfers, salvageBanks, ...rest } = withSalvage;
+
+  assert.deepEqual(rest, withoutSalvage);
+  assert.equal('lpCost' in withSalvage, false);
+  assert.equal('lpCost' in withoutSalvage, false);
+});
+
+test('salvage declines a receiver whose transfer would lose the target and vents instead', () => {
+  const baseline = optimizeBlend(drainSalvageInput([]));
+  const input = drainSalvageInput([leftoverBank({ id: 'bank-rich', oxygenPercent: 12, heliumPercent: 65, pressureBar: 150 })]);
+  const result = optimizeBlend(input);
+
+  assert.equal(result.feasible, true);
+  assert.equal(result.protocolSteps.some(step => step.type === 'salvage'), false);
+  assert.ok(Math.abs(result.blend.heliumVentedLitres - baseline.blend.heliumVentedLitres) < 1e-9);
+});
+
+test('thermal fallback returns the feasible vent baseline when the salvage winner is thermally infeasible', () => {
+  const input = {
+    ...drainSalvageInput([leftoverBank({ id: 'bank-src', oxygenPercent: 21, heliumPercent: 35, pressureBar: 40 })]),
+    thermal: {
+      tankMaterial: 'steel',
+      coolingMedium: 'air',
+      ambientTemperatureC: 20,
+      inletTemperatureC: 20,
+      targetMediumTemperatureC: 20,
+      targetInWaterTemperatureC: 20,
+      waitMode: 'minutes',
+      waitMinutes: 0
+    }
+  };
+  const withoutThermal = ({ thermal: ignored, ...rest }) => rest;
+  const staticSolve = candidate => (candidate._salvage === false
+    ? optimizeBlend(withoutThermal(candidate))
+    : { feasible: false, error: 'injected: salvage winner has no feasible thermal plan' });
+
+  assert.ok(
+    optimizeBlend(withoutThermal(input)).protocolSteps.some(step => step.type === 'salvage'),
+    'scenario must have a salvage winner in the static search'
+  );
+  const result = solveThermalWithSalvageFallback(input, staticSolve);
+  const expected = optimizeBlend({ ...input, _salvage: false });
+
+  assert.equal(result.feasible, true);
+  assert.equal(result.protocolSteps.some(step => step.type === 'salvage'), false);
+  assert.deepEqual(result.protocolSteps, expected.protocolSteps);
+  assert.deepEqual(result.blend, expected.blend);
+});
+
+test('salvage keeps the receiver end state consistent with the salvaged bank', () => {
+  const input = drainSalvageInput([leftoverBank({ id: 'bank-src', oxygenPercent: 21, heliumPercent: 35, pressureBar: 40 })]);
+  const result = optimizeBlend(input);
+
+  const salvageSteps = result.protocolSteps.filter(step => step.type === 'salvage');
+  assert.ok(salvageSteps.length > 0, 'expected a salvage step');
+  assert.equal(result.salvageTransfers.length, salvageSteps.length);
+  const last = salvageSteps[salvageSteps.length - 1];
+  const receiver = result.salvageBanks.find(bank => bank.id === last.receiverBankId);
+  assert.ok(Math.abs(receiver.pressureBar - last.receiverEndPressureBar) < 1e-9);
+  assert.equal(receiver.oxygenPercent, last.receiverEndMix.oxygenPercent);
+  assert.equal(receiver.heliumPercent, last.receiverEndMix.heliumPercent);
+});
+
+test('thermal salvage step cools the tank while its pressure falls', () => {
+  const input = {
+    ...drainSalvageInput([leftoverBank({ id: 'bank-n', oxygenPercent: 32, heliumPercent: 0, pressureBar: 20 })]),
+    thermal: {
+      tankMaterial: 'steel',
+      coolingMedium: 'air',
+      ambientTemperatureC: 20,
+      inletTemperatureC: 40,
+      targetMediumTemperatureC: 20,
+      targetInWaterTemperatureC: 20,
+      waitMode: 'minutes',
+      waitMinutes: 0
+    },
+    settings: { booster: { compressorInletFlowLPerMin: 100 } }
+  };
+  const result = optimizeBlend(input);
+
+  assert.equal(result.feasible, true);
+  const salvage = result.protocolSteps.find(step => step.type === 'salvage');
+  assert.ok(salvage?.thermal, 'expected a thermal salvage step');
+  assert.ok(salvage.thermal.temperatureAtTransferEndC < salvage.thermal.temperatureStartC);
+  assert.ok(salvage.resultingPressureBar < input.cylinder.initialPressureBar);
+});
+
+// Salvage that moves the whole vent surplus into a leftover bank, with the drained cylinder
+// then decanted from the recipe banks. Retained cylinder moles are unchanged by the salvage.
+function salvageThenDecantInput({ thermal } = {}) {
+  return {
+    cylinder: {
+      volumeL: 12,
+      initialPressureBar: 150,
+      initialOxygenPercent: 32,
+      initialHeliumPercent: 0,
+      targetPressureBar: 100,
+      targetOxygenPercent: 21,
+      targetHeliumPercent: 35
+    },
+    physics: { model: 'vdw', temperatureC: 20 },
+    banks: [
+      { id: 'bank-he', name: 'Pure Helium', volumeL: 50, pressureBar: 200, maxPressureBar: 350, minimumPressureBar: 15, oxygenPercent: 0, heliumPercent: 100, enabled: true },
+      { id: 'bank-o2', name: 'Pure Oxygen', volumeL: 40, pressureBar: 180, maxPressureBar: 350, minimumPressureBar: 10, oxygenPercent: 100, heliumPercent: 0, enabled: true },
+      { id: 'bank-n', name: 'Leftover N', volumeL: 50, pressureBar: 20, maxPressureBar: 200, minimumPressureBar: 10, oxygenPercent: 32, heliumPercent: 0, enabled: true }
+    ],
+    settings: { booster: { maxCompressorPressureBar: 350, maxBoosterOutputPressureBar: 350 } },
+    ...(thermal ? { thermal } : {})
+  };
+}
+
+const SALVAGE_THERMAL = {
+  tankMaterial: 'steel',
+  coolingMedium: 'air',
+  ambientTemperatureC: 20,
+  inletTemperatureC: 40,
+  targetMediumTemperatureC: 20,
+  targetInWaterTemperatureC: 20,
+  waitMode: 'minutes',
+  waitMinutes: 0
+};
+
+test('thermal trajectory maps bank points to recipe decants, never to salvage steps', () => {
+  const result = optimizeBlend(salvageThenDecantInput({ thermal: SALVAGE_THERMAL }));
+  assert.equal(result.feasible, true);
+  assert.equal(result.salvageTransfers.length, 1);
+
+  const decantPressures = result.protocolSteps
+    .filter(step => step.type === 'decant')
+    .map(step => step.resultingPressureBar);
+  const bankPoints = result.trajectory.filter(point => point.bankId);
+  assert.equal(bankPoints.length, decantPressures.length);
+  bankPoints.forEach((point, index) => {
+    assert.ok(Math.abs(point.pressureBar - decantPressures[index]) < 1e-6,
+      `bank point ${index} at ${point.pressureBar} bar, expected decant ${decantPressures[index]} bar`);
+  });
+});
+
+test('salvage that takes the whole surplus emits no drain and no keep step', () => {
+  for (const thermal of [undefined, SALVAGE_THERMAL]) {
+    const result = optimizeBlend(salvageThenDecantInput({ thermal }));
+    assert.equal(result.feasible, true);
+    assert.ok(Math.abs(result.blend.ventedGasLitres) < 1e-6, 'salvage takes the whole surplus');
+    const types = result.protocolSteps.map(step => step.type);
+    assert.equal(types[0], 'salvage');
+    assert.equal(types.includes('drain'), false);
+    assert.equal(types.includes('keep'), false);
+  }
+});
+
+test('thermal salvage search runs once per optimize, not once per thermal candidate', () => {
+  const calls = [];
+  const result = solveThermalWithSalvageFallback(
+    salvageThenDecantInput({ thermal: SALVAGE_THERMAL }),
+    optimizerModule.optimizeBlendWithoutThermal,
+    { searchSalvage: candidate => { calls.push(candidate); return optimizerModule.searchSalvageVariant(candidate); } }
+  );
+  assert.equal(result.feasible, true);
+  assert.equal(result.salvageTransfers.length, 1);
+  assert.equal(calls.length, 1);
+});
+
+test('salvage that keeps the cylinder retained gas unchanged is accepted and moves the whole surplus', () => {
+  const input = salvageThenDecantInput();
+  const baseline = optimizeBlend({ ...input, _salvage: false });
+  const result = optimizeBlend(input);
+
+  assert.equal(result.feasible, true);
+  assert.equal(result.salvageTransfers.length, 1);
+  assert.equal(result.salvageTransfers[0].receiverBankId, 'bank-n');
+  assert.ok(Math.abs(result.salvageTransfers[0].movedMoles - baseline.blend.ventedMoles) < 1e-6,
+    'salvage moves exactly the baseline vented moles');
+  assert.ok(Math.abs(result.solution.x_cyl - baseline.solution.x_cyl) <= 1e-9 * Math.max(1, baseline.solution.x_cyl));
+});
+
+test('salvage search ignores invalid input and reports the usual invalid result', () => {
+  const input = drainSalvageInput([leftoverBank({ id: 'bank-n', oxygenPercent: 32, heliumPercent: 0, pressureBar: 20 })]);
+  const thermal = {
+    tankMaterial: 'steel',
+    ambientTemperatureC: 20,
+    inletTemperatureC: 20,
+    targetMediumTemperatureC: 25,
+    targetInWaterTemperatureC: 20,
+    waitMode: 'minutes',
+    waitMinutes: 10,
+    targetTemperatureC: 25
+  };
+  const withoutPhysics = { ...input, physics: undefined };
+  assert.equal(optimizerModule.searchSalvageVariant(withoutPhysics), null);
+  assert.equal(optimizerModule.searchSalvageVariant({ ...withoutPhysics, thermal }), null);
+
+  const result = optimizeBlend({ ...withoutPhysics, thermal });
+  assert.equal(result.feasible, false);
+  assert.equal(result.blend, null);
+  assert.match(result.error, /^Invalid blend input:/);
+});
+
+// A 7/70 S80 at 45 bar drained toward 50/0 at 195 bar, with two leftover trimix banks. Both
+// receivers absorb the same gas and their attractiveness changes are within the near-tie margin
+// (+2.60 Shallow, +2.14 Deep), so the receiver that can still reach more standard mixes wins.
+const shallowDeepInput = {
+  cylinder: {
+    volumeL: 11.1, initialPressureBar: 45, initialOxygenPercent: 7, initialHeliumPercent: 70,
+    targetPressureBar: 195, targetOxygenPercent: 50, targetHeliumPercent: 0,
+    workingPressureBar: 207, hotOverfillPercent: 2
+  },
+  physics: { model: 'vdw', temperatureC: 21 },
+  banks: [
+    { id: 'he', name: 'Helium', volumeL: 40, pressureBar: 150, maxPressureBar: 200, oxygenPercent: 0, heliumPercent: 100, enabled: true },
+    { id: 'o2', name: 'Oxygen', volumeL: 50, pressureBar: 200, maxPressureBar: 200, oxygenPercent: 100, heliumPercent: 0, enabled: true },
+    { id: 'shallow', name: 'Shallow', volumeL: 18, pressureBar: 117, maxPressureBar: 200, oxygenPercent: 17, heliumPercent: 42, enabled: true },
+    { id: 'deep', name: 'Deep', volumeL: 12, pressureBar: 42, maxPressureBar: 200, oxygenPercent: 11, heliumPercent: 63, enabled: true }
+  ],
+  settings: DEFAULT_SETTINGS
+};
+const salvageReceivers = result => result.protocolSteps.filter(step => step.type === 'salvage').map(step => step.receiverBankId);
+
+
+test('a salvage plan costs only its purchased transfers: salvage adds no gas line, no fee and no operation id', () => {
+  const result = optimizeBlend(salvageThenDecantInput({ thermal: SALVAGE_THERMAL }));
+  assert.equal(result.feasible, true);
+  assert.equal(result.salvageTransfers.length, 1);
+
+  const salvage = result.protocolSteps.filter(step => step.type === 'salvage');
+  assert.equal(salvage.length, 1);
+  for (const step of salvage) {
+    assert.equal(step.costOperation, undefined);
+    assert.equal(step.costOperationId, undefined);
+  }
+
+  const costs = { currencySymbol: '', leftoverDiscountPercent: 0, operationPrices: { boost: 2, decant: 1, topUp: 5 } };
+  const banks = salvageThenDecantInput().banks;
+  const withSalvage = computeFillCost({ steps: result.protocolSteps, banks, costs, temperatureC: 20 });
+  const purchasedOnly = computeFillCost({ steps: result.protocolSteps.filter(step => step.type !== 'salvage'), banks, costs, temperatureC: 20 });
+  assert.deepEqual(withSalvage, purchasedOnly);
+  assert.ok(withSalvage.total > 0);
+  assert.ok(withSalvage.gasLines.every(line => line.sourceBankId !== 'bank-n'));
+});
+test('salvage near tie goes to the receiver that can still reach more standard mixes', () => {
+  const result = optimizeBlend(shallowDeepInput);
+  assert.equal(result.feasible, true);
+  assert.deepEqual([...new Set(salvageReceivers(result))], ['deep']);
+  const end = result.salvageTransfers.at(-1).receiverEndMix;
+  // Deep ends near 9/66 at about 81 bar (all 5 targets reachable); Shallow would end 15.2/47 at 146 bar (3 of 5).
+  assert.ok(Math.abs(end.oxygenPercent - 9.1) < 0.2 && Math.abs(end.heliumPercent - 66.3) < 0.2);
+});
+
+test('salvage near-tie preference also holds in the thermal path', () => {
+  const thermal = {
+    tankMaterial: 'aluminum', coolingMedium: 'air', ambientTemperatureC: 21, inletTemperatureC: 25,
+    targetMediumTemperatureC: 21, targetInWaterTemperatureC: 21, waitMode: 'minutes', waitMinutes: 0, interimMeasurements: []
+  };
+  const result = optimizeBlend({ ...shallowDeepInput, thermal });
+  assert.equal(result.feasible, true);
+  assert.deepEqual([...new Set(salvageReceivers(result))], ['deep']);
+});
+
+test('a receiver that fails alone as first-ranked cannot hide another receiver that passes alone', () => {
+  // Found by sweeping random Shallow/Deep inventories: salvaging into the first-ranked prefix
+  // (Shallow, then Shallow + Deep) is rejected by the gates, while Deep alone passes them.
+  const result = optimizeBlend({
+    cylinder: {
+      volumeL: 11.1, initialPressureBar: 42.7, initialOxygenPercent: 24.4, initialHeliumPercent: 65.1,
+      targetPressureBar: 156.2, targetOxygenPercent: 21.2, targetHeliumPercent: 15.7,
+      workingPressureBar: 207, hotOverfillPercent: 2
+    },
+    physics: { model: 'vdw', temperatureC: 21 },
+    settings: DEFAULT_SETTINGS,
+    banks: [
+      { id: 'he', name: 'Helium', volumeL: 40, pressureBar: 150, maxPressureBar: 200, oxygenPercent: 0, heliumPercent: 100, enabled: true },
+      { id: 'o2', name: 'Oxygen', volumeL: 50, pressureBar: 200, maxPressureBar: 200, oxygenPercent: 100, heliumPercent: 0, enabled: true },
+      { id: 'shallow', name: 'shallow', volumeL: 25.5, pressureBar: 203.5, maxPressureBar: 222.9, oxygenPercent: 9.7, heliumPercent: 41.9, enabled: true },
+      { id: 'deep', name: 'deep', volumeL: 24.5, pressureBar: 149.7, maxPressureBar: 239.4, oxygenPercent: 14.1, heliumPercent: 69.3, enabled: true }
+    ]
+  });
+  assert.equal(result.feasible, true);
+  assert.deepEqual([...new Set(salvageReceivers(result))], ['deep']);
 });
