@@ -22,7 +22,7 @@ const run = ({ banks, steps = [], blend = { heliumRetainedLitres: 100 }, feasibl
   banks, costs: discountPercent === undefined ? costs : { ...costs, leftoverDiscountPercent: discountPercent }, settings: DEFAULT_SETTINGS, physics, inventoryTemperatureC
 });
 
-test('saved cost is retained helium litres times the weighted pure helium price', () => {
+test('reuse value is retained helium litres times the weighted pure helium price', () => {
   // Two He banks, weights 10 L × 150 bar = 1500 and 5 L × 150 bar = 750 (ideal litres = P·V).
   // Weighted He = (1500 × 0.05 + 750 × 0.11) / 2250 = 0.07. Saved = 100 × 0.07 = 7.
   const heSmall = bank({ id: 'he2', name: 'He small', volumeL: 5, oxygenPercent: 0, heliumPercent: 100, pricePerLitre: 0.11 });
@@ -31,13 +31,13 @@ test('saved cost is retained helium litres times the weighted pure helium price'
   assert.deepEqual(result.missing, []);
 });
 
-test('no helium price with helium retained makes saved cost null and names helium as a pure-price gap', () => {
+test('no helium price with helium retained makes reuse value null and names helium as a pure-price gap', () => {
   const result = run({ banks: [pureO2, real] });
   assert.equal(result.savedCost, null);
   assert.deepEqual(result.missing, [{ code: 'pure-price', gas: 'helium' }]);
 });
 
-test('no helium retained gives zero saved cost without asking for a helium price', () => {
+test('no helium retained gives zero reuse value without asking for a helium price', () => {
   const result = run({ banks: [pureO2, real], blend: { heliumRetainedLitres: 0 } });
   assert.equal(result.savedCost, 0);
   assert.deepEqual(result.missing, []);

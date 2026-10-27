@@ -7,7 +7,6 @@ const OPERATION_LABELS = Object.freeze({
   topUp: 'Top-up'
 });
 
-const NO_PRICE = 'no price set';
 export const NOT_CONFIGURED = 'No prices apply to this fill. Set bank prices in Inventory and fees in Settings → Costs.';
 const NO_PLAN = 'Costs appear when a feasible blend is available.';
 
@@ -38,28 +37,52 @@ function messageRow(text) {
   return row;
 }
 
+function numberText(value, digits) {
+  const text = value.toFixed(digits);
+  return /^-0(\.0*)?$/.test(text) ? text.slice(1) : text;
+}
+
+function unitWord(quantity, units) {
+  return unitLabel(quantity, units).replace(/^\//, '');
+}
+
 function litresText(litres, units) {
-  return `${convertToDisplay(litres, 'volumeL', units).toFixed(1)} ${unitLabel('volumeL', units)}`;
+  return numberText(convertToDisplay(litres, 'volumeL', units), 1);
 }
 
-function perVolumeText(pricePerLitre, symbol, units) {
-  return `${formatMoney(convertToDisplay(pricePerLitre, 'pricePerVolumeL', units), symbol, 6)} ${unitLabel('pricePerVolumeL', units)}`;
+function perVolumeText(pricePerLitre, units) {
+  return numberText(convertToDisplay(pricePerLitre, 'pricePerVolumeL', units), 6);
 }
 
-function gasRow(line, symbol, units) {
+// Headers carry the currency and unit so that table cells hold numbers only.
+function priceHeadingText(symbol, units) {
+  const unit = unitWord('pricePerVolumeL', units);
+  return symbol ? `Price (${symbol} / ${unit})` : `Price (per ${unit})`;
+}
+
+function currencyHeading(label, symbol) {
+  return symbol ? `${label} (${symbol})` : label;
+}
+
+function setText(root, key, text) {
+  const element = hook(root, key);
+  if (element) element.textContent = text;
+}
+
+function gasRow(line, units) {
   const row = document.createElement('tr');
   const priced = line.unitPrice !== null && line.unitPrice !== undefined;
   row.append(
     labelCell(line.name),
     cell(litresText(line.litres, units)),
-    cell(priced ? perVolumeText(line.unitPrice, symbol, units) : NO_PRICE),
-    cell(priced ? formatMoney(line.cost, symbol, 2) : '—')
+    cell(priced ? perVolumeText(line.unitPrice, units) : '—'),
+    cell(priced ? numberText(line.cost, 2) : '—')
   );
   return row;
 }
 
 // Operation table is count × fee; there is no per-litre column.
-function operationRow(line, symbol) {
+function operationRow(line) {
   const row = document.createElement('tr');
   const label = OPERATION_LABELS[line.operation] ?? line.operation;
   if (line.operation === 'topUp') {
@@ -71,14 +94,14 @@ function operationRow(line, symbol) {
   }
   row.append(
     cell(String(line.count)),
-    cell(formatMoney(line.fee, symbol, 2)),
-    cell(formatMoney(line.cost, symbol, 2))
+    cell(numberText(line.fee, 2)),
+    cell(numberText(line.cost, 2))
   );
   return row;
 }
 
-function totalText(cost, symbol) {
-  const text = formatMoney(cost.total, symbol, 2);
+function totalText(cost) {
+  const text = numberText(cost.total, 2);
   if (!cost.incomplete) return text;
   const names = (cost.unpricedSources ?? []).map(source => source.name).join(', ');
   return `${text} (incomplete: ${names} unpriced)`;
@@ -110,24 +133,27 @@ export function renderCostSummary(cost, { root, units = 'metric', currencySymbol
     return;
   }
 
-  const gasHeading = hook(root, 'cost-gas-volume-heading');
-  if (gasHeading) gasHeading.textContent = `Volume (${unitLabel('volumeL', units)})`;
+  setText(root, 'cost-gas-volume-heading', `Volume (${unitLabel('volumeL', units)})`);
+  setText(root, 'cost-gas-price-heading', priceHeadingText(currencySymbol, units));
+  setText(root, 'cost-gas-cost-heading', currencyHeading('Cost', currencySymbol));
+  setText(root, 'cost-operation-fee-heading', currencyHeading('Fee', currencySymbol));
+  setText(root, 'cost-operation-cost-heading', currencyHeading('Cost', currencySymbol));
   setVisible(status, false);
   setVisible(tables, true);
   setVisible(total, true);
 
-  const gasRows = cost.gasLines.map(line => gasRow(line, currencySymbol, units));
+  const gasRows = cost.gasLines.map(line => gasRow(line, units));
   gasBody.replaceChildren(...(gasRows.length ? gasRows : [messageRow('No gas transferred.')]));
 
-  const operationRows = cost.operationLines.map(line => operationRow(line, currencySymbol));
+  const operationRows = cost.operationLines.map(line => operationRow(line));
   operationBody.replaceChildren(...(operationRows.length ? operationRows : [messageRow('No operations.')]));
 
-  if (gasTotal) gasTotal.textContent = formatMoney(cost.gasTotal, currencySymbol, 2);
-  if (operationsTotal) operationsTotal.textContent = formatMoney(cost.operationTotal, currencySymbol, 2);
-  total.textContent = totalText(cost, currencySymbol);
+  if (gasTotal) gasTotal.textContent = numberText(cost.gasTotal, 2);
+  if (operationsTotal) operationsTotal.textContent = numberText(cost.operationTotal, 2);
+  total.textContent = totalText(cost);
 }
 
-// Saved cost can only be missing for helium, and only the untagged pure-price gap explains it.
+// Reuse value can only be missing for helium, and only the untagged pure-price gap explains it.
 function savedText(value, missing, symbol) {
   if (value !== null && value !== undefined) return formatMoney(value, symbol, 2);
   const gap = missing.find(entry => entry.code === 'pure-price' && entry.gas === 'helium' && entry.bankId === undefined);
@@ -145,7 +171,7 @@ function salvagedText(value, missing, symbol) {
 }
 
 /**
- * Render the Total cost of fill, Saved cost and Salvaged saving items of the Blending summary banner.
+ * Render the Total cost of fill, Reuse value and Salvaged saving items of the Blending summary banner.
  * `cost` is the derived fill cost (null without a feasible blend); `savings` is the `computeSavings` result.
  */
 export function renderCostBanner(cost, savings, { root, currencySymbol = '' } = {}) {

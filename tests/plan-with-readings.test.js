@@ -238,7 +238,7 @@ test('a fallback plan keeps unique operation ids and finite consumed moles on ev
   }
 });
 
-test('a reading-based Air-start plan has finite zero retained helium, so saved cost is 0 without a helium price', async () => {
+test('a reading-based Air-start plan has finite zero retained helium, so reuse value is 0 without a helium price', async () => {
   const { computeSavings } = await import('../js/savings.js');
   const { computeFillCost } = await import('../js/cost.js');
   const costs = { currencySymbol: '', leftoverDiscountPercent: 0, operationPrices: { boost: 1, decant: 1, topUp: 1 } };

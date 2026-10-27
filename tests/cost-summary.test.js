@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { renderCostBanner, renderCostSummary } from '../js/ui/cost-summary.js';
 
 class FakeNode {
@@ -101,7 +102,7 @@ const PRICED_COST = {
   configured: true
 };
 
-test('renders priced gas, operation and total lines with the currency prefix', () => {
+test('renders priced gas, operation and total lines as bare numbers', () => {
   withDocument(() => {
     const { host, status, tables, gasBody, operationBody, total } = createHost();
     renderCostSummary(PRICED_COST, { root: host, units: 'metric', currencySymbol: '€' });
@@ -109,17 +110,24 @@ test('renders priced gas, operation and total lines with the currency prefix', (
     assert.equal(status.hidden, true);
     assert.equal(tables.hidden, false);
     assert.equal(total.hidden, false);
-    assert.deepEqual(rowTexts(gasBody), [['Oxygen bank', '10.0 L', '€0.025000 /L', '€0.25']]);
-    assert.deepEqual(rowTexts(operationBody), [['Boost', '2', '€5.00', '€10.00']]);
-    assert.equal(total.textContent, '€10.25');
+    assert.deepEqual(rowTexts(gasBody), [['Oxygen bank', '10.0', '0.025000', '0.25']]);
+    assert.deepEqual(rowTexts(operationBody), [['Boost', '2', '5.00', '10.00']]);
+    assert.equal(total.textContent, '10.25');
   });
 });
 
-test('uses a spaced prefix for alphanumeric currency symbols', () => {
+test('puts the currency in the headers and keeps table amounts as bare numbers', () => {
   withDocument(() => {
-    const { host, total } = createHost();
+    const { host, gasBody, operationBody, total } = createHost();
+    const headings = addHeadings(host);
     renderCostSummary(PRICED_COST, { root: host, units: 'metric', currencySymbol: 'CHF' });
-    assert.equal(total.textContent, 'CHF 10.25');
+    assert.equal(headings.gasPrice.textContent, 'Price (CHF / L)');
+    assert.equal(headings.gasCost.textContent, 'Cost (CHF)');
+    assert.equal(headings.operationFee.textContent, 'Fee (CHF)');
+    assert.equal(headings.operationCost.textContent, 'Cost (CHF)');
+    assert.deepEqual(rowTexts(gasBody), [['Oxygen bank', '10.0', '0.025000', '0.25']]);
+    assert.deepEqual(rowTexts(operationBody), [['Boost', '2', '5.00', '10.00']]);
+    assert.equal(total.textContent, '10.25');
   });
 });
 
@@ -141,8 +149,8 @@ test('labels the total incomplete with unpriced source names and marks the gas r
     };
     renderCostSummary(cost, { root: host, units: 'metric', currencySymbol: '€' });
 
-    assert.deepEqual(rowTexts(gasBody)[1], ['Helium bank', '5.0 L', 'no price set', '—']);
-    assert.equal(total.textContent, '€0.25 (incomplete: Helium bank unpriced)');
+    assert.deepEqual(rowTexts(gasBody)[1], ['Helium bank', '5.0', '—', '—']);
+    assert.equal(total.textContent, '0.25 (incomplete: Helium bank unpriced)');
   });
 });
 
@@ -165,9 +173,9 @@ test('shows top-up as count, fee and cost with compressor air as information onl
     const [topUpRow] = rowTexts(operationBody);
     assert.equal(topUpRow[0], 'Top-up includes compressor air');
     assert.equal(topUpRow[1], '1');
-    assert.equal(topUpRow[2], '€5.00');
-    assert.equal(topUpRow[3], '€5.00');
-    assert.equal(total.textContent, '€5.25');
+    assert.equal(topUpRow[2], '5.00');
+    assert.equal(topUpRow[3], '5.00');
+    assert.equal(total.textContent, '5.25');
   });
 });
 
@@ -200,8 +208,8 @@ test('converts litres and prices to imperial units', () => {
     renderCostSummary(PRICED_COST, { root: host, units: 'imperial', currencySymbol: '€' });
 
     const [[, litres, price]] = rowTexts(gasBody);
-    assert.match(litres, /cu ft$/);
-    assert.match(price, /^€\d+\.\d{6} \/cu ft$/);
+    assert.match(litres, /^\d+\.\d$/);
+    assert.match(price, /^\d+\.\d{6}$/);
   });
 });
 
@@ -223,6 +231,21 @@ test('labels the gas volume column with the active volume unit', () => {
   });
 });
 
+test('labels the gas price column with the active per-volume unit and currency', () => {
+  withDocument(() => {
+    const { host } = createHost();
+    const { gasPrice } = addHeadings(host);
+    renderCostSummary(PRICED_COST, { root: host, units: 'metric', currencySymbol: '€' });
+    assert.equal(gasPrice.textContent, 'Price (€ / L)');
+    renderCostSummary(PRICED_COST, { root: host, units: 'imperial', currencySymbol: '€' });
+    assert.equal(gasPrice.textContent, 'Price (€ / cu ft)');
+    renderCostSummary(PRICED_COST, { root: host, units: 'metric', currencySymbol: '' });
+    assert.equal(gasPrice.textContent, 'Price (per L)');
+    renderCostSummary(PRICED_COST, { root: host, units: 'imperial', currencySymbol: '' });
+    assert.equal(gasPrice.textContent, 'Price (per cu ft)');
+  });
+});
+
 test('shows Total gas cost and Operations cost rows with 2-decimal amounts', () => {
   withDocument(() => {
     const { host } = createHost();
@@ -232,8 +255,41 @@ test('shows Total gas cost and Operations cost rows with 2-decimal amounts', () 
     operationsTotal.setAttribute('data-result-key', 'cost-operations-total');
     host.children[0].children[0].append(gasTotal, operationsTotal);
     renderCostSummary(PRICED_COST, { root: host, units: 'metric', currencySymbol: '€' });
-    assert.equal(gasTotal.textContent, '€0.25');
-    assert.equal(operationsTotal.textContent, '€10.00');
+    assert.equal(gasTotal.textContent, '0.25');
+    assert.equal(operationsTotal.textContent, '10.00');
+  });
+});
+
+const HEADING_KEYS = {
+  gasVolume: 'cost-gas-volume-heading',
+  gasPrice: 'cost-gas-price-heading',
+  gasCost: 'cost-gas-cost-heading',
+  operationFee: 'cost-operation-fee-heading',
+  operationCost: 'cost-operation-cost-heading'
+};
+
+function addHeadings(host) {
+  const panel = host.children[0].children[0];
+  const headings = {};
+  for (const [name, key] of Object.entries(HEADING_KEYS)) {
+    const heading = new FakeNode('th');
+    heading.setAttribute('data-result-key', key);
+    panel.append(heading);
+    headings[name] = heading;
+  }
+  return headings;
+}
+
+test('headers without a currency symbol read Cost and Fee with no empty parentheses', () => {
+  withDocument(() => {
+    const { host } = createHost();
+    const headings = addHeadings(host);
+    renderCostSummary(PRICED_COST, { root: host, units: 'metric', currencySymbol: '' });
+    assert.equal(headings.gasVolume.textContent, 'Volume (L)');
+    assert.equal(headings.gasCost.textContent, 'Cost');
+    assert.equal(headings.operationFee.textContent, 'Fee');
+    assert.equal(headings.operationCost.textContent, 'Cost');
+    for (const heading of Object.values(headings)) assert.doesNotMatch(heading.textContent, /\(\)/);
   });
 });
 
@@ -251,7 +307,7 @@ function createBannerHost() {
   return { host, hooks };
 }
 
-test('banner shows total fill cost, saved cost and salvaged saving with 2 decimals', () => {
+test('banner shows total fill cost, reuse value and salvaged saving with 2 decimals', () => {
   withDocument(() => {
     const { host, hooks } = createBannerHost();
     renderCostBanner(PRICED_COST, { savedCost: 1.5, salvagedSaving: 0.333, missing: [] }, { root: host, currencySymbol: '€' });
@@ -319,4 +375,10 @@ test('banner shows dashes without a feasible blend', () => {
     renderCostBanner(null, { savedCost: null, salvagedSaving: null, missing: [] }, { root: host, currencySymbol: '€' });
     for (const name of SAVINGS_HOOKS) assert.equal(hooks[name].textContent, '—');
   });
+});
+
+test('the banner labels the retained-helium item Reuse value and no user-visible text uses the old label', () => {
+  const markup = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  assert.match(markup, /<div class="summary-banner-label[^"]*">Reuse value<\/div>\s*<div data-result-key="cost-saved"/);
+  assert.doesNotMatch(markup, /saved cost/i);
 });

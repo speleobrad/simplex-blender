@@ -5,7 +5,7 @@ import { isPureBank, pureGasPrices } from './pure-prices.js';
 const RETAINED_TOLERANCE_L = 1e-9;
 
 /**
- * Saved cost and salvaged saving for the blending summary. Display-only: never alters a plan.
+ * Reuse value and salvaged saving for the blending summary. Display-only: never alters a plan.
  *
  * - savedCost: retained helium litres of the original tank × weighted pure helium price.
  *   No retained helium gives 0 without needing a price.
@@ -17,8 +17,8 @@ const RETAINED_TOLERANCE_L = 1e-9;
  *
  * `missing` lists what prevented a number. Each entry appears once, as one of:
  * - {code: 'pure-price', gas: 'oxygen'|'helium'}: a needed pure-gas price is unavailable.
- *   Without bankId it is the Saved cost gap; with bankId it is a salvage gap for that bank.
- *   Saved cost is null when it is helium; salvagedSaving is null for a salvage gap.
+ *   Without bankId it is the Reuse value gap; with bankId it is a salvage gap for that bank.
+ *   Reuse value is null when it is helium; salvagedSaving is null for a salvage gap.
  * - {code: 'recipe-unavailable', bankId, name}: a used bank cannot be priced by recipe for a
  *   reason other than a missing pure price (equipment limits, more than 6 virtual sources,
  *   pressure below 10 bar), or is no longer in the inventory. salvagedSaving is null.

@@ -366,7 +366,7 @@ test.describe('fill costs in What-if', () => {
     await saveSettings(page);
     await setPurePrices(page, { oxygen: 0.02 });
 
-    await expect(section.locator('[data-result-key="cost-total"]')).toHaveText(/^CHF \d+\.\d{2}$/);
+    await expect(section.locator('[data-result-key="cost-total"]')).toHaveText(/^\d+\.\d{2}$/);
     await expect(section.locator('[data-result-key="cost-total"]')).not.toContainText('incomplete');
   });
 });

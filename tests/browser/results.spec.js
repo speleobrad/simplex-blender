@@ -295,7 +295,7 @@ test.describe('fill costs in the Tanks and costs', () => {
     await expect(section.getByRole('heading', { name: 'Costs', exact: true })).toBeVisible();
     await expect(section.getByRole('table', { name: 'Gas cost' })).toBeVisible();
     await expect(section.getByRole('table', { name: 'Operation cost' })).toBeVisible();
-    await expect(section.locator('[data-result-key="cost-total"]')).toHaveText(/^€\d+\.\d{2}$/);
+    await expect(section.locator('[data-result-key="cost-total"]')).toHaveText(/^\d+\.\d{2}$/);
     const cellAmounts = table => table.locator('tbody tr').evaluateAll(rows => rows
       .map(row => row.lastElementChild?.textContent ?? '')
       .filter(text => /\d/.test(text))
@@ -328,7 +328,7 @@ test.describe('fill costs in the Tanks and costs', () => {
 
     const section = costSection(page);
     await expect(section.locator('[data-result-key="cost-total"]')).toContainText('incomplete');
-    await expect(section.getByRole('table', { name: 'Gas cost' })).toContainText('no price set');
+    await expect(section.getByRole('table', { name: 'Gas cost' }).locator('tbody')).toContainText('—');
   });
 
   test('prompts for Settings when no price is configured', async ({ appPage }) => {
@@ -354,10 +354,10 @@ test.describe('fill costs in the Tanks and costs', () => {
     await openRecipeScenario(page);
     await selectResultTab(page, 'Tanks and costs');
 
-    await expect(costSection(page).getByRole('table', { name: 'Gas cost' })).toContainText('/cu ft');
+    await expect(costSection(page).locator('[data-result-key="cost-gas-price-heading"]')).toHaveText('Price (€ / cu ft)');
   });
 
-  test('prices Saved cost from retained helium and doubles it when the helium price doubles', async ({ appPage }) => {
+  test('prices Reuse value from retained helium and doubles it when the helium price doubles', async ({ appPage }) => {
     const page = await appPage.goto('tourSeen');
     const costs = await openSettingsCategory(page, 'costs');
     await costs.getByRole('textbox', { name: 'Currency symbol', exact: true }).fill('€');
@@ -383,7 +383,7 @@ test.describe('fill costs in the Tanks and costs', () => {
     const fillTotal = (await banner.locator('[data-result-key="cost-fill-total"]').textContent()).replace(' (incomplete)', '');
     await selectResultTab(page, 'Tanks and costs');
     const costTotal = await costSection(page).locator('[data-result-key="cost-total"]').textContent();
-    expect(costTotal.startsWith(fillTotal)).toBe(true);
+    expect(costTotal.startsWith(fillTotal.replace(/^€/, ''))).toBe(true);
   });
 
   test('renders the salvaged saving as the scrap litres times the pure-gas recipe price, live and independent of the scrap price', async ({ appPage }) => {
