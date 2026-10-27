@@ -2608,12 +2608,16 @@ function buildSalvageVariant(input, context, receiverIds) {
     finalBanks: bankStatesAfterRecipe(result, cascade.banks, context.physics),
     salvagedMoles: cascade.movedMoles,
     resolvedSurplusMoles: context.initialMoles - (result.solution.x_cyl || 0),
+    retainedMoles: result.solution.x_cyl || 0,
     lpCost: result.lpCost ?? null
   };
 }
 
 function salvageBaseline(baseline, context) {
-  return { finalBanks: bankStatesAfterRecipe(baseline, context.banks, context.physics) };
+  return {
+    retainedMoles: context.retainedMoles,
+    finalBanks: bankStatesAfterRecipe(baseline, context.banks, context.physics)
+  };
 }
 
 // The requested-target candidate of a thermal input: the same target the thermal search

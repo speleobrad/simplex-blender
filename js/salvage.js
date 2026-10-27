@@ -6,6 +6,7 @@ export const SALVAGE_MIN_VALUE = 1.0;
 export const SALVAGE_ATTRACTIVENESS_GATE = -2;
 
 const TOLERANCE = 1e-9;
+const RETENTION_RELATIVE_TOLERANCE = 1e-9;
 const BISECTION_STEPS = 100;
 
 function usesVdw(physics) {
@@ -182,16 +183,19 @@ function attractivenessDeltas(baselineBanks, variantBanks, bankScoresOf) {
 
 /**
  * Picks the salvage variant to apply, or null when none passes the gates.
- * Gates: feasible (re-solved surplus covers the salvaged moles), no bank loses
+ * Gates: cylinder retention (re-solved retained moles at least the baseline's, within a
+ * relative 1e-9), feasible (re-solved surplus covers the salvaged moles), no bank loses
  * more than |SALVAGE_ATTRACTIVENESS_GATE| points, and net value kept is at least
  * SALVAGE_MIN_VALUE. Ranking: value kept, then summed attractiveness change, then LP cost
  * (missing LP cost ranks last). `bankScoresOf(bank)` returns that bank's attractiveness score.
+ * Each variant and the baseline carry `retainedMoles`, the re-solved cylinder moles.
  */
 export function selectSalvageVariant({ baseline, variants, bankScoresOf, physics }) {
   const baselineValue = netStockValue(baseline.finalBanks, physics);
   const qualifying = [];
 
   for (const variant of variants) {
+    if (variant.retainedMoles < baseline.retainedMoles * (1 - RETENTION_RELATIVE_TOLERANCE)) continue;
     if (variant.resolvedSurplusMoles < variant.salvagedMoles - TOLERANCE) continue;
 
     const deltas = attractivenessDeltas(baseline.finalBanks, variant.finalBanks, bankScoresOf);

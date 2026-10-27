@@ -290,3 +290,15 @@ test('rankReceivers sorts by attractiveness change right after transfer, stable 
   const ranked = rankReceivers([candidate('down', 58), candidate('up', 61), candidate('flat-a', 60), candidate('flat-b', 60)], scoreOf);
   assert.deepEqual(ranked.map(entry => entry.id), ['up', 'flat-a', 'flat-b', 'down']);
 });
+
+test('selection rejects a variant that lowers the retained cylinder moles, even when value and attractiveness pass', () => {
+  const retainedBaseline = { ...baseline, retainedMoles: 10 };
+  const lowerRetained = { ...variant('lower-retained', { receiver: receiverAt(40, 60) }), retainedMoles: 9.9999 };
+  const equalRetained = { ...variant('equal-retained', { receiver: receiverAt(40, 60) }), retainedMoles: 10 };
+  const selectRetained = variants => selectSalvageVariant({
+    baseline: retainedBaseline, variants, bankScoresOf: scoreOf, physics: IDEAL
+  });
+
+  assert.equal(selectRetained([lowerRetained]), null);
+  assert.equal(selectRetained([lowerRetained, equalRetained]).id, 'equal-retained');
+});

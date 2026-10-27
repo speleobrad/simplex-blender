@@ -6,7 +6,6 @@ import { calcMolarDensity } from '../js/physics.js';
 import { calculatePressureAtTemperature } from '../js/thermodynamics.js';
 import { DEFAULT_BANKS } from '../js/bank-storage.js';
 import { DEFAULT_SETTINGS } from '../js/settings.js';
-import { SALVAGE_MIN_VALUE, applyDrawToBank, netStockValue } from '../js/salvage.js';
 
 const defaultInput = {
   cylinder: {
@@ -695,7 +694,7 @@ test('trajectory records source-bank pressure ranges for each transfer stage', (
 });
 
 
-test('nitrox preset reports vented gas as equivalent litres at one bar', () => {
+test('nitrox preset vents the surplus and keeps the cylinder retained gas', () => {
   const input = {
     ...defaultInput,
     cylinder: {
@@ -709,22 +708,14 @@ test('nitrox preset reports vented gas as equivalent litres at one bar', () => {
     }
   };
   const result = optimizeBlend(input);
+  const baseline = optimizeBlend({ ...input, _salvage: false });
 
-  // Default path: the net post-recipe gate accepts one salvage into bank-1845 (the recipe's own
-  // draw source). Moved gas is 32% O2 / 0% He, so the value gain is all O2 (about 1.54 vs 1.0).
+  // Salvage into bank-1845 (the recipe's own draw source) would move 34.4 mol but cut the
+  // retained cylinder gas (11.60 mol vs 17.77 mol), so the retention gate keeps vent-only.
   assert.equal(result.feasible, true);
-  assert.equal(result.salvageTransfers.length, 1);
-  const [transfer] = result.salvageTransfers;
-  assert.equal(transfer.receiverBankId, 'bank-1845');
-  assert.equal(transfer.receiverBankName, 'Tx 18/45 Bank');
-  // 34.397 mol moved = the whole baseline vented surplus (solver-rounding tolerance 0.01 mol).
-  assert.ok(Math.abs(transfer.movedMoles - 34.3966) < 0.01);
-  assert.equal(transfer.movedHeliumLitres, 0);
-  // Receiver ends at 220.76 bar, below its 350 bar maximum (tolerance 0.05 bar).
-  assert.ok(Math.abs(transfer.receiverEndPressureBar - 220.758) < 0.05);
-  assert.ok(transfer.receiverEndPressureBar <= 350);
-  // Vented litres 150.44 (solver tolerance 0.01 L; 688 L fewer than the 838.38 L vent-only result).
-  assert.ok(Math.abs(result.blend.ventedGasLitres - 150.441) < 0.01);
+  assert.equal(result.salvageTransfers, undefined);
+  assert.ok(Math.abs(result.blend.ventedGasLitres - 838.377979816809) < 1e-8);
+  assert.ok(result.solution.x_cyl >= baseline.solution.x_cyl * (1 - 1e-9));
 });
 
 test('vent-only mode keeps 838.38 L vented for the nitrox preset', () => {
@@ -745,40 +736,6 @@ test('vent-only mode keeps 838.38 L vented for the nitrox preset', () => {
   assert.equal(result.feasible, true);
   assert.equal(result.salvageTransfers, undefined);
   assert.ok(Math.abs(result.blend.ventedGasLitres - 838.377979816809) < 1e-8);
-});
-
-test('salvage gate uses net post-recipe bank states when the receiver is also a recipe source', () => {
-  const input = {
-    ...defaultInput,
-    cylinder: {
-      ...defaultInput.cylinder,
-      initialPressureBar: 100,
-      initialOxygenPercent: 32,
-      initialHeliumPercent: 0,
-      targetPressureBar: 220,
-      targetOxygenPercent: 21,
-      targetHeliumPercent: 30
-    }
-  };
-  const baseline = optimizeBlend({ ...input, _salvage: false });
-  const result = optimizeBlend(input);
-
-  assert.equal(result.feasible, true);
-  assert.ok(result.salvageTransfers.some(step => step.receiverBankId === 'bank-1845'));
-  assert.ok(result.solution.x_b2_Tx > 0, 'the recipe draws from the salvage receiver');
-  assert.ok(result.blend.ventedGasLitres < baseline.blend.ventedGasLitres);
-
-  const afterRecipe = (solution, banks) => {
-    let enabledIndex = 0;
-    return banks.map(bank => {
-      if (!bank.enabled) return bank;
-      const drawn = solution[`x_b${++enabledIndex}_${bank.name.split(' ')[0]}`] || 0;
-      return applyDrawToBank(bank, drawn, input.physics);
-    });
-  };
-  const baselineValue = netStockValue(afterRecipe(baseline.solution, input.banks), input.physics);
-  const variantValue = netStockValue(afterRecipe(result.solution, result.salvageBanks), input.physics);
-  assert.ok(variantValue - baselineValue >= SALVAGE_MIN_VALUE - 1e-9);
 });
 
 test('reports the maximum achievable pressure at the compressor ceiling', () => {
@@ -3406,6 +3363,25 @@ test('salvage moves drained gas into an attractive leftover bank before the vent
   assert.ok(salvageIndex >= 0, 'expected a salvage step');
   assert.ok(drainIndex < 0 || salvageIndex < drainIndex, 'salvage must precede the vent drain');
   assert.ok(result.blend.heliumVentedLitres < baseline.blend.heliumVentedLitres);
+});
+
+test('partial salvage is followed by the vent drain down to the retained pressure', () => {
+  // The receiver's 30 bar ceiling caps the salvage below the surplus, so the tank is still
+  // above its retained pressure after the salvage steps and the drain follows them.
+  const input = drainSalvageInput([leftoverBank({ id: 'bank-n', oxygenPercent: 32, heliumPercent: 0, pressureBar: 20, maxPressureBar: 30 })]);
+  const result = optimizeBlend(input);
+
+  assert.equal(result.feasible, true);
+  const types = result.protocolSteps.map(step => step.type);
+  const salvageIndex = types.lastIndexOf('salvage');
+  const drainIndex = types.indexOf('drain');
+  assert.ok(salvageIndex >= 0, 'expected a salvage step');
+  assert.equal(drainIndex, salvageIndex + 1, 'the drain follows the salvage steps');
+  assert.equal(types.includes('keep'), false, 'no keep when the drain runs');
+  const salvagePressure = result.protocolSteps[salvageIndex].resultingPressureBar;
+  const drainPressure = result.protocolSteps[drainIndex].resultingPressureBar;
+  assert.ok(salvagePressure > drainPressure + 1, 'the drain starts above its retained pressure');
+  assert.ok(Math.abs(drainPressure - 100) < 0.01, 'the drain ends at the retained pressure');
 });
 
 test('salvage never fills a receiver already at its maximum pressure', () => {
