@@ -2,7 +2,32 @@ import { test, expect } from './fixtures/app-fixtures.js';
 import { assertResultPanelExclusive, openRecipeScenario } from './helpers/blending.js';
 import { selectResultTab, toggleTheme } from './helpers/navigation.js';
 import { bankRows, editBank, setPurePrices } from './helpers/inventory.js';
+import { priceBankByRecipe } from '../../js/bank-pricing.js';
+import { DEFAULT_SETTINGS } from '../../js/settings.js';
 import { openSettingsCategory, saveSettings } from './helpers/settings.js';
+
+const parseAmount = text => Number(text.replace(/[^0-9.]/g, ''));
+
+// Independent expectation: the scrap bank priced by pure-gas recipe, leftover discount 0, default settings.
+function scrapRecipePricePerLitre({ oxygen, helium, ambientC }) {
+  const bank = (id, name, volumeL, pressureBar, oxygenPercent, heliumPercent, pricePerLitre) => (
+    { id, name, volumeL, pressureBar, oxygenPercent, heliumPercent, enabled: true, pricePerLitre });
+  const scrap = { id: 'bank-sample-scrap', name: 'Sample scrap', volumeL: 12, pressureBar: 45, oxygenPercent: 19, heliumPercent: 40, enabled: true };
+  const result = priceBankByRecipe({
+    bank: scrap,
+    costs: { ...DEFAULT_SETTINGS.costs, leftoverDiscountPercent: 0, operationPrices: { boost: 1, decant: 0.5, topUp: 3 } },
+    settings: DEFAULT_SETTINGS,
+    physics: { model: 'vdw', temperatureC: ambientC },
+    inventoryBanks: [
+      bank('bank-helium', 'Helium', 40, 150, 0, 100, helium),
+      bank('bank-oxygen', 'Oxygen', 50, 200, 100, 0, oxygen),
+      scrap
+    ],
+    inventoryTemperatureC: ambientC
+  });
+  if (!result.ok) throw new Error(result.reason);
+  return result.pricePerLitre;
+}
 
 async function populated(appPage) { return appPage.goto('tourSeen'); }
 
@@ -359,6 +384,42 @@ test.describe('fill costs in the Tanks and costs', () => {
     await selectResultTab(page, 'Tanks and costs');
     const costTotal = await costSection(page).locator('[data-result-key="cost-total"]').textContent();
     expect(costTotal.startsWith(fillTotal)).toBe(true);
+  });
+
+  test('renders the salvaged saving as the scrap litres times the pure-gas recipe price, live and independent of the scrap price', async ({ appPage }) => {
+    const page = await appPage.goto('tourSeen');
+    const costs = await openSettingsCategory(page, 'costs');
+    await costs.getByRole('textbox', { name: 'Currency symbol', exact: true }).fill('€');
+    await costs.getByRole('spinbutton', { name: 'Boost (per operation)', exact: true }).fill('1.00');
+    await costs.getByRole('spinbutton', { name: 'Decant incl. equalize (per operation)', exact: true }).fill('0.50');
+    await costs.getByRole('spinbutton', { name: 'Top-up (per operation, includes compressor air)', exact: true }).fill('3.00');
+    await saveSettings(page);
+    await setPurePrices(page, { oxygen: 0.012, helium: 0.06 });
+    await openRecipeScenario(page);
+    await selectResultTab(page, 'Tanks and costs');
+
+    const ambientC = Number(await page.locator('#ambient-temperature').inputValue());
+    const scrapLitres = parseAmount(await costSection(page).getByRole('table', { name: 'Gas cost' })
+      .locator('tr').filter({ hasText: 'Sample scrap' }).locator('th, td').nth(1).textContent());
+    await selectResultTab(page, 'Recipe');
+    const expectedSalvaged = pricing => scrapLitres * scrapRecipePricePerLitre({ ...pricing, ambientC });
+
+    const banner = page.locator('[data-result-key="cost-banner"]:visible');
+    const salvaged = banner.locator('[data-result-key="cost-salvaged"]');
+    await expect(salvaged).toHaveText(/^€\d+\.\d{2}$/);
+    const first = expectedSalvaged({ oxygen: 0.012, helium: 0.06 });
+    expect(Math.abs(parseAmount(await salvaged.textContent()) - first)).toBeLessThanOrEqual(0.01);
+    await expect(banner.locator('[data-result-key="cost-fill-total"]')).toHaveText(/\(incomplete\)$/);
+
+    await setPurePrices(page, { helium: 0.12 });
+    const doubled = expectedSalvaged({ oxygen: 0.012, helium: 0.12 });
+    expect(Math.abs(doubled - first)).toBeGreaterThan(0.02);
+    await expect.poll(async () => Math.abs(parseAmount(await salvaged.textContent()) - doubled)).toBeLessThanOrEqual(0.01);
+    await expect(banner.locator('[data-result-key="cost-fill-total"]')).toHaveText(/\(incomplete\)$/);
+
+    await editBank(page, 1, { pricePerLitre: '' });
+    await page.getByRole('tab', { name: 'Blending', exact: true }).click();
+    await expect(salvaged).toHaveText('Price pure oxygen in Inventory');
   });
 
   test('keeps cost tables scrollable with no page overflow and no price overlap on narrow screens', async ({ appPage }) => {
