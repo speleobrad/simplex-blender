@@ -16,12 +16,8 @@ export function validateCostSettings(costs) {
   if (typeof costs.currencySymbol !== 'string' || costs.currencySymbol.trim().length > 8) {
     errors.push('Currency symbol must be text of at most 8 characters.');
   }
-  const prices = [
-    costs.pricePerLitre?.oxygen, costs.pricePerLitre?.helium,
-    costs.operationPrices?.boostPerLitre, costs.operationPrices?.decantPerLitre,
-    costs.operationPrices?.equalizePerLitre, costs.operationPrices?.topUpPerOperation
-  ];
-  if (!prices.every(priceOk)) errors.push('Prices must be numbers from 0 to 1,000,000.');
+  const fees = [costs.operationPrices?.boost, costs.operationPrices?.decant, costs.operationPrices?.topUp];
+  if (!fees.every(priceOk)) errors.push('Prices must be numbers from 0 to 1,000,000.');
   if (!Number.isFinite(costs.leftoverDiscountPercent)
     || costs.leftoverDiscountPercent < 0 || costs.leftoverDiscountPercent > 100) {
     errors.push('Leftover discount must be between 0 and 100%.');

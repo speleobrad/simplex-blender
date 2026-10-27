@@ -1,6 +1,5 @@
 import { GAS_CONSTANT } from './physics.js';
 
-const PER_LITRE_RATE = { boost: 'boostPerLitre', decant: 'decantPerLitre', equalize: 'equalizePerLitre' };
 const OPERATION_ORDER = ['boost', 'decant', 'equalize', 'topUp'];
 
 export function litresPerMole(temperatureC) {
@@ -21,10 +20,7 @@ export function withoutBankPrices(banks) {
 }
 
 function anySettingsPrice(costs) {
-  return [
-    costs?.pricePerLitre?.oxygen, costs?.pricePerLitre?.helium,
-    ...Object.values(costs?.operationPrices ?? {})
-  ].some(value => Number.isFinite(value) && value > 0);
+  return Object.values(costs?.operationPrices ?? {}).some(value => Number.isFinite(value) && value > 0);
 }
 
 export function computeFillCost({ steps = [], banks = [], costs, temperatureC }) {
@@ -67,10 +63,10 @@ export function computeFillCost({ steps = [], banks = [], costs, temperatureC })
     .filter(operation => operation === 'topUp' ? topUpIds.size > 0 : operationLitres[operation] > 0)
     .map(operation => {
       if (operation === 'topUp') {
-        const rate = prices.topUpPerOperation ?? 0;
+        const rate = prices.topUp ?? 0; // redesign: replaced in Task 2
         return { operation, litres: operationLitres.topUp, count: topUpIds.size, rate, cost: topUpIds.size * rate };
       }
-      const rate = prices[PER_LITRE_RATE[operation]] ?? 0;
+      const rate = 0; // redesign: replaced in Task 2
       return { operation, litres: operationLitres[operation], count: null, rate, cost: operationLitres[operation] * rate };
     });
 

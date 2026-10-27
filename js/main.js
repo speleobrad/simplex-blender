@@ -49,7 +49,7 @@ import { loadAnalytics } from './analytics.js';
 import { createOnboardingController } from './ui/onboarding.js';
 import { renderCompareRecipe } from './ui/compare-recipe.js';
 import { renderPressureLimitWarnings, renderResults } from './ui/results.js';
-import { renderSettingsDialog, renderPresetOptions, costFieldToStored, setCostField } from './ui/settings-dialog.js';
+import { renderSettingsDialog, renderPresetOptions, parseCostFee, setCostField } from './ui/settings-dialog.js';
 import { renderEquipmentSummary } from './ui/equipment-summary.js';
 import { formatBankPrice, formatSuggestionNote, renderSupplyBanks } from './ui/supply-banks.js';
 import { renderStorageWarning } from './ui/storage-warning.js';
@@ -753,7 +753,8 @@ function updateSettingsDraft(input, eventType) {
   const index = Number(input.dataset.settingsIndex);
   const field = input.dataset.settingsField;
   if (collection === 'costs') {
-    setCostField(state.settingsDraft.costs, field, costFieldToStored(field, input.value, state.settingsDraft.units));
+    const value = field === 'currencySymbol' ? input.value : parseCostFee(input.value);
+    setCostField(state.settingsDraft.costs, field, value);
     persistSettingsDraft();
     return;
   }

@@ -27,9 +27,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
   interimPressureTolerancePercent: 3,
   costs: Object.freeze({
     currencySymbol: '',
-    pricePerLitre: Object.freeze({ oxygen: 0, helium: 0 }),
     leftoverDiscountPercent: 0,
-    operationPrices: Object.freeze({ boostPerLitre: 0, decantPerLitre: 0, equalizePerLitre: 0, topUpPerOperation: 0 })
+    operationPrices: Object.freeze({ boost: 0, decant: 0, topUp: 0 })
   }),
   physics: Object.freeze({ model: 'vdw' }),
   gasPresets: Object.freeze([
@@ -271,19 +270,17 @@ export function addDefaultCosts(settings) {
   };
 }
 
+// Missing flat fees (including legacy per-litre settings) load as 0; present values are validated.
+const feeOrZero = value => (value === undefined ? 0 : value);
+
 function copyCosts(costs) {
   return {
     currencySymbol: typeof costs?.currencySymbol === 'string' ? costs.currencySymbol.trim() : costs?.currencySymbol,
-    pricePerLitre: {
-      oxygen: costs?.pricePerLitre?.oxygen,
-      helium: costs?.pricePerLitre?.helium
-    },
     leftoverDiscountPercent: costs?.leftoverDiscountPercent,
     operationPrices: {
-      boostPerLitre: costs?.operationPrices?.boostPerLitre,
-      decantPerLitre: costs?.operationPrices?.decantPerLitre,
-      equalizePerLitre: costs?.operationPrices?.equalizePerLitre,
-      topUpPerOperation: costs?.operationPrices?.topUpPerOperation
+      boost: feeOrZero(costs?.operationPrices?.boost),
+      decant: feeOrZero(costs?.operationPrices?.decant),
+      topUp: feeOrZero(costs?.operationPrices?.topUp)
     }
   };
 }

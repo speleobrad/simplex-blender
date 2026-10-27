@@ -341,16 +341,21 @@ test('Warning mode bypasses only cylinder ceilings, not supported calculator inp
 
 const validCosts = () => ({
   currencySymbol: '€',
-  pricePerLitre: { oxygen: 0.01, helium: 0.05 },
   leftoverDiscountPercent: 20,
-  operationPrices: { boostPerLitre: 0.002, decantPerLitre: 0, equalizePerLitre: 0, topUpPerOperation: 5 }
+  operationPrices: { boost: 0.5, decant: 0, topUp: 5 }
 });
 test('valid cost settings pass', () => assert.deepEqual(validateCostSettings(validCosts()), []));
-test('cost settings reject negative, non-finite, oversized prices and bad discount', () => {
+test('flat fees accept zero and the 1,000,000 ceiling', () => {
+  const c = validCosts(); c.operationPrices = { boost: 0, decant: 1_000_000, topUp: 0.01 };
+  assert.deepEqual(validateCostSettings(c), []);
+});
+test('cost settings reject negative, non-finite, missing, oversized fees and bad discount', () => {
   for (const mutate of [
-    c => { c.pricePerLitre.oxygen = -1; },
-    c => { c.pricePerLitre.helium = NaN; },
-    c => { c.operationPrices.topUpPerOperation = 1e7; },
+    c => { c.operationPrices.boost = -1; },
+    c => { c.operationPrices.decant = NaN; },
+    c => { c.operationPrices.topUp = 1_000_001; },
+    c => { delete c.operationPrices.boost; },
+    c => { c.operationPrices.topUp = '5'; },
     c => { c.leftoverDiscountPercent = 101; },
     c => { c.currencySymbol = 'WAYTOOLONGSYMBOL'; },
     c => { c.currencySymbol = 5; }

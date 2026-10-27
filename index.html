@@ -126,21 +126,11 @@
 
           <section id="settings-pane-costs" aria-labelledby="settings-pane-costs-title" class="hidden">
             <h3 id="settings-pane-costs-title" class="mb-2 text-sm font-semibold text-slate-200">Costs</h3>
-            <p id="settings-costs-help" class="mb-3 text-[10px] text-slate-500">Prices are per litre of gas at 1 bar and follow the Units setting. The top-up fee is charged once per operation and is not unit-converted.</p>
+            <p id="settings-costs-help" class="mb-3 text-[10px] text-slate-500">Each fee is charged once per operation in the currency above. Fees are money and are not affected by the Units setting.</p>
             <div class="space-y-4">
               <div>
                 <label for="settings-cost-currency" class="block text-xs text-slate-400">Currency symbol</label>
                 <input id="settings-cost-currency" type="text" maxlength="8" data-settings-collection="costs" data-settings-field="currencySymbol" class="mt-1 w-24 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 font-mono text-xs text-slate-100">
-              </div>
-              <div class="grid gap-3 sm:grid-cols-2">
-                <div>
-                  <label for="settings-cost-price-oxygen" class="block text-xs text-slate-400">Oxygen price (<span data-settings-unit="pricePerVolumeL">/L</span>)</label>
-                  <input id="settings-cost-price-oxygen" type="number" min="0" max="1000000" step="0.0001" data-settings-collection="costs" data-settings-field="pricePerLitre.oxygen" aria-describedby="settings-costs-help" class="mt-1 w-24 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 font-mono text-xs text-slate-100">
-                </div>
-                <div>
-                  <label for="settings-cost-price-helium" class="block text-xs text-slate-400">Helium price (<span data-settings-unit="pricePerVolumeL">/L</span>)</label>
-                  <input id="settings-cost-price-helium" type="number" min="0" max="1000000" step="0.0001" data-settings-collection="costs" data-settings-field="pricePerLitre.helium" aria-describedby="settings-costs-help" class="mt-1 w-24 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 font-mono text-xs text-slate-100">
-                </div>
               </div>
               <div>
                 <label for="settings-cost-discount" class="block text-xs text-slate-400">Leftover gas discount (%)</label>
@@ -148,20 +138,16 @@
               </div>
               <div class="grid gap-3 sm:grid-cols-2">
                 <div>
-                  <label for="settings-cost-boost" class="block text-xs text-slate-400">Boost price (<span data-settings-unit="pricePerVolumeL">/L</span>)</label>
-                  <input id="settings-cost-boost" type="number" min="0" max="1000000" step="0.0001" data-settings-collection="costs" data-settings-field="operationPrices.boostPerLitre" aria-describedby="settings-costs-help" class="mt-1 w-24 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 font-mono text-xs text-slate-100">
+                  <label for="settings-cost-boost" class="block text-xs text-slate-400">Boost (per operation)</label>
+                  <input id="settings-cost-boost" type="number" min="0" max="1000000" step="0.01" data-settings-collection="costs" data-settings-field="operationPrices.boost" aria-describedby="settings-costs-help" class="mt-1 w-24 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 font-mono text-xs text-slate-100">
                 </div>
                 <div>
-                  <label for="settings-cost-decant" class="block text-xs text-slate-400">Decant price (<span data-settings-unit="pricePerVolumeL">/L</span>)</label>
-                  <input id="settings-cost-decant" type="number" min="0" max="1000000" step="0.0001" data-settings-collection="costs" data-settings-field="operationPrices.decantPerLitre" aria-describedby="settings-costs-help" class="mt-1 w-24 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 font-mono text-xs text-slate-100">
+                  <label for="settings-cost-decant" class="block text-xs text-slate-400">Decant incl. equalize (per operation)</label>
+                  <input id="settings-cost-decant" type="number" min="0" max="1000000" step="0.01" data-settings-collection="costs" data-settings-field="operationPrices.decant" aria-describedby="settings-costs-help" class="mt-1 w-24 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 font-mono text-xs text-slate-100">
                 </div>
                 <div>
-                  <label for="settings-cost-equalize" class="block text-xs text-slate-400">Equalize price (<span data-settings-unit="pricePerVolumeL">/L</span>)</label>
-                  <input id="settings-cost-equalize" type="number" min="0" max="1000000" step="0.0001" data-settings-collection="costs" data-settings-field="operationPrices.equalizePerLitre" aria-describedby="settings-costs-help" class="mt-1 w-24 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 font-mono text-xs text-slate-100">
-                </div>
-                <div>
-                  <label for="settings-cost-topup" class="block text-xs text-slate-400">Top-up, per operation, includes compressor air</label>
-                  <input id="settings-cost-topup" type="number" min="0" max="1000000" step="0.0001" data-settings-collection="costs" data-settings-field="operationPrices.topUpPerOperation" aria-describedby="settings-costs-help" class="mt-1 w-24 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 font-mono text-xs text-slate-100">
+                  <label for="settings-cost-topup" class="block text-xs text-slate-400">Top-up (per operation, includes compressor air)</label>
+                  <input id="settings-cost-topup" type="number" min="0" max="1000000" step="0.01" data-settings-collection="costs" data-settings-field="operationPrices.topUp" aria-describedby="settings-costs-help" class="mt-1 w-24 rounded border border-ocean-700 bg-ocean-950 px-2 py-1 font-mono text-xs text-slate-100">
                 </div>
               </div>
             </div>

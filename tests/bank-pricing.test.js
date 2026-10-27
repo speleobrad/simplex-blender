@@ -7,8 +7,8 @@ import { priceBankByRecipe, virtualBankCount } from '../js/bank-pricing.js';
 
 const physics = { model: 'vdw', temperatureC: 20 };
 const costs = () => ({
-  currencySymbol: '', pricePerLitre: { oxygen: 0.01, helium: 0.05 }, leftoverDiscountPercent: 0,
-  operationPrices: { boostPerLitre: 0.002, decantPerLitre: 0.001, equalizePerLitre: 0, topUpPerOperation: 5 }
+  currencySymbol: '', leftoverDiscountPercent: 0,
+  operationPrices: { boost: 2, decant: 1, topUp: 5 }
 });
 const settingsWith = (mutate = () => {}) => {
   const s = copySettings(DEFAULT_SETTINGS);
@@ -38,38 +38,26 @@ test('virtualBankCount is 0 for an absent gas and 2x margin otherwise', () => {
   assert.equal(virtualBankCount({ needMoles: 1001, perBankMoles: 1000 }), 3);
 });
 
-test('pure O2 at 150 bar: price is the O2 price plus the decant rate, exactly', () => {
-  const result = priceBankByRecipe({ bank: bank(), costs: costs(), settings: settingsWith(), physics });
-  assert.equal(result.ok, true, result.reason);
-  // One decant from a pure O2 virtual bank; no top-up, no air.
-  assert.equal(result.operationCount.topUp, undefined);
-  assert.ok(Math.abs(result.pricePerLitre - 0.011) < 1e-9);
-});
-
 test('discount applies once and 100 percent gives zero', () => {
-  const base = priceBankByRecipe({ bank: bank(), costs: costs(), settings: settingsWith(), physics });
-  const half = priceBankByRecipe({ bank: bank(), costs: { ...costs(), leftoverDiscountPercent: 50 }, settings: settingsWith(), physics });
+  const b = bank({ oxygenPercent: 32 });
+  const base = priceBankByRecipe({ bank: b, costs: costs(), settings: settingsWith(), physics });
+  assert.ok(base.pricePerLitre > 0);
+  const half = priceBankByRecipe({ bank: b, costs: { ...costs(), leftoverDiscountPercent: 50 }, settings: settingsWith(), physics });
   assert.ok(Math.abs(half.pricePerLitre - base.pricePerLitre / 2) < 1e-12);
-  const free = priceBankByRecipe({ bank: bank(), costs: { ...costs(), leftoverDiscountPercent: 100 }, settings: settingsWith(), physics });
+  const free = priceBankByRecipe({ bank: b, costs: { ...costs(), leftoverDiscountPercent: 100 }, settings: settingsWith(), physics });
   assert.equal(free.pricePerLitre, 0);
 });
 
-test('EAN32 at 150 bar: one top-up fee plus oxygen decant, hand-checked', () => {
+test('EAN32 at 150 bar: one top-up fee, hand-checked', () => {
   const result = priceBankByRecipe({ bank: bank({ oxygenPercent: 32, pressureBar: 150 }), costs: costs(), settings: settingsWith(), physics });
   assert.equal(result.ok, true, result.reason);
-  // Hand check, vdw at 20 C, 12 L:
-  //   M = calcMolarDensity(150, 32, 0, 20, true) * 12 total moles.
-  //   Pure O2 draw x and air a satisfy x + a = M and x + 0.21 a = 0.32 M,
-  //   so x = 0.11 M / 0.79 (about 10.881 mol, matching the optimizer's decant).
-  //   litres = M * litresPerMole(20).
-  //   recipeCost = 5 (one top-up) + x * litresPerMole(20) * (0.01 + 0.001).
+  // Hand check, vdw at 20 C, 12 L: M = calcMolarDensity(150, 32, 0, 20, true) * 12 total moles.
+  // Only the top-up fee is charged here; per-litre gas prices return in Task 2 (pure-bank pricing).
   const perMole = litresPerMole(20);
   const M = calcMolarDensity(150, 32, 0, 20, true) * 12;
-  const x = 0.11 * M / 0.79;
-  const expectedCost = 5 + x * perMole * 0.011;
   assert.ok(Math.abs(result.litres - M * perMole) < 1e-9);
-  assert.ok(Math.abs(result.recipeCost - expectedCost) < 1e-6, `${result.recipeCost} vs ${expectedCost}`);
-  assert.ok(Math.abs(result.pricePerLitre - expectedCost / (M * perMole)) < 1e-9);
+  assert.ok(Math.abs(result.recipeCost - 5) < 1e-6, `${result.recipeCost} vs 5`);
+  assert.ok(Math.abs(result.pricePerLitre - 5 / (M * perMole)) < 1e-9);
   assert.equal(result.operationCount.topUp, 1);
   assert.equal(result.operationCount.decant, 1);
   assert.equal(result.operationCount.boost, undefined);
@@ -139,10 +127,7 @@ test('more than 6 virtual banks for one gas fails without a price', () => {
 });
 
 test('all-zero prices report that no prices are configured', () => {
-  const zero = {
-    currencySymbol: '', pricePerLitre: { oxygen: 0, helium: 0 }, leftoverDiscountPercent: 0,
-    operationPrices: { boostPerLitre: 0, decantPerLitre: 0, equalizePerLitre: 0, topUpPerOperation: 0 }
-  };
+  const zero = { currencySymbol: '', leftoverDiscountPercent: 0, operationPrices: { boost: 0, decant: 0, topUp: 0 } };
   const result = priceBankByRecipe({ bank: bank(), costs: zero, settings: settingsWith(), physics });
   assert.equal(result.ok, false);
   assert.match(result.reason, /no prices/i);
@@ -208,10 +193,4 @@ test('Tx21/35 at 150 bar: sourceCount is the O2 count plus the He count', () => 
   assert.equal(result.ok, true, result.reason);
   assert.ok(gasCount('O2', b) > 0 && gasCount('He', b) > 0);
   assert.equal(result.sourceCount, gasCount('O2', b) + gasCount('He', b));
-});
-
-test('pure He at 150 bar: He price plus decant rate, not the O2 price', () => {
-  const result = priceBankByRecipe({ bank: bank({ oxygenPercent: 0, heliumPercent: 100 }), costs: costs(), settings: settingsWith(), physics });
-  assert.equal(result.ok, true, result.reason);
-  assert.ok(Math.abs(result.pricePerLitre - 0.051) < 1e-9);
 });

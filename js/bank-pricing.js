@@ -14,9 +14,7 @@ export function virtualBankCount({ needMoles, perBankMoles }) {
   return Math.ceil(SAFETY_MARGIN * needMoles / perBankMoles);
 }
 
-const anyPrice = costs => [
-  costs.pricePerLitre.oxygen, costs.pricePerLitre.helium, ...Object.values(costs.operationPrices)
-].some(value => value > 0);
+const anyPrice = costs => Object.values(costs.operationPrices).some(value => value > 0); // redesign: replaced in Task 2
 
 function virtualBanks(gasId, composition, count, price) {
   return Array.from({ length: count }, (_, index) => ({
@@ -57,8 +55,8 @@ export function priceBankByRecipe({ bank, costs, settings, physics }) {
 
   const sources = [];
   for (const [gasId, composition, fraction, price] of [
-    ['oxygen', { oxygenPercent: 100, heliumPercent: 0 }, bank.oxygenPercent / 100, costs.pricePerLitre.oxygen],
-    ['helium', { oxygenPercent: 0, heliumPercent: 100 }, bank.heliumPercent / 100, costs.pricePerLitre.helium]
+    ['oxygen', { oxygenPercent: 100, heliumPercent: 0 }, bank.oxygenPercent / 100, 0], // redesign: replaced in Task 2
+    ['helium', { oxygenPercent: 0, heliumPercent: 100 }, bank.heliumPercent / 100, 0] // redesign: replaced in Task 2
   ]) {
     const perBankMoles = (
       calcMolarDensity(VIRTUAL_BANK_PRESSURE_BAR, composition.oxygenPercent, composition.heliumPercent, temperatureC, useVdw)

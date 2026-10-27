@@ -1,7 +1,7 @@
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
-import { costFieldToDisplay, costFieldToStored, renderSettingsDialog } from '../js/ui/settings-dialog.js';
+import { parseCostFee, renderSettingsDialog } from '../js/ui/settings-dialog.js';
 
 class FakeElement {
   constructor(tagName = 'div') {
@@ -109,12 +109,9 @@ function createFakeDocument() {
     'settings-booster-temperature-modifier',
     'settings-compressor-temperature-modifier',
     'settings-cost-currency',
-    'settings-cost-price-oxygen',
-    'settings-cost-price-helium',
     'settings-cost-discount',
     'settings-cost-boost',
     'settings-cost-decant',
-    'settings-cost-equalize',
     'settings-cost-topup',
   ]) {
     elements.set(id, new FakeElement());
@@ -444,40 +441,29 @@ function settingsWithCosts(units = 'metric') {
     units,
     costs: {
       currencySymbol: '€',
-      pricePerLitre: { oxygen: 0.02, helium: 0.05 },
       leftoverDiscountPercent: 12.5,
-      operationPrices: { boostPerLitre: 0.001, decantPerLitre: 0.002, equalizePerLitre: 0.003, topUpPerOperation: 1.5 }
+      operationPrices: { boost: 1.5, decant: 0.5, topUp: 5.126 }
     }
   };
 }
 
-test('renders the costs pane with metric per-litre prices and the stored currency', () => {
+test('renders the costs pane with the symbol, discount and flat fees to two decimals', () => {
   const { document, elements } = createFakeDocument();
   globalThis.document = document;
 
   renderSettingsDialog(settingsWithCosts('metric'));
 
   assert.equal(elements.get('settings-cost-currency').value, '€');
-  assert.equal(elements.get('settings-cost-price-oxygen').value, '0.02');
-  assert.equal(elements.get('settings-cost-price-oxygen').attributes.get('aria-label'), 'Oxygen price (/L)');
   assert.equal(elements.get('settings-cost-discount').value, '12.5');
-  assert.equal(elements.get('settings-cost-topup').value, '1.5');
+  assert.equal(elements.get('settings-cost-boost').value, '1.50');
+  assert.equal(elements.get('settings-cost-decant').value, '0.50');
+  assert.equal(elements.get('settings-cost-topup').value, '5.13');
+  assert.equal(elements.get('settings-cost-boost').attributes.get('aria-label'), 'Boost (per operation)');
+  assert.equal(elements.get('settings-cost-decant').attributes.get('aria-label'), 'Decant incl. equalize (per operation)');
+  assert.equal(elements.get('settings-cost-topup').attributes.get('aria-label'), 'Top-up (per operation, includes compressor air)');
 });
 
-test('renders per-litre cost prices converted to /cu ft in imperial units', () => {
-  const { document, elements } = createFakeDocument();
-  globalThis.document = document;
-
-  renderSettingsDialog(settingsWithCosts('imperial'));
-
-  const oxygen = elements.get('settings-cost-price-oxygen');
-  assert.equal(oxygen.value, '0.566337');
-  assert.match(oxygen.attributes.get('aria-label'), /\/cu ft\)$/);
-  assert.match(elements.get('settings-cost-price-helium').attributes.get('aria-label'), /\/cu ft/);
-  assert.match(elements.get('settings-cost-boost').attributes.get('aria-label'), /\/cu ft/);
-});
-
-test('keeps the top-up fee identical in metric and imperial units', () => {
+test('shows identical flat fees in metric and imperial units because fees are never unit-converted', () => {
   const metric = createFakeDocument();
   globalThis.document = metric.document;
   renderSettingsDialog(settingsWithCosts('metric'));
@@ -485,27 +471,20 @@ test('keeps the top-up fee identical in metric and imperial units', () => {
   globalThis.document = imperial.document;
   renderSettingsDialog(settingsWithCosts('imperial'));
 
-  assert.equal(metric.elements.get('settings-cost-topup').value, '1.5');
-  assert.equal(imperial.elements.get('settings-cost-topup').value, '1.5');
-  assert.equal(imperial.elements.get('settings-cost-topup').attributes.get('aria-label'), 'Top-up, per operation, includes compressor air');
-  assert.equal(imperial.elements.get('settings-cost-discount').value, '12.5');
+  for (const id of ['settings-cost-boost', 'settings-cost-decant', 'settings-cost-topup', 'settings-cost-discount']) {
+    assert.equal(imperial.elements.get(id).value, metric.elements.get(id).value);
+  }
 });
 
-test('converts edited per-litre prices back to stored values and leaves flat fields unconverted', () => {
-  assert.equal(costFieldToStored('pricePerLitre.oxygen', '0.02', 'metric'), 0.02);
-  assert.ok(Math.abs(costFieldToStored('pricePerLitre.oxygen', '0.566337', 'imperial') - 0.02) < 1e-6);
-  assert.ok(Math.abs(costFieldToStored('operationPrices.boostPerLitre', '0.028316846592', 'imperial') - 0.001) < 1e-12);
-  assert.equal(costFieldToStored('operationPrices.topUpPerOperation', '1.5', 'imperial'), 1.5);
-  assert.equal(costFieldToStored('leftoverDiscountPercent', '12.5', 'imperial'), 12.5);
-  assert.equal(costFieldToStored('currencySymbol', '  € ', 'imperial'), '€');
-  assert.ok(Number.isNaN(costFieldToStored('pricePerLitre.oxygen', '', 'metric')));
-  assert.ok(Number.isNaN(costFieldToStored('pricePerLitre.helium', 'abc', 'imperial')));
-
-  assert.ok(Math.abs(costFieldToDisplay('pricePerLitre.oxygen', 0.02, 'imperial') - 0.56633693184) < 1e-12);
-  assert.equal(costFieldToDisplay('operationPrices.topUpPerOperation', 1.5, 'imperial'), 1.5);
+test('parses typed fees without unit conversion and maps empty or non-numeric text to NaN', () => {
+  assert.equal(parseCostFee(' 1.5 '), 1.5);
+  assert.equal(parseCostFee('0.25'), 0.25);
+  assert.ok(Number.isNaN(parseCostFee('')));
+  assert.ok(Number.isNaN(parseCostFee('   ')));
+  assert.ok(Number.isNaN(parseCostFee('abc')));
 });
 
-test('provides a Costs category with the flat fee and discount labelled in the pane', () => {
+test('provides a Costs pane with symbol, discount and three flat fees and no per-litre inputs', () => {
   const markup = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   const pane = markup.match(/<section id="settings-pane-costs"[\s\S]*?<\/section>/)?.[0] ?? '';
 
@@ -515,17 +494,22 @@ test('provides a Costs category with the flat fee and discount labelled in the p
   assert.match(pane, /class="hidden"/);
   for (const id of [
     'settings-cost-currency',
-    'settings-cost-price-oxygen',
-    'settings-cost-price-helium',
     'settings-cost-discount',
     'settings-cost-boost',
     'settings-cost-decant',
-    'settings-cost-equalize',
     'settings-cost-topup'
   ]) {
     assert.match(pane, new RegExp(`<input id="${id}"[^>]*data-settings-collection="costs"`));
   }
-  assert.match(pane, /Top-up, per operation, includes compressor air/);
+  for (const id of ['settings-cost-boost', 'settings-cost-decant', 'settings-cost-topup']) {
+    const tag = pane.match(new RegExp(`<input id="${id}"[^>]*>`))?.[0] ?? '';
+    assert.match(tag, /type="number"/);
+    assert.match(tag, /min="0"/);
+    assert.match(tag, /step="0\.01"/);
+  }
+  assert.match(pane, /<label for="settings-cost-boost"[^>]*>Boost \(per operation\)<\/label>/);
+  assert.match(pane, /<label for="settings-cost-decant"[^>]*>Decant incl\. equalize \(per operation\)<\/label>/);
+  assert.match(pane, /<label for="settings-cost-topup"[^>]*>Top-up \(per operation, includes compressor air\)<\/label>/);
   assert.match(pane, /Leftover gas discount \(%\)/);
-  assert.match(pane, /per litre/);
+  assert.doesNotMatch(pane, /pricePerLitre|per litre|settings-cost-price|equalize-per|Oxygen price|Helium price/i);
 });

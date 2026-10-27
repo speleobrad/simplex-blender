@@ -1,6 +1,6 @@
 import { PRESET_IMPORT_DEFAULT_URLS } from '../preset-import.js';
 import { matchesPressureWarningUnlockPhrase, sortCylinderPresetEntries, sortGasPresetEntries } from '../settings.js';
-import { convertFromDisplay, convertToDisplay, materialLabel, unitLabel } from '../units.js';
+import { convertToDisplay, materialLabel, unitLabel } from '../units.js';
 import { MATERIAL_VALUES } from '../materials.js';
 const CUSTOM_PRESET = 'custom';
 const EQUIPMENT_FIELD_QUANTITIES = {
@@ -31,19 +31,15 @@ function formatSettingNumber(value) {
   return Number.isFinite(Number(value)) ? Number(value).toFixed(2) : String(value);
 }
 
-const COST_PRICE_QUANTITY = 'pricePerVolumeL';
 const COST_FIELDS = [
   { id: 'settings-cost-currency', field: 'currencySymbol', kind: 'text', label: 'Currency symbol' },
-  { id: 'settings-cost-price-oxygen', field: 'pricePerLitre.oxygen', kind: 'perLitre', label: 'Oxygen price' },
-  { id: 'settings-cost-price-helium', field: 'pricePerLitre.helium', kind: 'perLitre', label: 'Helium price' },
   { id: 'settings-cost-discount', field: 'leftoverDiscountPercent', kind: 'number', label: 'Leftover gas discount (%)' },
-  { id: 'settings-cost-boost', field: 'operationPrices.boostPerLitre', kind: 'perLitre', label: 'Boost price' },
-  { id: 'settings-cost-decant', field: 'operationPrices.decantPerLitre', kind: 'perLitre', label: 'Decant price' },
-  { id: 'settings-cost-equalize', field: 'operationPrices.equalizePerLitre', kind: 'perLitre', label: 'Equalize price' },
-  { id: 'settings-cost-topup', field: 'operationPrices.topUpPerOperation', kind: 'number', label: 'Top-up, per operation, includes compressor air' }
+  { id: 'settings-cost-boost', field: 'operationPrices.boost', kind: 'fee', label: 'Boost (per operation)' },
+  { id: 'settings-cost-decant', field: 'operationPrices.decant', kind: 'fee', label: 'Decant incl. equalize (per operation)' },
+  { id: 'settings-cost-topup', field: 'operationPrices.topUp', kind: 'fee', label: 'Top-up (per operation, includes compressor air)' }
 ];
 
-/** Read a dotted Settings costs path such as `pricePerLitre.oxygen`. */
+/** Read a dotted Settings costs path such as `operationPrices.boost`. */
 export function getCostField(costs, field) {
   return field.split('.').reduce((value, key) => value?.[key], costs);
 }
@@ -56,24 +52,13 @@ export function setCostField(costs, field, value) {
 }
 
 /**
- * Convert a value typed into a cost input into its stored form. Per-litre prices
- * use the active units; the flat top-up fee and the discount are never converted.
- * Empty or non-numeric numbers become NaN so validation rejects them.
+ * Parse a typed flat operation fee. Fees are money per operation, so they are
+ * never unit-converted. Empty or non-numeric text becomes NaN so validation rejects it.
  */
-export function costFieldToStored(field, displayValue, units) {
-  const text = String(displayValue ?? '').trim();
-  const kind = COST_FIELDS.find(entry => entry.field === field)?.kind;
-  if (kind === 'text') return text;
-  if (text === '') return Number.NaN;
-  const number = Number(text);
-  if (!Number.isFinite(number)) return Number.NaN;
-  return kind === 'perLitre' ? convertFromDisplay(number, COST_PRICE_QUANTITY, units) : number;
-}
-
-/** Convert a stored cost value to the value shown in its input for the active units. */
-export function costFieldToDisplay(field, storedValue, units) {
-  const kind = COST_FIELDS.find(entry => entry.field === field)?.kind;
-  return kind === 'perLitre' ? convertToDisplay(storedValue, COST_PRICE_QUANTITY, units) : storedValue;
+export function parseCostFee(text) {
+  const trimmed = String(text ?? '').trim();
+  if (trimmed === '') return Number.NaN;
+  return Number(trimmed);
 }
 
 function formatCostInput(value) {
@@ -81,14 +66,18 @@ function formatCostInput(value) {
   return Number.isFinite(value) ? String(Number(value.toPrecision(6))) : '';
 }
 
+function formatCostFee(value) {
+  return Number.isFinite(value) ? value.toFixed(2) : '';
+}
+
 function renderCostsPane(settings) {
   if (!settings.costs) return;
   for (const { id, field, kind, label } of COST_FIELDS) {
     const input = document.getElementById(id);
     if (!input) continue;
-    input.value = formatCostInput(costFieldToDisplay(field, getCostField(settings.costs, field), settings.units));
-    const unit = kind === 'perLitre' ? ` (${unitLabel(COST_PRICE_QUANTITY, settings.units)})` : '';
-    input.setAttribute('aria-label', `${label}${unit}`);
+    const stored = getCostField(settings.costs, field);
+    input.value = kind === 'fee' ? formatCostFee(stored) : formatCostInput(stored);
+    input.setAttribute('aria-label', label);
   }
 }
 

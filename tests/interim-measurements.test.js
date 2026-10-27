@@ -133,7 +133,7 @@ test('a titled step shows its plan number and an untitled step falls back to ind
 const priced = (over = {}) => ({
   ...input,
   banks: [{ id: 'oxygen', pressureBar: 200, pricePerLitre: 0.02 }],
-  settings: { booster: { otherBoostBpm: 50 }, costs: { pricePerLitre: { oxygen: 0.01, helium: 0.05 }, leftoverDiscountPercent: 0 } },
+  settings: { booster: { otherBoostBpm: 50 }, costs: { currencySymbol: '€', leftoverDiscountPercent: 0, operationPrices: { boost: 1, decant: 2, topUp: 3 } } },
   ...over
 });
 
@@ -141,7 +141,7 @@ test('calculator recipe signature ignores cost prices in settings and banks', ()
   const base = priced();
   assert.equal(
     calculatorInputSignature(base),
-    calculatorInputSignature({ ...base, settings: { ...base.settings, costs: { ...base.settings.costs, pricePerLitre: { oxygen: 9, helium: 9 }, leftoverDiscountPercent: 50 } } })
+    calculatorInputSignature({ ...base, settings: { ...base.settings, costs: { ...base.settings.costs, operationPrices: { boost: 9, decant: 9, topUp: 9 }, leftoverDiscountPercent: 50 } } })
   );
   assert.equal(
     calculatorInputSignature(base),

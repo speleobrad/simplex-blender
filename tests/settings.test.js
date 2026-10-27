@@ -940,24 +940,59 @@ test('interim pressure tolerance round-trips through storage and validates its b
   }
 });
 
-test('settings default costs to zero prices and survive save, load and copy', () => {
-  assert.equal(DEFAULT_SETTINGS.costs.pricePerLitre.oxygen, 0);
-  assert.equal(DEFAULT_SETTINGS.costs.currencySymbol, '');
+test('settings default costs to empty symbol, no discount and zero flat fees', () => {
+  assert.deepEqual(DEFAULT_SETTINGS.costs, {
+    currencySymbol: '',
+    leftoverDiscountPercent: 0,
+    operationPrices: { boost: 0, decant: 0, topUp: 0 }
+  });
+});
+test('flat fees survive save, load and copy', () => {
   const storage = memoryStorage();
   const settings = copySettings(DEFAULT_SETTINGS);
-  settings.costs.pricePerLitre.helium = 0.07;
-  settings.costs.operationPrices.topUpPerOperation = 4.5;
+  settings.costs.operationPrices = { boost: 1.25, decant: 0.5, topUp: 4.5 };
   saveSettings(settings, storage);
   const loaded = loadSettings(storage);
-  assert.equal(loaded.costs.pricePerLitre.helium, 0.07);
-  assert.equal(loaded.costs.operationPrices.topUpPerOperation, 4.5);
-  const copy = copySettings(loaded); copy.costs.pricePerLitre.helium = 9;
-  assert.equal(loaded.costs.pricePerLitre.helium, 0.07);
+  assert.deepEqual(loaded.costs.operationPrices, { boost: 1.25, decant: 0.5, topUp: 4.5 });
+  assert.equal('pricePerLitre' in loaded.costs, false);
+  const copy = copySettings(loaded); copy.costs.operationPrices.boost = 9;
+  assert.equal(loaded.costs.operationPrices.boost, 1.25);
 });
-test('legacy saved settings without costs load with zero-price defaults', () => {
+test('legacy saved settings without costs load with zero-fee defaults', () => {
   const legacy = copySettings(DEFAULT_SETTINGS); delete legacy.costs;
   const storage = memoryStorage([['simplex-gas-remixer-settings', JSON.stringify(legacy)]]);
   assert.deepEqual(loadSettings(storage).costs, DEFAULT_SETTINGS.costs);
+});
+test('legacy per-litre cost shape loads with zero flat fees and keeps a valid symbol and discount', () => {
+  const legacy = copySettings(DEFAULT_SETTINGS);
+  legacy.costs = {
+    currencySymbol: '€',
+    pricePerLitre: { oxygen: 0.02, helium: 0.05 },
+    leftoverDiscountPercent: 12.5,
+    operationPrices: { boostPerLitre: 0.001, decantPerLitre: 0.002, equalizePerLitre: 0.003, topUpPerOperation: 1.5 }
+  };
+  const failures = [];
+  const loaded = loadSettings(memoryStorage([['simplex-gas-remixer-settings', JSON.stringify(legacy)]]), error => failures.push(error));
+  assert.deepEqual(failures, []);
+  assert.deepEqual(loaded.costs, {
+    currencySymbol: '€',
+    leftoverDiscountPercent: 12.5,
+    operationPrices: { boost: 0, decant: 0, topUp: 0 }
+  });
+});
+test('invalid flat fees in saved settings fall back to the default settings', () => {
+  for (const operationPrices of [
+    { boost: -1, decant: 0, topUp: 0 },
+    { boost: 0, decant: 1_000_001, topUp: 0 },
+    { boost: 0, decant: 0, topUp: 'x' }
+  ]) {
+    const saved = copySettings(DEFAULT_SETTINGS);
+    saved.costs = { currencySymbol: '€', leftoverDiscountPercent: 5, operationPrices };
+    const failures = [];
+    const loaded = loadSettings(memoryStorage([['simplex-gas-remixer-settings', JSON.stringify(saved)]]), error => failures.push(error));
+    assert.equal(failures.length, 1);
+    assert.deepEqual(loaded.costs, DEFAULT_SETTINGS.costs);
+  }
 });
 test('saving settings with invalid costs throws', () => {
   const settings = copySettings(DEFAULT_SETTINGS); settings.costs.leftoverDiscountPercent = -1;
