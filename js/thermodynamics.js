@@ -415,7 +415,6 @@ function salvageTransferRate({
   currentPressureBar,
   currentTemperatureC,
   transferEndPressureBar,
-  cylinder,
   physics,
   booster
 }) {
@@ -484,7 +483,6 @@ function rateForProtocolStep({
       currentPressureBar,
       currentTemperatureC,
       transferEndPressureBar,
-      cylinder,
       physics,
       booster
     });

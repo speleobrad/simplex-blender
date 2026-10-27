@@ -46,6 +46,7 @@ test('a reading below ambient is rejected when no drain produced it', () => {
   );
   assert.equal(result.ok, false);
   assert.match(result.error, /below ambient 21\.0 °C.*pressure-lowering drain/);
+  assert.match(result.error, /salvage transfer out of the working tank/);
 });
 
 test('a pressure outside the tolerance band for the measured temperature is rejected', () => {
