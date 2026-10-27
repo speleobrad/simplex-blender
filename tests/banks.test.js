@@ -22,9 +22,9 @@ test('default banks exclude compressor Air', () => {
 });
 test('built-in supply banks match the requested defaults', () => {
   assert.deepEqual(DEFAULT_BANKS, [
-    { id: 'bank-helium', name: 'Helium', volumeL: 40, pressureBar: 150, oxygenPercent: 0, heliumPercent: 100, enabled: true },
-    { id: 'bank-oxygen', name: 'Oxygen', volumeL: 50, pressureBar: 200, oxygenPercent: 100, heliumPercent: 0, enabled: true },
-    { id: 'bank-sample-scrap', name: 'Sample scrap', volumeL: 12, pressureBar: 45, oxygenPercent: 19, heliumPercent: 40, enabled: true, gasPresetName: null }
+    { id: 'bank-helium', name: 'Helium', volumeL: 40, pressureBar: 150, maxPressureBar: 200, oxygenPercent: 0, heliumPercent: 100, enabled: true },
+    { id: 'bank-oxygen', name: 'Oxygen', volumeL: 50, pressureBar: 200, maxPressureBar: 200, oxygenPercent: 100, heliumPercent: 0, enabled: true },
+    { id: 'bank-sample-scrap', name: 'Sample scrap', volumeL: 12, pressureBar: 45, maxPressureBar: 200, oxygenPercent: 19, heliumPercent: 40, enabled: true, gasPresetName: null }
   ]);
 });
 
@@ -72,6 +72,7 @@ test('saved banks preserve gas, pressure, volume, enable, and preset state', () 
     name: 'Custom mix',
     volumeL: 36,
     pressureBar: 217,
+    maxPressureBar: 250,
     oxygenPercent: 19,
     heliumPercent: 42,
     enabled: false,
@@ -134,4 +135,38 @@ test('rejects out-of-range banks and falls back when invalid saved records are l
     reportedFailure = error;
   }), DEFAULT_BANKS);
   assert.ok(reportedFailure instanceof RangeError);
+});
+
+test('every default bank carries a maximum pressure of 200 bar', () => {
+  for (const bank of DEFAULT_BANKS) assert.equal(bank.maxPressureBar, 200);
+});
+
+test('stored banks without maxPressureBar migrate to the greater of 200 bar and current pressure', () => {
+  const storage = memoryStorage([[
+    'simplex-gas-remixer-banks',
+    JSON.stringify([
+      { id: 'bank-low', name: 'Low', volumeL: 20, pressureBar: 120, oxygenPercent: 0, heliumPercent: 100, enabled: true },
+      { id: 'bank-high', name: 'High', volumeL: 20, pressureBar: 250, oxygenPercent: 0, heliumPercent: 100, enabled: true }
+    ])
+  ]]);
+  const banks = loadSupplyBanks(storage);
+  assert.equal(banks[0].maxPressureBar, 200);
+  assert.equal(banks[1].maxPressureBar, 250);
+});
+
+test('stored valid maxPressureBar is kept when banks are loaded', () => {
+  const storage = memoryStorage([[
+    'simplex-gas-remixer-banks',
+    JSON.stringify([
+      { id: 'bank-roomy', name: 'Roomy', volumeL: 20, pressureBar: 120, maxPressureBar: 300, oxygenPercent: 0, heliumPercent: 100, enabled: true }
+    ])
+  ]]);
+  assert.equal(loadSupplyBanks(storage)[0].maxPressureBar, 300);
+});
+
+test('saving a bank without a finite maximum pressure is rejected', () => {
+  const storage = memoryStorage();
+  const { maxPressureBar, ...withoutMax } = DEFAULT_BANKS[0];
+  assert.throws(() => saveSupplyBanks([withoutMax], storage), RangeError);
+  assert.equal(storage.getItem('simplex-gas-remixer-banks'), null);
 });

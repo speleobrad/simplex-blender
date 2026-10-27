@@ -18,9 +18,9 @@ const defaultInput = {
   },
   physics: { model: 'vdw', temperatureC: 20 },
   banks: [
-    { id: 'bank-he', name: 'Pure Helium', volumeL: 50, pressureBar: 200, minimumPressureBar: 15, oxygenPercent: 0, heliumPercent: 100, enabled: true },
-    { id: 'bank-1845', name: 'Tx 18/45 Bank', volumeL: 50, pressureBar: 200, minimumPressureBar: 20, oxygenPercent: 18, heliumPercent: 45, enabled: true },
-    { id: 'bank-o2', name: 'Pure Oxygen', volumeL: 40, pressureBar: 180, minimumPressureBar: 10, oxygenPercent: 100, heliumPercent: 0, enabled: true }
+    { id: 'bank-he', name: 'Pure Helium', volumeL: 50, pressureBar: 200, maxPressureBar: 350, minimumPressureBar: 15, oxygenPercent: 0, heliumPercent: 100, enabled: true },
+    { id: 'bank-1845', name: 'Tx 18/45 Bank', volumeL: 50, pressureBar: 200, maxPressureBar: 350, minimumPressureBar: 20, oxygenPercent: 18, heliumPercent: 45, enabled: true },
+    { id: 'bank-o2', name: 'Pure Oxygen', volumeL: 40, pressureBar: 180, maxPressureBar: 350, minimumPressureBar: 10, oxygenPercent: 100, heliumPercent: 0, enabled: true }
   ],
   settings: {
     booster: {
@@ -67,10 +67,10 @@ test('safety fallback preserves working gas and uses available premixes before p
     },
     physics: { model: 'vdw', temperatureC: 20 },
     banks: [
-      { id: 'he', name: 'Pure Helium', volumeL: 50, pressureBar: 200, minimumPressureBar: 15, oxygenPercent: 0, heliumPercent: 100, enabled: true },
-      { id: 'o2', name: 'Pure Oxygen', volumeL: 40, pressureBar: 180, minimumPressureBar: 10, oxygenPercent: 100, heliumPercent: 0, enabled: true },
-      { id: '1845', name: '18/45', volumeL: 18, pressureBar: 200, minimumPressureBar: 20, oxygenPercent: 18, heliumPercent: 45, enabled: true },
-      { id: '770', name: '7/70', volumeL: 50, pressureBar: 200, minimumPressureBar: 20, oxygenPercent: 7, heliumPercent: 70, enabled: true }
+      { id: 'he', name: 'Pure Helium', volumeL: 50, pressureBar: 200, maxPressureBar: 350, minimumPressureBar: 15, oxygenPercent: 0, heliumPercent: 100, enabled: true },
+      { id: 'o2', name: 'Pure Oxygen', volumeL: 40, pressureBar: 180, maxPressureBar: 350, minimumPressureBar: 10, oxygenPercent: 100, heliumPercent: 0, enabled: true },
+      { id: '1845', name: '18/45', volumeL: 18, pressureBar: 200, maxPressureBar: 350, minimumPressureBar: 20, oxygenPercent: 18, heliumPercent: 45, enabled: true },
+      { id: '770', name: '7/70', volumeL: 50, pressureBar: 200, maxPressureBar: 350, minimumPressureBar: 20, oxygenPercent: 7, heliumPercent: 70, enabled: true }
     ],
     settings: {
       booster: {
@@ -107,6 +107,7 @@ function equalGasTransferInput({ initialPressureBar, targetPressureBar, bankPres
       volumeL: 10,
       pressureBar: bankPressureBar,
       minimumPressureBar: 0,
+      maxPressureBar: 350,
       oxygenPercent: 0,
       heliumPercent: 0,
       enabled: true
@@ -157,6 +158,7 @@ test('rejects finite Air banks in favor of the implicit compressor source', () =
       name: 'Air bank',
       volumeL: 10,
       pressureBar: 200,
+      maxPressureBar: 350,
       oxygenPercent: 21,
       heliumPercent: 0,
       enabled: true
@@ -209,6 +211,7 @@ test('non-Air boost cannot end above the booster output ceiling', () => {
       name: 'Helium',
       volumeL: 50,
       pressureBar: 150,
+      maxPressureBar: 350,
       oxygenPercent: 0,
       heliumPercent: 100,
       enabled: true
@@ -242,6 +245,7 @@ test('non-Air decant can exceed the booster output ceiling', () => {
       name: 'Helium',
       volumeL: 100,
       pressureBar: 300,
+      maxPressureBar: 350,
       oxygenPercent: 0,
       heliumPercent: 100,
       enabled: true
@@ -276,6 +280,7 @@ test('uses one booster minimum source pressure for every supply bank', () => {
       name: 'Helium',
       volumeL: 10,
       pressureBar: 100,
+      maxPressureBar: 350,
       oxygenPercent: 0,
       heliumPercent: 100,
       enabled: true
@@ -304,6 +309,7 @@ test('formats equalising and top-up protocol stages with source leftovers and in
       name: 'Nitrox source',
       volumeL: 10,
       pressureBar: 120,
+      maxPressureBar: 350,
       minimumPressureBar: 0,
       oxygenPercent: 20,
       heliumPercent: 0,
@@ -337,6 +343,7 @@ test('counts helium from non-pure supply gas as salvaged helium', () => {
       name: 'Helium mix',
       volumeL: 10,
       pressureBar: 200,
+      maxPressureBar: 350,
       oxygenPercent: 0,
       heliumPercent: 50,
       enabled: true
@@ -582,6 +589,7 @@ test('shows tiny required drains with a nonzero pressure change', () => {
       name: 'Pure Oxygen',
       volumeL: 10,
       pressureBar: 100,
+      maxPressureBar: 350,
       minimumPressureBar: 0,
       oxygenPercent: 100,
       heliumPercent: 0,
@@ -780,8 +788,8 @@ test('reports helium shortage as required source-bank pressure and names the dep
     },
     physics: { model: 'ideal', temperatureC: 20 },
     banks: [
-      { id: 'he', name: 'Pure Helium', volumeL: 1, pressureBar: 10, minimumPressureBar: 0, oxygenPercent: 0, heliumPercent: 100, enabled: true },
-      { id: 'o2', name: 'Pure Oxygen', volumeL: 10, pressureBar: 100, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true },
+      { id: 'he', name: 'Pure Helium', volumeL: 1, pressureBar: 10, maxPressureBar: 350, minimumPressureBar: 0, oxygenPercent: 0, heliumPercent: 100, enabled: true },
+      { id: 'o2', name: 'Pure Oxygen', volumeL: 10, pressureBar: 100, maxPressureBar: 350, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true },
     ]
   });
 
@@ -818,8 +826,8 @@ test('converts required source-bank pressure with the selected real-gas model', 
     },
     physics: { model: 'vdw', temperatureC: 20 },
     banks: [
-      { id: 'he', name: 'Pure Helium', volumeL: 1, pressureBar: 10, minimumPressureBar: 0, oxygenPercent: 0, heliumPercent: 100, enabled: true },
-      { id: 'o2', name: 'Pure Oxygen', volumeL: 10, pressureBar: 100, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true },
+      { id: 'he', name: 'Pure Helium', volumeL: 1, pressureBar: 10, maxPressureBar: 350, minimumPressureBar: 0, oxygenPercent: 0, heliumPercent: 100, enabled: true },
+      { id: 'o2', name: 'Pure Oxygen', volumeL: 10, pressureBar: 100, maxPressureBar: 350, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true },
     ]
   });
 
@@ -845,8 +853,8 @@ test('does not present an out-of-range real-gas source pressure as exact', () =>
     },
     physics: { model: 'vdw', temperatureC: 20 },
     banks: [
-      { id: 'he', name: 'Pure Helium', volumeL: 1, pressureBar: 10, minimumPressureBar: 0, oxygenPercent: 0, heliumPercent: 100, enabled: true },
-      { id: 'o2', name: 'Pure Oxygen', volumeL: 10, pressureBar: 100, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true },
+      { id: 'he', name: 'Pure Helium', volumeL: 1, pressureBar: 10, maxPressureBar: 350, minimumPressureBar: 0, oxygenPercent: 0, heliumPercent: 100, enabled: true },
+      { id: 'o2', name: 'Pure Oxygen', volumeL: 10, pressureBar: 100, maxPressureBar: 350, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true },
     ]
   });
 
@@ -873,6 +881,7 @@ test('does not label an unused trace bank as exhausted', () => {
       name: 'Trace helium bank',
       volumeL: 1,
       pressureBar: 1,
+      maxPressureBar: 350,
       minimumPressureBar: 0,
       oxygenPercent: 0,
       heliumPercent: 100,
@@ -928,8 +937,8 @@ test('maximum-pressure fallback uses complementary banks to preserve the exact t
     },
     physics: { model: 'ideal', temperatureC: 20 },
     banks: [
-      { id: 'he', name: 'Helium bank', volumeL: 10, pressureBar: 100, minimumPressureBar: 0, oxygenPercent: 0, heliumPercent: 100, enabled: true },
-      { id: 'nitrogen', name: 'Nitrogen bank', volumeL: 10, pressureBar: 100, minimumPressureBar: 0, oxygenPercent: 0, heliumPercent: 0, enabled: true }
+      { id: 'he', name: 'Helium bank', volumeL: 10, pressureBar: 100, maxPressureBar: 350, minimumPressureBar: 0, oxygenPercent: 0, heliumPercent: 100, enabled: true },
+      { id: 'nitrogen', name: 'Nitrogen bank', volumeL: 10, pressureBar: 100, maxPressureBar: 350, minimumPressureBar: 0, oxygenPercent: 0, heliumPercent: 0, enabled: true }
     ],
     settings: {
       booster: {
@@ -964,6 +973,7 @@ test('keeps a sub-0.05-mol bank contribution in the fallback recipe', () => {
       name: 'Oxygen bank',
       volumeL: 200,
       pressureBar: 100,
+      maxPressureBar: 350,
       minimumPressureBar: 0,
       oxygenPercent: 100,
       heliumPercent: 0,
@@ -994,8 +1004,8 @@ test('uses a larger interchangeable oxygen bank when it keeps the maximum recipe
     },
     physics: { model: 'ideal', temperatureC: 20 },
     banks: [
-      { id: 'small-oxygen', name: 'Small oxygen bank', volumeL: 10, pressureBar: 80, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true },
-      { id: 'large-oxygen', name: 'Large oxygen bank', volumeL: 100, pressureBar: 80, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true }
+      { id: 'small-oxygen', name: 'Small oxygen bank', volumeL: 10, pressureBar: 80, maxPressureBar: 350, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true },
+      { id: 'large-oxygen', name: 'Large oxygen bank', volumeL: 100, pressureBar: 80, maxPressureBar: 350, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true }
     ]
   });
 
@@ -1017,8 +1027,8 @@ test('searches an alternative high-pressure source instead of overstating an uns
     },
     physics: { model: 'ideal', temperatureC: 20 },
     banks: [
-      { id: 'low-pressure', name: 'Low-pressure large bank', volumeL: 100, pressureBar: 20, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true },
-      { id: 'high-pressure', name: 'High-pressure small bank', volumeL: 10, pressureBar: 100, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true }
+      { id: 'low-pressure', name: 'Low-pressure large bank', volumeL: 100, pressureBar: 20, maxPressureBar: 350, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true },
+      { id: 'high-pressure', name: 'High-pressure small bank', volumeL: 10, pressureBar: 100, maxPressureBar: 350, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true }
     ]
   });
 
@@ -1040,8 +1050,8 @@ test('splits oxygen transfers when neither full-bank allocation is safe', () => 
     },
     physics: { model: 'ideal', temperatureC: 20 },
     banks: [
-      { id: 'oxygen-a', name: 'Oxygen A', volumeL: 10, pressureBar: 100, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true },
-      { id: 'oxygen-b', name: 'Oxygen B', volumeL: 10, pressureBar: 100, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true }
+      { id: 'oxygen-a', name: 'Oxygen A', volumeL: 10, pressureBar: 100, maxPressureBar: 350, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true },
+      { id: 'oxygen-b', name: 'Oxygen B', volumeL: 10, pressureBar: 100, maxPressureBar: 350, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true }
     ]
   });
 
@@ -1065,8 +1075,8 @@ test('searches uneven oxygen-bank splits when an equal split fails the 4:1 limit
     },
     physics: { model: 'ideal', temperatureC: 20 },
     banks: [
-      { id: 'oxygen-a', name: 'Oxygen A', volumeL: 20, pressureBar: 90, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true },
-      { id: 'oxygen-b', name: 'Oxygen B', volumeL: 10, pressureBar: 90, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true }
+      { id: 'oxygen-a', name: 'Oxygen A', volumeL: 20, pressureBar: 90, maxPressureBar: 350, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true },
+      { id: 'oxygen-b', name: 'Oxygen B', volumeL: 10, pressureBar: 90, maxPressureBar: 350, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true }
     ]
   });
 
@@ -1089,8 +1099,8 @@ test('finds a narrow safe bank split outside the fixed-share samples', () => {
     },
     physics: { model: 'ideal', temperatureC: 20 },
     banks: [
-      { id: 'oxygen-a', name: 'Low-pressure oxygen', volumeL: 10, pressureBar: 55, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true },
-      { id: 'oxygen-b', name: 'High-pressure oxygen', volumeL: 10, pressureBar: 145, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true }
+      { id: 'oxygen-a', name: 'Low-pressure oxygen', volumeL: 10, pressureBar: 55, maxPressureBar: 350, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true },
+      { id: 'oxygen-b', name: 'High-pressure oxygen', volumeL: 10, pressureBar: 145, maxPressureBar: 350, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true }
     ]
   });
 
@@ -1117,6 +1127,7 @@ test('allows a later non-Air transfer after compressor Air reaches its ceiling',
       name: 'Oxygen source',
       volumeL: 100,
       pressureBar: 200,
+      maxPressureBar: 350,
       minimumPressureBar: 0,
       oxygenPercent: 100,
       heliumPercent: 0,
@@ -1150,8 +1161,8 @@ test('ignores oxygen inventory in air when the exact target contains no nitrogen
     },
     physics: { model: 'ideal', temperatureC: 20 },
     banks: [
-      { id: 'oxygen-a', name: 'Oxygen A', volumeL: 2, pressureBar: 100, minimumPressureBar: 45, oxygenPercent: 100, heliumPercent: 0, enabled: true },
-      { id: 'oxygen-b', name: 'Oxygen B', volumeL: 10, pressureBar: 240, minimumPressureBar: 45, oxygenPercent: 100, heliumPercent: 0, enabled: true },
+      { id: 'oxygen-a', name: 'Oxygen A', volumeL: 2, pressureBar: 100, maxPressureBar: 350, minimumPressureBar: 45, oxygenPercent: 100, heliumPercent: 0, enabled: true },
+      { id: 'oxygen-b', name: 'Oxygen B', volumeL: 10, pressureBar: 240, maxPressureBar: 350, minimumPressureBar: 45, oxygenPercent: 100, heliumPercent: 0, enabled: true },
     ]
   });
 
@@ -1179,6 +1190,7 @@ test('drains small amounts of cylinder gas when fallback fractions require it', 
       name: 'Oxygen bank',
       volumeL: 10,
       pressureBar: 100,
+      maxPressureBar: 350,
       minimumPressureBar: 66.8,
       oxygenPercent: 100,
       heliumPercent: 0,
@@ -1188,6 +1200,7 @@ test('drains small amounts of cylinder gas when fallback fractions require it', 
       name: 'Helium bank',
       volumeL: 10,
       pressureBar: 100,
+      maxPressureBar: 350,
       minimumPressureBar: 0,
       oxygenPercent: 0,
       heliumPercent: 100,
@@ -1220,6 +1233,7 @@ test('does not display moles for small fallback transfers', () => {
       name: 'Oxygen bank',
       volumeL: 200,
       pressureBar: 100,
+      maxPressureBar: 350,
       minimumPressureBar: 0,
       oxygenPercent: 100,
       heliumPercent: 0,
@@ -1229,6 +1243,7 @@ test('does not display moles for small fallback transfers', () => {
       name: 'Helium bank',
       volumeL: 10,
       pressureBar: 100,
+      maxPressureBar: 350,
       minimumPressureBar: 0,
       oxygenPercent: 0,
       heliumPercent: 100,
@@ -1277,6 +1292,7 @@ function oxygenTransferInput(sourcePressureBar, sourceOxygenPercent = 100) {
       name: 'Oxygen source',
       volumeL: 10,
       pressureBar: sourcePressureBar,
+      maxPressureBar: 350,
       minimumPressureBar: 0,
       oxygenPercent: sourceOxygenPercent,
       heliumPercent: 0,
@@ -1311,6 +1327,7 @@ test('checks oxygen transfer after compressor Air is staged first', () => {
       name: 'Oxygen source',
       volumeL: 10,
       pressureBar: 110,
+      maxPressureBar: 350,
       oxygenPercent: 100,
       heliumPercent: 0,
       enabled: true
@@ -1370,6 +1387,7 @@ test('reports the configured minimum when a finite boost source is exhausted', (
       name: 'Oxygen bank',
       volumeL: 10,
       pressureBar: 100,
+      maxPressureBar: 350,
       minimumPressureBar: 0,
       oxygenPercent: 100,
       heliumPercent: 0,
@@ -1658,6 +1676,7 @@ test('thermal trajectory maps each bank point to its corresponding transfer stat
         name: 'Oxygen',
         volumeL: 12,
         pressureBar: 300,
+        maxPressureBar: 350,
         minimumPressureBar: 0,
         oxygenPercent: 100,
         heliumPercent: 0,
@@ -1668,6 +1687,7 @@ test('thermal trajectory maps each bank point to its corresponding transfer stat
         name: 'Helium',
         volumeL: 12,
         pressureBar: 300,
+        maxPressureBar: 350,
         minimumPressureBar: 0,
         oxygenPercent: 0,
         heliumPercent: 100,
@@ -1853,6 +1873,7 @@ test('optimizeBlend returns a feasible split protocol with safe endpoints and ta
       name: 'Nitrogen',
       volumeL: 12,
       pressureBar: 300,
+      maxPressureBar: 350,
       minimumPressureBar: 0,
       oxygenPercent: 0,
       heliumPercent: 0,
@@ -1937,6 +1958,7 @@ test('two scheduler-split transfers preserve stage order, inventories, and therm
         name: 'Oxygen',
         volumeL: 12,
         pressureBar: 300,
+        maxPressureBar: 350,
         minimumPressureBar: 0,
         oxygenPercent: 100,
         heliumPercent: 0,
@@ -1947,6 +1969,7 @@ test('two scheduler-split transfers preserve stage order, inventories, and therm
         name: 'Helium',
         volumeL: 12,
         pressureBar: 300,
+        maxPressureBar: 350,
         minimumPressureBar: 0,
         oxygenPercent: 0,
         heliumPercent: 100,
@@ -2116,7 +2139,7 @@ test('projects a below-ambient water target after ambient settling', () => {
       targetTemperatureC: 15
     },
     banks: [
-      { id: '1845', name: '18/45', volumeL: 50, pressureBar: 200, minimumPressureBar: 20, oxygenPercent: 18, heliumPercent: 45, enabled: true }
+      { id: '1845', name: '18/45', volumeL: 50, pressureBar: 200, maxPressureBar: 350, minimumPressureBar: 20, oxygenPercent: 18, heliumPercent: 45, enabled: true }
     ],
     settings: {
       booster: {
@@ -2381,7 +2404,7 @@ test('normalizes the requested in-water target and reports all thermal states', 
       inletTemperatureC: 25, targetMediumTemperatureC: 25, targetInWaterTemperatureC: 10,
       waitMode: 'minutes', waitMinutes: 10
     },
-    banks: [{ id: '1845', name: '18/45', volumeL: 50, pressureBar: 200, minimumPressureBar: 20, oxygenPercent: 18, heliumPercent: 45, enabled: true }],
+    banks: [{ id: '1845', name: '18/45', volumeL: 50, pressureBar: 200, maxPressureBar: 350, minimumPressureBar: 20, oxygenPercent: 18, heliumPercent: 45, enabled: true }],
     settings: { booster: { minimumSourcePressureBar: 0, maxCompressorPressureBar: 350, maxBoosterOutputPressureBar: 350, cylinderVolumeCm3: 9, oxygenBoostBpm: 50, otherBoostBpm: 50, oxygenDecantRateBarPerMin: 5, otherDecantRateBarPerMin: 5, compressorInletFlowLPerMin: 100 } }
   });
   assert.equal(result.feasible, true);
@@ -2412,8 +2435,8 @@ test('thermal initial infeasibility preserves requested target and maximum fallb
     cylinder: { ...defaultInput.cylinder, targetPressureBar: 200, targetOxygenPercent: 15, targetHeliumPercent: 55 },
     thermal: thermalFailureFixture,
     banks: [
-      { id: 'he', name: 'Pure Helium', volumeL: 1, pressureBar: 10, minimumPressureBar: 0, oxygenPercent: 0, heliumPercent: 100, enabled: true },
-      { id: 'o2', name: 'Pure Oxygen', volumeL: 10, pressureBar: 100, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true }
+      { id: 'he', name: 'Pure Helium', volumeL: 1, pressureBar: 10, maxPressureBar: 350, minimumPressureBar: 0, oxygenPercent: 0, heliumPercent: 100, enabled: true },
+      { id: 'o2', name: 'Pure Oxygen', volumeL: 10, pressureBar: 100, maxPressureBar: 350, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true }
     ]
   });
   assert.equal(result.feasible, false);
@@ -2429,8 +2452,8 @@ test('thermal floor infeasibility prefixes the requested in-water pressure', () 
     cylinder: { ...defaultInput.cylinder, targetPressureBar: 300, targetOxygenPercent: 15, targetHeliumPercent: 55 },
     thermal: thermalFailureFixture,
     banks: [
-      { id: 'he', name: 'Pure Helium', volumeL: 1, pressureBar: 10, minimumPressureBar: 0, oxygenPercent: 0, heliumPercent: 100, enabled: true },
-      { id: 'o2', name: 'Pure Oxygen', volumeL: 10, pressureBar: 100, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true }
+      { id: 'he', name: 'Pure Helium', volumeL: 1, pressureBar: 10, maxPressureBar: 350, minimumPressureBar: 0, oxygenPercent: 0, heliumPercent: 100, enabled: true },
+      { id: 'o2', name: 'Pure Oxygen', volumeL: 10, pressureBar: 100, maxPressureBar: 350, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true }
     ]
   });
   assert.equal(result.feasible, false);
@@ -3229,8 +3252,8 @@ test('hot overfill preserves the requested ambient and target pressure at safe e
       }
     },
     banks: [
-      { id: 'o2', name: 'Oxygen', volumeL: 12, pressureBar: 300, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true },
-      { id: 'he', name: 'Helium', volumeL: 12, pressureBar: 300, minimumPressureBar: 0, oxygenPercent: 0, heliumPercent: 100, enabled: true }
+      { id: 'o2', name: 'Oxygen', volumeL: 12, pressureBar: 300, maxPressureBar: 350, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true },
+      { id: 'he', name: 'Helium', volumeL: 12, pressureBar: 300, maxPressureBar: 350, minimumPressureBar: 0, oxygenPercent: 0, heliumPercent: 100, enabled: true }
     ]
   });
 

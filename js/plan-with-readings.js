@@ -225,10 +225,11 @@ function applyReading(plan, input, readingsInput, index, reading) {
   }
 
   const allBanks = segmentFor(plan.readingPlan, index).banks;
-  const remainingBanks = allBanks.map(bank => ({
-    ...bank,
-    pressureBar: calcPressure(Math.max(0, bankMoles.get(bank.id)) / bank.volumeL, bank.oxygenPercent, bank.heliumPercent, referenceC, useVdw)
-  }));
+  const remainingBanks = allBanks.map(bank => {
+    const pressureBar = calcPressure(Math.max(0, bankMoles.get(bank.id)) / bank.volumeL, bank.oxygenPercent, bank.heliumPercent, referenceC, useVdw);
+    // Derived state is a model estimate; the rating must not sit below it.
+    return { ...bank, pressureBar, maxPressureBar: Math.max(bank.maxPressureBar, pressureBar) };
+  });
   const pressureAtReferenceBar = calculatePressureAtTemperature({
     pressureBar: reading.pressureBar,
     oxygenPercent: mix.oxygenPercent,

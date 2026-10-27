@@ -4,7 +4,7 @@ import { verifyInterimMeasurement } from '../js/interim-check.js';
 import { optimizeBlend } from '../js/optimizer.js';
 
 const bank = (id, name, oxygenPercent, heliumPercent) => ({
-  id, name, enabled: true, volumeL: 50, pressureBar: 300, oxygenPercent, heliumPercent
+  id, name, enabled: true, volumeL: 50, pressureBar: 300, maxPressureBar: 350, oxygenPercent, heliumPercent
 });
 
 // Default-like recipe: 50 bar Air at 21 °C to 195 bar 18/45, settled at 10 °C in water.

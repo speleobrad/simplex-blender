@@ -60,6 +60,7 @@ test('renders inventory bank values and main-screen-sized editable controls', ()
         name: 'Helium',
         volumeL: 40,
         pressureBar: 150,
+        maxPressureBar: 200,
         oxygenPercent: 0,
         heliumPercent: 100,
         enabled: true
@@ -69,9 +70,9 @@ test('renders inventory bank values and main-screen-sized editable controls', ()
     ]);
 
     const inputs = tbody.querySelectorAll('input').filter(input => input.type !== 'checkbox');
-    assert.deepEqual(inputs.map(input => input.value), ['Helium', 40, 150, 0, 100]);
-    assert.ok(inputs.slice(1, 3).every(input => input.className.includes('w-28')));
-    assert.ok(inputs.slice(3).every(input => input.className.includes('w-20')));
+    assert.deepEqual(inputs.map(input => input.value), ['Helium', 40, 150, 200, 0, 100]);
+    assert.ok(inputs.slice(1, 4).every(input => input.className.includes('w-28')));
+    assert.ok(inputs.slice(4).every(input => input.className.includes('w-20')));
   } finally {
     globalThis.document = previousDocument;
   }
@@ -89,6 +90,7 @@ test('converts editable imperial supply-bank values and constraints', () => {
         name: 'Tx 18/45',
         volumeL: 12,
         pressureBar: 150,
+        maxPressureBar: 200,
         oxygenPercent: 18,
         heliumPercent: 45,
         enabled: true
