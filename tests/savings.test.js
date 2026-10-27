@@ -78,7 +78,7 @@ test('an unpriced used bank is skipped, listed by id, and salvage stays numeric'
 test('a missing pure oxygen price makes salvage null and names oxygen as a pure-price gap', () => {
   const result = run({ banks: [pureHe, real], steps: [decantFrom('real', 360)] });
   assert.equal(result.salvagedSaving, null);
-  assert.deepEqual(result.missing, [{ code: 'pure-price', gas: 'oxygen' }]);
+  assert.deepEqual(result.missing, [{ code: 'pure-price', gas: 'oxygen', bankId: 'real', name: 'EAN32' }]);
 });
 
 test('a bank the recipe cannot price for equipment reasons makes salvage null and names the bank', () => {

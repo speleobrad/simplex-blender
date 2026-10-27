@@ -349,28 +349,29 @@ test.describe('fill costs in What-if', () => {
     await page.locator('#what-if-result-host').getByRole('tab', { name: 'Tanks and costs', exact: true }).click();
 
     const section = page.locator('#what-if-result-host [data-result-key="cost-summary"]');
-    await expect(section).toContainText('Set prices in Settings → Costs.');
+    await expect(section).toContainText('No prices set. Set bank prices in Inventory and fees in Settings → Costs.');
+    await expect(page.locator('#what-if-result-host [data-result-key="cost-banner"]')).toHaveCount(0);
   });
 
-  test('refreshes the What-if Costs total after a Settings price edit without re-running', async ({ appPage }) => {
+  test('refreshes the What-if Costs total after an Inventory price edit without re-running', async ({ appPage }) => {
     const page = await load(appPage);
     await openWhatIf(page);
     await runWhatIf(page);
     await page.locator('#what-if-result-host').getByRole('tab', { name: 'Tanks and costs', exact: true }).click();
     const section = page.locator('#what-if-result-host [data-result-key="cost-summary"]');
-    await expect(section.locator('[data-result-key="cost-status"]')).toHaveText('Set prices in Settings → Costs.');
+    await expect(section.locator('[data-result-key="cost-status"]')).toHaveText('No prices set. Set bank prices in Inventory and fees in Settings → Costs.');
 
     const costs = await openSettingsCategory(page, 'costs');
     await costs.getByRole('textbox', { name: 'Currency symbol', exact: true }).fill('CHF');
     await saveSettings(page);
     await setPurePrices(page, { oxygen: 0.02 });
 
-    await expect(section.locator('[data-result-key="cost-total"]')).toContainText(/Total CHF \d+\.\d{2}/);
+    await expect(section.locator('[data-result-key="cost-total"]')).toHaveText(/^CHF \d+\.\d{2}$/);
     await expect(section.locator('[data-result-key="cost-total"]')).not.toContainText('incomplete');
   });
 });
 
-test.describe('What-if and bank price edits', () => {
+test.describe('What-if and Inventory price edits', () => {
   test('a bank price edit does not mark What-if out of date', async ({ appPage }) => {
     const page = await load(appPage);
     await openWhatIf(page);

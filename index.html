@@ -629,7 +629,7 @@
             <canvas id="ternary-canvas" role="img" aria-label="Gas composition ternary diagram" aria-describedby="ternary-chart-description" class="w-full h-full block cursor-crosshair"></canvas>
           </div>
           <p id="ternary-chart-description" class="sr-only">
-            The solid region connects Air, pure oxygen, and pure helium. The dotted boundary includes pure nitrogen. A dashed line connects the initial and scenario endpoint mixes; arrows show the blend sequence. Open the Tank summary tab for the plotted mix and stage values.
+            The solid region connects Air, pure oxygen, and pure helium. The dotted boundary includes pure nitrogen. A dashed line connects the initial and scenario endpoint mixes; arrows show the blend sequence. Open the Tanks and costs tab for the plotted mix and stage values.
           </p>
 
           <!-- Trajectory Legend & Step Path Info -->
@@ -696,8 +696,9 @@
             <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300">Costs</h3>
             <p data-result-key="cost-status" class="py-2 text-slate-400 text-xs">Costs appear when a feasible blend is available.</p>
             <div data-result-key="cost-tables" class="overflow-x-auto pb-2" hidden>
-              <table class="mb-4 min-w-full text-left font-mono text-xs">
+              <table class="mb-4 w-full table-fixed text-left font-mono text-xs">
                 <caption class="py-2 text-left font-sans text-slate-300">Gas cost</caption>
+                <colgroup><col class="w-2/5"><col class="w-1/5"><col class="w-1/5"><col class="w-1/5"></colgroup>
                 <thead>
                   <tr class="text-slate-400">
                     <th scope="col" class="px-2 py-1 text-left">Source</th>
@@ -706,6 +707,7 @@
                     <th scope="col" class="px-2 py-1 text-right">Cost</th>
                   </tr>
                 </thead>
+                <tbody data-result-key="cost-gas-body"></tbody>
                 <tfoot>
                   <tr class="text-slate-100">
                     <th scope="row" class="px-2 py-1 text-left">Total gas cost</th>
@@ -714,10 +716,10 @@
                     <td class="px-2 py-1 text-right" data-result-key="cost-gas-total">—</td>
                   </tr>
                 </tfoot>
-                <tbody data-result-key="cost-gas-body"></tbody>
               </table>
-              <table class="min-w-full text-left font-mono text-xs">
+              <table class="mb-4 w-full table-fixed text-left font-mono text-xs">
                 <caption class="py-2 text-left font-sans text-slate-300">Operation cost</caption>
+                <colgroup><col class="w-2/5"><col class="w-1/5"><col class="w-1/5"><col class="w-1/5"></colgroup>
                 <thead>
                   <tr class="text-slate-400">
                     <th scope="col" class="px-2 py-1 text-left">Operation</th>
@@ -726,6 +728,7 @@
                     <th scope="col" class="px-2 py-1 text-right">Cost</th>
                   </tr>
                 </thead>
+                <tbody data-result-key="cost-operations-body"></tbody>
                 <tfoot>
                   <tr class="text-slate-100">
                     <th scope="row" class="px-2 py-1 text-left">Operations cost</th>
@@ -733,11 +736,15 @@
                     <td class="px-2 py-1"></td>
                     <td class="px-2 py-1 text-right" data-result-key="cost-operations-total">—</td>
                   </tr>
+                  <tr class="border-t border-ocean-800 text-slate-100">
+                    <th scope="row" class="px-2 py-1 text-left">Total cost</th>
+                    <td class="px-2 py-1"></td>
+                    <td class="px-2 py-1"></td>
+                    <td class="px-2 py-1 text-right" data-result-key="cost-total"></td>
+                  </tr>
                 </tfoot>
-                <tbody data-result-key="cost-operations-body"></tbody>
               </table>
             </div>
-            <p data-result-key="cost-total" class="py-2 font-mono text-sm text-slate-100" hidden></p>
           </section>
         </div>
 

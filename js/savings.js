@@ -14,7 +14,8 @@ const RETAINED_TOLERANCE_L = 1e-9;
  *
  * `missing` lists what prevented a number. Each entry appears once, as one of:
  * - {code: 'pure-price', gas: 'oxygen'|'helium'}: a needed pure-gas price is unavailable.
- *   The gas is missing, so salvagedSaving is null. savedCost is null when it is helium.
+ *   Without bankId it is the Saved cost gap; with bankId it is a salvage gap for that bank.
+ *   Saved cost is null when it is helium; salvagedSaving is null for a salvage gap.
  * - {code: 'unpriced-bank', bankId, name}: a used non-pure bank has no price. It is left out
  *   of salvagedSaving, which stays numeric.
  * - {code: 'recipe-unavailable', bankId, name}: a used bank cannot be priced by recipe for a
@@ -64,7 +65,7 @@ export function computeSavings({ result, banks = [], costs, settings, physics, i
     if (!recipe.ok) {
       salvagedSaving = null;
       addMissing(recipe.missingGas
-        ? { code: 'pure-price', gas: recipe.missingGas }
+        ? { code: 'pure-price', gas: recipe.missingGas, bankId: line.sourceBankId, name: line.name }
         : { code: 'recipe-unavailable', bankId: line.sourceBankId, name: line.name });
       continue;
     }

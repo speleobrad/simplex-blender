@@ -78,7 +78,7 @@ export function priceBankByRecipe({ bank, costs, settings, physics, inventoryBan
   // Reached only when no needed pure gas is missing, so the gas-specific reasons above take precedence.
   const anyFee = Object.values(costs.operationPrices).some(value => value > 0);
   if (!anyFee && pure.oxygen === null && pure.helium === null) {
-    return { ok: false, reason: 'No prices are configured in Settings → Costs.' };
+    return { ok: false, reason: 'No prices set. Set bank prices in Inventory and fees in Settings → Costs.' };
   }
 
   const result = optimizeBlend({

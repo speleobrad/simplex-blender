@@ -50,6 +50,7 @@ export function createResultPanel(document, host, { mode = 'optimize', instanceP
   root.dataset.resultMode = mode;
   root.dataset.instancePrefix = instancePrefix;
   if (mode !== 'what-if') root.querySelectorAll?.('[data-what-if-only]').forEach(element => element.remove());
+  if (mode !== 'optimize') root.querySelectorAll?.('[data-blending-only]').forEach(element => element.remove());
   root.querySelectorAll?.('[id]').forEach(element => {
     const logical = element.id;
     element.dataset.resultKey ??= logical;

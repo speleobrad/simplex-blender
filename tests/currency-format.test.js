@@ -19,3 +19,14 @@ test('formatMoney prefixes the fixed-precision amount', () => {
   assert.equal(formatMoney(0.025, '', 4), '0.0250');
   assert.equal(formatMoney(0, '$', 2), '$0.00');
 });
+
+test('formatMoney puts the sign before the currency prefix', () => {
+  assert.equal(formatMoney(-1.2, '€', 2), '-€1.20');
+  assert.equal(formatMoney(-1.2, 'CHF', 2), '-CHF 1.20');
+  assert.equal(formatMoney(-0.023, '€', 6), '-€0.023000');
+});
+
+test('formatMoney prints no minus for an amount that rounds to zero', () => {
+  assert.equal(formatMoney(-0.001, '€', 2), '€0.00');
+  assert.equal(formatMoney(-0, '€', 2), '€0.00');
+});

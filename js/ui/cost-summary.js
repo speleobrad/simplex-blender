@@ -8,7 +8,7 @@ const OPERATION_LABELS = Object.freeze({
 });
 
 const NO_PRICE = 'no price set';
-const NOT_CONFIGURED = 'Set prices in Settings → Costs.';
+const NOT_CONFIGURED = 'No prices set. Set bank prices in Inventory and fees in Settings → Costs.';
 const NO_PLAN = 'Costs appear when a feasible blend is available.';
 
 function hook(root, key) {
@@ -78,7 +78,7 @@ function operationRow(line, symbol) {
 }
 
 function totalText(cost, symbol) {
-  const text = `Total ${formatMoney(cost.total, symbol, 2)}`;
+  const text = formatMoney(cost.total, symbol, 2);
   if (!cost.incomplete) return text;
   const names = (cost.unpricedSources ?? []).map(source => source.name).join(', ');
   return `${text} (incomplete: ${names} unpriced)`;
@@ -89,7 +89,7 @@ function setVisible(element, visible) {
 }
 
 /**
- * Render the Costs section of one Tank summary host from a derived cost object.
+ * Render the Costs section of one Tanks and costs host from a derived cost object.
  * `cost` is null when no feasible plan exists; `cost.configured` is false when no price is set.
  */
 export function renderCostSummary(cost, { root, units = 'metric', currencySymbol = '' } = {}) {
@@ -127,11 +127,18 @@ export function renderCostSummary(cost, { root, units = 'metric', currencySymbol
   total.textContent = totalText(cost, currencySymbol);
 }
 
-// `gas` limits which pure price can explain a missing value; null accepts any pure gas.
-function savingText(value, missing, gas, symbol) {
+// Saved cost can only be missing for helium, and only the untagged pure-price gap explains it.
+function savedText(value, missing, symbol) {
   if (value !== null && value !== undefined) return formatMoney(value, symbol, 2);
-  const priceMissing = missing.find(entry => entry.code === 'pure-price' && (!gas || entry.gas === gas));
-  if (priceMissing) return `Price pure ${priceMissing.gas} in Inventory`;
+  const gap = missing.find(entry => entry.code === 'pure-price' && entry.gas === 'helium' && entry.bankId === undefined);
+  return gap ? 'Price pure helium in Inventory' : '—';
+}
+
+// Salvaged saving is explained only by gaps raised for a used bank.
+function salvagedText(value, missing, symbol) {
+  if (value !== null && value !== undefined) return formatMoney(value, symbol, 2);
+  const gap = missing.find(entry => entry.code === 'pure-price' && entry.bankId !== undefined);
+  if (gap) return `Price pure ${gap.gas} in Inventory`;
   const unavailable = missing.find(entry => entry.code === 'recipe-unavailable');
   if (unavailable) return `Unavailable for ${unavailable.name}`;
   return '—';
@@ -151,6 +158,6 @@ export function renderCostBanner(cost, savings, { root, currencySymbol = '' } = 
   fillTotal.textContent = cost && cost.configured !== false
     ? `${formatMoney(cost.total, currencySymbol, 2)}${cost.incomplete ? ' (incomplete)' : ''}`
     : '—';
-  saved.textContent = savings ? savingText(savings.savedCost, missing, 'helium', currencySymbol) : '—';
-  salvaged.textContent = savings ? savingText(savings.salvagedSaving, missing, null, currencySymbol) : '—';
+  saved.textContent = savings ? savedText(savings.savedCost, missing, currencySymbol) : '—';
+  salvaged.textContent = savings ? salvagedText(savings.salvagedSaving, missing, currencySymbol) : '—';
 }

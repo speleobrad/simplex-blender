@@ -105,7 +105,7 @@ test('renders priced gas, operation and total lines with the currency prefix', (
     assert.equal(total.hidden, false);
     assert.deepEqual(rowTexts(gasBody), [['Oxygen bank', '10.0 L', '€0.025000 /L', '€0.25']]);
     assert.deepEqual(rowTexts(operationBody), [['Boost', '2', '€5.00', '€10.00']]);
-    assert.equal(total.textContent, 'Total €10.25');
+    assert.equal(total.textContent, '€10.25');
   });
 });
 
@@ -113,7 +113,7 @@ test('uses a spaced prefix for alphanumeric currency symbols', () => {
   withDocument(() => {
     const { host, total } = createHost();
     renderCostSummary(PRICED_COST, { root: host, units: 'metric', currencySymbol: 'CHF' });
-    assert.equal(total.textContent, 'Total CHF 10.25');
+    assert.equal(total.textContent, 'CHF 10.25');
   });
 });
 
@@ -136,7 +136,7 @@ test('labels the total incomplete with unpriced source names and marks the gas r
     renderCostSummary(cost, { root: host, units: 'metric', currencySymbol: '€' });
 
     assert.deepEqual(rowTexts(gasBody)[1], ['Helium bank', '5.0 L', 'no price set', '—']);
-    assert.equal(total.textContent, 'Total €0.25 (incomplete: Helium bank unpriced)');
+    assert.equal(total.textContent, '€0.25 (incomplete: Helium bank unpriced)');
   });
 });
 
@@ -161,7 +161,7 @@ test('shows top-up as count, fee and cost with compressor air as information onl
     assert.equal(topUpRow[1], '1');
     assert.equal(topUpRow[2], '€5.00');
     assert.equal(topUpRow[3], '€5.00');
-    assert.equal(total.textContent, 'Total €5.25');
+    assert.equal(total.textContent, '€5.25');
   });
 });
 
@@ -170,7 +170,7 @@ test('prompts for Settings when nothing is configured and hides the tables', () 
     const { host, status, tables, total } = createHost();
     renderCostSummary({ ...PRICED_COST, configured: false }, { root: host, units: 'metric', currencySymbol: '€' });
 
-    assert.equal(status.textContent, 'Set prices in Settings → Costs.');
+    assert.equal(status.textContent, 'No prices set. Set bank prices in Inventory and fees in Settings → Costs.');
     assert.equal(status.hidden, false);
     assert.equal(tables.hidden, true);
     assert.equal(total.hidden, true);
@@ -268,10 +268,21 @@ test('banner prompts for a missing pure price instead of a number', () => {
   withDocument(() => {
     const { host, hooks } = createBannerHost();
     renderCostBanner(PRICED_COST,
-      { savedCost: null, salvagedSaving: null, missing: [{ code: 'pure-price', gas: 'helium' }] },
+      { savedCost: null, salvagedSaving: null, missing: [{ code: 'pure-price', gas: 'helium' }, { code: 'pure-price', gas: 'oxygen', bankId: 'b', name: 'EAN32' }] },
       { root: host, currencySymbol: '€' });
     assert.equal(hooks['cost-saved'].textContent, 'Price pure helium in Inventory');
-    assert.equal(hooks['cost-salvaged'].textContent, 'Price pure helium in Inventory');
+    assert.equal(hooks['cost-salvaged'].textContent, 'Price pure oxygen in Inventory');
+  });
+});
+
+test('banner explains the Saved and Salvaged gaps separately', () => {
+  withDocument(() => {
+    const { host, hooks } = createBannerHost();
+    renderCostBanner(PRICED_COST,
+      { savedCost: null, salvagedSaving: null, missing: [{ code: 'pure-price', gas: 'helium' }, { code: 'recipe-unavailable', bankId: 'b', name: 'EAN32' }] },
+      { root: host, currencySymbol: '€' });
+    assert.equal(hooks['cost-saved'].textContent, 'Price pure helium in Inventory');
+    assert.equal(hooks['cost-salvaged'].textContent, 'Unavailable for EAN32');
   });
 });
 

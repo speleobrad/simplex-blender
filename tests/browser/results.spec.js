@@ -34,7 +34,7 @@ test.describe('result tabs', () => {
       expect(order).toEqual(['pressure', 'temperature']);
     }
   });
-  test('keeps partial recipe data in the diagram and tank summary', async ({ appPage }) => {
+  test('keeps partial recipe data in the diagram and Tanks and costs', async ({ appPage }) => {
     const page = await appPage.goto('tourSeen');
     await openRecipeScenario(page, { values: { targetPressure: 207 } });
     const results = page.locator('[data-result-host="blending"]');
@@ -270,7 +270,7 @@ test.describe('fill costs in the Tanks and costs', () => {
     await expect(section.getByRole('heading', { name: 'Costs', exact: true })).toBeVisible();
     await expect(section.getByRole('table', { name: 'Gas cost' })).toBeVisible();
     await expect(section.getByRole('table', { name: 'Operation cost' })).toBeVisible();
-    await expect(section.locator('[data-result-key="cost-total"]')).toContainText(/^Total €\d+\.\d{2}$/);
+    await expect(section.locator('[data-result-key="cost-total"]')).toHaveText(/^€\d+\.\d{2}$/);
     const cellAmounts = table => table.locator('tbody tr').evaluateAll(rows => rows
       .map(row => row.lastElementChild?.textContent ?? '')
       .filter(text => /\d/.test(text))
@@ -283,6 +283,13 @@ test.describe('fill costs in the Tanks and costs', () => {
     const lineSum = lineAmounts.reduce((sum, value) => sum + value, 0);
     expect(lineAmounts.length).toBeGreaterThan(0);
     expect(Math.abs(totalAmount - lineSum)).toBeLessThanOrEqual(0.01);
+    const right = locator => locator.evaluate(element => element.getBoundingClientRect().right);
+    const costColumnRights = [
+      await right(section.getByRole('table', { name: 'Gas cost' }).locator('thead th').last()),
+      await right(section.getByRole('table', { name: 'Operation cost' }).locator('thead th').last()),
+      await right(section.locator('[data-result-key="cost-total"]')),
+    ];
+    for (const edge of costColumnRights) expect(Math.abs(edge - costColumnRights[0])).toBeLessThanOrEqual(1);
   });
 
   test('labels the total incomplete and names a bank without a price', async ({ appPage }) => {
@@ -305,7 +312,7 @@ test.describe('fill costs in the Tanks and costs', () => {
     await selectResultTab(page, 'Tanks and costs');
 
     const section = costSection(page);
-    await expect(section.locator('[data-result-key="cost-status"]')).toHaveText('Set prices in Settings → Costs.');
+    await expect(section.locator('[data-result-key="cost-status"]')).toHaveText('No prices set. Set bank prices in Inventory and fees in Settings → Costs.');
     await expect(section.getByRole('table', { name: 'Gas cost' })).toBeHidden();
   });
 
@@ -325,25 +332,29 @@ test.describe('fill costs in the Tanks and costs', () => {
     await expect(costSection(page).getByRole('table', { name: 'Gas cost' })).toContainText('/cu ft');
   });
 
-  test('shows Saved cost as zero when no helium is retained, and right-aligns the banner amounts', async ({ appPage }) => {
+  test('prices Saved cost from retained helium and doubles it when the helium price doubles', async ({ appPage }) => {
     const page = await appPage.goto('tourSeen');
     const costs = await openSettingsCategory(page, 'costs');
     await costs.getByRole('textbox', { name: 'Currency symbol', exact: true }).fill('€');
     await saveSettings(page);
-    await setPurePrices(page, { helium: 0.05 });
-    await page.getByRole('tab', { name: 'Blending', exact: true }).click();
-    await openRecipeScenario(page);
+    await openRecipeScenario(page, { values: { initialHelium: 20 } });
 
     const banner = page.locator('[data-result-key="cost-banner"]:visible');
     const saved = banner.locator('[data-result-key="cost-saved"]');
-    // tourSeen retains no helium, so Saved cost is zero and needs no helium price.
-    await expect(saved).toHaveText('€0.00');
-    await setPurePrices(page, { helium: 0.10 });
-    await page.getByRole('tab', { name: 'Blending', exact: true }).click();
-    await expect(saved).toHaveText('€0.00');
+    await expect(saved).toHaveText('Price pure helium in Inventory');
 
-    for (const key of ['cost-fill-total', 'cost-saved', 'cost-salvaged']) {
-      await expect(banner.locator(`[data-result-key="${key}"]`)).toHaveCSS('text-align', 'right');
-    }
+    await setPurePrices(page, { helium: 0.05 });
+    const first = await saved.textContent();
+    expect(first).toMatch(/^€\d+\.\d{2}$/);
+    const firstValue = Number(first.replace('€', ''));
+    expect(firstValue).toBeGreaterThan(0);
+
+    await setPurePrices(page, { helium: 0.10 });
+    // Cost is linear in price; each value is rounded to the cent, so doubling may differ by up to 0.02.
+    await expect.poll(async () => Math.abs(Number((await saved.textContent()).replace('€', '')) - 2 * firstValue)).toBeLessThanOrEqual(0.02);
+    const fillTotal = (await banner.locator('[data-result-key="cost-fill-total"]').textContent()).replace(' (incomplete)', '');
+    await selectResultTab(page, 'Tanks and costs');
+    const costTotal = await costSection(page).locator('[data-result-key="cost-total"]').textContent();
+    expect(costTotal.startsWith(fillTotal)).toBe(true);
   });
 });

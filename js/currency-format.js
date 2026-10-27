@@ -4,7 +4,8 @@ export function currencyPrefix(symbol) {
   return /[\p{L}\p{N}]$/u.test(symbol) ? `${symbol} ` : symbol;
 }
 
-/** Format a money amount with a fixed number of decimal digits and the configured currency prefix. */
+/** Format a money amount with a fixed number of decimal digits and the configured currency prefix. A negative amount gets its sign before the prefix ("-€1.20"); an amount that rounds to zero has no sign. */
 export function formatMoney(amount, symbol, digits) {
-  return `${currencyPrefix(symbol)}${amount.toFixed(digits)}`;
+  const negative = Number(amount.toFixed(digits)) < 0;
+  return `${negative ? '-' : ''}${currencyPrefix(symbol)}${Math.abs(amount).toFixed(digits)}`;
 }

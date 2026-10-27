@@ -1546,11 +1546,7 @@ function refreshCostSummaries() {
     renderCostBanner(cost, blendingSavings(), { root: blending, currencySymbol: display.currencySymbol });
   }
   const whatIf = byId('what-if-result-host');
-  if (whatIf) {
-    renderCostSummary(deriveFillCost(whatIfCostSource()), { root: whatIf, ...display });
-    const banner = whatIf.querySelector?.('[data-result-key="cost-banner"]');
-    if (banner) banner.hidden = true;
-  }
+  if (whatIf) renderCostSummary(deriveFillCost(whatIfCostSource()), { root: whatIf, ...display });
 }
 
 function renderCompareResult() {
