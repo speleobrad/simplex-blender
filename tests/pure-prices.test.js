@@ -123,3 +123,15 @@ test('pricePerLitreFromFullTank divides the tank price by the free-gas litres on
   assert.equal(pricePerLitreFromFullTank(Number.NaN, 1500), null);
   assert.equal(pricePerLitreFromFullTank(30, Number.NaN), null);
 });
+
+test('a full-tank price converts at the inventory temperature, not the ambient temperature', () => {
+  // Real gas: free-gas litres depend on temperature, so the same full-tank price gives a
+  // different per-litre price at 5 °C than at 35 °C. Ambient is irrelevant to the conversion.
+  const cold = bankFreeGasLitres(O2({ volumeL: 10, pressureBar: 150 }), vdw, 5);
+  const warm = bankFreeGasLitres(O2({ volumeL: 10, pressureBar: 150 }), vdw, 35);
+  assert.ok(cold > warm, 'colder gas holds more free litres');
+  const expectedCold = calcMolarDensity(150, 100, 0, 5, true) * 10 * litresPerMole(5);
+  assert.ok(Math.abs(cold - expectedCold) < 1e-9);
+  assert.ok(Math.abs(pricePerLitreFromFullTank(30, cold) - 30 / expectedCold) < 1e-12);
+  assert.notEqual(pricePerLitreFromFullTank(30, cold), pricePerLitreFromFullTank(30, warm));
+});

@@ -66,7 +66,7 @@ export const WIZARD_STEPS = Object.freeze([
   Object.freeze({
     id: 'explore-options',
     title: 'Explore other options',
-    body: 'Use the result tabs on the right to explore other views: Thermal Graph that will show you how temperature changes as you will, In-water pressures that can show you pressures in other water temperatures, but also if it\'s safe to drive around in a hot summer day, Tanks summary that will tell you what you are left with after the mix, and Simplex diagram to show you visual path you will be making as you move from starting to target mix.',
+    body: 'Use the result tabs on the right to explore other views: Thermal Graph that will show you how temperature changes as you will, In-water pressures that can show you pressures in other water temperatures, but also if it\'s safe to drive around in a hot summer day, Tanks and costs that will tell you what you are left with after the mix and what the fill costs, and Simplex diagram to show you visual path you will be making as you move from starting to target mix.',
     targetId: 'results-tablist',
     screen: 'blending'
   })

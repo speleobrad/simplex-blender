@@ -237,3 +237,19 @@ test('a fallback plan keeps unique operation ids and finite consumed moles on ev
     assert.ok(Number.isFinite(step.sourceConsumedMoles));
   }
 });
+
+test('a reading-based Air-start plan has finite zero retained helium, so saved cost is 0 without a helium price', async () => {
+  const { computeSavings } = await import('../js/savings.js');
+  const { computeFillCost } = await import('../js/cost.js');
+  const costs = { currencySymbol: '', leftoverDiscountPercent: 0, operationPrices: { boost: 1, decant: 1, topUp: 1 } };
+  const plan = planWithReadings(withReadings({ [scrapIndex]: { pressureBar: plannedScrapStart.plannedStartPressureBar, temperatureC: plannedScrapStart.plannedStartTemperatureC } }));
+  assert.ok(Number.isFinite(plan.blend.heliumRetainedLitres) && plan.blend.heliumRetainedLitres >= 0);
+  const cost = computeFillCost({ steps: plan.protocolSteps, banks: input.banks, costs, temperatureC: 21 });
+  assert.ok(Number.isFinite(cost.total));
+  const savings = computeSavings({
+    result: plan, banks: input.banks, costs, settings: input.settings,
+    physics: input.physics, inventoryTemperatureC: 21
+  });
+  assert.equal(savings.savedCost, 0);
+  assert.ok(!savings.missing.some(entry => entry.code === 'pure-price' && entry.gas === 'helium'));
+});

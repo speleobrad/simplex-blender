@@ -343,6 +343,26 @@ test.describe('inventory supply banks', () => {
       await expect(bankPrice(row)).toHaveValue('0.030000');
     });
 
+    test('drops a pending suggestion when the effective inventory gas temperature changes', async ({ appPage }) => {
+      const page = await appPage.goto('tourSeen');
+      await setPurePrices(page, { oxygen: 0.01, helium: 0.02 });
+      const index = await createBank(page, {});
+      const row = bankRows(page).nth(index);
+      await row.getByRole('button', { name: /^Calculate price for /i }).click();
+      await expect(row.getByRole('button', { name: /^Apply suggested price for /i })).toBeVisible();
+
+      await page.getByRole('tab', { name: 'Inventory', exact: true }).click();
+      const sameAsAmbient = page.getByRole('checkbox', { name: 'Same as ambient', exact: true });
+      await sameAsAmbient.check();
+      await page.getByRole('tab', { name: 'Blending', exact: true }).click();
+      const ambient = page.locator('#ambient-temperature');
+      await ambient.fill('35');
+      await ambient.blur();
+      await page.getByRole('tab', { name: 'Inventory', exact: true }).click();
+      await expect(bankRows(page).nth(index).getByRole('button', { name: /suggested price for /i })).toHaveCount(0);
+      await expect(bankPrice(bankRows(page).nth(index))).toHaveValue('');
+    });
+
     test('keeps focus where the user put it after pricing another bank', async ({ appPage }) => {
       const page = await appPage.goto('tourSeen');
       await setPurePrices(page, { oxygen: 0.01, helium: 0.02 });

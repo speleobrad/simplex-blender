@@ -60,4 +60,4 @@ Each executed transfer step carries three cost fields that the planner stamps an
 
 With interim readings, `js/plan-with-readings.js` prefixes the IDs of each re-planned segment with `r<index>-`, so IDs stay distinct across a reading boundary. The Compare planner numbers its operations with the same `op-N` scheme.
 
-In the tested EAN 32 (32/0) recipe at 150 bar, the bank is priced as one compressor top-up followed by an O₂ decant with no boost (`tests/bank-pricing.test.js`). Under default equipment, a pure O₂ bank at 200 L and 350 bar cannot be priced because the 100% O₂ transfer would exceed the 4:1 safety limit, and a pure He bank at that pressure cannot be priced because booster output is capped at the configured limit; raising the booster limit to 350 bar makes both priceable.
+In the tested EAN 32 (32/0) recipe at 150 bar, the bank is priced as one compressor top-up followed by an O₂ decant with no boost (`tests/bank-pricing.test.js`). Pure O₂ and He banks are refused by `priceBankByRecipe` and have no Calculate price. A non-pure 200 L bank at 350 bar cannot be priced under default equipment; raising the booster limit to 350 bar makes it priceable.

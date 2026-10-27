@@ -96,6 +96,7 @@ The summary banner is split into two side-by-side regions on wide screens:
 - Six headline metrics: retained gas, helium vented, helium salvaged, achieved O₂/He mix, fill duration, and maximum temperature. Helium vented is the helium litres (1 bar equivalent volume) drained with the original mix, shown above the total vented pressure (`of N bar`); it equals the vented gas volume times the cylinder's initial helium fraction.
 - Three aligned datapoint columns: `Hot mix`, `Ambient settled`, and `In-water`. Each column shows pressure in the top row and temperature in the lower row; on wide screens, temperature values align vertically with values in the lower row of headline metrics.
 
+Summary values use the app's semantic palette: neutral for expected measurements, green for benefits, amber for partial loss or mix mismatch, and rose for problems. Retained gas is rose at zero, neutral when partial, and green when complete; helium vented (and its vented-gas subline) is green when nothing is vented, amber when partial, and rose when the whole original mix is vented. Helium salvaged is neutral at zero and green when positive. Fill duration remains neutral; maximum temperature is rose. Hot-mix, ambient-settled, and in-water pressures turn rose when above the cylinder working pressure. In-water pressure is green only when it matches the requested target and remains within the working pressure.
 
 Blending shows a cost banner with **Total cost of fill**, **Saved cost**, and **Salvaged saving**. Saved cost is the retained helium × the weighted pure-helium price; salvaged saving is the value of gas taken from non-pure banks over its recipe price. A figure that cannot be computed shows a prompt naming the missing price. The banner is hidden in What-if.
 
@@ -169,12 +170,13 @@ The editable table has these columns:
 | Vol(L) | Editable bank volume, displayed in the selected units. |
 | P(bar) | Editable bank pressure, displayed in the selected units. |
 | O₂% | Editable oxygen percentage. |
+| He% | Editable helium percentage. |
 | Price | Per L or Per cu ft, or Full tank basis (see below). Pure O₂ and He banks show no Calculate price. |
 | Del | Deletes the bank. |
 
 The **Add bank** button appends a new editable source row. Compressor Air is implicit and is not shown as a bank row. The table omits derived nitrogen, compressibility, and minimum-pressure columns.
 
-The Price column shows each bank's stored price per litre (per cu ft in Imperial) with a basis select. **Per L** / **Per cu ft** enters the price directly. **Full tank** takes the price of one full tank, divides it once by the bank's free-gas litres, stores the per-litre result, and resets the basis to per-volume. Prices display 6 decimals. **Calculate price** prices a non-pure bank on demand from the current Settings → Costs values and the bank's volume, pressure, and composition, showing "Calculating…" while it runs. The result appears as an indicative price with its recipe cost; **Apply** (or **Replace** when a price is already set) stores it on the bank. The suggestion is discarded when the bank or its pricing inputs change.
+The Price column shows each bank's stored price per litre (per cu ft in Imperial) with a basis select. **Per L** / **Per cu ft** enters the price directly. **Full tank** takes the price of one full tank, divides it once by the bank's free-gas litres, stores the per-litre result, and resets the basis to per-volume. Prices display 6 decimals. **Calculate price** prices a non-pure bank on demand from the weighted pure-bank prices from Inventory plus the flat fees in Settings → Costs, and the bank's volume, pressure, and composition, showing "Calculating…" while it runs. The result appears as an indicative price with its recipe cost; **Apply** (or **Replace** when a price is already set) stores it on the bank. The suggestion is discarded when the bank or its pricing inputs change.
 
 Below the table, **Transfer conditions** contains **Temperature of inventory gases** in °C, default 21 °C. It is shared by compressor and inventory transfers. Checking **Same as ambient** disables the field and makes it follow the ambient temperature. Source-specific equipment temperature modifiers still apply.
 
