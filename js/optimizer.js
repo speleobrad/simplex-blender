@@ -2632,9 +2632,9 @@ function requestedSalvageCandidate(input) {
 }
 
 // Picks the salvage receiver prefix once, on the requested target: the N+1 prefix search
-// with the selector's gates. Returns the winning receiver ids, or null for vent-only.
+// with the selector's gates. Returns the winning receiver ids, or null for vent-only or invalid input.
 export function searchSalvageVariant(input) {
-  if (!input?.cylinder || typeof input.cylinder !== 'object') return null;
+  if (validateBlendInput(input).length > 0) return null;
   const candidate = requestedSalvageCandidate(input);
   const baseline = solveBlendWithoutSalvage(candidate);
   if (!baseline.feasible) return null;

@@ -3594,3 +3594,25 @@ test('salvage that keeps the cylinder retained gas unchanged is accepted and mov
     'salvage moves exactly the baseline vented moles');
   assert.ok(Math.abs(result.solution.x_cyl - baseline.solution.x_cyl) <= 1e-9 * Math.max(1, baseline.solution.x_cyl));
 });
+
+test('salvage search ignores invalid input and reports the usual invalid result', () => {
+  const input = drainSalvageInput([leftoverBank({ id: 'bank-n', oxygenPercent: 32, heliumPercent: 0, pressureBar: 20 })]);
+  const thermal = {
+    tankMaterial: 'steel',
+    ambientTemperatureC: 20,
+    inletTemperatureC: 20,
+    targetMediumTemperatureC: 25,
+    targetInWaterTemperatureC: 20,
+    waitMode: 'minutes',
+    waitMinutes: 10,
+    targetTemperatureC: 25
+  };
+  const withoutPhysics = { ...input, physics: undefined };
+  assert.equal(optimizerModule.searchSalvageVariant(withoutPhysics), null);
+  assert.equal(optimizerModule.searchSalvageVariant({ ...withoutPhysics, thermal }), null);
+
+  const result = optimizeBlend({ ...withoutPhysics, thermal });
+  assert.equal(result.feasible, false);
+  assert.equal(result.blend, null);
+  assert.match(result.error, /^Invalid blend input:/);
+});
