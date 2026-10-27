@@ -44,6 +44,18 @@ test('calculator recipe signature changes when a recipe input changes', () => {
     })
   );
 });
+
+test('calculator recipe signature ignores display units but tracks equipment settings', () => {
+  const withSettings = overrides => calculatorInputSignature({
+    ...input,
+    settings: { ...input.settings, ...overrides }
+  });
+  assert.equal(withSettings({ units: 'metric' }), withSettings({ units: 'imperial' }));
+  assert.notEqual(
+    withSettings({ booster: { otherBoostBpm: 51 } }),
+    withSettings({ booster: { otherBoostBpm: 50 } })
+  );
+});
 test('clearing one reading keeps the recipe signature while others remain', () => {
   const multiInput = {
     ...input,

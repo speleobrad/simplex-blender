@@ -1184,30 +1184,37 @@ export function simulateCompareProtocol({
     let waitMinutes = isWait
       ? (Number.isFinite(step.waitMinutes) ? step.waitMinutes : 0)
       : 0;
+    let targetWaitTemperatureC = null;
     if (isWait && step.waitMode === 'target') {
       const targetTemperatureC = step.targetTemperatureC;
+      const targetIsAmbient = Math.abs(targetTemperatureC - thermal.ambientTemperatureC) < 1e-9;
       if (!Number.isFinite(targetTemperatureC)
-        || targetTemperatureC <= thermal.ambientTemperatureC
-        || temperatureAtTransferEndC < targetTemperatureC) {
+        || targetTemperatureC < thermal.ambientTemperatureC - 1e-9
+        || temperatureAtTransferEndC < targetTemperatureC - 1e-9) {
         throw compareTargetWaitError('Compare target wait cannot reach the requested target temperature.', {
           targetTemperatureC,
           temperatureAtTransferEndC,
           ambientTemperatureC: thermal.ambientTemperatureC
         });
       }
-      waitMinutes = calculateCoolingTime({
+      targetWaitTemperatureC = targetIsAmbient ? thermal.ambientTemperatureC : targetTemperatureC;
+      waitMinutes = targetIsAmbient
+        ? 4.6 * tauMinutes
+        : calculateCoolingTime({
+          transferEndTemperatureC: temperatureAtTransferEndC,
+          ambientTemperatureC: thermal.ambientTemperatureC,
+          targetTemperatureC,
+          tauMinutes
+        });
+    }
+    const temperatureAfterWaitC = targetWaitTemperatureC === null
+      ? calculateTemperatureAfterWait({
         transferEndTemperatureC: temperatureAtTransferEndC,
         ambientTemperatureC: thermal.ambientTemperatureC,
-        targetTemperatureC,
+        waitMinutes,
         tauMinutes
-      });
-    }
-    const temperatureAfterWaitC = calculateTemperatureAfterWait({
-      transferEndTemperatureC: temperatureAtTransferEndC,
-      ambientTemperatureC: thermal.ambientTemperatureC,
-      waitMinutes,
-      tauMinutes
-    });
+      })
+      : targetWaitTemperatureC;
     const pressureAfterWaitBar = Math.max(0, calculatePressureAtTemperature({
       pressureBar: pressureAtTransferEndHotBar,
       oxygenPercent: receiverMix.oxygenPercent,

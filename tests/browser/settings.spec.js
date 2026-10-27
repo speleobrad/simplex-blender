@@ -462,4 +462,25 @@ test.describe('settings categories and drafts', () => {
       .locator('option[value="warning"]')).toBeDisabled();
   });
 
+  test('discarding an unsaved draft when leaving Settings keeps the saved calculator state', async ({ appPage }) => {
+    const page = await appPage.goto('tourSeen');
+    const general = await openSettingsCategory(page, 'general');
+    await general.getByRole('combobox', { name: 'Units' }).selectOption('imperial');
+    await page.getByRole('tab', { name: 'Blending', exact: true }).click();
+    await expect(page.locator('#screen-settings')).toBeHidden();
+    await expect(page.locator('#init-p')).toHaveValue(/^45(\.0+)?$/);
+    await expect(page.locator('#init-p')).toHaveAttribute('aria-label', 'Start pressure in bar');
+  });
 });
+
+  test('imperial temperature inputs keep converted bounds and decimal precision', async ({ appPage }) => {
+    const page = await appPage.goto('tourSeen');
+    const general = await openSettingsCategory(page, 'general');
+    await general.getByRole('combobox', { name: 'Units' }).selectOption('imperial');
+    await saveSettings(page);
+    const ambient = page.locator('#ambient-temperature');
+    await expect(ambient).toHaveAttribute('min', '41.0');
+    await expect(ambient).toHaveAttribute('max', '104.0');
+    await expect(ambient).toHaveAttribute('step', '0.1');
+    await expect(ambient).toHaveValue(/^\d+\.\d$/);
+  });

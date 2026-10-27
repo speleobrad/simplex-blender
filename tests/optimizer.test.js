@@ -56,6 +56,35 @@ test('default example keeps the cylinder gas when the safety ceiling is active',
   assert.equal(result.protocolSteps[0].type, 'keep');
 });
 
+test('maximum-pressure fallback keeps cylinder gas retained by the same-pressure exact recipe', () => {
+  const input = {
+    cylinder: {
+      volumeL: 10, initialPressureBar: 50, initialOxygenPercent: 32, initialHeliumPercent: 0,
+      targetPressureBar: 200, targetOxygenPercent: 21, targetHeliumPercent: 35
+    },
+    physics: { model: 'ideal', temperatureC: 20 },
+    banks: [
+      { id: 'he', name: 'He small', volumeL: 10, pressureBar: 60, maxPressureBar: 200, oxygenPercent: 0, heliumPercent: 100, enabled: true },
+      { id: 'o2', name: 'O2', volumeL: 50, pressureBar: 200, maxPressureBar: 200, oxygenPercent: 100, heliumPercent: 0, enabled: true }
+    ],
+    settings: DEFAULT_SETTINGS
+  };
+  const fallback = optimizeBlend(input);
+  assert.equal(fallback.feasible, false);
+  const maximumPressureBar = fallback.maximumPressure.blend.finalPressureBar;
+  const exact = optimizeBlend({
+    ...input,
+    cylinder: { ...input.cylinder, targetPressureBar: Math.floor(maximumPressureBar * 10) / 10 }
+  });
+
+  assert.equal(exact.feasible, true);
+  assert.ok(exact.blend.retainedPercent > 99);
+  assert.ok(
+    fallback.maximumPressure.blend.retainedPercent >= exact.blend.retainedPercent - 1,
+    `fallback retained ${fallback.maximumPressure.blend.retainedPercent}% but exact retained ${exact.blend.retainedPercent}%`
+  );
+});
+
 test('safety fallback preserves working gas and uses available premixes before pure helium', () => {
   const result = optimizeBlend({
     cylinder: {
@@ -492,6 +521,7 @@ test('uses decant when source and receiver start at equal pressure', () => {
   const transferSteps = result.protocolSteps.slice(1);
   assert.equal(transferSteps.length, 1);
   assert.equal(transferSteps[0].type, 'decant');
+  assert.equal(transferSteps[0].operation, 'Decant');
 });
 
 test('rejects a target-mix mismatch below the old absolute phase-I tolerance', () => {

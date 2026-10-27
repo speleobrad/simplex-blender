@@ -1058,10 +1058,13 @@ function protocolOperation(stage, bank) {
     stage.receiverEndPressureBar
   ) * 1e-9;
   const startsHigher = stage.sourceStartPressureBar > stage.receiverStartPressureBar + tolerance;
+  const startsEqual = Math.abs(stage.sourceStartPressureBar - stage.receiverStartPressureBar) <= tolerance;
   const endsEqual = Math.abs(stage.sourceEndPressureBar - stage.receiverEndPressureBar) <= tolerance;
   if (startsHigher && endsEqual) return 'Equalize';
-  if (stage.sourceStartPressureBar >= stage.receiverStartPressureBar - tolerance
-    && stage.sourceEndPressureBar >= stage.receiverEndPressureBar - tolerance) {
+  if ((stage.type === 'decant' && startsEqual) || (
+    stage.sourceStartPressureBar > stage.receiverStartPressureBar + tolerance
+    && stage.sourceEndPressureBar >= stage.receiverEndPressureBar - tolerance
+  )) {
     return 'Decant';
   }
   return 'Boost';
@@ -2127,9 +2130,15 @@ function solveBlendWithoutSalvage(input) {
     const maximumRecipeError = isUnsafe(maximumResult, inventoryMaximumPressure);
     let safeSolverResult = null;
     if (inventoryMaximumPressure <= targetPressureBar) {
-      safeSolverResult = maximumRecipeError
-        ? safeAtPressure(inventoryMaximumPressure, maximumResult)
-        : maximumResult;
+      if (maximumRecipeError) {
+        safeSolverResult = safeAtPressure(inventoryMaximumPressure, maximumResult);
+      } else {
+        const retentionResult = solveAtPressure(inventoryMaximumPressure, { prioritizeTransferSafety: true });
+        const keepsAtLeastAsMuch = retentionResult.feasible
+          && !isUnsafe(retentionResult, inventoryMaximumPressure)
+          && (retentionResult.solution.x_cyl || 0) >= (maximumResult.solution.x_cyl || 0);
+        safeSolverResult = keepsAtLeastAsMuch ? retentionResult : maximumResult;
+      }
     }
 
     if (safeSolverResult) {

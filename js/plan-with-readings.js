@@ -139,7 +139,7 @@ function suppliedSalvagedHeliumMoles(steps, trajectory) {
   return total;
 }
 
-function blendFromLedger({ input, template, steps, trajectory, retainedFraction, ventedMoles, startPressureBar }) {
+function blendFromLedger({ input, template, steps, trajectory, retainedFraction, ventedMoles, ventedHeliumMoles, startPressureBar }) {
   const { cylinder, physics } = input;
   const temperatureC = physics.temperatureC;
   const useVdw = physics.model !== 'ideal';
@@ -158,7 +158,7 @@ function blendFromLedger({ input, template, steps, trajectory, retainedFraction,
     ventedPressureBar: Math.max(0, startPressureBar - retainedPressureBar),
     ventedMoles,
     ventedGasLitres: ventedMoles * litresPerMole,
-    heliumVentedLitres: ventedMoles * (cylinder.initialHeliumPercent / 100) * litresPerMole,
+    heliumVentedLitres: ventedHeliumMoles * litresPerMole,
     heliumSalvagedLitres: (retainedHeliumMoles + suppliedSalvagedHeliumMoles(steps, trajectory)) * litresPerMole,
     heliumRetainedLitres: retainedMoles * (cylinder.initialHeliumPercent / 100) * litresPerMole
   };
@@ -166,12 +166,14 @@ function blendFromLedger({ input, template, steps, trajectory, retainedFraction,
 
 // Attaches the bookkeeping a later reading needs to a plan built without readings.
 function startingPlan(base, input) {
+  const litresPerMole = GAS_CONSTANT * (input.physics.temperatureC + 273.15);
   return {
     ...base,
     readingPlan: {
       segments: [{ fromIndex: 0, banks: base.salvageBanks ?? input.banks ?? [], startMix: initialMixOf(input.cylinder) }],
       retainedFraction: base.blend.retainedPercent / 100,
-      ventedMoles: base.blend.ventedMoles ?? 0
+      ventedMoles: base.blend.ventedMoles ?? 0,
+      ventedHeliumMoles: (base.blend.heliumVentedLitres ?? 0) / litresPerMole
     }
   };
 }
@@ -296,14 +298,17 @@ function applyReading(plan, input, readingsInput, index, reading) {
   ];
 
   const retainedFraction = plan.readingPlan.retainedFraction * (suffix.blend.retainedPercent / 100);
+  const litresPerMole = GAS_CONSTANT * (physics.temperatureC + 273.15);
   const ventedMoles = plan.readingPlan.ventedMoles + (suffix.blend.ventedMoles ?? 0);
+  const ventedHeliumMoles = plan.readingPlan.ventedHeliumMoles
+    + (suffix.blend.heliumVentedLitres ?? 0) / litresPerMole;
   const lastSalvage = mergedSteps.filter(step => step?.type === 'salvage').at(-1);
   const postSalvagePressureBar = Number.isFinite(lastSalvage?.resultingPressureBar)
     ? lastSalvage.resultingPressureBar
     : cylinder.initialPressureBar;
   const blend = blendFromLedger({
     input, template: suffix, steps: mergedSteps, trajectory: mergedTrajectory,
-    retainedFraction, ventedMoles, startPressureBar: postSalvagePressureBar
+    retainedFraction, ventedMoles, ventedHeliumMoles, startPressureBar: postSalvagePressureBar
   });
   const finalized = finalizeComposedPlan({
     input: readingsInput,

@@ -137,7 +137,7 @@ export function solveTwoPhaseSimplex(tableau, numDecisionVars, numConstraints, v
           currentCost += costVector[basicVariable] * tableau[i][rhsCol];
         }
       }
-      tableau[phase2ObjectiveRow][rhsCol] = currentCost;
+      tableau[phase2ObjectiveRow][rhsCol] = -currentCost;
     } else if (j < numPhysicalVars) {
       let basicCost = 0;
       for (let i = 0; i < numConstraints; i++) {
@@ -195,5 +195,5 @@ export function solveTwoPhaseSimplex(tableau, numDecisionVars, numConstraints, v
     }
   }
 
-  return { feasible: true, solution, steps, cost: tableau[phase2ObjectiveRow][rhsCol] };
+  return { feasible: true, solution, steps, cost: -tableau[phase2ObjectiveRow][rhsCol] };
 }

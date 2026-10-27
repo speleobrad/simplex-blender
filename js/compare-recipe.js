@@ -732,6 +732,7 @@ export function buildCompareProtocol(rows, { cylinder, physics, banks = [], sett
         ? receiverFinal.totalMoles / receiver.totalMoles
         : 0;
       retainedInitialMoles *= retainedFraction;
+      addedHeliumMoles *= retainedFraction;
       const step = passiveStep(row, receiverStart);
       step.receiverEndPressureBar = receiverFinal.pressureBar;
       step.resultingPressureBar = receiverFinal.pressureBar;
@@ -783,6 +784,12 @@ export function buildCompareProtocol(rows, { cylinder, physics, banks = [], sett
         temperatureC,
         useVdw
       );
+      if (requiredMoles <= 1e-9) {
+        const step = passiveStep({ ...row, type: 'keep' }, receiver);
+        protocolSteps.push(step);
+        trajectoryStep = addTrajectoryPoint(trajectory, step, trajectoryStep);
+        continue;
+      }
       addedHeliumMoles += salvagedHeliumFrom(requiredMoles, sourceBank.heliumPercent);
       const receiverStart = receiver;
       const receiverFinal = receiverAfterAddedMoles(
@@ -812,6 +819,12 @@ export function buildCompareProtocol(rows, { cylinder, physics, banks = [], sett
       temperatureC,
       useVdw
     );
+    if (requiredMoles <= 1e-9) {
+      const step = passiveStep({ ...row, type: 'keep' }, receiver);
+      protocolSteps.push(step);
+      trajectoryStep = addTrajectoryPoint(trajectory, step, trajectoryStep);
+      continue;
+    }
     addedHeliumMoles += salvagedHeliumFrom(requiredMoles, sourceBank.heliumPercent);
     const sourceMinimumMoles = calcMolarDensity(
       limits.minimumSourcePressureBar,

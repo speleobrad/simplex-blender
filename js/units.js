@@ -64,7 +64,12 @@ export function displayStep(value, quantity, units) {
 }
 
 
-export function formatInputValue(value, quantity, units) {
-  const digits = quantity === 'pressureBar' && normalizeUnits(units) === IMPERIAL_UNITS ? 1 : 0;
-  return convertToDisplay(value, quantity, units).toFixed(digits);
+export function formatInputValue(value, quantity, units, digitsOverride = null) {
+  const normalizedUnits = normalizeUnits(units);
+  const digits = digitsOverride ?? (
+    quantity === 'pressureBar' && normalizedUnits === IMPERIAL_UNITS
+      ? 1
+      : quantity === 'temperatureC' ? 1 : 0
+  );
+  return convertToDisplay(value, quantity, normalizedUnits).toFixed(digits);
 }

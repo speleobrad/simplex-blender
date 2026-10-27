@@ -79,3 +79,10 @@ test('a Carbondive 12 L preset runs through validation and the optimizer with th
   assert.equal(result.feasible, true);
   assert.ok(result.protocolSteps.some(step => step.thermal));
 });
+
+test('isValidMaterial accepts only string material keys', async () => {
+  const { isValidMaterial } = await import('../js/materials.js');
+  assert.equal(isValidMaterial('steel'), true);
+  assert.equal(isValidMaterial(['steel']), false);
+  assert.equal(isValidMaterial({ toString: () => 'steel' }), false);
+});

@@ -136,6 +136,14 @@ test('rejects out-of-range banks and falls back when invalid saved records are l
   }), DEFAULT_BANKS);
   assert.ok(reportedFailure instanceof RangeError);
 });
+
+test('loadSupplyBanks falls back instead of throwing on null legacy entries', () => {
+  const storage = memoryStorage([['simplex-gas-remixer-banks', JSON.stringify([null, null, null])]]);
+  let fallbackCalls = 0;
+  const banks = loadSupplyBanks(storage, () => { fallbackCalls += 1; });
+  assert.equal(fallbackCalls, 1);
+  assert.deepEqual(banks.map(bank => bank.id), DEFAULT_BANKS.map(bank => bank.id));
+});
 test('bank price per litre persists and legacy banks stay unpriced', () => {
   const storage = memoryStorage();
   const banks = loadSupplyBanks(storage);

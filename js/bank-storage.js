@@ -21,7 +21,8 @@ function isLegacyDefaultBanks(banks) {
   return Array.isArray(banks)
     && banks.length === LEGACY_DEFAULT_BANKS.length
     && banks.every((bank, index) => (
-      Object.keys(bank).length === LEGACY_BANK_FIELDS.length
+      bank !== null && typeof bank === 'object'
+      && Object.keys(bank).length === LEGACY_BANK_FIELDS.length
       && BANK_FIELDS.every(field => bank[field] === LEGACY_DEFAULT_BANKS[index][field])
     ));
 }

@@ -200,6 +200,33 @@ test('rejects unsupported thermal selectors and negative fixed waits', () => {
   assert.ok(errors.length >= 2);
 });
 
+test('rejects invalid fixed wait minutes and unknown wait modes', () => {
+  const cylinder = { volumeL: 12, initialPressureBar: 80, targetPressureBar: 210 };
+  const physics = { temperatureC: 20 };
+  const thermal = {
+    tankMaterial: 'steel',
+    coolingMedium: 'air',
+    ambientTemperatureC: 20,
+    inletTemperatureC: 20,
+    targetMediumTemperatureC: 25,
+    targetInWaterTemperatureC: 20,
+    waitMode: 'minutes',
+    waitMinutes: 5
+  };
+  const errorsFor = overrides => validateCalculatorInputs(
+    cylinder,
+    physics,
+    { ...thermal, ...overrides }
+  );
+
+  assert.deepEqual(errorsFor({}), []);
+  assert.match(errorsFor({ waitMinutes: Number.NaN }).join(' '), /Thermal wait must be between 0 and 1440 minutes\./);
+  assert.match(errorsFor({ waitMinutes: -1 }).join(' '), /Thermal wait must be between 0 and 1440 minutes\./);
+  assert.match(errorsFor({ waitMinutes: 1441 }).join(' '), /Thermal wait must be between 0 and 1440 minutes\./);
+  assert.match(errorsFor({ waitMode: 'sometime' }).join(' '), /Thermal wait mode must be minutes or temperature\./);
+  assert.deepEqual(errorsFor({ waitMode: 'temperature', waitMinutes: Number.NaN }), []);
+});
+
 test('rejects finite Air supply banks because Air is an implicit compressor source', () => {
   const errors = validateSupplyBankInput({
     id: 'air-bank',

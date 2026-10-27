@@ -45,6 +45,11 @@ test('formats pressure inputs to one decimal place in PSI', () => {
   assert.equal(formatInputValue(200, 'pressureBar', METRIC_UNITS), '200');
 });
 
+test('formats temperature inputs to one decimal place in both unit systems', () => {
+  assert.equal(formatInputValue(22.5, 'temperatureC', METRIC_UNITS), '22.5');
+  assert.equal(formatInputValue(22.5, 'temperatureC', IMPERIAL_UNITS), '72.5');
+});
+
 test('price per litre converts to price per cubic foot and back', () => {
   assert.equal(convertToDisplay(0.02, 'pricePerVolumeL', 'metric'), 0.02);
   const perCubicFoot = convertToDisplay(0.02, 'pricePerVolumeL', 'imperial');

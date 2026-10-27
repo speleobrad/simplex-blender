@@ -36,7 +36,7 @@ import {
   selectEquipmentPreset,
   validateSettings
 } from './settings.js';
-import { convertFromDisplay, convertToDisplay, formatInputValue, materialLabel, METRIC_UNITS, unitLabel } from './units.js';
+import { convertFromDisplay, convertToDisplay, formatInputValue, materialLabel, IMPERIAL_UNITS, METRIC_UNITS, unitLabel } from './units.js';
 import { resetApplicationState } from './factory-reset.js';
 import { analyzePresetSource, mergeSelectedPresets, PRESET_IMPORT_DEFAULT_URLS } from './preset-import.js';
 import { loadSupplyBanks, saveSupplyBanks } from './bank-storage.js';
@@ -45,7 +45,7 @@ import { loadTheme, saveTheme } from './theme.js';
 import { setPrimaryScreen } from './navigation.js';
 import { setResultTab } from './result-tabs.js';
 import { loadOnboardingState } from './onboarding.js';
-import { loadAnalytics } from './analytics.js';
+import { disableAnalytics, loadAnalytics } from './analytics.js';
 import { createOnboardingController } from './ui/onboarding.js';
 import { renderCompareRecipe } from './ui/compare-recipe.js';
 import { renderPressureLimitWarnings, renderResults } from './ui/results.js';
@@ -181,6 +181,9 @@ function updateWorkingTankUnitLabels(units) {
 }
 const numberValue = id => parseNumericInput(byId(id).value);
 const canonicalNumberValue = (id, quantity) => convertFromDisplay(numberValue(id), quantity, state.settings.units);
+const formatMainInputValue = (value, quantity, units) => quantity === 'temperatureC'
+  ? formatInputValue(value, quantity, units, units === IMPERIAL_UNITS ? 1 : 0)
+  : formatInputValue(value, quantity, units);
 
 function convertDisplayedInputs(fromUnits, toUnits) {
   for (const [id, quantity] of [
@@ -194,9 +197,7 @@ function convertDisplayedInputs(fromUnits, toUnits) {
     const input = byId(id);
     if (!input) continue;
     const canonical = convertFromDisplay(Number.parseFloat(input.value), quantity, fromUnits);
-    input.value = quantity === 'pressureBar'
-      ? formatInputValue(canonical, quantity, toUnits)
-      : String(convertToDisplay(canonical, quantity, toUnits));
+    input.value = formatMainInputValue(canonical, quantity, toUnits);
   }
   for (const [id, label] of [['init-p', 'Start pressure'], ['target-p', 'Target pressure']]) {
     const input = byId(id);
@@ -212,6 +213,18 @@ function convertDisplayedInputs(fromUnits, toUnits) {
     input.min = formatInputValue(minimumBar, 'pressureBar', toUnits);
     input.max = formatInputValue(350, 'pressureBar', toUnits);
     input.step = pressureStep;
+  }
+  for (const [id, minimumC, maximumC] of [
+    ['ambient-temperature', 5, 40],
+    ['target-temperature', 1, 30],
+    ['inlet-gas-temperature', 5, 40],
+    ['wait-target-temperature', 5, 40]
+  ]) {
+    const input = byId(id);
+    if (!input) continue;
+    input.min = formatMainInputValue(minimumC, 'temperatureC', toUnits);
+    input.max = formatMainInputValue(maximumC, 'temperatureC', toUnits);
+    input.step = '0.1';
   }
   updateWorkingTankUnitLabels(toUnits);
 }
@@ -601,6 +614,7 @@ async function loadPresetText(readText, sourceLabel) {
 function loadPresetFile(input) {
   const file = input.files?.[0];
   if (!file) return;
+  input.value = '';
   loadPresetText(() => file.text(), file.name);
 }
 
@@ -654,7 +668,7 @@ function togglePresetImport(checkbox) {
 function importSelectedPresets() {
   const selectedIds = state.settingsImport.selectedIds;
   if (selectedIds.length === 0) return;
-  const baseSettings = state.settings;
+  const baseSettings = state.settingsBeforeDraft ?? state.settings;
   let merged;
   try {
     merged = mergeSelectedPresets(baseSettings, state.settingsImport.candidates, selectedIds);
@@ -666,6 +680,7 @@ function importSelectedPresets() {
   state.settings = copySettings(merged);
   state.settingsDraft = copySettings(merged);
   state.settingsLoadFailure = null;
+  state.settingsBeforeDraft = copySettings(merged);
   state.settingsImport = {
     ...state.settingsImport,
     candidates: [],
@@ -682,6 +697,7 @@ function importSelectedPresets() {
 }
 
 function resetFactorySettings() {
+  const previousUnits = state.settings.units;
   let didReset;
   try {
     didReset = resetApplicationState(
@@ -694,6 +710,14 @@ function resetFactorySettings() {
     return;
   }
   if (!didReset) return;
+  disableAnalytics(window);
+  convertDisplayedInputs(previousUnits, state.settings.units);
+  state.bankSuggestions = {};
+  state.bankPriceBasis = {};
+  state.interimMeasurements = [];
+  state.interimMeasurementSignature = null;
+  state.settingsBeforeDraft = copySettings(state.settings);
+  state.settingsBeforeDraftCylinderName = null;
   clearPressureWarningConfirmation();
   invalidateCompareResult();
   state.whatIfScenario = createWhatIfScenario();
@@ -926,6 +950,7 @@ function saveSettingsDraft() {
     return;
   }
   clearPressureWarningConfirmation();
+  state.settingsLoadFailure = null;
   const pressureLimitModeChanged = state.settings.pressureLimitMode !== state.settingsDraft.pressureLimitMode;
 
   const previousUnits = state.settings.units;
@@ -967,8 +992,7 @@ function applyWhatIfGasPreset(select) {
     heliumPercent: preset.heliumPercent
   });
   state.whatIfErrors = [];
-  renderWhatIfEditor();
-  renderWhatIfResult();
+  runWhatIf();
 }
 
 function handleGasShortcut(event) {
@@ -1001,19 +1025,14 @@ function markGasPresetCustom(input) {
   byId(`${prefix}-gas-preset`).value = 'custom';
 }
 
-function cancelSettings() {
+function cancelSettings(nextScreen = null) {
   state.settingsSession += 1;
   clearPressureWarningConfirmation();
   const previousUnits = state.settings.units;
   const selectedCylinderName = state.settingsBeforeDraftCylinderName;
-  const returnScreen = state.settingsReturnScreen;
+  const returnScreen = nextScreen ?? state.settingsReturnScreen;
   if (state.settingsBeforeDraft) {
     state.settings = copySettings(state.settingsBeforeDraft);
-    try {
-      saveSettings(state.settings, settingsStorage);
-    } catch (error) {
-      console.warn('Simplex blender settings could not restore the canceled draft.', error);
-    }
     convertDisplayedInputs(previousUnits, state.settings.units);
     refreshPresetOptions(
       state.settings.cylinderPresets.some(preset => preset.name === selectedCylinderName)
@@ -1160,6 +1179,8 @@ function comparePressureStarts(input = compareInput(), rows = state.compareRows)
       starts[row.id] = currentPressure;
       const normalized = normalizeComparePressureFields(row, currentPressure);
       if (Number.isFinite(normalized.targetPressureBar)) currentPressure = normalized.targetPressureBar;
+    } else if (row.type === 'drain' && Number.isFinite(row.targetPressureBar)) {
+      currentPressure = row.targetPressureBar;
     } else if (row.type === 'wait' && Number.isFinite(waitStates[row.id]?.pressureBar)) {
       currentPressure = waitStates[row.id].pressureBar;
     }
@@ -1867,6 +1888,10 @@ function recalculate() {
 }
 
 function selectScreen(screenId) {
+  if (state.activeScreen === 'settings' && screenId !== 'settings' && state.settingsDraft !== null) {
+    cancelSettings(screenId);
+    return;
+  }
   if (screenId === 'settings' && state.settingsDraft === null) {
     openSettings();
     return;

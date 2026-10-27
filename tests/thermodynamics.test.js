@@ -1122,6 +1122,24 @@ test('compare target wait permits an already reached target temperature', () => 
   assert.ok(Math.abs(wait.pressureAfterWaitBar - 100) < 1e-9);
 });
 
+test('compare target wait accepts a target equal to ambient', () => {
+  const result = simulateCompareProtocol({
+    protocolSteps: [{
+      type: 'wait', waitMode: 'target',
+      targetTemperatureC: 20,
+      receiverStartPressureBar: 100, resultingPressureBar: 100,
+      resultingMix: { oxygenPercent: 21, heliumPercent: 0 }
+    }],
+    cylinder: { initialPressureBar: 100, volumeL: 12 },
+    physics: { model: 'ideal', temperatureC: 30 },
+    thermal: { tankMaterial: 'steel', coolingMedium: 'air', ambientTemperatureC: 20 },
+    settings: {}
+  });
+  const wait = result.protocolSteps[0].thermal;
+  assert.equal(wait.temperatureAfterWaitC, 20);
+  assert.ok(wait.waitMinutes > 0);
+});
+
 test('compare rejects a target temperature that cannot be reached by cooling', () => {
   assert.throws(() => simulateCompareProtocol({
     protocolSteps: [{

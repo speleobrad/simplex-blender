@@ -85,6 +85,12 @@ export function validateCalculatorInputs(cylinder, physics, thermal, options = {
   if (!['air', 'water'].includes(thermal.coolingMedium)) {
     errors.push('Thermal cooling medium must be air or water.');
   }
+  if (thermal.waitMode !== undefined && !['minutes', 'temperature'].includes(thermal.waitMode)) {
+    errors.push('Thermal wait mode must be minutes or temperature.');
+  } else if (thermal.waitMode !== 'temperature' && thermal.waitMinutes !== undefined
+    && !(Number.isFinite(thermal.waitMinutes) && thermal.waitMinutes >= 0 && thermal.waitMinutes <= 1440)) {
+    errors.push('Thermal wait must be between 0 and 1440 minutes.');
+  }
   if (thermal.coolingMedium === 'water' && thermal.waterSubmersionPercent !== undefined
     && !WATER_SUBMERSION_PERCENT_OPTIONS.includes(thermal.waterSubmersionPercent)) {
     errors.push('Thermal water submersion must be 20, 40, 60, or 80%.');

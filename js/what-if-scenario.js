@@ -20,7 +20,7 @@ export function expandWhatIfRows(rows = []) {
   return operations.flatMap((row, index) => {
     if (index === operations.length - 1) return [clone(row)];
     const wait = createCompareRow('wait', `${row.id}-wait`);
-    wait.waitMinutes = Number.isFinite(row.waitMinutes) ? row.waitMinutes : 0;
+    wait.waitMinutes = row.waitMinutes === undefined ? 0 : row.waitMinutes;
     return [clone(row), wait];
   });
 }

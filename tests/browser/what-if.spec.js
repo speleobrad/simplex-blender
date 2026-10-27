@@ -386,3 +386,32 @@ test.describe('What-if and Inventory price edits', () => {
     await expect(host).not.toContainText('Out of date');
   });
 });
+
+test.describe('What-if draft recalculation invariants', () => {
+  test('selecting a What-if gas preset reruns the scenario', async ({ appPage }) => {
+    const page = await load(appPage);
+    await openWhatIf(page);
+    await runWhatIf(page);
+    await page.locator('#what-if-current-gas-preset').selectOption('gas:EAN 32');
+    await expect(page.locator('#what-if-result-host')).not.toContainText('Out of date');
+  });
+
+  test('an add row after a drain exposes the drained receiver start pressure', async ({ appPage }) => {
+    const page = await load(appPage);
+    await openWhatIf(page);
+    await setWhatIfRow(page, 'compare-row-1', { type: 'drain', targetPressureBar: '20' });
+    await page.getByRole('button', { name: 'Add step', exact: true }).evaluate(button => button.click());
+    const steps = page.locator('#screen-what-if fieldset[data-row-id^="compare-row-"]:visible');
+    const add = steps.nth(1);
+    await add.locator('[data-compare-field="type"]').selectOption('add');
+    await add.locator('[data-compare-field="bankId"]').selectOption('compressor-air');
+    await add.locator('[data-compare-field="targetPressureBar"]').fill('25');
+    await add.locator('[data-compare-field="targetPressureBar"]').press('Tab');
+    await expect(add.locator('[data-compare-field="targetPressureBar"]')).toHaveValue(/^25(\.0+)?$/);
+    await expect(add.locator('[data-compare-field="pressureAddedBar"]')).toHaveValue(/^5(\.0+)?$/);
+    await expect(add.locator('[data-compare-field="targetPressureBar"]')).toHaveAttribute(
+      'data-receiver-start-pressure',
+      /^(20|20\.0+)(?:\d+)?$/
+    );
+  });
+});

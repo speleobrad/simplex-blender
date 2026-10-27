@@ -3,7 +3,7 @@ import { test, expect } from './fixtures/app-fixtures.js';
 import { injectStorageFailure } from './fixtures/storage-fixtures.js';
 import { assertResultPanelExclusive, fillWorkingTank } from './helpers/blending.js';
 import { acceptConsent, completeOrExitTour } from './helpers/onboarding.js';
-import { openSettingsCategory, saveSettings } from './helpers/settings.js';
+import { cancelSettings, openSettingsCategory, saveSettings } from './helpers/settings.js';
 
 const validGasFixture = fileURLToPath(new URL('./fixtures/import-fixtures/valid-gases.json', import.meta.url));
 const invalidFixture = fileURLToPath(new URL('./fixtures/import-fixtures/invalid.json', import.meta.url));
@@ -89,6 +89,20 @@ test.describe('persistence and failure states', () => {
       .some(preset => preset.name === 'Browser fixture gas'))).resolves.toBe(true);
   });
 
+  test('canceling after a confirmed preset import keeps the imported presets', async ({ appPage }) => {
+    const page = await appPage.goto('settings');
+    await openSettingsCategory(page, 'preset-management');
+    await uploadFixture(page, validGasFixture);
+    await page.getByRole('button', { name: 'Import selected', exact: true }).click();
+    await expect(settingsImportStatus(page)).toHaveText('Imported 1 preset.');
+
+    await cancelSettings(page);
+
+    await expect(page.evaluate(() => JSON.parse(localStorage.getItem('simplex-gas-remixer-settings')).gasPresets
+      .some(preset => preset.name === 'Browser fixture gas'))).resolves.toBe(true);
+    await expect(page.locator('#init-gas-preset option', { hasText: 'Browser fixture gas' })).toHaveCount(1);
+  });
+
   test('reports invalid checked-in local preset data and unavailable imports', async ({ appPage }) => {
     const page = await appPage.goto('settings');
     await openSettingsCategory(page, 'preset-management');
@@ -109,6 +123,29 @@ test.describe('persistence and failure states', () => {
     await page.getByRole('button', { name: 'Load online', exact: true }).click();
     await expect(settingsImportStatus(page)).toContainText(/HTTP 503/i);
     await page.evaluate(() => window.__restoreTestFetch?.());
+  });
+
+  test('factory reset from imperial units restores metric input values', async ({ appPage }) => {
+    const page = await appPage.goto('tourSeen');
+    const general = await openSettingsCategory(page, 'general');
+    await general.getByRole('combobox', { name: 'Units' }).selectOption('imperial');
+    await saveSettings(page);
+    await expect(page.locator('#init-p')).not.toHaveValue(/^45(\.0+)?$/);
+
+    await openSettingsCategory(page, 'preset-management');
+    page.once('dialog', dialog => dialog.accept());
+    await page.getByRole('button', { name: 'Reset to factory settings', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Analytics consent', exact: true })).toBeVisible();
+    await expect(page.locator('#init-p')).toHaveValue(/^45(\.0+)?$/);
+  });
+
+  test('the same preset file can be loaded twice', async ({ appPage }) => {
+    const page = await appPage.goto('tourSeen');
+    await openSettingsCategory(page, 'preset-management');
+    await uploadFixture(page, validGasFixture);
+    await expect(settingsImportStatus(page)).toContainText('Loaded 3 entries');
+    await uploadFixture(page, validGasFixture);
+    await expect(settingsImportStatus(page)).toContainText('Loaded 3 entries');
   });
 
   test('labels duplicate and conflicting candidates without mutating settings', async ({ appPage }) => {

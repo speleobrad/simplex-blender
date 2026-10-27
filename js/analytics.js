@@ -1,6 +1,11 @@
 export const ANALYTICS_MEASUREMENT_ID = 'G-KDQH39FXV3';
 
+export function disableAnalytics(window) {
+  window[`ga-disable-${ANALYTICS_MEASUREMENT_ID}`] = true;
+}
+
 export function loadAnalytics(document, window) {
+  window[`ga-disable-${ANALYTICS_MEASUREMENT_ID}`] = false;
   if (document.querySelector('script[data-simplex-analytics]')) {
     return false;
   }

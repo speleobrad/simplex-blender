@@ -241,7 +241,22 @@ test('thermal pressure notices classify target states by endpoint phase', async 
     pressureBar: 101.5,
     limitBar: 100,
     source: 'settled',
-    stepIdentifier: 'Wait to 22 °C'
+    stepIdentifier: 'Wait to 22 °C',
+    stepIndex: 2
   }]);
 
+});
+
+test('warning de-duplication keeps repeated step titles separate', async () => {
+  const helpers = await import('../js/pressure-limits.js');
+  const repeated = [
+    { title: 'Boost Oxygen', thermal: { pressureStartBar: 100, pressureAtTransferEndHotBar: 110, temperatureStartC: 30, temperatureAtTransferEndC: 30, pressureAfterWaitBar: 100, temperatureAfterWaitC: 20, durationMinutes: 1, waitMinutes: 1, rateSource: 'booster', samples: [] } },
+    { title: 'Boost Oxygen', thermal: { pressureStartBar: 100, pressureAtTransferEndHotBar: 115, temperatureStartC: 30, temperatureAtTransferEndC: 30, pressureAfterWaitBar: 100, temperatureAfterWaitC: 20, durationMinutes: 1, waitMinutes: 1, rateSource: 'booster', samples: [] } }
+  ];
+  const observations = helpers.collectThermalPressureWarningObservations({ protocolSteps: repeated, ambientTemperatureC: 20 });
+  const warnings = helpers.collectCylinderPressureWarnings({
+    cylinder: { workingPressureBar: 105, hotOverfillPercent: 0 },
+    observations
+  });
+  assert.equal(warnings.filter(warning => warning.source === 'transfer').length, 2);
 });

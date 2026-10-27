@@ -52,6 +52,18 @@ The Node and browser suites are independent: run `npm test` for the Node suite, 
 
 Cylinder-gas retention, and therefore helium salvaging from the working cylinder, is the optimizer's primary objective. Every safety or fallback re-solve MUST preserve as much working gas as its safe feasible recipe allows before choosing supply-bank sources. The preservation regression uses a 12 L, 80 bar, 21/35 → 210 bar, 18/45 input and MUST begin with preservation rather than a drain when that safe recipe exists. It is covered by `default example keeps the cylinder gas when the safety ceiling is active` in `tests/optimizer.test.js`; changes to LP costs or safety candidate selection must keep this behavior.
 
+## Non-UI correctness guardrails
+
+The pure-module tests are the contract for changes that affect calculations, persistence, or validation. In particular:
+
+- simplex phase-one feasibility is evaluated against scaled residuals, while phase two minimizes the configured objective without treating artificial variables as gas;
+- maximum-pressure fallback preserves working-cylinder gas whenever a safe feasible recipe allows it, and does not silently turn an unavailable exact target into a zero-pressure success;
+- transfer stages are classified from source and receiver pressures at both ends, with Compressor Air represented as `Top-up` and equal-endpoint transfers as `Equalize`;
+- zero-pressure drains, ambient-equal waits, representable tiny drains, and target-temperature waits retain their distinct semantics rather than being collapsed by rounding;
+- interim readings remain in Celsius internally and use the display-unit conversion only at input/output boundaries; later accepted readings supersede earlier ones without duplicate warning observations.
+
+When changing one of these rules, update the focused Node tests beside the affected module and run `npm test`. Browser tests remain the required check for UI wiring, rendering, and persistence flows.
+
 ## Browser smoke checks
 
 After serving the page, verify that:

@@ -1,12 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildCompareProtocol, normalizeComparePressureFields, validateCompareRecipe } from '../js/compare-recipe.js';
+import { buildCompareProtocol, createCompareRow, normalizeComparePressureFields, validateCompareRecipe } from '../js/compare-recipe.js';
 import { simulateCompareProtocol } from '../js/thermodynamics.js';
 import { isThermalTerminalProjection } from '../js/ui/thermal-charts.js';
 import {
   applyWhatIfStartPatch,
   buildWhatIfInput,
   createWhatIfScenario,
+  expandWhatIfRows,
   projectWhatIfInWater,
   snapshotWhatIfFromBlending,
   whatIfDraftSignature,
@@ -270,4 +271,19 @@ test('what-if shared signature ignores bank cost prices but not bank pressure', 
   assert.equal(shared([bank]), shared([{ ...bank, pricePerLitre: undefined }]));
   assert.notEqual(shared([bank]), shared([{ ...bank, pressureBar: 180 }]));
   assert.notEqual(shared([bank]), shared([bank], { ...settings, booster: { otherBoostBpm: 9 } }));
+});
+
+test('a present invalid What-if wait remains invalid instead of becoming zero', () => {
+  const rows = [
+    { ...createCompareRow('add', 'a'), waitMinutes: Number.NaN },
+    createCompareRow('add', 'b')
+  ];
+  const wait = expandWhatIfRows(rows).find(row => row.type === 'wait');
+  assert.equal(Number.isFinite(wait.waitMinutes), false);
+});
+
+test('an omitted What-if wait still defaults to zero minutes', () => {
+  const rows = [createCompareRow('add', 'a'), createCompareRow('add', 'b')];
+  const wait = expandWhatIfRows(rows).find(row => row.type === 'wait');
+  assert.equal(wait.waitMinutes, 0);
 });

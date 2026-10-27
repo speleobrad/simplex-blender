@@ -4,6 +4,10 @@ import { DEFAULT_WATER_SUBMERSION_PERCENT, WATER_SUBMERSION_PERCENT_OPTIONS } fr
 
 const inputClass = 'w-full min-w-0 bg-ocean-900 border border-ocean-700 rounded px-2 py-1 font-mono text-slate-100 text-xs';
 const selectClass = 'w-full min-w-0 bg-ocean-900 border border-ocean-700 rounded px-2 py-1 text-xs text-slate-200';
+function formatScenarioInputValue(value, quantity, units) {
+  const formatted = formatInputValue(value, quantity, units);
+  return quantity === 'temperatureC' ? formatted.replace(/\.0$/, '') : formatted;
+}
 
 function el(tag, attrs = {}, text) {
   const node = document.createElement(tag);
@@ -26,7 +30,7 @@ function addFieldError(wrapper, control, errors, field) {
 
 function valueFor(start, field, quantity, units) {
   const value = start?.[field];
-  return quantity && Number.isFinite(value) ? formatInputValue(value, quantity, units) : (value ?? '');
+  return quantity && Number.isFinite(value) ? formatScenarioInputValue(value, quantity, units) : (value ?? '');
 }
 
 function fieldInput(field, start, units, errors, {

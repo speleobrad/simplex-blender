@@ -51,6 +51,22 @@ const banks = [
     enabled: false
   }
 ];
+
+test('an add row at the current pressure is represented as a no-op', () => {
+  const { normalizedRows } = validateCompareRecipe([{
+    id: 'no-op',
+    type: 'add',
+    bankId: 'he-bank',
+    pressureAddedBar: 0,
+    targetPressureBar: cylinder.initialPressureBar,
+    pressureInputMode: 'target'
+  }], { cylinder, banks, physics, settings });
+  const protocol = buildCompareProtocol(normalizedRows, { cylinder, banks, physics, settings });
+  assert.equal(protocol.protocolSteps.length, 1);
+  assert.equal(protocol.protocolSteps[0].type, 'keep');
+  assert.equal(protocol.protocolSteps[0].costOperation, undefined);
+  assert.equal(protocol.sourceBanks.length, 0);
+});
 test('creates a drain row with a target pressure', () => {
   assert.deepEqual(createCompareRow('drain', 'row-1'), {
     id: 'row-1',
@@ -572,4 +588,39 @@ test('compare summary reports retained helium ungated for a 98% helium initial m
   assert.equal(result.summary.heliumSalvagedLitres, 0);
   // Ideal gas, nothing vented: retained He litres = 80 bar × 12 L × 0.98.
   assert.ok(Math.abs(result.summary.heliumRetainedLitres - 80 * 12 * 0.98) < 1e-6, `${result.summary.heliumRetainedLitres}`);
+});
+
+test('helium added from a leftover bank is scaled by a later drain in the summary', () => {
+  const halfHeliumBank = {
+    id: 'half-he',
+    name: 'Half helium',
+    volumeL: 40,
+    pressureBar: 200,
+    oxygenPercent: 0,
+    heliumPercent: 50,
+    enabled: true
+  };
+  const context = { cylinder, banks: [halfHeliumBank], physics, settings };
+  const { normalizedRows } = validateCompareRecipe([
+    {
+      id: 'add',
+      type: 'add',
+      bankId: 'half-he',
+      pressureAddedBar: 100,
+      targetPressureBar: 150,
+      pressureInputMode: 'target'
+    },
+    { id: 'drain', type: 'drain', targetPressureBar: 75 }
+  ], context);
+  const { summary } = buildCompareProtocol(normalizedRows, context);
+  const close = (actual, expected) => assert.ok(
+    Math.abs(actual - expected) < 1e-6,
+    `${actual} !== ${expected}`
+  );
+
+  close(summary.retainedPercent, 50);
+  close(summary.ventedGasLitres, 300);
+  close(summary.heliumVentedLitres, 0);
+  close(summary.heliumRetainedLitres, 0);
+  close(summary.heliumSalvagedLitres, 300);
 });

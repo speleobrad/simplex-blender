@@ -38,7 +38,7 @@ export const MATERIALS = Object.freeze({
 export const MATERIAL_VALUES = Object.freeze(Object.keys(MATERIALS));
 
 export function isValidMaterial(material) {
-  return Object.hasOwn(MATERIALS, material);
+  return typeof material === 'string' && Object.hasOwn(MATERIALS, material);
 }
 
 export function materialListText() {

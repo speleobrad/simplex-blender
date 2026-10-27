@@ -51,11 +51,12 @@ export function collectCylinderPressureWarnings({
     if (!exceedance) continue;
     const source = observation?.source;
     const stepIdentifier = observation?.stepIdentifier;
-    const key = JSON.stringify([source, stepIdentifier, exceedance.kind]);
+    const key = JSON.stringify([source, stepIdentifier, observation?.stepIndex, exceedance.kind]);
     const warning = {
       ...exceedance,
       source,
-      stepIdentifier
+      stepIdentifier,
+      stepIndex: observation?.stepIndex
     };
     const previous = highest.get(key);
     if (!previous || warning.pressureBar > previous.pressureBar) highest.set(key, warning);
@@ -83,11 +84,13 @@ export function collectThermalPressureWarningObservations({
 } = {}) {
   const observations = [];
   let previousStepEndsAtTargetWait = false;
-  const addObservation = (pressureBar, source, stepIdentifier, isTransientHot = false) => {
+  let currentStepIndex = null;
+  const addObservation = (pressureBar, source, stepIdentifier, isTransientHot = false, stepIndex = currentStepIndex) => {
     if (!Number.isFinite(pressureBar)) return;
-    observations.push({ pressureBar, source, stepIdentifier, isTransientHot });
+    observations.push({ pressureBar, source, stepIdentifier, stepIndex, isTransientHot });
   };
   for (const [index, step] of protocolSteps.entries()) {
+    currentStepIndex = index;
     const thermal = step?.thermal;
     if (!thermal) {
       previousStepEndsAtTargetWait = false;
@@ -112,20 +115,24 @@ export function collectThermalPressureWarningObservations({
       thermal.pressureStartBar,
       'start',
       stepIdentifier,
-      startIsTransientHot
+      startIsTransientHot,
+      index
     );
     if (thermal.rateSource !== 'none') {
       addObservation(
         thermal.pressureAtTransferEndAmbientBar,
         'ambient',
-        stepIdentifier
+        stepIdentifier,
+        false,
+        index
       );
     }
     addObservation(
       thermal.pressureAtTransferEndHotBar ?? thermal.pressureAtTransferEndBar,
       'transfer',
       stepIdentifier,
-      isAboveAmbientTemperature(thermal.temperatureAtTransferEndC, ambientTemperatureC)
+      isAboveAmbientTemperature(thermal.temperatureAtTransferEndC, ambientTemperatureC),
+      index
     );
 
     const waitIsTransientHot = !endsAtTargetWait
@@ -134,7 +141,8 @@ export function collectThermalPressureWarningObservations({
       thermal.pressureAfterWaitBar,
       waitIsTransientHot ? 'cooling' : 'settled',
       stepIdentifier,
-      waitIsTransientHot
+      waitIsTransientHot,
+      index
     );
 
     for (const sample of thermal.samples ?? []) {
@@ -150,7 +158,8 @@ export function collectThermalPressureWarningObservations({
         sample.projectedPressureBar ?? sample.pressureBar,
         sampleIsTransientHot ? 'cooling' : 'settled',
         stepIdentifier,
-        sampleIsTransientHot
+        sampleIsTransientHot,
+        index
       );
     }
     previousStepEndsAtTargetWait = endsAtTargetWait;

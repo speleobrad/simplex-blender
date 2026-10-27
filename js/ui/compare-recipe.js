@@ -1,6 +1,10 @@
 import { COMPARE_ROW_TYPES, COMPRESSOR_AIR_ID } from '../compare-recipe.js';
 import { convertToDisplay, formatInputValue, unitLabel } from '../units.js';
 const inputClass = 'min-w-0 w-full rounded border border-ocean-700 bg-ocean-900 px-2 py-1 font-mono text-xs text-slate-100';
+function formatCompareInputValue(value, quantity, units) {
+  const formatted = formatInputValue(value, quantity, units);
+  return quantity === 'temperatureC' ? formatted.replace(/\.0$/, '') : formatted;
+}
 
 function element(tagName, { className, text, attributes } = {}) {
   const node = document.createElement(tagName);
@@ -166,7 +170,7 @@ function rowFields(card, row, rowNumber, banks, errors, pressureStarts, units = 
     fields.append(modeField);
     if (row.waitMode === 'target') {
       const temperatureField = element('div');
-      appendLabelledControl(temperatureField, row, rowNumber, 'targetTemperatureC', `Target medium temperature (${unitLabel('temperatureC', units)})`, input(row, 'targetTemperatureC', Number.isFinite(row.targetTemperatureC) ? formatInputValue(row.targetTemperatureC, 'temperatureC', units) : '', 'number'), errors);
+      appendLabelledControl(temperatureField, row, rowNumber, 'targetTemperatureC', `Target medium temperature (${unitLabel('temperatureC', units)})`, input(row, 'targetTemperatureC', Number.isFinite(row.targetTemperatureC) ? formatCompareInputValue(row.targetTemperatureC, 'temperatureC', units) : '', 'number'), errors);
       fields.append(temperatureField);
     } else {
       const waitField = element('div');
