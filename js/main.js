@@ -57,6 +57,8 @@ import { renderThermalCharts } from './ui/thermal-charts.js';
 import { changeTernaryZoom, clearTernaryDiagram, observeTernaryCanvas, renderTernaryDiagram } from './ui/ternary.js';
 import { renderWhatIfScenarioEditor } from './ui/what-if-scenario.js';
 import { getResultTabs } from './ui/result-panel.js';
+import { computeFillCost } from './cost.js';
+import { renderCostSummary } from './ui/cost-summary.js';
 
 const settingsStorage = {
   getItem: key => window.localStorage.getItem(key),
@@ -123,6 +125,7 @@ const state = {
   compareErrors: [],
   lastCompareInput: null,
   lastCompareResult: null,
+  blendingCostSource: 'optimize',
   compareHasRun: false,
   whatIfScenario: createWhatIfScenario(),
   whatIfErrors: [],
@@ -1462,15 +1465,55 @@ function collectPressureWarnings(input, observations) {
   });
 }
 
+function blendingCostSource() {
+  if (state.blendingCostSource === 'compare') {
+    const compare = state.lastCompareResult?.compare;
+    if (!compare || !state.lastCompareInput) return null;
+    return { steps: compare.protocolSteps, temperatureC: state.lastCompareInput.physics?.temperatureC };
+  }
+  if (!state.lastResult || !state.lastInput || state.lastResult.feasible === false) return null;
+  return { steps: state.lastResult.protocolSteps, temperatureC: state.lastInput.physics?.temperatureC };
+}
+
+function whatIfCostSource() {
+  const result = state.whatIfScenario.result;
+  if (!result?.compare) return null;
+  return { steps: result.compare.protocolSteps, temperatureC: result.input?.physics?.temperatureC };
+}
+
+function deriveFillCost(source) {
+  if (!source || !Array.isArray(source.steps)) return null;
+  return computeFillCost({
+    steps: source.steps,
+    banks: state.banks,
+    costs: state.settings.costs,
+    temperatureC: source.temperatureC
+  });
+}
+
+/**
+ * Re-derive the Costs section of every result host from its stored final steps, the current banks and
+ * the current settings. Quantities come from the run; prices are never frozen into a result.
+ */
+function refreshCostSummaries() {
+  const display = { units: state.settings.units, currencySymbol: state.settings.costs.currencySymbol };
+  const blending = document.querySelector('[data-result-host="blending"]');
+  if (blending) renderCostSummary(deriveFillCost(blendingCostSource()), { root: blending, ...display });
+  const whatIf = byId('what-if-result-host');
+  if (whatIf) renderCostSummary(deriveFillCost(whatIfCostSource()), { root: whatIf, ...display });
+}
+
 function renderCompareResult() {
   const compare = state.lastCompareResult?.compare;
   if (!compare) {
     clearTernaryDiagram(document.querySelector('[data-result-host="blending"] [data-result-key="ternary-canvas"]'));
     return;
   }
+  state.blendingCostSource = 'compare';
   renderResults(state.lastCompareResult, state.lastCompareInput);
   renderThermalCharts(state.lastCompareResult, state.lastCompareInput, state.settings.units);
   renderTernary();
+  refreshCostSummaries();
 }
 
 function renderWhatIfResult() {
@@ -1507,6 +1550,7 @@ function renderWhatIfResult() {
     root.querySelector?.('[data-result-key="steps-container"]')?.replaceChildren();
     root.querySelector?.('[data-result-key="water-pressure-container"]')?.replaceChildren();
     root.querySelector?.('[data-result-key="scenario-summary-content"]')?.replaceChildren();
+    refreshCostSummaries();
     return;
   }
   renderResults(result, result.input, { root, mode: 'what-if' });
@@ -1528,6 +1572,7 @@ function renderWhatIfResult() {
       status.textContent = 'Scenario result is out of date. Update the scenario inputs.';
     }
   }
+  refreshCostSummaries();
 }
 
 function scenarioError(field, message, rowId = null) {
@@ -1762,6 +1807,7 @@ function recalculate() {
   };
   state.lastInput = input;
   state.lastResult = resultWithWarnings;
+  state.blendingCostSource = 'optimize';
 
   renderBankTable();
   renderEquipmentSummary(state.settings, state.settings.units);
@@ -1770,6 +1816,7 @@ function recalculate() {
   renderThermalCharts(resultWithWarnings, input, state.settings.units);
   if (ternaryData()) renderTernary();
   else clearTernaryDiagram(document.querySelector('[data-result-host="blending"] [data-result-key="ternary-canvas"]'));
+  refreshCostSummaries();
 }
 
 function selectScreen(screenId) {

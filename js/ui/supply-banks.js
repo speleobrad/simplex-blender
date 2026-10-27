@@ -1,5 +1,6 @@
 import { getSelectedGasPreset, sortGasPresetEntries } from '../settings.js';
 import { convertToDisplay, unitLabel } from '../units.js';
+import { formatMoney } from '../currency-format.js';
 const COLUMN_CLASSES = {
   name: 'py-2 px-2 min-w-32',
   volumeL: 'py-2 px-1',
@@ -91,11 +92,6 @@ function makeBankNameControl(bank, gasPresets, units) {
   return control;
 }
 
-function currencyPrefix(symbol) {
-  if (!symbol) return '';
-  return /[A-Za-z0-9]$/.test(symbol) ? `${symbol} ` : symbol;
-}
-
 function formatAmount(value) {
   return String(Number(value.toPrecision(6)));
 }
@@ -104,7 +100,7 @@ export function formatSuggestionNote(bank, suggestion, units, currencySymbol) {
   if (suggestion.status === 'calculating') return 'Calculating…';
   if (suggestion.status === 'failed') return suggestion.reason;
   const perVolume = unitLabel('volumeL', units);
-  const money = (amount, digits) => `${currencyPrefix(currencySymbol)}${amount.toFixed(digits)}`;
+  const money = (amount, digits) => formatMoney(amount, currencySymbol, digits);
   const price = pricePerLitre => `${money(convertToDisplay(pricePerLitre, 'pricePerVolumeL', units), 4)} per ${perVolume}`;
   const litres = formatAmount(convertToDisplay(suggestion.litres, 'volumeL', units));
   let text = `Indicative price ${price(suggestion.pricePerLitre)} (recipe cost ${money(suggestion.recipeCost, 2)} for ${litres} ${perVolume}).`;

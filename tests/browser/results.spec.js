@@ -1,6 +1,8 @@
 import { test, expect } from './fixtures/app-fixtures.js';
 import { assertResultPanelExclusive, openRecipeScenario } from './helpers/blending.js';
 import { selectResultTab, toggleTheme } from './helpers/navigation.js';
+import { bankRows, editBank } from './helpers/inventory.js';
+import { openSettingsCategory, saveSettings } from './helpers/settings.js';
 
 async function populated(appPage) { return appPage.goto('tourSeen'); }
 
@@ -241,5 +243,87 @@ test.describe('result tabs', () => {
     await expect(results.locator('[data-result-key="ternary-data-status"]')).toContainText(/available|appears|invalid|error|no feasible/i);
     await assertResultPanelExclusive(page, 'In-water pressure');
     await expect(results.locator('[data-result-key="water-pressure-container"]')).toBeEmpty();
+  });
+});
+
+test.describe('fill costs in the Tank summary', () => {
+  const costSection = page => page.locator('[data-result-host="blending"] [data-result-key="cost-summary"]');
+
+  async function priceEveryBank(page, pricePerLitre) {
+    const count = await bankRows(page).count();
+    for (let index = 0; index < count; index += 1) await editBank(page, index, { pricePerLitre });
+    await page.getByRole('tab', { name: 'Blending', exact: true }).click();
+  }
+
+  test('shows the Costs section with a gas table, an operations table and a total', async ({ appPage }) => {
+    const page = await appPage.goto('tourSeen');
+    const costs = await openSettingsCategory(page, 'costs');
+    await costs.getByRole('textbox', { name: 'Currency symbol', exact: true }).fill('€');
+    await costs.getByRole('spinbutton', { name: 'Oxygen price (/L)', exact: true }).fill('0.02');
+    await costs.getByRole('spinbutton', { name: 'Helium price (/L)', exact: true }).fill('0.05');
+    await costs.getByRole('spinbutton', { name: /Top-up, per operation/ }).fill('1.5');
+    await saveSettings(page);
+    await priceEveryBank(page, 0.02);
+    await openRecipeScenario(page);
+    await selectResultTab(page, 'Tank summary');
+
+    const section = costSection(page);
+    await expect(section.getByRole('heading', { name: 'Costs', exact: true })).toBeVisible();
+    await expect(section.getByRole('table', { name: 'Gas cost' })).toBeVisible();
+    await expect(section.getByRole('table', { name: 'Operation cost' })).toBeVisible();
+    await expect(section.locator('[data-result-key="cost-total"]')).toContainText(/^Total €\d+\.\d{2}$/);
+    const cellAmounts = table => table.locator('tbody tr').evaluateAll(rows => rows
+      .map(row => row.lastElementChild?.textContent ?? '')
+      .filter(text => /\d/.test(text))
+      .map(text => Number(text.replace(/[^0-9.]/g, ''))));
+    const lineAmounts = [
+      ...await cellAmounts(section.getByRole('table', { name: 'Gas cost' })),
+      ...await cellAmounts(section.getByRole('table', { name: 'Operation cost' }))
+    ];
+    const totalAmount = Number((await section.locator('[data-result-key="cost-total"]').textContent()).replace(/[^0-9.]/g, ''));
+    const lineSum = lineAmounts.reduce((sum, value) => sum + value, 0);
+    expect(lineAmounts.length).toBeGreaterThan(0);
+    expect(Math.abs(totalAmount - lineSum)).toBeLessThanOrEqual(0.01);
+  });
+
+  test('labels the total incomplete and names a bank without a price', async ({ appPage }) => {
+    const page = await appPage.goto('tourSeen');
+    const costs = await openSettingsCategory(page, 'costs');
+    await costs.getByRole('textbox', { name: 'Currency symbol', exact: true }).fill('€');
+    await costs.getByRole('spinbutton', { name: 'Oxygen price (/L)', exact: true }).fill('0.02');
+    await saveSettings(page);
+    await openRecipeScenario(page);
+    await selectResultTab(page, 'Tank summary');
+
+    const section = costSection(page);
+    await expect(section.locator('[data-result-key="cost-total"]')).toContainText('incomplete');
+    await expect(section.getByRole('table', { name: 'Gas cost' })).toContainText('no price set');
+  });
+
+  test('prompts for Settings when no price is configured', async ({ appPage }) => {
+    const page = await appPage.goto('tourSeen');
+    await openRecipeScenario(page);
+    await selectResultTab(page, 'Tank summary');
+
+    const section = costSection(page);
+    await expect(section.locator('[data-result-key="cost-status"]')).toHaveText('Set prices in Settings → Costs.');
+    await expect(section.getByRole('table', { name: 'Gas cost' })).toBeHidden();
+  });
+
+  test('shows per-litre prices in /cu ft after switching to imperial units', async ({ appPage }) => {
+    const page = await appPage.goto('tourSeen');
+    const costs = await openSettingsCategory(page, 'costs');
+    await costs.getByRole('textbox', { name: 'Currency symbol', exact: true }).fill('€');
+    await costs.getByRole('spinbutton', { name: 'Oxygen price (/L)', exact: true }).fill('0.02');
+    await saveSettings(page);
+    await priceEveryBank(page, 0.02);
+
+    const general = await openSettingsCategory(page, 'general');
+    await general.getByRole('combobox', { name: 'Units' }).selectOption('imperial');
+    await saveSettings(page);
+    await openRecipeScenario(page);
+    await selectResultTab(page, 'Tank summary');
+
+    await expect(costSection(page).getByRole('table', { name: 'Gas cost' })).toContainText('/cu ft');
   });
 });

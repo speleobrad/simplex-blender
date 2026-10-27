@@ -335,3 +335,37 @@ test('identifies a selected finite bank after it is disabled', async ({ appPage 
   await runWhatIf(page);
   await expect(page.locator('#screen-what-if')).toContainText(/disabled|unavailable|bank|invalid/i);
 });
+
+test.describe('fill costs in What-if', () => {
+  test('shows the Costs section with an incomplete total when a bank has no price', async ({ appPage }) => {
+    const page = await load(appPage);
+    const costs = await openSettingsCategory(page, 'costs');
+    await costs.getByRole('textbox', { name: 'Currency symbol', exact: true }).fill('€');
+    await costs.getByRole('spinbutton', { name: 'Oxygen price (/L)', exact: true }).fill('0.02');
+    await saveSettings(page);
+    await openWhatIf(page);
+    await runWhatIf(page);
+    await page.locator('#what-if-result-host').getByRole('tab', { name: 'Tank summary', exact: true }).click();
+
+    const section = page.locator('#what-if-result-host [data-result-key="cost-summary"]');
+    await expect(section.getByRole('table', { name: 'Gas cost' })).toBeVisible();
+    await expect(section.locator('[data-result-key="cost-total"]')).toContainText('incomplete');
+  });
+
+  test('refreshes the What-if Costs total after a Settings price edit without re-running', async ({ appPage }) => {
+    const page = await load(appPage);
+    await openWhatIf(page);
+    await runWhatIf(page);
+    await page.locator('#what-if-result-host').getByRole('tab', { name: 'Tank summary', exact: true }).click();
+    const section = page.locator('#what-if-result-host [data-result-key="cost-summary"]');
+    await expect(section.locator('[data-result-key="cost-status"]')).toHaveText('Set prices in Settings → Costs.');
+
+    const costs = await openSettingsCategory(page, 'costs');
+    await costs.getByRole('textbox', { name: 'Currency symbol', exact: true }).fill('CHF');
+    await costs.getByRole('spinbutton', { name: 'Oxygen price (/L)', exact: true }).fill('0.02');
+    await saveSettings(page);
+
+    await expect(section.locator('[data-result-key="cost-total"]')).toContainText(/Total CHF \d+\.\d{2}/);
+    await expect(section.locator('[data-result-key="cost-total"]')).toContainText('incomplete');
+  });
+});

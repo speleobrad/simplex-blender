@@ -692,6 +692,37 @@
               <tbody id="ternary-data-trajectory"></tbody>
             </table>
           </div>
+          <section data-result-key="cost-summary" aria-label="Costs">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300">Costs</h3>
+            <p data-result-key="cost-status" class="py-2 text-slate-400 text-xs">Costs appear when a feasible blend is available.</p>
+            <div data-result-key="cost-tables" class="overflow-x-auto pb-2" hidden>
+              <table class="mb-4 min-w-full text-left font-mono text-xs">
+                <caption class="py-2 text-left font-sans text-slate-300">Gas cost</caption>
+                <thead>
+                  <tr class="text-slate-400">
+                    <th scope="col" class="px-2 py-1 text-left">Source</th>
+                    <th scope="col" class="px-2 py-1 text-right">Litres</th>
+                    <th scope="col" class="px-2 py-1 text-right">Price</th>
+                    <th scope="col" class="px-2 py-1 text-right">Cost</th>
+                  </tr>
+                </thead>
+                <tbody data-result-key="cost-gas-body"></tbody>
+              </table>
+              <table class="min-w-full text-left font-mono text-xs">
+                <caption class="py-2 text-left font-sans text-slate-300">Operation cost</caption>
+                <thead>
+                  <tr class="text-slate-400">
+                    <th scope="col" class="px-2 py-1 text-left">Operation</th>
+                    <th scope="col" class="px-2 py-1 text-right">Litres</th>
+                    <th scope="col" class="px-2 py-1 text-right">Rate</th>
+                    <th scope="col" class="px-2 py-1 text-right">Cost</th>
+                  </tr>
+                </thead>
+                <tbody data-result-key="cost-operations-body"></tbody>
+              </table>
+            </div>
+            <p data-result-key="cost-total" class="py-2 font-mono text-sm text-slate-100" hidden></p>
+          </section>
         </div>
 
 
