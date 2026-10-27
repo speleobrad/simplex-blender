@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { renderCostSummary } from '../js/ui/cost-summary.js';
+import { renderCostBanner, renderCostSummary } from '../js/ui/cost-summary.js';
 
 class FakeNode {
   constructor(tagName) {
@@ -214,5 +214,82 @@ test('labels the gas volume column with the active volume unit', () => {
     host.children[0].children[0].append(gasHeading);
     renderCostSummary(PRICED_COST, { root: host, units: 'imperial', currencySymbol: '€' });
     assert.equal(gasHeading.textContent, 'Volume (cu ft)');
+  });
+});
+
+test('shows Total gas cost and Operations cost rows with 2-decimal amounts', () => {
+  withDocument(() => {
+    const { host } = createHost();
+    const gasTotal = new FakeNode('td');
+    gasTotal.setAttribute('data-result-key', 'cost-gas-total');
+    const operationsTotal = new FakeNode('td');
+    operationsTotal.setAttribute('data-result-key', 'cost-operations-total');
+    host.children[0].children[0].append(gasTotal, operationsTotal);
+    renderCostSummary(PRICED_COST, { root: host, units: 'metric', currencySymbol: '€' });
+    assert.equal(gasTotal.textContent, '€0.25');
+    assert.equal(operationsTotal.textContent, '€10.00');
+  });
+});
+
+const SAVINGS_HOOKS = ['cost-fill-total', 'cost-saved', 'cost-salvaged'];
+
+function createBannerHost() {
+  const host = new FakeNode('div');
+  const hooks = {};
+  for (const name of SAVINGS_HOOKS) {
+    const element = new FakeNode('div');
+    element.setAttribute('data-result-key', name);
+    hooks[name] = element;
+    host.append(element);
+  }
+  return { host, hooks };
+}
+
+test('banner shows total fill cost, saved cost and salvaged saving with 2 decimals', () => {
+  withDocument(() => {
+    const { host, hooks } = createBannerHost();
+    renderCostBanner(PRICED_COST, { savedCost: 1.5, salvagedSaving: 0.333, missing: [] }, { root: host, currencySymbol: '€' });
+    assert.equal(hooks['cost-fill-total'].textContent, '€10.25');
+    assert.equal(hooks['cost-saved'].textContent, '€1.50');
+    assert.equal(hooks['cost-salvaged'].textContent, '€0.33');
+  });
+});
+
+test('banner marks the total incomplete when a used bank is unpriced', () => {
+  withDocument(() => {
+    const { host, hooks } = createBannerHost();
+    renderCostBanner({ ...PRICED_COST, incomplete: true, unpricedSources: [{ sourceBankId: 'b', name: 'Helium bank' }] },
+      { savedCost: 0, salvagedSaving: 0, missing: [] }, { root: host, currencySymbol: '€' });
+    assert.equal(hooks['cost-fill-total'].textContent, '€10.25 (incomplete)');
+  });
+});
+
+test('banner prompts for a missing pure price instead of a number', () => {
+  withDocument(() => {
+    const { host, hooks } = createBannerHost();
+    renderCostBanner(PRICED_COST,
+      { savedCost: null, salvagedSaving: null, missing: [{ code: 'pure-price', gas: 'helium' }] },
+      { root: host, currencySymbol: '€' });
+    assert.equal(hooks['cost-saved'].textContent, 'Price pure helium in Inventory');
+    assert.equal(hooks['cost-salvaged'].textContent, 'Price pure helium in Inventory');
+  });
+});
+
+test('banner names a bank whose recipe cannot be priced', () => {
+  withDocument(() => {
+    const { host, hooks } = createBannerHost();
+    renderCostBanner(PRICED_COST,
+      { savedCost: 0, salvagedSaving: null, missing: [{ code: 'recipe-unavailable', bankId: 'b1', name: 'Mix bank' }] },
+      { root: host, currencySymbol: '€' });
+    assert.equal(hooks['cost-saved'].textContent, '€0.00');
+    assert.equal(hooks['cost-salvaged'].textContent, 'Unavailable for Mix bank');
+  });
+});
+
+test('banner shows dashes without a feasible blend', () => {
+  withDocument(() => {
+    const { host, hooks } = createBannerHost();
+    renderCostBanner(null, { savedCost: null, salvagedSaving: null, missing: [] }, { root: host, currencySymbol: '€' });
+    for (const name of SAVINGS_HOOKS) assert.equal(hooks[name].textContent, '—');
   });
 });

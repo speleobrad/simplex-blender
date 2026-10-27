@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures/app-fixtures.js';
 import { assertResultPanelExclusive, openRecipeScenario } from './helpers/blending.js';
 import { selectResultTab, toggleTheme } from './helpers/navigation.js';
-import { bankRows, editBank } from './helpers/inventory.js';
+import { bankRows, editBank, setPurePrices } from './helpers/inventory.js';
 import { openSettingsCategory, saveSettings } from './helpers/settings.js';
 
 async function populated(appPage) { return appPage.goto('tourSeen'); }
@@ -9,7 +9,7 @@ async function populated(appPage) { return appPage.goto('tourSeen'); }
 test.describe('result tabs', () => {
   test('exposes every result panel exclusively in a populated recipe', async ({ appPage }) => {
     const page = await populated(appPage);
-    for (const tab of ['Recipe', 'Thermal Graph', 'In-water pressure', 'Tank summary', 'Simplex diagram']) {
+    for (const tab of ['Recipe', 'Thermal Graph', 'In-water pressure', 'Tanks and costs', 'Simplex diagram']) {
       await assertResultPanelExclusive(page, tab);
     }
     await openRecipeScenario(page);
@@ -44,7 +44,7 @@ test.describe('result tabs', () => {
     await expect(results.locator('[data-result-key="ternary-steps-summary"]')).not.toHaveText('No feasible blend');
     await expect(results.locator('[data-result-key="ternary-data-trajectory"] tr')).not.toHaveCount(0);
 
-    await assertResultPanelExclusive(page, 'Tank summary');
+    await assertResultPanelExclusive(page, 'Tanks and costs');
     await expect(results.locator('[data-result-key="ternary-data-status"]')).toContainText(/trajectory points/i);
     await expect(results.locator('[data-result-key="ternary-data-trajectory"] tr')).not.toHaveCount(0);
     await selectResultTab(page, 'Simplex diagram');
@@ -133,7 +133,7 @@ test.describe('result tabs', () => {
     await expect(tabs).toHaveCount(5);
     const tabByName = name => results.getByRole('tab', { name, exact: true });
     await expect(tabByName('Recipe')).toHaveAttribute('tabindex', '0');
-    for (const name of ['Simplex diagram', 'Thermal Graph', 'Tank summary', 'In-water pressure']) {
+    for (const name of ['Simplex diagram', 'Thermal Graph', 'Tanks and costs', 'In-water pressure']) {
       await expect(tabByName(name)).toHaveAttribute('tabindex', '-1');
     }
 
@@ -151,8 +151,8 @@ test.describe('result tabs', () => {
     await expect(tabByName('Simplex diagram')).toHaveAttribute('aria-selected', 'true');
     await expect(tabByName('Simplex diagram')).toHaveAttribute('tabindex', '0');
     await page.keyboard.press('ArrowLeft');
-    await expect(tabByName('Tank summary')).toBeFocused();
-    await expect(tabByName('Tank summary')).toHaveAttribute('aria-selected', 'true');
+    await expect(tabByName('Tanks and costs')).toBeFocused();
+    await expect(tabByName('Tanks and costs')).toHaveAttribute('aria-selected', 'true');
 
     await page.keyboard.press('Home');
     await expect(tabByName('Recipe')).toBeFocused();
@@ -239,14 +239,14 @@ test.describe('result tabs', () => {
     await expect(results.locator('[data-result-key="ternary-data-trajectory"] tr')).toHaveCount(0);
     await assertResultPanelExclusive(page, 'Thermal Graph');
     await expect(results.locator('[data-result-key="thermal-chart-status"]')).toContainText(/available|appears|invalid|error/i);
-    await assertResultPanelExclusive(page, 'Tank summary');
+    await assertResultPanelExclusive(page, 'Tanks and costs');
     await expect(results.locator('[data-result-key="ternary-data-status"]')).toContainText(/available|appears|invalid|error|no feasible/i);
     await assertResultPanelExclusive(page, 'In-water pressure');
     await expect(results.locator('[data-result-key="water-pressure-container"]')).toBeEmpty();
   });
 });
 
-test.describe('fill costs in the Tank summary', () => {
+test.describe('fill costs in the Tanks and costs', () => {
   const costSection = page => page.locator('[data-result-host="blending"] [data-result-key="cost-summary"]');
 
   async function priceEveryBank(page, pricePerLitre) {
@@ -259,13 +259,12 @@ test.describe('fill costs in the Tank summary', () => {
     const page = await appPage.goto('tourSeen');
     const costs = await openSettingsCategory(page, 'costs');
     await costs.getByRole('textbox', { name: 'Currency symbol', exact: true }).fill('€');
-    await costs.getByRole('spinbutton', { name: 'Oxygen price (/L)', exact: true }).fill('0.02');
-    await costs.getByRole('spinbutton', { name: 'Helium price (/L)', exact: true }).fill('0.05');
-    await costs.getByRole('spinbutton', { name: /Top-up, per operation/ }).fill('1.5');
+    await costs.getByRole('spinbutton', { name: 'Boost (per operation)', exact: true }).fill('0.5');
+    await costs.getByRole('spinbutton', { name: 'Top-up (per operation, includes compressor air)', exact: true }).fill('1.5');
     await saveSettings(page);
     await priceEveryBank(page, 0.02);
     await openRecipeScenario(page);
-    await selectResultTab(page, 'Tank summary');
+    await selectResultTab(page, 'Tanks and costs');
 
     const section = costSection(page);
     await expect(section.getByRole('heading', { name: 'Costs', exact: true })).toBeVisible();
@@ -290,10 +289,10 @@ test.describe('fill costs in the Tank summary', () => {
     const page = await appPage.goto('tourSeen');
     const costs = await openSettingsCategory(page, 'costs');
     await costs.getByRole('textbox', { name: 'Currency symbol', exact: true }).fill('€');
-    await costs.getByRole('spinbutton', { name: 'Oxygen price (/L)', exact: true }).fill('0.02');
     await saveSettings(page);
+    await setPurePrices(page, { helium: 0.02 });
     await openRecipeScenario(page);
-    await selectResultTab(page, 'Tank summary');
+    await selectResultTab(page, 'Tanks and costs');
 
     const section = costSection(page);
     await expect(section.locator('[data-result-key="cost-total"]')).toContainText('incomplete');
@@ -303,7 +302,7 @@ test.describe('fill costs in the Tank summary', () => {
   test('prompts for Settings when no price is configured', async ({ appPage }) => {
     const page = await appPage.goto('tourSeen');
     await openRecipeScenario(page);
-    await selectResultTab(page, 'Tank summary');
+    await selectResultTab(page, 'Tanks and costs');
 
     const section = costSection(page);
     await expect(section.locator('[data-result-key="cost-status"]')).toHaveText('Set prices in Settings → Costs.');
@@ -314,7 +313,6 @@ test.describe('fill costs in the Tank summary', () => {
     const page = await appPage.goto('tourSeen');
     const costs = await openSettingsCategory(page, 'costs');
     await costs.getByRole('textbox', { name: 'Currency symbol', exact: true }).fill('€');
-    await costs.getByRole('spinbutton', { name: 'Oxygen price (/L)', exact: true }).fill('0.02');
     await saveSettings(page);
     await priceEveryBank(page, 0.02);
 
@@ -322,8 +320,30 @@ test.describe('fill costs in the Tank summary', () => {
     await general.getByRole('combobox', { name: 'Units' }).selectOption('imperial');
     await saveSettings(page);
     await openRecipeScenario(page);
-    await selectResultTab(page, 'Tank summary');
+    await selectResultTab(page, 'Tanks and costs');
 
     await expect(costSection(page).getByRole('table', { name: 'Gas cost' })).toContainText('/cu ft');
+  });
+
+  test('shows Saved cost as zero when no helium is retained, and right-aligns the banner amounts', async ({ appPage }) => {
+    const page = await appPage.goto('tourSeen');
+    const costs = await openSettingsCategory(page, 'costs');
+    await costs.getByRole('textbox', { name: 'Currency symbol', exact: true }).fill('€');
+    await saveSettings(page);
+    await setPurePrices(page, { helium: 0.05 });
+    await page.getByRole('tab', { name: 'Blending', exact: true }).click();
+    await openRecipeScenario(page);
+
+    const banner = page.locator('[data-result-key="cost-banner"]:visible');
+    const saved = banner.locator('[data-result-key="cost-saved"]');
+    // tourSeen retains no helium, so Saved cost is zero and needs no helium price.
+    await expect(saved).toHaveText('€0.00');
+    await setPurePrices(page, { helium: 0.10 });
+    await page.getByRole('tab', { name: 'Blending', exact: true }).click();
+    await expect(saved).toHaveText('€0.00');
+
+    for (const key of ['cost-fill-total', 'cost-saved', 'cost-salvaged']) {
+      await expect(banner.locator(`[data-result-key="${key}"]`)).toHaveCSS('text-align', 'right');
+    }
   });
 });

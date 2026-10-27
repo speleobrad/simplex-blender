@@ -124,7 +124,7 @@ export function formatSuggestionNote(bank, suggestion, units, currencySymbol, le
   if (suggestion.status === 'failed') return suggestion.reason;
   const perVolume = unitLabel('volumeL', units);
   const money = (amount, digits) => formatMoney(amount, currencySymbol, digits);
-  const price = pricePerLitre => `${money(convertToDisplay(pricePerLitre, 'pricePerVolumeL', units), 4)} per ${perVolume}`;
+  const price = pricePerLitre => `${money(convertToDisplay(pricePerLitre, 'pricePerVolumeL', units), 6)} per ${perVolume}`;
   const litres = formatAmount(convertToDisplay(suggestion.litres, 'volumeL', units));
   const discountNote = leftoverDiscountPercent > 0 ? ` after ${leftoverDiscountPercent}% leftover discount` : '';
   let text = `Indicative price ${price(suggestion.pricePerLitre)}${discountNote} (recipe cost ${money(suggestion.recipeCost, 2)} for ${litres} ${perVolume}).`;

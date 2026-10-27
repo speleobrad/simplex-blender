@@ -98,6 +98,8 @@ export function renderCostSummary(cost, { root, units = 'metric', currencySymbol
   const total = hook(root, 'cost-total');
   const gasBody = hook(root, 'cost-gas-body');
   const operationBody = hook(root, 'cost-operations-body');
+  const gasTotal = hook(root, 'cost-gas-total');
+  const operationsTotal = hook(root, 'cost-operations-total');
   if (!status || !tables || !total || !gasBody || !operationBody) return;
 
   if (!cost || cost.configured === false) {
@@ -120,5 +122,35 @@ export function renderCostSummary(cost, { root, units = 'metric', currencySymbol
   const operationRows = cost.operationLines.map(line => operationRow(line, currencySymbol));
   operationBody.replaceChildren(...(operationRows.length ? operationRows : [messageRow('No operations.')]));
 
+  if (gasTotal) gasTotal.textContent = formatMoney(cost.gasTotal, currencySymbol, 2);
+  if (operationsTotal) operationsTotal.textContent = formatMoney(cost.operationTotal, currencySymbol, 2);
   total.textContent = totalText(cost, currencySymbol);
+}
+
+// `gas` limits which pure price can explain a missing value; null accepts any pure gas.
+function savingText(value, missing, gas, symbol) {
+  if (value !== null && value !== undefined) return formatMoney(value, symbol, 2);
+  const priceMissing = missing.find(entry => entry.code === 'pure-price' && (!gas || entry.gas === gas));
+  if (priceMissing) return `Price pure ${priceMissing.gas} in Inventory`;
+  const unavailable = missing.find(entry => entry.code === 'recipe-unavailable');
+  if (unavailable) return `Unavailable for ${unavailable.name}`;
+  return '—';
+}
+
+/**
+ * Render the Total cost of fill, Saved cost and Salvaged saving items of the Blending summary banner.
+ * `cost` is the derived fill cost (null without a feasible blend); `savings` is the `computeSavings` result.
+ */
+export function renderCostBanner(cost, savings, { root, currencySymbol = '' } = {}) {
+  const fillTotal = hook(root, 'cost-fill-total');
+  const saved = hook(root, 'cost-saved');
+  const salvaged = hook(root, 'cost-salvaged');
+  if (!fillTotal || !saved || !salvaged) return;
+
+  const missing = savings?.missing ?? [];
+  fillTotal.textContent = cost && cost.configured !== false
+    ? `${formatMoney(cost.total, currencySymbol, 2)}${cost.incomplete ? ' (incomplete)' : ''}`
+    : '—';
+  saved.textContent = savings ? savingText(savings.savedCost, missing, 'helium', currencySymbol) : '—';
+  salvaged.textContent = savings ? savingText(savings.salvagedSaving, missing, null, currencySymbol) : '—';
 }

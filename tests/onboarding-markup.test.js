@@ -71,7 +71,7 @@ test('keeps the working tank and optimized results in Blending, with What-if ste
 
 });
 test('exposes semantic result tabs and panels in the requested order', () => {
-  assert.match(markup, /id="results-tablist"[\s\S]*?Recipe[\s\S]*?Thermal Graph[\s\S]*?In-water pressure[\s\S]*?Tank summary[\s\S]*?Simplex diagram/);
+  assert.match(markup, /id="results-tablist"[\s\S]*?Recipe[\s\S]*?Thermal Graph[\s\S]*?In-water pressure[\s\S]*?Tanks and costs[\s\S]*?Simplex diagram/);
   assert.doesNotMatch(markup, /id="tab-btn-ternary"[^>]*>\s*Diagram\s*</);
   for (const tab of ['recipe', 'ternary', 'thermal', 'summary', 'water-pressure']) {
     assert.match(markup, new RegExp(`id="tab-btn-${tab}"[^>]*role="tab"[^>]*aria-selected=`));

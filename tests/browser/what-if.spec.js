@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures/app-fixtures.js';
 import { openWhatIf, fillWhatIfStart, setWhatIfRow, runWhatIf, assertWhatIfResultPanelExclusive } from './helpers/blending.js';
 import { openSettingsCategory, saveSettings } from './helpers/settings.js';
-import { editBank } from './helpers/inventory.js';
+import { editBank, setPurePrices } from './helpers/inventory.js';
 async function load(appPage) { return appPage.goto('tourSeen'); }
 
 async function warningSettings(page) {
@@ -222,7 +222,7 @@ async function warningSettings(page) {
     await expect(recipe).toContainText(/Compressor Air|Add gas|Top-up/i);
     await expect(recipe).toContainText(/Wait|Cooloff period/i);
     await expect(recipe).toContainText(/Pressure after cooloff|Temperature after cooloff|Pressure at transfer end/i);
-    for (const tab of ['Thermal Graph', 'In-water pressure', 'Tank summary', 'Simplex diagram']) {
+    for (const tab of ['Thermal Graph', 'In-water pressure', 'Tanks and costs', 'Simplex diagram']) {
       const panel = await assertWhatIfResultPanelExclusive(page, tab);
       await expect(panel).toContainText(/(?:temperature|pressure|stage|trajectory|unavailable|diagram|table)/i);
     }
@@ -338,36 +338,35 @@ test('identifies a selected finite bank after it is disabled', async ({ appPage 
 });
 
 test.describe('fill costs in What-if', () => {
-  test('shows the Costs section with an incomplete total when a bank has no price', async ({ appPage }) => {
+  test('prompts for Settings Costs when the used gas has no price', async ({ appPage }) => {
     const page = await load(appPage);
     const costs = await openSettingsCategory(page, 'costs');
     await costs.getByRole('textbox', { name: 'Currency symbol', exact: true }).fill('€');
-    await costs.getByRole('spinbutton', { name: 'Oxygen price (/L)', exact: true }).fill('0.02');
     await saveSettings(page);
+    await setPurePrices(page, { helium: 0.02 });
     await openWhatIf(page);
     await runWhatIf(page);
-    await page.locator('#what-if-result-host').getByRole('tab', { name: 'Tank summary', exact: true }).click();
+    await page.locator('#what-if-result-host').getByRole('tab', { name: 'Tanks and costs', exact: true }).click();
 
     const section = page.locator('#what-if-result-host [data-result-key="cost-summary"]');
-    await expect(section.getByRole('table', { name: 'Gas cost' })).toBeVisible();
-    await expect(section.locator('[data-result-key="cost-total"]')).toContainText('incomplete');
+    await expect(section).toContainText('Set prices in Settings → Costs.');
   });
 
   test('refreshes the What-if Costs total after a Settings price edit without re-running', async ({ appPage }) => {
     const page = await load(appPage);
     await openWhatIf(page);
     await runWhatIf(page);
-    await page.locator('#what-if-result-host').getByRole('tab', { name: 'Tank summary', exact: true }).click();
+    await page.locator('#what-if-result-host').getByRole('tab', { name: 'Tanks and costs', exact: true }).click();
     const section = page.locator('#what-if-result-host [data-result-key="cost-summary"]');
     await expect(section.locator('[data-result-key="cost-status"]')).toHaveText('Set prices in Settings → Costs.');
 
     const costs = await openSettingsCategory(page, 'costs');
     await costs.getByRole('textbox', { name: 'Currency symbol', exact: true }).fill('CHF');
-    await costs.getByRole('spinbutton', { name: 'Oxygen price (/L)', exact: true }).fill('0.02');
     await saveSettings(page);
+    await setPurePrices(page, { oxygen: 0.02 });
 
     await expect(section.locator('[data-result-key="cost-total"]')).toContainText(/Total CHF \d+\.\d{2}/);
-    await expect(section.locator('[data-result-key="cost-total"]')).toContainText('incomplete');
+    await expect(section.locator('[data-result-key="cost-total"]')).not.toContainText('incomplete');
   });
 });
 

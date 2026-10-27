@@ -60,7 +60,8 @@ import { changeTernaryZoom, clearTernaryDiagram, observeTernaryCanvas, renderTer
 import { renderWhatIfScenarioEditor } from './ui/what-if-scenario.js';
 import { getResultTabs } from './ui/result-panel.js';
 import { computeFillCost } from './cost.js';
-import { renderCostSummary } from './ui/cost-summary.js';
+import { renderCostBanner, renderCostSummary } from './ui/cost-summary.js';
+import { computeSavings } from './savings.js';
 
 const settingsStorage = {
   getItem: key => window.localStorage.getItem(key),
@@ -1519,6 +1520,19 @@ function deriveFillCost(source) {
   });
 }
 
+/** Savings against pure-gas and bank prices for the optimize result; null while a compare result is shown. */
+function blendingSavings() {
+  if (state.blendingCostSource === 'compare' || !state.lastResult || !state.lastInput) return null;
+  return computeSavings({
+    result: state.lastResult,
+    banks: state.banks,
+    costs: state.settings.costs,
+    settings: state.settings,
+    physics: state.lastInput.physics,
+    inventoryTemperatureC: effectiveInletTemperatureC()
+  });
+}
+
 /**
  * Re-derive the Costs section of every result host from its stored final steps, the current banks and
  * the current settings. Quantities come from the run; prices are never frozen into a result.
@@ -1526,9 +1540,17 @@ function deriveFillCost(source) {
 function refreshCostSummaries() {
   const display = { units: state.settings.units, currencySymbol: state.settings.costs.currencySymbol };
   const blending = document.querySelector('[data-result-host="blending"]');
-  if (blending) renderCostSummary(deriveFillCost(blendingCostSource()), { root: blending, ...display });
+  if (blending) {
+    const cost = deriveFillCost(blendingCostSource());
+    renderCostSummary(cost, { root: blending, ...display });
+    renderCostBanner(cost, blendingSavings(), { root: blending, currencySymbol: display.currencySymbol });
+  }
   const whatIf = byId('what-if-result-host');
-  if (whatIf) renderCostSummary(deriveFillCost(whatIfCostSource()), { root: whatIf, ...display });
+  if (whatIf) {
+    renderCostSummary(deriveFillCost(whatIfCostSource()), { root: whatIf, ...display });
+    const banner = whatIf.querySelector?.('[data-result-key="cost-banner"]');
+    if (banner) banner.hidden = true;
+  }
 }
 
 function renderCompareResult() {

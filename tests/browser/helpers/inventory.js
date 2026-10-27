@@ -71,4 +71,12 @@ export async function removeBank(page, rowIndex) {
   await expect(rows).toHaveCount(count - 1);
 }
 
+/** Price the default pure banks in Inventory (row 0 pure Helium, row 1 pure Oxygen), per litre. */
+export async function setPurePrices(page, { oxygen, helium } = {}) {
+  await page.getByRole('tab', { name: 'Inventory', exact: true }).click();
+  if (oxygen !== undefined) await editBank(page, 1, { pricePerLitre: oxygen });
+  if (helium !== undefined) await editBank(page, 0, { pricePerLitre: helium });
+  await page.getByRole('tab', { name: 'Blending', exact: true }).click();
+}
+
 export { bankPanel, bankRows };

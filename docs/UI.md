@@ -78,7 +78,7 @@ The result card has a horizontally scrollable tablist. **Recipe** is selected in
 1. **Recipe**
 2. **Diagram**
 3. **Thermal graphs**
-4. **Tank summary**
+4. **Tanks and costs**
 5. **In water pressure**
 
 Tabs use `aria-selected`, roving `tabindex`, and keyboard handling in `main.js`. Only the selected tab panel is visible.
@@ -111,7 +111,7 @@ For an unavailable requested pressure, the recipe still renders the maximum-pres
 #### Diagram tab
 
 The Diagram tab contains a square canvas showing the gas-composition trajectory. The chart includes the Air/O₂/He simplex, the complementary N₂/Air/He region, a direct-target dashed path, and the calculated mixing vector path with arrows.
-When the requested exact mix/pressure is unavailable but a partial maximum-pressure recipe exists, the chart and Tank summary use that partial recipe's trajectory and preserve the requested target mix as the goal/reference row. They remain empty only when no recipe datapoints exist.
+When the requested exact mix/pressure is unavailable but a partial maximum-pressure recipe exists, the chart and Tanks and costs use that partial recipe's trajectory and preserve the requested target mix as the goal/reference row. They remain empty only when no recipe datapoints exist.
 
 Controls:
 
@@ -120,7 +120,7 @@ Controls:
 - `+` zoom in.
 - Pointer hover reports gas fractions in the live coordinate readout.
 
-The canvas has a screen-reader description. The Tank summary tab provides the accessible tabular representation of the plotted data.
+The canvas has a screen-reader description. The Tanks and costs tab provides the accessible tabular representation of the plotted data.
 
 #### Thermal graphs tab
 
@@ -134,7 +134,7 @@ The tab contains synchronized SVG temperature and pressure histories over elapse
 
 Hovering either graph moves the shared guide/readout across both charts. Alternating step bands and caption rows separate transfer-plus-wait intervals. No completed protocol produces the empty-state status instead of chart data.
 
-#### Tank summary tab
+#### Tanks and costs tab
 
 The tab exposes accessible tables for:
 
@@ -143,7 +143,7 @@ The tab exposes accessible tables for:
 
 The tab reports when feasible chart data is unavailable. The tables are the keyboard-operable/reference view of the Diagram data, including source-bank start/end pressure information where supplied by the calculation.
 
-The Costs section sits at the end of the pane. It has a gas table (litres, price per litre in the display unit, and cost for each finite bank; unpriced banks show "no price set"), an operation table for Boost, Decant, Equalize, and Top-up (the Top-up row shows its litres as information only and includes compressor air), and a total. A total with unpriced gas reads "(incomplete: … unpriced)". With no prices set it shows "Set prices in Settings → Costs."; with no feasible blend it shows "Costs appear when a feasible blend is available." Costs appear in the Blending and What-if Tank summary panes.
+The Costs section sits at the end of the pane. It has a gas table (litres, price per litre in the display unit, and cost for each finite bank; unpriced banks show "no price set"), an operation table for Boost, Decant, Equalize, and Top-up (the Top-up row shows its litres as information only and includes compressor air), and a total. A total with unpriced gas reads "(incomplete: … unpriced)". With no prices set it shows "Set prices in Settings → Costs."; with no feasible blend it shows "Costs appear when a feasible blend is available." Costs appear in the Blending and What-if Tanks and costs panes.
 
 #### In water pressure tab
 
@@ -250,10 +250,10 @@ Settings, Inventory, theme, and onboarding state use separate browser-storage re
 - Equipment summary: `js/ui/equipment-summary.js`
 - Result and protocol rendering: `js/ui/results.js`
 - Thermal charts: `js/ui/thermal-charts.js`
-- Composition diagram and Tank summary data: `js/ui/ternary.js`
+- Composition diagram and Tanks and costs data: `js/ui/ternary.js`
 - Consent and guided tour: `js/ui/onboarding.js`
 - Storage fallback alert: `js/ui/storage-warning.js`
 
 ## What-if scenario
 
-- What-if places the single `Scenario start` state at the top of the Recipe summary banner, above the retained/vented gas metrics. The right-side result navigation includes Recipe, Thermal Graph, In-water pressure, Tank summary, and Simplex diagram. Recipe technical details are informational and What-if never exposes Record actual controls.
+- What-if places the single `Scenario start` state at the top of the Recipe summary banner, above the retained/vented gas metrics. The right-side result navigation includes Recipe, Thermal Graph, In-water pressure, Tanks and costs, and Simplex diagram. Recipe technical details are informational and What-if never exposes Record actual controls.

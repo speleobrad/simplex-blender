@@ -40,7 +40,7 @@ export async function openRecipeScenario(page, scenario = {}) {
 }
 
 export async function assertResultPanelExclusive(page, tabName) {
-  const ids = { Recipe: 'recipe', 'Simplex diagram': 'ternary', 'Thermal Graph': 'thermal', 'Tank summary': 'summary', 'In-water pressure': 'water-pressure' };
+  const ids = { Recipe: 'recipe', 'Simplex diagram': 'ternary', 'Thermal Graph': 'thermal', 'Tanks and costs': 'summary', 'In-water pressure': 'water-pressure' };
   const id = ids[tabName] ?? tabName;
   const host = page.locator('[data-result-host="blending"]');
   await selectResultTab(page, tabName);
@@ -98,7 +98,7 @@ export async function runWhatIf(page) {
 }
 
 export async function assertWhatIfResultPanelExclusive(page, tabName) {
-  const ids = { Recipe: 'recipe', 'Simplex diagram': 'ternary', 'Thermal Graph': 'thermal', 'Tank summary': 'summary', 'In-water pressure': 'water-pressure' };
+  const ids = { Recipe: 'recipe', 'Simplex diagram': 'ternary', 'Thermal Graph': 'thermal', 'Tanks and costs': 'summary', 'In-water pressure': 'water-pressure' };
   const id = ids[tabName] ?? tabName;
   const host = page.locator('#what-if-result-host');
   const tab = host.getByRole('tab', { name: tabName, exact: true });
