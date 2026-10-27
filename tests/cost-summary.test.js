@@ -88,8 +88,8 @@ const PRICED_COST = {
   gasLines: [{ sourceBankId: 'bank-o2', name: 'Oxygen bank', litres: 10, unitPrice: 0.025, cost: 0.25 }],
   operationLines: [{ operation: 'boost', count: 2, fee: 5, cost: 10 }],
   gasTotal: 0.25,
-  operationTotal: 11,
-  total: 11.25,
+  operationTotal: 10,
+  total: 10.25,
   unpricedSources: [],
   incomplete: false,
   configured: true
@@ -105,7 +105,7 @@ test('renders priced gas, operation and total lines with the currency prefix', (
     assert.equal(total.hidden, false);
     assert.deepEqual(rowTexts(gasBody), [['Oxygen bank', '10.0 L', '€0.025000 /L', '€0.25']]);
     assert.deepEqual(rowTexts(operationBody), [['Boost', '2', '€5.00', '€10.00']]);
-    assert.equal(total.textContent, 'Total €11.25');
+    assert.equal(total.textContent, 'Total €10.25');
   });
 });
 
@@ -113,7 +113,7 @@ test('uses a spaced prefix for alphanumeric currency symbols', () => {
   withDocument(() => {
     const { host, total } = createHost();
     renderCostSummary(PRICED_COST, { root: host, units: 'metric', currencySymbol: 'CHF' });
-    assert.equal(total.textContent, 'Total CHF 11.25');
+    assert.equal(total.textContent, 'Total CHF 10.25');
   });
 });
 

@@ -17,8 +17,8 @@ const perMole = litresPerMole(physics.temperatureC);
 const decantFrom = (sourceBankId, litres, id = 'op-1') => ({
   costOperation: 'decant', costOperationId: id, sourceBankId, sourceConsumedMoles: litres / perMole
 });
-const run = ({ banks, steps = [], blend = { heliumRetainedLitres: 100 } }) => computeSavings({
-  result: { blend, protocolSteps: steps },
+const run = ({ banks, steps = [], blend = { heliumRetainedLitres: 100 }, feasible }) => computeSavings({
+  result: { blend, protocolSteps: steps, feasible },
   banks, costs, settings: DEFAULT_SETTINGS, physics, inventoryTemperatureC
 });
 
@@ -31,10 +31,23 @@ test('saved cost is retained helium litres times the weighted pure helium price'
   assert.deepEqual(result.missing, []);
 });
 
-test('no helium price makes saved cost null and names helium', () => {
+test('no helium price with helium retained makes saved cost null and names helium as a pure-price gap', () => {
   const result = run({ banks: [pureO2, real] });
   assert.equal(result.savedCost, null);
-  assert.ok(result.missing.includes('helium'));
+  assert.deepEqual(result.missing, [{ code: 'pure-price', gas: 'helium' }]);
+});
+
+test('no helium retained gives zero saved cost without asking for a helium price', () => {
+  const result = run({ banks: [pureO2, real], blend: { heliumRetainedLitres: 0 } });
+  assert.equal(result.savedCost, 0);
+  assert.deepEqual(result.missing, []);
+});
+
+test('no feasible result gives null savings and no gas prompt', () => {
+  const result = run({ banks: [pureO2, real], steps: [decantFrom('real', 360)], feasible: false });
+  assert.deepEqual(result, { savedCost: null, salvagedSaving: null, missing: [] });
+  const noBlend = computeSavings({ result: { protocolSteps: [] }, banks: [pureO2, real], costs, settings: DEFAULT_SETTINGS, physics, inventoryTemperatureC });
+  assert.deepEqual(noBlend, { savedCost: null, salvagedSaving: null, missing: [] });
 });
 
 test('salvage is litres used × discount-0 recipe price minus what the bank charged', () => {
@@ -55,23 +68,30 @@ test('a used pure bank is not a salvage source', () => {
   assert.deepEqual(result.missing, []);
 });
 
-test('an unpriced used bank is skipped, marked missing, and salvage stays numeric', () => {
+test('an unpriced used bank is skipped, listed by id, and salvage stays numeric', () => {
   const unpriced = bank({ id: 'real', name: 'EAN32', volumeL: 12, pricePerLitre: null });
   const result = run({ banks: [pureO2, pureHe, unpriced], steps: [decantFrom('real', 360)] });
   assert.equal(result.salvagedSaving, 0);
-  assert.ok(result.missing.includes('unpriced banks'));
+  assert.deepEqual(result.missing, [{ code: 'unpriced-bank', bankId: 'real', name: 'EAN32' }]);
 });
 
-test('a missing pure oxygen price makes salvage null and gives the reason', () => {
+test('a missing pure oxygen price makes salvage null and names oxygen as a pure-price gap', () => {
   const result = run({ banks: [pureHe, real], steps: [decantFrom('real', 360)] });
   assert.equal(result.salvagedSaving, null);
-  assert.ok(result.missing.includes('Set a price on a pure oxygen bank first.'));
+  assert.deepEqual(result.missing, [{ code: 'pure-price', gas: 'oxygen' }]);
 });
 
-test('missing reasons are deduplicated', () => {
+test('a bank the recipe cannot price for equipment reasons makes salvage null and names the bank', () => {
+  const low = bank({ id: 'real', name: 'EAN32', volumeL: 12, pressureBar: 9.5, pricePerLitre: 0.001 });
+  const result = run({ banks: [pureO2, pureHe, low], steps: [decantFrom('real', 360)] });
+  assert.equal(result.salvagedSaving, null);
+  assert.deepEqual(result.missing, [{ code: 'recipe-unavailable', bankId: 'real', name: 'EAN32' }]);
+});
+
+test('missing entries are deduplicated', () => {
   const unpriced = bank({ id: 'real', name: 'EAN32', volumeL: 12, pricePerLitre: null });
-  const result = run({ banks: [unpriced], steps: [decantFrom('real', 100, 'op-1'), decantFrom('real', 100, 'op-2')] });
-  assert.equal(new Set(result.missing).size, result.missing.length);
+  const result = run({ banks: [pureO2, pureHe, unpriced], steps: [decantFrom('real', 100, 'op-1'), decantFrom('real', 100, 'op-2')] });
+  assert.deepEqual(result.missing, [{ code: 'unpriced-bank', bankId: 'real', name: 'EAN32' }]);
 });
 
 test('computeSavings does not mutate the result, banks or costs', () => {

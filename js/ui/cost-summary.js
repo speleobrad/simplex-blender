@@ -58,7 +58,7 @@ function gasRow(line, symbol, units) {
   return row;
 }
 
-// redesign: wired in Task 3/4 (operation table is count × fee; no per-litre column)
+// Operation table is count × fee; there is no per-litre column.
 function operationRow(line, symbol) {
   const row = document.createElement('tr');
   const label = OPERATION_LABELS[line.operation] ?? line.operation;

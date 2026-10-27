@@ -11,6 +11,10 @@ const costs = () => ({
   currencySymbol: '', leftoverDiscountPercent: 0,
   operationPrices: { boost: 2, decant: 1, topUp: 5 }
 });
+const zeroCosts = () => ({
+  currencySymbol: '', leftoverDiscountPercent: 0,
+  operationPrices: { boost: 0, decant: 0, topUp: 0 }
+});
 const settingsWith = (mutate = () => {}) => {
   const s = copySettings(DEFAULT_SETTINGS);
   s.costs = costs();
@@ -115,6 +119,7 @@ test('compressor ceiling below the target makes the mix unpriceable', () => {
   const result = priceWith({ settings: settingsWith(s => { s.booster.maxCompressorPressureBar = 100; }) });
   assert.equal(result.ok, false);
   assert.match(result.reason, /Compressor Air cannot top up/);
+  assert.equal(result.missingGas, undefined, 'an equipment failure names no pure gas');
 });
 
 test('a bank below 10 bar fails without a price', () => {
@@ -136,18 +141,26 @@ test('more than 6 virtual banks for one gas fails without a price', () => {
   });
   assert.equal(result.ok, false);
   assert.match(result.reason, /more than 6 virtual oxygen sources/);
+  assert.equal(result.missingGas, undefined, 'a source-count failure names no pure gas');
 });
 
-test('zero flat fees and no priced pure bank report that no prices are configured', () => {
-  const zero = { currencySymbol: '', leftoverDiscountPercent: 0, operationPrices: { boost: 0, decant: 0, topUp: 0 } };
-  const result = priceWith({ costs: zero, inventoryBanks: [] });
+test('zero flat fees with no priced pure bank name the needed oxygen', () => {
+  const result = priceWith({ costs: zeroCosts(), inventoryBanks: [] });
   assert.equal(result.ok, false);
-  assert.match(result.reason, /no prices/i);
+  assert.match(result.reason, /Set a price on a pure oxygen bank first/);
+  assert.equal(result.missingGas, 'oxygen');
+});
+
+test('no fees and no pure price, with no pure gas needed, report that no prices are configured', () => {
+  // A bank with no oxygen and no helium needs no pure gas, so no gas is named.
+  const result = priceWith({ bank: bank({ oxygenPercent: 0, heliumPercent: 0 }), costs: zeroCosts(), inventoryBanks: [] });
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /No prices are configured/);
+  assert.equal(result.missingGas, undefined);
 });
 
 test('zero flat fees still price a bank from the pure-gas prices alone', () => {
-  const zero = { currencySymbol: '', leftoverDiscountPercent: 0, operationPrices: { boost: 0, decant: 0, topUp: 0 } };
-  const result = priceWith({ costs: zero });
+  const result = priceWith({ costs: zeroCosts() });
   assert.equal(result.ok, true, result.reason);
   assert.ok(result.recipeCost > 0);
   const base = priceWith();
@@ -158,19 +171,22 @@ test('a needed pure oxygen gas with no priced pure O2 bank fails naming oxygen',
   const result = priceWith({ inventoryBanks: inventory().filter(b => b.id !== 'o2') });
   assert.equal(result.ok, false);
   assert.match(result.reason, /Set a price on a pure oxygen bank first/);
+  assert.equal(result.missingGas, 'oxygen');
 });
 
 test('a needed pure helium gas with no priced pure He bank fails naming helium', () => {
   const result = priceWith({ bank: bank({ oxygenPercent: 21, heliumPercent: 35 }), inventoryBanks: inventory().filter(b => b.id !== 'he') });
   assert.equal(result.ok, false);
   assert.match(result.reason, /Set a price on a pure helium bank first/);
+  assert.equal(result.missingGas, 'helium');
 });
 
-test('a disabled pure bank is not a price source', () => {
+test('a disabled pure bank is not a price source and names its gas', () => {
   const disabled = inventory().map(b => (b.id === 'o2' ? { ...b, enabled: false } : b));
   const result = priceWith({ inventoryBanks: disabled });
   assert.equal(result.ok, false);
   assert.match(result.reason, /pure oxygen bank/);
+  assert.equal(result.missingGas, 'oxygen');
 });
 
 test('real banks, inventory and settings are not mutated', () => {

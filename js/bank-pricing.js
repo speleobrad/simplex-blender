@@ -36,17 +36,16 @@ function virtualBanks(gasId, composition, count, price) {
  * `operationCount` maps each operation (boost, decant, topUp) charged by `computeFillCost`
  * to its number of distinct operations.
  *
+ * A failure caused by a needed pure gas without a weighted price carries `missingGas`
+ * ('oxygen' | 'helium'). Every other failure leaves it out.
+ *
  * @returns {{ok: true, pricePerLitre: number, recipeCost: number, litres: number,
  *   exhaustedSources: number, sourceCount: number, operationCount: Object}
- *   | {ok: false, reason: string}}
+ *   | {ok: false, reason: string, missingGas?: 'oxygen'|'helium'}}
  */
 export function priceBankByRecipe({ bank, costs, settings, physics, inventoryBanks = [], inventoryTemperatureC }) {
   if (isPureBank(bank)) return { ok: false, reason: 'Pure banks take their price from the pure-gas price. Enter a price manually.' };
   const pure = pureGasPrices({ banks: inventoryBanks, physics, inventoryTemperatureC });
-  const anyFee = Object.values(costs.operationPrices).some(value => value > 0);
-  if (!anyFee && pure.oxygen === null && pure.helium === null) {
-    return { ok: false, reason: 'No prices are configured in Settings → Costs.' };
-  }
   if (bank.pressureBar < MIN_TARGET_PRESSURE_BAR) {
     return { ok: false, reason: `Banks below ${MIN_TARGET_PRESSURE_BAR} bar cannot be priced by recipe. Enter a price manually.` };
   }
@@ -71,9 +70,15 @@ export function priceBankByRecipe({ bank, costs, settings, physics, inventoryBan
       return { ok: false, reason: `This bank needs more than ${MAX_VIRTUAL_BANKS_PER_GAS} virtual ${gasId} sources and cannot be priced by recipe. Enter a price manually.` };
     }
     if (count > 0 && price === null) {
-      return { ok: false, reason: `Set a price on a pure ${gasId} bank first.` };
+      return { ok: false, reason: `Set a price on a pure ${gasId} bank first.`, missingGas: gasId };
     }
     sources.push(...virtualBanks(gasId, composition, count, price));
+  }
+
+  // Reached only when no needed pure gas is missing, so the gas-specific reasons above take precedence.
+  const anyFee = Object.values(costs.operationPrices).some(value => value > 0);
+  if (!anyFee && pure.oxygen === null && pure.helium === null) {
+    return { ok: false, reason: 'No prices are configured in Settings → Costs.' };
   }
 
   const result = optimizeBlend({
