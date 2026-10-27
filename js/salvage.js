@@ -1,5 +1,4 @@
 import { GAS_CONSTANT, calcMolarDensity, calcPressure } from './physics.js';
-import { leftoverAttractiveness } from './leftover-attractiveness.js';
 
 export const SALVAGE_HE_PRICE_PER_LITRE = 0.075;
 export const SALVAGE_O2_PRICE_PER_LITRE = 0.007;
@@ -61,6 +60,17 @@ function largestWhere(hi, predicate) {
 function bankPressureAfter(bank, bankMoles, tank, addedMoles, physics) {
   const mixed = mixInto(bank, bankMoles, tank, addedMoles);
   return pressureOfMoles(mixed.moles, bank.volumeL, mixed.oxygenPercent, mixed.heliumPercent, physics);
+}
+
+// Descending/ascending comparators treating values within TOLERANCE as ties; Infinity ties with Infinity.
+function compareDescending(a, b) {
+  if (a === b || Math.abs(a - b) <= TOLERANCE) return 0;
+  return a > b ? -1 : 1;
+}
+
+function compareAscending(a, b) {
+  if (a === b || Math.abs(a - b) <= TOLERANCE) return 0;
+  return a < b ? -1 : 1;
 }
 
 export function isSalvageReceiver(bank) {
@@ -149,18 +159,6 @@ export function netStockValue(banks, physics) {
   return value;
 }
 
-/** Leftover attractiveness (0-100) of a bank's current state. */
-export function attractivenessOfBank(bank, physics) {
-  return leftoverAttractiveness({
-    oxygenPercent: bank.oxygenPercent,
-    heliumPercent: bank.heliumPercent,
-    pressureBar: bank.pressureBar,
-    volumeL: bank.volumeL,
-    maxPressureBar: bank.maxPressureBar,
-    physics
-  });
-}
-
 function attractivenessDeltas(baselineBanks, variantBanks, bankScoresOf) {
   const variantById = new Map(variantBanks.map(bank => [bank.id, bank]));
   const deltas = [];
@@ -176,8 +174,8 @@ function attractivenessDeltas(baselineBanks, variantBanks, bankScoresOf) {
  * Picks the salvage variant to apply, or null when none passes the gates.
  * Gates: feasible (re-solved surplus covers the salvaged moles), no bank loses
  * more than |SALVAGE_ATTRACTIVENESS_GATE| points, and net value kept is at least
- * SALVAGE_MIN_VALUE. Ranking: value kept, then summed attractiveness change, then LP cost.
- * `bankScoresOf(bank)` returns that bank's attractiveness score.
+ * SALVAGE_MIN_VALUE. Ranking: value kept, then summed attractiveness change, then LP cost
+ * (missing LP cost ranks last). `bankScoresOf(bank)` returns that bank's attractiveness score.
  */
 export function selectSalvageVariant({ baseline, variants, bankScoresOf, physics }) {
   const baselineValue = netStockValue(baseline.finalBanks, physics);
@@ -200,9 +198,9 @@ export function selectSalvageVariant({ baseline, variants, bankScoresOf, physics
   }
 
   qualifying.sort((a, b) => (
-    (b.valueKept - a.valueKept)
-    || (b.attractivenessChange - a.attractivenessChange)
-    || (a.variant.lpCost - b.variant.lpCost)
+    compareDescending(a.valueKept, b.valueKept)
+    || compareDescending(a.attractivenessChange, b.attractivenessChange)
+    || compareAscending(a.variant.lpCost ?? Infinity, b.variant.lpCost ?? Infinity)
   ));
 
   return qualifying[0]?.variant ?? null;
@@ -211,7 +209,7 @@ export function selectSalvageVariant({ baseline, variants, bankScoresOf, physics
 /**
  * Sorts receiver candidates `{ receiver, transferredReceiver }` by how much the
  * receiving bank's attractiveness changes right after the transfer, best first.
- * Stable for equal deltas.
+ * Deltas within TOLERANCE are ties; ties keep input order.
  */
 export function rankReceivers(candidates, bankScoresOf) {
   return candidates
@@ -219,6 +217,6 @@ export function rankReceivers(candidates, bankScoresOf) {
       candidate,
       delta: bankScoresOf(candidate.transferredReceiver) - bankScoresOf(candidate.receiver)
     }))
-    .sort((a, b) => b.delta - a.delta)
+    .sort((a, b) => compareDescending(a.delta, b.delta))
     .map(entry => entry.candidate);
 }

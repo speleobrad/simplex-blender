@@ -12,9 +12,10 @@ import {
   salvageTransferMoles,
   selectSalvageVariant
 } from '../js/salvage.js';
-import { GAS_CONSTANT } from '../js/physics.js';
+import { GAS_CONSTANT, calcMolarDensity, calcPressure } from '../js/physics.js';
 
 const IDEAL = Object.freeze({ model: 'ideal', temperatureC: 20 });
+const VDW = Object.freeze({ model: 'vdw', temperatureC: 20 });
 const RT = GAS_CONSTANT * (20 + 273.15);
 
 // Ideal-gas moles for a pressure in bar and a volume in litres at 20 C.
@@ -70,7 +71,7 @@ test('transfer is capped by the bank maximum pressure', () => {
 test('without a booster, decant stops at pressure equalization', () => {
   // Equal volumes: equalization moves half the pressure difference, 30 -> 20 bar gives 5 bar-equivalent.
   const result = salvageTransferMoles({
-    bank: bankAt(20), tank: tankAt(30), surplusMoles: molesFor(100, 10), physics: IDEAL,
+    bank: bankAt(20), tank: tankAt(30), surplusMoles: molesFor(25, 10), physics: IDEAL,
     minimumSourcePressureBar: 10, maxBoosterOutputPressureBar: undefined, retainedMoles: 0
   });
   assert.ok(Math.abs(result.movedMoles - molesFor(5, 10)) < 1e-9);
@@ -80,7 +81,7 @@ test('without a booster, decant stops at pressure equalization', () => {
 
 test('with a booster, transfer continues past equalization down to the minimum source pressure', () => {
   const result = salvageTransferMoles({
-    bank: bankAt(20), tank: tankAt(30), surplusMoles: molesFor(100, 10), physics: IDEAL,
+    bank: bankAt(20), tank: tankAt(30), surplusMoles: molesFor(25, 10), physics: IDEAL,
     minimumSourcePressureBar: 10, maxBoosterOutputPressureBar: 200, retainedMoles: 0
   });
   // Tank can give 30 -> 10 bar (20 bar-equivalent); bank 20 -> 40 bar.
@@ -91,7 +92,7 @@ test('with a booster, transfer continues past equalization down to the minimum s
 
 test('booster minimum source pressure leaves the remainder to be vented', () => {
   const result = salvageTransferMoles({
-    bank: bankAt(0, { maxPressureBar: 350 }), tank: tankAt(200), surplusMoles: molesFor(400, 10), physics: IDEAL,
+    bank: bankAt(0, { maxPressureBar: 350 }), tank: tankAt(200), surplusMoles: molesFor(190, 10), physics: IDEAL,
     minimumSourcePressureBar: 50, maxBoosterOutputPressureBar: 350, retainedMoles: 0
   });
   // Tank keeps 50 bar; 150 bar-equivalent moves; 200 - 150 = 50 remains for the vent step.
@@ -100,9 +101,9 @@ test('booster minimum source pressure leaves the remainder to be vented', () => 
   assert.ok(Math.abs(result.receiverEndPressureBar - 150) < 1e-6);
 });
 
-test('retained moles lower the deliverable floor above the minimum source pressure', () => {
+test('retained moles raise the tank floor above the minimum source pressure', () => {
   const result = salvageTransferMoles({
-    bank: bankAt(0, { maxPressureBar: 350 }), tank: tankAt(200), surplusMoles: molesFor(400, 10), physics: IDEAL,
+    bank: bankAt(0, { maxPressureBar: 350 }), tank: tankAt(200), surplusMoles: molesFor(190, 10), physics: IDEAL,
     minimumSourcePressureBar: 10, maxBoosterOutputPressureBar: 350, retainedMoles: molesFor(120, 10)
   });
   // Tank may only fall to the 120 bar it retains: 80 bar-equivalent moves, all by decant (equalization is 100 bar).
@@ -113,13 +114,39 @@ test('retained moles lower the deliverable floor above the minimum source pressu
 
 test('boost-only transfer when the bank is already above tank pressure', () => {
   const result = salvageTransferMoles({
-    bank: bankAt(120, { maxPressureBar: 200 }), tank: tankAt(100), surplusMoles: molesFor(200, 10), physics: IDEAL,
+    bank: bankAt(120, { maxPressureBar: 200 }), tank: tankAt(100), surplusMoles: molesFor(90, 10), physics: IDEAL,
     minimumSourcePressureBar: 10, maxBoosterOutputPressureBar: 200, retainedMoles: 0
   });
   // Bank room to 200 bar is 80 bar-equivalent; tank can give 90.
   assert.ok(Math.abs(result.movedMoles - molesFor(80, 10)) < 1e-9);
   assert.equal(result.stage, 'boost');
   assert.ok(Math.abs(result.receiverEndPressureBar - 200) < 1e-6);
+});
+
+test('booster output cap does not cut a decant that stops at equalization', () => {
+  // Bank 10 L at 150 bar (max 300), tank 10 L at 300 bar, booster cap 200.
+  // Equalization: (3000 - m) / 10 = (1500 + m) / 10 -> m = 750 bar*L, i.e. 225 bar in both.
+  // The cap 200 bar allows only (200 - 150) * 10 = 500 bar*L, but the decant (750) is already past it.
+  const result = salvageTransferMoles({
+    bank: bankAt(150, { maxPressureBar: 300 }), tank: tankAt(300), surplusMoles: molesFor(300, 10), physics: IDEAL,
+    minimumSourcePressureBar: 10, maxBoosterOutputPressureBar: 200, retainedMoles: 0
+  });
+  assert.ok(Math.abs(result.movedMoles - molesFor(75, 10)) < 1e-9);
+  assert.equal(result.stage, 'decant');
+  assert.ok(Math.abs(result.receiverEndPressureBar - 225) < 1e-6);
+});
+
+test('booster continues past equalization and stops at its output cap', () => {
+  // Bank 10 L at 20 bar (max 300); tank 40 L at 100 bar; booster cap 150 bar.
+  // Equalization: (4000 - m) / 40 = (200 + m) / 10 -> m = 640 bar*L, i.e. bank 84 bar, tank 84 bar.
+  // Moving 1300 bar*L takes the bank to 150 bar; the tank keeps 4000 - 1300 = 2700 bar*L, far above its floor, and the 2000 bar*L surplus is not binding.
+  const result = salvageTransferMoles({
+    bank: bankAt(20, { maxPressureBar: 300 }), tank: tankAt(100, 40), surplusMoles: molesFor(200, 10), physics: IDEAL,
+    minimumSourcePressureBar: 10, maxBoosterOutputPressureBar: 150, retainedMoles: 0
+  });
+  assert.ok(Math.abs(result.movedMoles - molesFor(130, 10)) < 1e-9);
+  assert.equal(result.stage, 'decant+boost');
+  assert.ok(Math.abs(result.receiverEndPressureBar - 150) < 1e-6);
 });
 
 test('applyTransferToBank mixes composition by moles and keeps volume', () => {
@@ -139,6 +166,23 @@ test('applyTransferToBank with no moved gas leaves pressure and mix unchanged', 
   assert.equal(next.heliumPercent, 45);
 });
 
+test('applyTransferToBank under van der Waals mixes by moles and uses the real-gas pressure', () => {
+  const bank = bankAt(100);
+  const tankMix = { oxygenPercent: 21, heliumPercent: 35 };
+  const moved = calcMolarDensity(30, 21, 35, 20, true) * 10;
+  const next = applyTransferToBank(bank, tankMix, moved, VDW);
+  const bankMoles = calcMolarDensity(100, 18, 45, 20, true) * 10;
+  const total = bankMoles + moved;
+  const oxygen = (bankMoles * 18 + moved * 21) / total;
+  const helium = (bankMoles * 45 + moved * 35) / total;
+  assert.ok(Math.abs(next.pressureBar - calcPressure(total / 10, oxygen, helium, 20, true)) < 1e-6);
+  assert.ok(Math.abs(next.oxygenPercent - oxygen) < 1e-9);
+  assert.ok(Math.abs(next.heliumPercent - helium) < 1e-9);
+  // The real-gas result must differ from the ideal-gas one at this pressure, otherwise the vdW branch is not exercised.
+  const idealPressure = total * RT / 10;
+  assert.ok(Math.abs(next.pressureBar - idealPressure) > 0.1);
+});
+
 test('net stock value prices He and O2 free litres in enabled banks only', () => {
   const he = { enabled: true, volumeL: 10, pressureBar: 100, oxygenPercent: 0, heliumPercent: 100 };
   const o2 = { enabled: true, volumeL: 10, pressureBar: 100, oxygenPercent: 100, heliumPercent: 0 };
@@ -153,10 +197,10 @@ test('net stock value prices He and O2 free litres in enabled banks only', () =>
 test('net value counts salvage only through stock left after the recipe draws', () => {
   const donor = { id: 'donor', enabled: true, volumeL: 10, pressureBar: 100, oxygenPercent: 0, heliumPercent: 100 };
   const receiverEmptyAfterDraws = { id: 'recv', enabled: true, volumeL: 10, pressureBar: 0, oxygenPercent: 18, heliumPercent: 45 };
-  // Empty receiver holds nothing: only the donor's 1000 L He (10 L at 100 bar) counts.
+  // Empty receiver holds nothing: only the donor's 1000 bar*L of He (10 L at 100 bar) counts.
   const baseline = netStockValue([donor, receiverEmptyAfterDraws], IDEAL);
   assert.ok(Math.abs(baseline - 75) < 1e-6);
-  // Gas left in the receiver (20 bar, 10 L = 200 L of 18/45) counts at its price.
+  // Gas left in the receiver (20 bar, 10 L = 200 bar*L of 18/45) counts at its price.
   const retained = { ...receiverEmptyAfterDraws, pressureBar: 20 };
   const delta = netStockValue([donor, retained], IDEAL) - baseline;
   assert.ok(Math.abs(delta - (200 * 0.45 * 0.075 + 200 * 0.18 * 0.007)) < 1e-6);
@@ -192,6 +236,20 @@ test('selection drops variants where a bank loses more than two points, keeping 
   assert.equal(select([violating, boundary]).id, 'boundary');
 });
 
+test('selection drops a variant whose donor bank loses more than two points', () => {
+  // Receiver gains 200 bar*L of 18/45 (about 7.0 value); only the donor's score differs.
+  const donorDrop = variant('donor-drop', { donor: donorAt(100, 47), receiver: receiverAt(40, 60) });
+  const donorOk = variant('donor-ok', { donor: donorAt(100, 50), receiver: receiverAt(40, 60) });
+  assert.equal(select([donorDrop]), null);
+  assert.equal(select([donorDrop, donorOk]).id, 'donor-ok');
+});
+
+test('selection rejects a variant with moved gas whose final banks equal the baseline', () => {
+  const noop = { ...variant('noop', { receiver: receiverAt(20) }), transfers: [{ receiverId: 'recv', movedMoles: 5 }] };
+  assert.equal(noop.salvagedMoles, 5);
+  assert.equal(select([noop]), null);
+});
+
 test('selection drops variants below the minimum value and keeps one exactly at it', () => {
   // Pure He donor: 10 L of He at 1 bar is 10 bar*L = 0.75 value, so 4/3 bar is exactly 1.0.
   const exact = variant('exact', { donor: donorAt(100 + 4 / 3), receiver: receiverAt(20) });
@@ -212,6 +270,12 @@ test('selection ranks value kept first, then attractiveness change, then LP cost
   const cheap = variant('cheap', { receiver: receiverAt(40, 60), lpCost: 2 });
   const expensive = variant('expensive', { receiver: receiverAt(40, 60), lpCost: 3 });
   assert.equal(select([expensive, cheap]).id, 'cheap');
+});
+
+test('selection ranks a missing LP cost last among otherwise tied variants', () => {
+  const costed = variant('costed', { receiver: receiverAt(40, 60), lpCost: 3 });
+  const unknown = { ...variant('unknown', { receiver: receiverAt(40, 60) }), lpCost: undefined };
+  assert.equal(select([unknown, costed]).id, 'costed');
 });
 
 test('selection returns null when no variant qualifies', () => {
