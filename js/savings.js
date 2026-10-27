@@ -21,7 +21,7 @@ const RETAINED_TOLERANCE_L = 1e-9;
  *   Saved cost is null when it is helium; salvagedSaving is null for a salvage gap.
  * - {code: 'recipe-unavailable', bankId, name}: a used bank cannot be priced by recipe for a
  *   reason other than a missing pure price (equipment limits, more than 6 virtual sources,
- *   pressure below 10 bar). salvagedSaving is null.
+ *   pressure below 10 bar), or is no longer in the inventory. salvagedSaving is null.
  *
  * Without a feasible result, savedCost and salvagedSaving are null and `missing` is empty.
  *
@@ -59,7 +59,9 @@ export function computeSavings({ result, banks = [], costs, settings, physics, i
   for (const line of cost.gasLines) {
     const bank = banks.find(candidate => candidate.id === line.sourceBankId);
     if (bank && isPureBank(bank)) continue;
-    const recipe = priceBankByRecipe({ bank, costs: discountFree, settings, physics, inventoryBanks: banks, inventoryTemperatureC });
+    const recipe = bank
+      ? priceBankByRecipe({ bank, costs: discountFree, settings, physics, inventoryBanks: banks, inventoryTemperatureC })
+      : { ok: false, missingGas: null };
     if (!recipe.ok) {
       salvagedSaving = null;
       addMissing(recipe.missingGas

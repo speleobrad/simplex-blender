@@ -17,9 +17,9 @@ const perMole = litresPerMole(physics.temperatureC);
 const decantFrom = (sourceBankId, litres, id = 'op-1') => ({
   costOperation: 'decant', costOperationId: id, sourceBankId, sourceConsumedMoles: litres / perMole
 });
-const run = ({ banks, steps = [], blend = { heliumRetainedLitres: 100 }, feasible }) => computeSavings({
+const run = ({ banks, steps = [], blend = { heliumRetainedLitres: 100 }, feasible, discountPercent }) => computeSavings({
   result: { blend, protocolSteps: steps, feasible },
-  banks, costs, settings: DEFAULT_SETTINGS, physics, inventoryTemperatureC
+  banks, costs: discountPercent === undefined ? costs : { ...costs, leftoverDiscountPercent: discountPercent }, settings: DEFAULT_SETTINGS, physics, inventoryTemperatureC
 });
 
 test('saved cost is retained helium litres times the weighted pure helium price', () => {
@@ -64,9 +64,15 @@ test('salvage is litres used × discount-0 recipe price per litre, with no subtr
 });
 
 test('salvage does not depend on the leftover discount', () => {
-  // The fixture costs use leftoverDiscountPercent 10; the avoided purchase is undiscounted.
-  const result = run({ banks: [pureO2, pureHe, real], steps: [decantFrom('real', USED_L)] });
-  assert.ok(Math.abs(result.salvagedSaving - EAN32_SALVAGE) < 1e-6, `${result.salvagedSaving} vs ${EAN32_SALVAGE}`);
+  // The avoided purchase is undiscounted: a 0% and a 50% leftover discount give the same result.
+  const withDiscount = percent => run({
+    banks: [pureO2, pureHe, real], steps: [decantFrom('real', USED_L)], discountPercent: percent
+  });
+  const none = withDiscount(0);
+  const half = withDiscount(50);
+  assert.ok(Math.abs(none.salvagedSaving - EAN32_SALVAGE) < 1e-6, `${none.salvagedSaving} vs ${EAN32_SALVAGE}`);
+  assert.equal(half.salvagedSaving, none.salvagedSaving);
+  assert.deepEqual(half.missing, none.missing);
 });
 
 test('salvage is independent of the stored price of the leftover bank', () => {
@@ -111,6 +117,12 @@ test('a bank the recipe cannot price for equipment reasons makes salvage null an
   const result = run({ banks: [pureO2, pureHe, low], steps: [decantFrom('real', USED_L)] });
   assert.equal(result.salvagedSaving, null);
   assert.deepEqual(result.missing, [{ code: 'recipe-unavailable', bankId: 'real', name: 'EAN32' }]);
+});
+
+test('a gas line whose source bank is not in the inventory is a recipe-unavailable gap, not a throw', () => {
+  const result = run({ banks: [pureO2, pureHe], steps: [decantFrom('gone', USED_L)] });
+  assert.equal(result.salvagedSaving, null);
+  assert.deepEqual(result.missing, [{ code: 'recipe-unavailable', bankId: 'gone', name: 'gone' }]);
 });
 
 test('missing entries are deduplicated', () => {
