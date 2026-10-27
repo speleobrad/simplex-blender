@@ -6,6 +6,8 @@ Resolves GitHub issue #3.
 
 Approved by the user after review on 2026-10-26. Implemented on branch feat/filling-cost-calculator.
 
+Partly superseded by `2026-10-27-cost-redesign-amendment.md`: flat per-operation fees (no per-litre operation prices), pure O₂/He prices from pure banks in Inventory rather than Settings, and the Blending savings banner. Where this document and the amendment conflict, the amendment wins; the current behavior is documented in `docs/UI.md` and `docs/architecture.md`.
+
 ## Goal
 
 Show the cost of a fill on the Tank summary tab, with a breakdown of gas drawn from each source and of each operation (boost, decant, equalize, top-up). Prices are configured by the user. Cost is display-only: it never influences the optimizer, the Compare/What-if planners, or the helium-retention priority invariant in `docs/development.md`.

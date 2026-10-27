@@ -56,7 +56,7 @@ If the requested pressure is unreachable, the optimizer reports the maximum pres
 
 ## Cost operation fields
 
-Each executed transfer step carries three cost fields that the planner stamps and that `js/cost.js` reads; the optimizer never reads a price. `sourceConsumedMoles` records the moles drawn from the source for that step. `costOperation` is `topUp` for compressor Air and `decant`, `equalize`, or `boost` for other sources, and it selects the price line. `costOperationId` is `op-N`, numbered from 1 within each `optimizeBlend` call, so a compressor top-up's flat fee is charged once per distinct ID.
+Each executed transfer step carries three cost fields that the planner stamps and that `js/cost.js` reads; the optimizer never reads a price. `sourceConsumedMoles` records the moles drawn from the source for that step. `costOperation` is `topUp` for compressor Air, `decant` for a decant stage, and `boost` otherwise, and it selects the flat fee line. `equalize` is never emitted by the optimizer; the Compare planner emits it and `js/cost.js` charges it under `decant`. `costOperationId` is `op-N`, numbered from 1 within each `optimizeBlend` call, so each flat fee is charged once per distinct ID.
 
 With interim readings, `js/plan-with-readings.js` prefixes the IDs of each re-planned segment with `r<index>-`, so IDs stay distinct across a reading boundary. The Compare planner numbers its operations with the same `op-N` scheme.
 

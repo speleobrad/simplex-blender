@@ -96,7 +96,8 @@ The summary banner is split into two side-by-side regions on wide screens:
 - Six headline metrics: retained gas, helium vented, helium salvaged, achieved O₂/He mix, fill duration, and maximum temperature. Helium vented is the helium litres (1 bar equivalent volume) drained with the original mix, shown above the total vented pressure (`of N bar`); it equals the vented gas volume times the cylinder's initial helium fraction.
 - Three aligned datapoint columns: `Hot mix`, `Ambient settled`, and `In-water`. Each column shows pressure in the top row and temperature in the lower row; on wide screens, temperature values align vertically with values in the lower row of headline metrics.
 
-Summary values use the app's semantic palette: neutral for expected measurements, green for benefits, amber for partial loss or mix mismatch, and rose for problems. Retained gas is rose at zero, neutral when partial, and green when complete; helium vented (and its vented-gas subline) is green when nothing is vented, amber when partial, and rose when the whole original mix is vented. Helium salvaged is neutral at zero and green when positive. Fill duration remains neutral; maximum temperature is rose. Hot-mix, ambient-settled, and in-water pressures turn rose when above the cylinder working pressure. In-water pressure is green only when it matches the requested target and remains within the working pressure.
+
+Blending shows a cost banner with **Total cost of fill**, **Saved cost**, and **Salvaged saving**. Saved cost is the retained helium × the weighted pure-helium price; salvaged saving is the value of gas taken from non-pure banks over its recipe price. A figure that cannot be computed shows a prompt naming the missing price. The banner is hidden in What-if.
 
 When thermal data exists, the summary shows values for each of those three states. The **Mixing steps** section then renders protocol cards. Each card owns its step number, action title, and transfer-end receiver pressure. Step titles are normalized so a supplied title cannot produce duplicate numbering; titles with a transfer target are updated to the same transfer-end pressure shown in the result.
 
@@ -143,7 +144,7 @@ The tab exposes accessible tables for:
 
 The tab reports when feasible chart data is unavailable. The tables are the keyboard-operable/reference view of the Diagram data, including source-bank start/end pressure information where supplied by the calculation.
 
-The Costs section sits at the end of the pane. It has a gas table (litres, price per litre in the display unit, and cost for each finite bank; unpriced banks show "no price set"), an operation table for Boost, Decant, Equalize, and Top-up (the Top-up row shows its litres as information only and includes compressor air), and a total row aligned with the Cost column. A total with unpriced gas reads "(incomplete: … unpriced)". With no priced gas or fees for this fill it shows "No prices apply to this fill. Set bank prices in Inventory and fees in Settings → Costs."; with no feasible blend it shows "Costs appear when a feasible blend is available." With nothing priced at all, Inventory's suggestion reads "Nothing is priced yet. Set fees in Settings → Costs and a price on a pure oxygen or helium bank." Costs appear in the Blending and What-if Tanks and costs panes.
+The Costs section sits at the end of the pane. It has a gas table (volume in litres, price per litre in the display unit, and cost for each finite bank; unpriced banks show "no price set"), an operation table with Operation, Count, Fee, and Cost for Boost, Decant (includes equalize), and Top-up (includes compressor air; no litres are shown), and footer rows for total gas cost, operations cost, and total cost. A total with unpriced gas reads "(incomplete: … unpriced)". With no priced gas or fees for this fill it shows "No prices apply to this fill. Set bank prices in Inventory and fees in Settings → Costs."; with no feasible blend it shows "Costs appear when a feasible blend is available." With nothing priced at all, Inventory's suggestion reads "Nothing is priced yet. Set fees in Settings → Costs and a price on a pure oxygen or helium bank." Costs appear in the Blending and What-if Tanks and costs panes.
 
 #### In water pressure tab
 
@@ -168,14 +169,14 @@ The editable table has these columns:
 | Vol(L) | Editable bank volume, displayed in the selected units. |
 | P(bar) | Editable bank pressure, displayed in the selected units. |
 | O₂% | Editable oxygen percentage. |
-| He% | Editable helium percentage. |
+| Price | Per L or Per cu ft, or Full tank basis (see below). Pure O₂ and He banks show no Calculate price. |
 | Del | Deletes the bank. |
 
 The **Add bank** button appends a new editable source row. Compressor Air is implicit and is not shown as a bank row. The table omits derived nitrogen, compressibility, and minimum-pressure columns.
 
-The Price column converts each bank's stored price per litre to the display unit. **Calculate price** prices the bank on demand from the current Settings → Costs values and the bank's volume, pressure, and composition, showing "Calculating…" while it runs. The result appears as an indicative price with its recipe cost; **Apply** (or **Replace** when a price is already set) stores it on the bank. The suggestion is discarded when the bank or its pricing inputs change.
+The Price column shows each bank's stored price per litre (per cu ft in Imperial) with a basis select. **Per L** / **Per cu ft** enters the price directly. **Full tank** takes the price of one full tank, divides it once by the bank's free-gas litres, stores the per-litre result, and resets the basis to per-volume. Prices display 6 decimals. **Calculate price** prices a non-pure bank on demand from the current Settings → Costs values and the bank's volume, pressure, and composition, showing "Calculating…" while it runs. The result appears as an indicative price with its recipe cost; **Apply** (or **Replace** when a price is already set) stores it on the bank. The suggestion is discarded when the bank or its pricing inputs change.
 
-Below the table, **Transfer conditions** contains **Incoming gas temperature** in °C. It is shared by compressor and inventory transfers; source-specific equipment temperature modifiers still apply.
+Below the table, **Transfer conditions** contains **Temperature of inventory gases** in °C, default 21 °C. It is shared by compressor and inventory transfers. Checking **Same as ambient** disables the field and makes it follow the ambient temperature. Source-specific equipment temperature modifiers still apply.
 
 ## Settings screen
 ### General
@@ -223,7 +224,7 @@ Creating a named equipment preset clones the current values without changing the
 
 ### Costs
 
-The Costs category sets per-litre prices for pure O₂ and He, the Boost, Decant, and Equalize operations, the flat top-up fee per operation (which includes compressor air and is not unit-converted), the currency symbol, and the leftover-gas discount percentage. Prices are entered in the current Units setting and stored per litre. Changes are drafts that persist on Save, like the other Settings categories.
+The Costs category sets the currency symbol, the leftover-gas discount percentage, and three flat fees per operation: **Boost**, **Decant (incl. equalize)**, and **Top-up (incl. compressor air)**. Fees are plain amounts with 2 decimals and are not unit-converted. All start at zero, and older saved costs in the per-litre shape load with zero fees. Pure O₂ and He prices are not set here; they come from pure banks in Inventory. Changes are drafts that persist on Save, like the other Settings categories.
 
 ### Preset management
 
