@@ -707,10 +707,42 @@ test('nitrox preset reports vented gas as equivalent litres at one bar', () => {
       targetHeliumPercent: 30
     }
   };
-  // Pins the no-salvage vented value; salvage behaviour has its own tests below.
+  const result = optimizeBlend(input);
+
+  // Default path: the net post-recipe gate accepts one salvage into bank-1845 (the recipe's own
+  // draw source). Moved gas is 32% O2 / 0% He, so the value gain is all O2 (about 1.54 vs 1.0).
+  assert.equal(result.feasible, true);
+  assert.equal(result.salvageTransfers.length, 1);
+  const [transfer] = result.salvageTransfers;
+  assert.equal(transfer.receiverBankId, 'bank-1845');
+  assert.equal(transfer.receiverBankName, 'Tx 18/45 Bank');
+  // 34.397 mol moved = the whole baseline vented surplus (solver-rounding tolerance 0.01 mol).
+  assert.ok(Math.abs(transfer.movedMoles - 34.3966) < 0.01);
+  assert.equal(transfer.movedHeliumLitres, 0);
+  // Receiver ends at 220.76 bar, below its 350 bar maximum (tolerance 0.05 bar).
+  assert.ok(Math.abs(transfer.receiverEndPressureBar - 220.758) < 0.05);
+  assert.ok(transfer.receiverEndPressureBar <= 350);
+  // Vented litres 150.44 (solver tolerance 0.01 L; 688 L fewer than the 838.38 L vent-only result).
+  assert.ok(Math.abs(result.blend.ventedGasLitres - 150.441) < 0.01);
+});
+
+test('vent-only mode keeps 838.38 L vented for the nitrox preset', () => {
+  const input = {
+    ...defaultInput,
+    cylinder: {
+      ...defaultInput.cylinder,
+      initialPressureBar: 100,
+      initialOxygenPercent: 32,
+      initialHeliumPercent: 0,
+      targetPressureBar: 220,
+      targetOxygenPercent: 21,
+      targetHeliumPercent: 30
+    }
+  };
   const result = optimizeBlend({ ...input, _salvage: false });
 
   assert.equal(result.feasible, true);
+  assert.equal(result.salvageTransfers, undefined);
   assert.ok(Math.abs(result.blend.ventedGasLitres - 838.377979816809) < 1e-8);
 });
 
