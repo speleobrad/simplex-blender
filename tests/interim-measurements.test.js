@@ -129,3 +129,41 @@ test('a titled step shows its plan number and an untitled step falls back to ind
   assert.equal(protocolStepNumber({ title: 'Preserve 100% of Cylinder Gas' }, 0), 1);
   assert.equal(protocolStepNumber(undefined, 3), 4);
 });
+
+const priced = (over = {}) => ({
+  ...input,
+  banks: [{ id: 'oxygen', pressureBar: 200, pricePerLitre: 0.02 }],
+  settings: { booster: { otherBoostBpm: 50 }, costs: { pricePerLitre: { oxygen: 0.01, helium: 0.05 }, leftoverDiscountPercent: 0 } },
+  ...over
+});
+
+test('calculator recipe signature ignores cost prices in settings and banks', () => {
+  const base = priced();
+  assert.equal(
+    calculatorInputSignature(base),
+    calculatorInputSignature({ ...base, settings: { ...base.settings, costs: { ...base.settings.costs, pricePerLitre: { oxygen: 9, helium: 9 }, leftoverDiscountPercent: 50 } } })
+  );
+  assert.equal(
+    calculatorInputSignature(base),
+    calculatorInputSignature({ ...base, banks: [{ ...base.banks[0], pricePerLitre: 1.5 }] })
+  );
+  assert.equal(
+    calculatorInputSignature(base),
+    calculatorInputSignature({ ...base, banks: [{ ...base.banks[0], pricePerLitre: undefined }] })
+  );
+});
+
+test('calculator recipe signature still changes for non-price bank, booster, and physics edits', () => {
+  const base = priced();
+  const signature = calculatorInputSignature(base);
+  assert.notEqual(signature, calculatorInputSignature({ ...base, banks: [{ ...base.banks[0], pressureBar: 180 }] }));
+  assert.notEqual(signature, calculatorInputSignature({ ...base, settings: { ...base.settings, booster: { otherBoostBpm: 60 } } }));
+  assert.notEqual(signature, calculatorInputSignature({ ...base, physics: { model: 'ideal', temperatureC: 25 } }));
+});
+
+test('calculator recipe signature does not mutate its input', () => {
+  const base = priced();
+  const snapshot = JSON.stringify(base);
+  calculatorInputSignature(base);
+  assert.equal(JSON.stringify(base), snapshot);
+});

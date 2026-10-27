@@ -1,8 +1,15 @@
+import { withoutBankPrices } from './cost.js';
+
+// Cost prices (settings.costs and each bank's pricePerLitre) never change a plan,
+// so they are excluded: editing them keeps interim readings.
 export function calculatorInputSignature(input) {
   const thermal = input?.thermal
     ? { ...input.thermal, interimMeasurements: undefined }
     : input?.thermal;
-  return JSON.stringify({ ...input, thermal });
+  const settings = input?.settings
+    ? { ...input.settings, costs: undefined }
+    : input?.settings;
+  return JSON.stringify({ ...input, thermal, settings, banks: withoutBankPrices(input?.banks) });
 }
 
 export function signatureAfterClearingMeasurement(input, index) {

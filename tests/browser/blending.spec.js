@@ -1,6 +1,7 @@
 import { test, expect } from './fixtures/app-fixtures.js';
 import { fillWorkingTank } from './helpers/blending.js';
 import { openSettingsCategory, saveSettings } from './helpers/settings.js';
+import { editBank } from './helpers/inventory.js';
 
 import { acceptConsent, completeOrExitTour } from './helpers/onboarding.js';
 async function load(appPage) { return appPage.goto('tourSeen'); }
@@ -255,6 +256,29 @@ test.describe('working tank blending inputs', () => {
     await expect(notice).toBeVisible();
     await expect(notice).toHaveText('This recipe is a mix of planned steps and your interim manual readings.');
     await expect(steps).toContainText(/Measured start for step 4: 146\.0 bar · 29\.6 °C/);
+  });
+  test('keeps a recorded reading when only bank and Settings prices change', async ({ appPage }) => {
+    test.setTimeout(120_000);
+    const page = await load(appPage);
+    const steps = page.locator('[data-result-host="blending"] [data-result-key="steps-container"]');
+    const notice = page.locator('[data-result-host="blending"] [data-result-key="interim-notice"]');
+
+    const form = steps.locator('form').nth(3);
+    await form.locator('xpath=..').locator('summary').click();
+    await form.locator('[name="pressureBar"]').fill('146');
+    await form.locator('[name="temperatureC"]').fill('29.6');
+    await form.locator('[data-action="apply-interim-measurement"]').click();
+    await expect(notice).toHaveText('This recipe is a mix of planned steps and your interim manual readings.');
+    await expect(steps).toContainText(/Measured start for step 4: 146\.0 bar · 29\.6 °C/);
+
+    await editBank(page, 0, { pricePerLitre: 0.02 });
+    const costs = await openSettingsCategory(page, 'costs');
+    await costs.getByRole('spinbutton', { name: 'Oxygen price (/L)', exact: true }).fill('0.03');
+    await saveSettings(page);
+
+    await page.getByRole('tab', { name: 'Blending', exact: true }).click();
+    await expect(steps).toContainText(/Measured start for step 4: 146\.0 bar · 29\.6 °C/);
+    await expect(notice).toHaveText('This recipe is a mix of planned steps and your interim manual readings.');
   });
   test('recalculates the steps after a reading below the planned start instead of failing on the scrap bank', async ({ appPage }) => {
     test.setTimeout(120_000);

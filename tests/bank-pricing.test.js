@@ -209,3 +209,9 @@ test('Tx21/35 at 150 bar: sourceCount is the O2 count plus the He count', () => 
   assert.ok(gasCount('O2', b) > 0 && gasCount('He', b) > 0);
   assert.equal(result.sourceCount, gasCount('O2', b) + gasCount('He', b));
 });
+
+test('pure He at 150 bar: He price plus decant rate, not the O2 price', () => {
+  const result = priceBankByRecipe({ bank: bank({ oxygenPercent: 0, heliumPercent: 100 }), costs: costs(), settings: settingsWith(), physics });
+  assert.equal(result.ok, true, result.reason);
+  assert.ok(Math.abs(result.pricePerLitre - 0.051) < 1e-9);
+});

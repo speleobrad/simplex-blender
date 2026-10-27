@@ -3317,3 +3317,19 @@ test('operation ids are unique per operation', () => {
   assert.ok(ids.length > 0);
   assert.equal(new Set(ids).size, ids.length);
 });
+
+test('scheduler-split stages sum to the logical protocol step moles per cost operation', () => {
+  const result = optimizeBlend(schedulerSplitInput);
+  assert.equal(result.feasible, true, result.error);
+  const splitStages = result.protocolSteps.filter(step => step._thermalSplit);
+  assert.ok(splitStages.length > 0);
+  const ids = [...new Set(splitStages.map(step => step.costOperationId))];
+  for (const id of ids) {
+    const summed = splitStages
+      .filter(step => step.costOperationId === id)
+      .reduce((total, step) => total + step.sourceConsumedMoles, 0);
+    const logical = result.logicalPlan.protocolSteps.find(step => step.costOperationId === id);
+    assert.ok(logical, `logical step for ${id}`);
+    assert.ok(Math.abs(summed - logical.sourceConsumedMoles) <= 1e-9 * Math.max(1, logical.sourceConsumedMoles), id);
+  }
+});

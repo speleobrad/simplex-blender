@@ -1,6 +1,7 @@
 import { test, expect } from './fixtures/app-fixtures.js';
 import { openWhatIf, fillWhatIfStart, setWhatIfRow, runWhatIf, assertWhatIfResultPanelExclusive } from './helpers/blending.js';
 import { openSettingsCategory, saveSettings } from './helpers/settings.js';
+import { editBank } from './helpers/inventory.js';
 async function load(appPage) { return appPage.goto('tourSeen'); }
 
 async function warningSettings(page) {
@@ -367,5 +368,21 @@ test.describe('fill costs in What-if', () => {
 
     await expect(section.locator('[data-result-key="cost-total"]')).toContainText(/Total CHF \d+\.\d{2}/);
     await expect(section.locator('[data-result-key="cost-total"]')).toContainText('incomplete');
+  });
+});
+
+test.describe('What-if and bank price edits', () => {
+  test('a bank price edit does not mark What-if out of date', async ({ appPage }) => {
+    const page = await load(appPage);
+    await openWhatIf(page);
+    await runWhatIf(page);
+    const host = page.locator('#what-if-result-host');
+
+    await editBank(page, 0, { pricePerLitre: 0.02 });
+    await page.getByRole('tab', { name: 'Blending', exact: true }).click();
+    await openWhatIf(page);
+    await runWhatIf(page);
+    await expect(host.locator('[data-what-if-stale-status]')).toBeHidden();
+    await expect(host).not.toContainText('Out of date');
   });
 });

@@ -1,5 +1,6 @@
 import { createCompareRow } from './compare-recipe.js';
 import { calculatePressureAtTemperature } from './thermodynamics.js';
+import { withoutBankPrices } from './cost.js';
 
 const START_FIELDS = ['pressureBar', 'oxygenPercent', 'heliumPercent', 'ambientTemperatureC', 'cylinderPresetName', 'coolingMedium', 'waterSubmersionPercent', 'inWaterTemperatureC'];
 const clone = value => value === undefined ? undefined : JSON.parse(JSON.stringify(value));
@@ -57,7 +58,7 @@ export function whatIfSharedInputSignature({ settings, banks, cylinderPresetName
     cylinderPreset: preset,
     booster: settings?.booster ?? {},
     pressureLimitMode: settings?.pressureLimitMode ?? 'hard-stop',
-    banks: banks ?? []
+    banks: withoutBankPrices(banks ?? [])
   });
 }
 

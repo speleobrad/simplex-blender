@@ -9,6 +9,17 @@ export function litresPerMole(temperatureC) {
 
 const hasPrice = value => Number.isFinite(value) && value >= 0;
 
+// Bank prices are display-only cost inputs; they never change a plan, so recipe
+// signatures (interim readings, What-if) must ignore them.
+export function withoutBankPrices(banks) {
+  if (!Array.isArray(banks)) return banks;
+  return banks.map(bank => {
+    if (!bank || typeof bank !== 'object' || !('pricePerLitre' in bank)) return bank;
+    const { pricePerLitre: _price, ...rest } = bank;
+    return rest;
+  });
+}
+
 function anySettingsPrice(costs) {
   return [
     costs?.pricePerLitre?.oxygen, costs?.pricePerLitre?.helium,

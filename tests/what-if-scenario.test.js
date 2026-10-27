@@ -261,3 +261,13 @@ test('What-if scenario transfers keep cost operation fields through simulation',
     assert.ok(step.sourceConsumedMoles > 0);
   }
 });
+
+test('what-if shared signature ignores bank cost prices but not bank pressure', () => {
+  const settings = { physics: { model: 'ideal' }, cylinderPresets: [], booster: {}, pressureLimitMode: 'hard-stop' };
+  const bank = { id: 'o2', pressureBar: 200, pricePerLitre: 0.02 };
+  const shared = (banks, s = settings) => whatIfSharedInputSignature({ settings: s, banks, cylinderPresetName: 'X', inletTemperatureC: 25 });
+  assert.equal(shared([bank]), shared([{ ...bank, pricePerLitre: 3 }]));
+  assert.equal(shared([bank]), shared([{ ...bank, pricePerLitre: undefined }]));
+  assert.notEqual(shared([bank]), shared([{ ...bank, pressureBar: 180 }]));
+  assert.notEqual(shared([bank]), shared([bank], { ...settings, booster: { otherBoostBpm: 9 } }));
+});
