@@ -14,7 +14,7 @@ Each Inventory bank carries an editable price. A **Calculate price** action, run
 
 ## Approved decisions
 
-- **Scope:** Optimize, Compare and What-if. All three mount the shared `result-panel-template`, so the Costs section lives once in the Tank summary pane. The app has no separate Compare cost entry point; Compare costs are reached only through the Blending and What-if results.
+- **Scope:** Optimize, Compare and What-if. All three mount the shared `result-panel-template`, so the Costs section lives once in the Tank summary pane. The app has no separate Compare cost entry point; the Compare planner is used only by What-if, so Compare costs are reached only through the What-if result.
 - **Price storage:** Settings holds pure O₂ and He prices, a leftover discount and operation prices. Each Inventory bank has an optional stored price, per free-gas litre of that bank's composition.
 - **Bank price suggestion:** computed on demand only, by a recipe (see below). Never computed automatically; never refreshed when Settings or the bank change. The result is shown as a suggestion and stored only when the user applies it; a price already entered is never replaced without that explicit step. The user can then edit it.
 - **Unpriced banks:** costed at 0 and flagged; the total is marked incomplete.

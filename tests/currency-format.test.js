@@ -9,7 +9,8 @@ test('currencyPrefix spaces alphanumeric symbols and leaves symbols bare', () =>
   assert.equal(currencyPrefix('$'), '$');
   assert.equal(currencyPrefix('CHF'), 'CHF ');
   assert.equal(currencyPrefix('kr.'), 'kr.');
-  assert.equal(currencyPrefix('Kč'), 'Kč');
+  assert.equal(currencyPrefix('Kč'), 'Kč ');
+  assert.equal(currencyPrefix('zł'), 'zł ');
 });
 
 test('formatMoney prefixes the fixed-precision amount', () => {

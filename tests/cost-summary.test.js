@@ -205,3 +205,17 @@ test('does nothing when the host has no Costs section', () => {
     assert.doesNotThrow(() => renderCostSummary(PRICED_COST, { root: host, units: 'metric', currencySymbol: '€' }));
   });
 });
+
+test('labels the volume column with the active volume unit', () => {
+  withDocument(() => {
+    const { host } = createHost();
+    const gasHeading = new FakeNode('th');
+    gasHeading.setAttribute('data-result-key', 'cost-gas-volume-heading');
+    const opHeading = new FakeNode('th');
+    opHeading.setAttribute('data-result-key', 'cost-operations-volume-heading');
+    host.children[0].children[0].append(gasHeading, opHeading);
+    renderCostSummary(PRICED_COST, { root: host, units: 'imperial', currencySymbol: '€' });
+    assert.equal(gasHeading.textContent, 'Volume (cu ft)');
+    assert.equal(opHeading.textContent, 'Volume (cu ft)');
+  });
+});

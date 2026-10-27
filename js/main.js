@@ -341,7 +341,8 @@ function renderBankTable() {
   }
   renderSupplyBanks(state.banks, state.settings.gasPresets, state.settings.units, {
     suggestions,
-    currencySymbol: state.settings.costs.currencySymbol
+    currencySymbol: state.settings.costs.currencySymbol,
+    leftoverDiscountPercent: state.settings.costs.leftoverDiscountPercent
   });
   restoreBankPriceFocus();
 }
@@ -408,7 +409,7 @@ function finishBankPriceCalculation(bankId) {
   state.bankSuggestions[bankId] = result.ok
     ? { status: 'ok', pricePerLitre: result.pricePerLitre, recipeCost: result.recipeCost, litres: result.litres, signature }
     : { status: 'failed', reason: result.reason, signature };
-  announceBankPrice(`${bank.name}: ${formatSuggestionNote(bank, state.bankSuggestions[bankId], state.settings.units, state.settings.costs.currencySymbol)}`);
+  announceBankPrice(`${bank.name}: ${formatSuggestionNote(bank, state.bankSuggestions[bankId], state.settings.units, state.settings.costs.currencySymbol, state.settings.costs.leftoverDiscountPercent)}`);
   renderBankTable();
   pendingBankFocus = null;
 }

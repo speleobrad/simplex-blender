@@ -113,6 +113,11 @@ export function renderCostSummary(cost, { root, units = 'metric', currencySymbol
     return;
   }
 
+  const volumeHeading = `Volume (${unitLabel('volumeL', units)})`;
+  for (const key of ['cost-gas-volume-heading', 'cost-operations-volume-heading']) {
+    const heading = hook(root, key);
+    if (heading) heading.textContent = volumeHeading;
+  }
   setVisible(status, false);
   setVisible(tables, true);
   setVisible(total, true);

@@ -214,3 +214,8 @@ test('ignores suggestions that belong to other banks', () => {
   assert.equal(noteOf(tbody, 'bank-mix').textContent, '');
   assert.equal(buttonWithAction(tbody, 'apply-bank-price'), undefined);
 });
+
+test('notes the leftover discount when one is configured', () => {
+  const { tbody } = renderOne(priceBank(), { suggestions: { 'bank-mix': OK_SUGGESTION }, currencySymbol: '€', leftoverDiscountPercent: 10 });
+  assert.equal(noteOf(tbody, 'bank-mix').textContent, 'Indicative price €0.0230 per L after 10% leftover discount (recipe cost €12.40 for 540 L).');
+});

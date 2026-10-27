@@ -96,19 +96,20 @@ function formatAmount(value) {
   return String(Number(value.toPrecision(6)));
 }
 
-export function formatSuggestionNote(bank, suggestion, units, currencySymbol) {
+export function formatSuggestionNote(bank, suggestion, units, currencySymbol, leftoverDiscountPercent = 0) {
   if (suggestion.status === 'calculating') return 'Calculating…';
   if (suggestion.status === 'failed') return suggestion.reason;
   const perVolume = unitLabel('volumeL', units);
   const money = (amount, digits) => formatMoney(amount, currencySymbol, digits);
   const price = pricePerLitre => `${money(convertToDisplay(pricePerLitre, 'pricePerVolumeL', units), 4)} per ${perVolume}`;
   const litres = formatAmount(convertToDisplay(suggestion.litres, 'volumeL', units));
-  let text = `Indicative price ${price(suggestion.pricePerLitre)} (recipe cost ${money(suggestion.recipeCost, 2)} for ${litres} ${perVolume}).`;
+  const discountNote = leftoverDiscountPercent > 0 ? ` after ${leftoverDiscountPercent}% leftover discount` : '';
+  let text = `Indicative price ${price(suggestion.pricePerLitre)}${discountNote} (recipe cost ${money(suggestion.recipeCost, 2)} for ${litres} ${perVolume}).`;
   if (bank.pricePerLitre !== null && bank.pricePerLitre !== undefined) text += ` Current price ${price(bank.pricePerLitre)}.`;
   return text;
 }
 
-function makePriceControl(bank, units, suggestion, currencySymbol) {
+function makePriceControl(bank, units, suggestion, currencySymbol, leftoverDiscountPercent) {
   const control = document.createElement('div');
   control.className = 'flex min-w-32 flex-col items-start gap-1';
 
@@ -124,7 +125,7 @@ function makePriceControl(bank, units, suggestion, currencySymbol) {
   const note = document.createElement('p');
   note.className = 'text-[11px] text-slate-400';
   note.dataset.bankNote = bank.id;
-  note.textContent = suggestion ? formatSuggestionNote(bank, suggestion, units, currencySymbol) : '';
+  note.textContent = suggestion ? formatSuggestionNote(bank, suggestion, units, currencySymbol, leftoverDiscountPercent) : '';
 
   control.append(makeBankInput(bank, bankFieldDefinition('pricePerLitre', units), units), calculate, note);
   if (suggestion?.status === 'ok') {
@@ -142,7 +143,7 @@ function makePriceControl(bank, units, suggestion, currencySymbol) {
 }
 
 
-export function renderSupplyBanks(banks, gasPresets, units = 'metric', { suggestions = {}, currencySymbol = '' } = {}) {
+export function renderSupplyBanks(banks, gasPresets, units = 'metric', { suggestions = {}, currencySymbol = '', leftoverDiscountPercent = 0 } = {}) {
   const tbody = document.getElementById('tanks-tbody');
   if (!tbody) return;
   const volumeHeading = document.getElementById('inventory-volume-heading');
@@ -171,7 +172,7 @@ export function renderSupplyBanks(banks, gasPresets, units = 'metric', { suggest
         : makeBankInput(bank, bankFieldDefinition(key, units), units);
       row.append(makeCell(COLUMN_CLASSES[key], child));
     }
-    row.append(makeCell(COLUMN_CLASSES.pricePerLitre, makePriceControl(bank, units, suggestions[bank.id], currencySymbol)));
+    row.append(makeCell(COLUMN_CLASSES.pricePerLitre, makePriceControl(bank, units, suggestions[bank.id], currencySymbol, leftoverDiscountPercent)));
 
     const remove = document.createElement('button');
     remove.type = 'button';
