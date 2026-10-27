@@ -17,6 +17,7 @@ const WEIGHT_LINE = 0.4;
 const WEIGHT_VERSATILITY = 0.4;
 const WEIGHT_ENERGY = 0.2;
 const RATIO_TOLERANCE_BAR = 1e-9;
+const FRACTION_SUM_TOLERANCE_PERCENT = 1e-9;
 
 function isFiniteNonNegative(value) {
   return Number.isFinite(value) && value >= 0;
@@ -25,7 +26,7 @@ function isFiniteNonNegative(value) {
 function hasValidFractions(oxygenPercent, heliumPercent) {
   return isFiniteNonNegative(oxygenPercent)
     && isFiniteNonNegative(heliumPercent)
-    && oxygenPercent + heliumPercent <= 100;
+    && oxygenPercent + heliumPercent <= 100 + FRACTION_SUM_TOLERANCE_PERCENT;
 }
 
 // Largest f_x / t_x over the components; a component absent from the target
