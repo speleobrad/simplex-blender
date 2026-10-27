@@ -115,6 +115,12 @@ test('a boost, decant, or top-up after a drain removes drain provenance', () => 
   assert.equal(gasCanBeBelowAmbient([step('drain', 'draining-rate'), step('equalize', 'none')], 2), false);
 });
 
+test('a salvage transfer out of the working tank cools it, so its gas can sit below ambient', () => {
+  assert.equal(gasCanBeBelowAmbient([step('salvage', 'salvage-decant')], 1), true);
+  assert.equal(gasCanBeBelowAmbient([step('salvage', 'salvage-booster')], 1), true);
+  assert.equal(gasCanBeBelowAmbient([step('drain', 'draining-rate'), step('salvage', 'salvage-decant')], 2), true);
+});
+
 test('a drain after a boost establishes provenance again', () => {
   assert.equal(gasCanBeBelowAmbient([
     step('drain', 'draining-rate'),

@@ -78,6 +78,39 @@ test('a reading below ambient after a drain is accepted at the drained state', (
   assert.deepEqual(result, { ok: true });
 });
 
+// Salvage scenario: the drained 150 bar cylinder moves its surplus into Leftover N, then the
+// recipe decants Pure Oxygen. The salvage cools the working tank below ambient.
+const salvageScenario = {
+  cylinder: {
+    volumeL: 12, initialPressureBar: 150, targetPressureBar: 100,
+    initialOxygenPercent: 32, initialHeliumPercent: 0,
+    targetOxygenPercent: 21, targetHeliumPercent: 35
+  },
+  physics: { model: 'vdw', temperatureC: 20 },
+  banks: [
+    { id: 'bank-he', name: 'Pure Helium', volumeL: 50, pressureBar: 200, maxPressureBar: 350, minimumPressureBar: 15, oxygenPercent: 0, heliumPercent: 100, enabled: true },
+    { id: 'bank-o2', name: 'Pure Oxygen', volumeL: 40, pressureBar: 180, maxPressureBar: 350, minimumPressureBar: 10, oxygenPercent: 100, heliumPercent: 0, enabled: true },
+    { id: 'bank-n', name: 'Leftover N', volumeL: 50, pressureBar: 20, maxPressureBar: 200, minimumPressureBar: 10, oxygenPercent: 32, heliumPercent: 0, enabled: true }
+  ],
+  thermal: {
+    tankMaterial: 'steel', coolingMedium: 'air', ambientTemperatureC: 20, inletTemperatureC: 40,
+    targetMediumTemperatureC: 20, targetInWaterTemperatureC: 20, waitMode: 'minutes', waitMinutes: 0,
+    interimMeasurements: []
+  },
+  settings: { booster: { maxCompressorPressureBar: 350, maxBoosterOutputPressureBar: 350 } }
+};
+
+test('a reading below ambient after a salvage is accepted at the salvage-cooled state', () => {
+  const planned = optimizeBlend(salvageScenario).protocolSteps.find(step => step._measurementIndex === 1).thermal;
+  assert.ok(planned.temperatureStartC < 20, 'the salvage should cool the tank below ambient');
+  const result = verifyInterimMeasurement(
+    salvageScenario, 1,
+    { pressureBar: planned.pressureStartBar, temperatureC: planned.temperatureStartC },
+    { tolerancePercent }
+  );
+  assert.deepEqual(result, { ok: true });
+});
+
 test('a pressure mismatch after a drain is rejected with the step number the results panel shows', () => {
   const result = verifyInterimMeasurement(
     drainScenario, 1, { pressureBar: 30, temperatureC: 11.8 }, { tolerancePercent }

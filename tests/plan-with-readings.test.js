@@ -165,3 +165,57 @@ test('recalculating from a reading keeps vented helium as the helium share of th
   assert.ok(Math.abs(plan.blend.heliumVentedLitres - planned.blend.heliumVentedLitres) < 1e-6);
   assert.ok(Math.abs(plan.blend.heliumVentedLitres - plan.blend.ventedGasLitres * 0.2) < 1e-6);
 });
+
+// Salvage fixture: the drained gas goes into Leftover N first, then the recipe decants
+// Pure Oxygen and Pure Helium. Interim readings can land on those decants.
+const salvageInput = {
+  cylinder: {
+    volumeL: 12, initialPressureBar: 150, initialOxygenPercent: 32, initialHeliumPercent: 0,
+    targetPressureBar: 100, targetOxygenPercent: 21, targetHeliumPercent: 35
+  },
+  physics: { model: 'vdw', temperatureC: 20 },
+  banks: [
+    { id: 'bank-he', name: 'Pure Helium', volumeL: 50, pressureBar: 200, maxPressureBar: 350, minimumPressureBar: 15, oxygenPercent: 0, heliumPercent: 100, enabled: true },
+    { id: 'bank-o2', name: 'Pure Oxygen', volumeL: 40, pressureBar: 180, maxPressureBar: 350, minimumPressureBar: 10, oxygenPercent: 100, heliumPercent: 0, enabled: true },
+    { id: 'bank-n', name: 'Leftover N', volumeL: 50, pressureBar: 20, maxPressureBar: 200, minimumPressureBar: 10, oxygenPercent: 32, heliumPercent: 0, enabled: true }
+  ],
+  thermal: {
+    tankMaterial: 'steel', coolingMedium: 'air', ambientTemperatureC: 20, inletTemperatureC: 40,
+    targetMediumTemperatureC: 20, targetInWaterTemperatureC: 20, waitMode: 'minutes', waitMinutes: 0,
+    interimMeasurements: []
+  },
+  settings: { booster: { maxCompressorPressureBar: 350, maxBoosterOutputPressureBar: 350 } }
+};
+const salvageBase = optimizeBlend(salvageInput);
+const salvageSteps = plan => plan.protocolSteps.filter(step => step.type === 'salvage');
+
+test('a re-plan keeps the base plan salvage step first, with the same receiver and moved helium', () => {
+  assert.equal(salvageBase.salvageTransfers.length, 1);
+  const replanned = planWithReadings({
+    ...salvageInput,
+    thermal: { ...salvageInput.thermal, interimMeasurements: Object.assign([], { 1: { pressureBar: 40, temperatureC: 20 } }) }
+  });
+  assert.equal(replanned.interimReadings.error, null);
+  assert.equal(replanned.protocolSteps[0].type, 'salvage');
+  assert.equal(replanned.protocolSteps[0].receiverBankId, salvageBase.protocolSteps[0].receiverBankId);
+  assert.equal(replanned.protocolSteps[0].movedMoles, salvageBase.protocolSteps[0].movedMoles);
+});
+
+test('a re-plan starts its bank inventory from the post-salvage banks, not the banks before salvage', () => {
+  const replanned = planWithReadings({
+    ...salvageInput,
+    thermal: { ...salvageInput.thermal, interimMeasurements: Object.assign([], { 1: { pressureBar: 40, temperatureC: 20 } }) }
+  });
+  const seeded = replanned.readingPlan.segments[0].banks.find(bank => bank.id === 'bank-n');
+  const salvaged = salvageBase.salvageBanks.find(bank => bank.id === 'bank-n');
+  assert.ok(Math.abs(seeded.pressureBar - salvaged.pressureBar) < 1e-6,
+    `seeded ${seeded.pressureBar} bar, expected post-salvage ${salvaged.pressureBar} bar`);
+});
+
+test('a re-plan never salvages a second time', () => {
+  const replanned = planWithReadings({
+    ...salvageInput,
+    thermal: { ...salvageInput.thermal, interimMeasurements: Object.assign([], { 1: { pressureBar: 40, temperatureC: 20 } }) }
+  });
+  assert.equal(salvageSteps(replanned).length, 1);
+});

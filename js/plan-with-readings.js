@@ -168,7 +168,7 @@ function startingPlan(base, input) {
   return {
     ...base,
     readingPlan: {
-      segments: [{ fromIndex: 0, banks: input.banks ?? [], startMix: initialMixOf(input.cylinder) }],
+      segments: [{ fromIndex: 0, banks: base.salvageBanks ?? input.banks ?? [], startMix: initialMixOf(input.cylinder) }],
       retainedFraction: base.blend.retainedPercent / 100,
       ventedMoles: base.blend.ventedMoles ?? 0
     }
@@ -241,6 +241,7 @@ function applyReading(plan, input, readingsInput, index, reading) {
   });
   const suffixInput = {
     ...input,
+    _salvage: false,
     cylinder: {
       ...cylinder,
       initialPressureBar: pressureAtReferenceBar,
