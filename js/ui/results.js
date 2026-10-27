@@ -613,6 +613,7 @@ function renderProtocol(protocolSteps, alertMessage = null, calculation = null, 
       && index > 0
       && step.type !== 'keep'
       && step.type !== 'salvage'
+      && step.type !== 'drain'
       && Number.isInteger(interimMeasurementIndex)) {
       const measurements = calculation?.thermal?.interimMeasurements ?? [];
       const measurement = measurements[interimMeasurementIndex] ?? null;

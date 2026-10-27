@@ -1613,7 +1613,7 @@ test('salvage card names the receiver, moved helium, and receiver before and aft
   }
 });
 
-test('salvage step gets no interim reading slot but the drain after it does', () => {
+test('salvage and the drain after it get no interim reading slot', () => {
   const previousDocument = globalThis.document;
   const document = createFakeDocument();
   globalThis.document = document;
@@ -1663,7 +1663,7 @@ test('salvage step gets no interim reading slot but the drain after it does', ()
     assert.doesNotMatch(children[0].textContent, /record actual readings/i);
     assert.doesNotMatch(children[1].textContent, /record actual readings/i);
     assert.match(children[2].textContent, /Drain \/ Vent Cylinder Gas/);
-    assert.match(children[2].textContent, /record actual readings/i);
+    assert.doesNotMatch(children[2].textContent, /record actual readings/i);
   } finally {
     globalThis.document = previousDocument;
   }
