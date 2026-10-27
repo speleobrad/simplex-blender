@@ -3657,3 +3657,25 @@ test('salvage near-tie preference also holds in the thermal path', () => {
   assert.equal(result.feasible, true);
   assert.deepEqual([...new Set(salvageReceivers(result))], ['deep']);
 });
+
+test('a receiver that fails alone as first-ranked cannot hide another receiver that passes alone', () => {
+  // Found by sweeping random Shallow/Deep inventories: salvaging into the first-ranked prefix
+  // (Shallow, then Shallow + Deep) is rejected by the gates, while Deep alone passes them.
+  const result = optimizeBlend({
+    cylinder: {
+      volumeL: 11.1, initialPressureBar: 42.7, initialOxygenPercent: 24.4, initialHeliumPercent: 65.1,
+      targetPressureBar: 156.2, targetOxygenPercent: 21.2, targetHeliumPercent: 15.7,
+      workingPressureBar: 207, hotOverfillPercent: 2
+    },
+    physics: { model: 'vdw', temperatureC: 21 },
+    settings: DEFAULT_SETTINGS,
+    banks: [
+      { id: 'he', name: 'Helium', volumeL: 40, pressureBar: 150, maxPressureBar: 200, oxygenPercent: 0, heliumPercent: 100, enabled: true },
+      { id: 'o2', name: 'Oxygen', volumeL: 50, pressureBar: 200, maxPressureBar: 200, oxygenPercent: 100, heliumPercent: 0, enabled: true },
+      { id: 'shallow', name: 'shallow', volumeL: 25.5, pressureBar: 203.5, maxPressureBar: 222.9, oxygenPercent: 9.7, heliumPercent: 41.9, enabled: true },
+      { id: 'deep', name: 'deep', volumeL: 24.5, pressureBar: 149.7, maxPressureBar: 239.4, oxygenPercent: 14.1, heliumPercent: 69.3, enabled: true }
+    ]
+  });
+  assert.equal(result.feasible, true);
+  assert.deepEqual([...new Set(salvageReceivers(result))], ['deep']);
+});
