@@ -98,6 +98,18 @@ Then clear it and record 54 bar at 22 °C on the Step 2 form of the default reci
 21. At a narrow viewport, verify Settings category navigation scrolls the active category into view, Equipment preset actions stack without clipping, Cylinder presets use readable cards with full-width remove actions, and Preset management URL controls stack without horizontal overflow. At desktop width, verify the cylinder table and sidebar layout remain intact.
 22. Select Surrounding medium = Water: a "Tank submerged" select (20/40/60/80%, default 60%) appears beside it; with Air it is hidden. Lowering the percentage raises the Hot mix temperature and lengthens the settle time on the Thermal graphs. In What-if, the same control appears for Water, is included by Copy from Blending, and changes the scenario result.
 
+### Fill cost checks
+
+1. Settings → Costs shows per-litre gas and operation prices in the current Units setting, with the top-up fee labelled as including compressor air. Set O₂ and He prices, the currency symbol, and the leftover discount, then Save; the values persist on reload.
+2. In Inventory, the Price column is editable in the display unit. Click **Calculate price** on a priced bank and verify the button is disabled with a "Calculating…" status until the indicative price appears. Use **Apply** (or **Replace** when a price exists) and verify the stored price updates; editing the bank's pressure or composition afterward removes the suggestion.
+3. Run an Optimize recipe and open Tank summary. Verify the Costs section lists a gas line per finite bank with unit price and cost, the operation lines, and a total. Clear one bank's price and verify the total shows "(incomplete: … unpriced)" and that the unpriced gas shows "no price set".
+4. With no feasible blend, verify the Costs section shows "Costs appear when a feasible blend is available." With prices unset and a feasible blend, verify it shows "Set prices in Settings → Costs." instead of the tables.
+5. Change a price in Settings and verify the Costs section on the visible result updates without re-running the recipe.
+
+Benchmark the on-demand bank pricing with `node scripts/bench-bank-pricing.mjs` from the project root. Each case is run three times, and the script exits non-zero if a target is missed. The development-machine run recorded for issue #3 gave: default Helium 3.0 ms, Oxygen 0.9 ms, Sample scrap 0.4 ms (target ≤ 2000 ms); worst case 200 L / 350 bar O₂ with the booster limit at 350, 1.9 ms; worst case He, 0.7 ms (target ≤ 10000 ms). These are machine-dependent observations, not guarantees.
+
+The Node suite covers cost calculation, bank pricing, Costs rendering, and the step contract consumed by Costs; see `tests/cost.test.js`, `tests/bank-pricing.test.js`, and `tests/cost-summary.test.js`.
+
 ### Compare recipe scenario
 
 With valid working-tank, thermal, equipment, and Supply-bank values, switch from the default Optimize mode to Compare and confirm those values remain while the row editor appears without an onboarding overlay blocking its controls. Add gas must list **Compressor Air** plus enabled named Supply banks, but not disabled or unnamed banks; selecting Compressor Air displays 21/0 and **Infinite supply**, while selecting a finite bank displays its inferred O₂/He composition, volume, and current pressure. Edit **Pressure added** and confirm **Receiver target pressure** changes, then edit the target and confirm the added value changes. Run a Compressor Air operation below its configured pressure ceiling and a finite-bank operation that produces automatic Decant, Equalize, and/or Boost cards; confirm the persisted Supply-bank value remains unchanged.

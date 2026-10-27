@@ -143,6 +143,8 @@ The tab exposes accessible tables for:
 
 The tab reports when feasible chart data is unavailable. The tables are the keyboard-operable/reference view of the Diagram data, including source-bank start/end pressure information where supplied by the calculation.
 
+The Costs section sits at the end of the pane. It has a gas table (litres, price per litre in the display unit, and cost for each finite bank; unpriced banks show "no price set"), an operation table for Boost, Decant, Equalize, and Top-up (the Top-up row shows its litres as information only and includes compressor air), and a total. A total with unpriced gas reads "(incomplete: … unpriced)". With no prices set it shows "Set prices in Settings → Costs."; with no feasible blend it shows "Costs appear when a feasible blend is available." Costs appear in the Blending and What-if Tank summary panes.
+
 #### In water pressure tab
 
 The tab describes estimated pressure-gauge readings after the cylinder equilibrates at each water temperature. Its contents are rendered only when thermal/blend data is available; otherwise the container is empty.
@@ -170,6 +172,8 @@ The editable table has these columns:
 | Del | Deletes the bank. |
 
 The **Add bank** button appends a new editable source row. Compressor Air is implicit and is not shown as a bank row. The table omits derived nitrogen, compressibility, and minimum-pressure columns.
+
+The Price column converts each bank's stored price per litre to the display unit. **Calculate price** prices the bank on demand from the current Settings → Costs values and the bank's volume, pressure, and composition, showing "Calculating…" while it runs. The result appears as an indicative price with its recipe cost; **Apply** (or **Replace** when a price is already set) stores it on the bank. The suggestion is discarded when the bank or its pricing inputs change.
 
 Below the table, **Transfer conditions** contains **Incoming gas temperature** in °C. It is shared by compressor and inventory transfers; source-specific equipment temperature modifiers still apply.
 
@@ -216,6 +220,10 @@ Contains separate Compressor, Booster, and Decanting hose sections.
 - **Decanting hose**: oxygen manual decant rate, other-gas manual decant rate, and draining rate.
 
 Creating a named equipment preset clones the current values without changing the active values. Removing the selected preset is disabled where removal is not allowed. A helper note explains that compressor Air and non-Air booster output have separate pressure limits.
+
+### Costs
+
+The Costs category sets per-litre prices for pure O₂ and He, the Boost, Decant, and Equalize operations, the flat top-up fee per operation (which includes compressor air and is not unit-converted), the currency symbol, and the leftover-gas discount percentage. Prices are entered in the current Units setting and stored per litre. Changes are drafts that persist on Save, like the other Settings categories.
 
 ### Preset management
 
