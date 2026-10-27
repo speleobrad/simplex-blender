@@ -3618,3 +3618,42 @@ test('salvage search ignores invalid input and reports the usual invalid result'
   assert.equal(result.blend, null);
   assert.match(result.error, /^Invalid blend input:/);
 });
+
+// A 7/70 S80 at 45 bar drained toward 50/0 at 195 bar, with two leftover trimix banks. Both
+// receivers absorb the same gas and their attractiveness changes are within the near-tie margin
+// (+2.60 Shallow, +2.14 Deep), so the receiver that can still reach more standard mixes wins.
+const shallowDeepInput = {
+  cylinder: {
+    volumeL: 11.1, initialPressureBar: 45, initialOxygenPercent: 7, initialHeliumPercent: 70,
+    targetPressureBar: 195, targetOxygenPercent: 50, targetHeliumPercent: 0,
+    workingPressureBar: 207, hotOverfillPercent: 2
+  },
+  physics: { model: 'vdw', temperatureC: 21 },
+  banks: [
+    { id: 'he', name: 'Helium', volumeL: 40, pressureBar: 150, maxPressureBar: 200, oxygenPercent: 0, heliumPercent: 100, enabled: true },
+    { id: 'o2', name: 'Oxygen', volumeL: 50, pressureBar: 200, maxPressureBar: 200, oxygenPercent: 100, heliumPercent: 0, enabled: true },
+    { id: 'shallow', name: 'Shallow', volumeL: 18, pressureBar: 117, maxPressureBar: 200, oxygenPercent: 17, heliumPercent: 42, enabled: true },
+    { id: 'deep', name: 'Deep', volumeL: 12, pressureBar: 42, maxPressureBar: 200, oxygenPercent: 11, heliumPercent: 63, enabled: true }
+  ],
+  settings: DEFAULT_SETTINGS
+};
+const salvageReceivers = result => result.protocolSteps.filter(step => step.type === 'salvage').map(step => step.receiverBankId);
+
+test('salvage near tie goes to the receiver that can still reach more standard mixes', () => {
+  const result = optimizeBlend(shallowDeepInput);
+  assert.equal(result.feasible, true);
+  assert.deepEqual([...new Set(salvageReceivers(result))], ['deep']);
+  const end = result.salvageTransfers.at(-1).receiverEndMix;
+  // Deep ends near 9/66 at about 81 bar (all 5 targets reachable); Shallow would end 15.2/47 at 146 bar (3 of 5).
+  assert.ok(Math.abs(end.oxygenPercent - 9.1) < 0.2 && Math.abs(end.heliumPercent - 66.3) < 0.2);
+});
+
+test('salvage near-tie preference also holds in the thermal path', () => {
+  const thermal = {
+    tankMaterial: 'aluminum', coolingMedium: 'air', ambientTemperatureC: 21, inletTemperatureC: 25,
+    targetMediumTemperatureC: 21, targetInWaterTemperatureC: 21, waitMode: 'minutes', waitMinutes: 0, interimMeasurements: []
+  };
+  const result = optimizeBlend({ ...shallowDeepInput, thermal });
+  assert.equal(result.feasible, true);
+  assert.deepEqual([...new Set(salvageReceivers(result))], ['deep']);
+});

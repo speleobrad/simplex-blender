@@ -4,6 +4,7 @@ import {
   SALVAGE_ATTRACTIVENESS_GATE,
   SALVAGE_HE_PRICE_PER_LITRE,
   SALVAGE_MIN_VALUE,
+  SALVAGE_NEAR_TIE_POINTS,
   SALVAGE_O2_PRICE_PER_LITRE,
   applyTransferToBank,
   isSalvageReceiver,
@@ -316,4 +317,58 @@ test('selection rejects a variant that lowers the retained cylinder moles, even 
 
   assert.equal(selectRetained([lowerRetained]), null);
   assert.equal(selectRetained([lowerRetained, equalRetained]).id, 'equal-retained');
+});
+
+// Near ties in attractiveness are decided by how many standard targets the receiving bank can
+// still reach. Fixtures carry the reach on each bank state, like the score.
+const reachOf = bank => bank.reach;
+const reaching = (reach, score) => ({ ...receiverAt(30, score), reach });
+const selectWithReach = variants => selectSalvageVariant({
+  baseline, variants, bankScoresOf: scoreOf, bankReachOf: reachOf, physics: IDEAL
+});
+
+test('selection prefers more reachable targets when attractiveness changes are within the near-tie margin', () => {
+  const fewerTargets = variant('fewer', { receiver: reaching(3, 62.0) });
+  const moreTargets = variant('more', { receiver: reaching(5, 61.6) });
+  assert.equal(selectWithReach([fewerTargets, moreTargets]).id, 'more');
+  assert.equal(selectWithReach([moreTargets, fewerTargets]).id, 'more');
+});
+
+test('selection keeps the larger attractiveness change when it leads by more than the near-tie margin', () => {
+  const fewerTargets = variant('fewer', { receiver: reaching(3, 62.0) });
+  const moreTargets = variant('more', { receiver: reaching(5, 62.0 - SALVAGE_NEAR_TIE_POINTS - 0.5) });
+  assert.equal(selectWithReach([moreTargets, fewerTargets]).id, 'fewer');
+});
+
+test('selection ignores reach when no reach function is given', () => {
+  const fewerTargets = variant('fewer', { receiver: reaching(3, 62.0) });
+  const moreTargets = variant('more', { receiver: reaching(5, 61.6) });
+  assert.equal(select([moreTargets, fewerTargets]).id, 'fewer');
+});
+
+test('selection judges reach on the banks the variant changed, not on untouched banks', () => {
+  // Both variants leave the donor untouched at reach 5; only the receiver differs.
+  const lowReach = variant('low', { receiver: reaching(2, 62.0), donor: { ...donorAt(100), reach: 5 } });
+  const highReach = variant('high', { receiver: reaching(4, 61.8), donor: { ...donorAt(100), reach: 5 } });
+  const baselineWithReach = { finalBanks: [{ ...donorAt(100), reach: 5 }, { ...receiverAt(20), reach: 1 }] };
+  const chosen = selectSalvageVariant({
+    baseline: baselineWithReach, variants: [lowReach, highReach], bankScoresOf: scoreOf, bankReachOf: reachOf, physics: IDEAL
+  });
+  assert.equal(chosen.id, 'high');
+});
+
+test('rankReceivers puts a near-tie receiver with more reachable targets first, and respects clear leads', () => {
+  const candidate = (id, afterScore, reach) => ({
+    id, receiver: receiverAt(20, 60), transferredReceiver: { ...receiverAt(30, afterScore), reach }
+  });
+  const nearTie = rankReceivers(
+    [candidate('shallow', 62.6, 3), candidate('deep', 62.14, 5)], scoreOf, reachOf
+  );
+  assert.deepEqual(nearTie.map(entry => entry.id), ['deep', 'shallow']);
+  const clearLead = rankReceivers(
+    [candidate('shallow', 64.5, 3), candidate('deep', 62.0, 5)], scoreOf, reachOf
+  );
+  assert.deepEqual(clearLead.map(entry => entry.id), ['shallow', 'deep']);
+  const noReach = rankReceivers([candidate('shallow', 62.6, 3), candidate('deep', 62.14, 5)], scoreOf);
+  assert.deepEqual(noReach.map(entry => entry.id), ['shallow', 'deep']);
 });

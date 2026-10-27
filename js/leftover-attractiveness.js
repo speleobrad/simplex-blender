@@ -59,6 +59,16 @@ function reachableTargetCount(gas, pressureBar, maxPressureBar) {
   return count;
 }
 
+/**
+ * Number of standard trimix targets (0 to STANDARD_TARGETS.length) this bank's gas can still be
+ * topped up to by adding gas only, within its maximum pressure. Invalid inputs count 0.
+ */
+export function leftoverReachability({ oxygenPercent, heliumPercent, pressureBar, maxPressureBar }) {
+  if (!hasValidFractions(oxygenPercent, heliumPercent)) return 0;
+  if (!isFiniteNonNegative(pressureBar) || !isFiniteNonNegative(maxPressureBar)) return 0;
+  return reachableTargetCount(componentFractions(oxygenPercent, heliumPercent), pressureBar, maxPressureBar);
+}
+
 function lineScore(oxygenPercent, heliumPercent) {
   const residual = Math.abs(LINE_SLOPE * (oxygenPercent / 100) + heliumPercent / 100 - 1);
   const perpendicularDistance = residual / LINE_NORM;

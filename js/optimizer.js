@@ -13,7 +13,7 @@ import {
   calculateCoolingTime,
   coolingTimeConstantMinutes
 } from './thermodynamics.js';
-import { leftoverAttractiveness } from './leftover-attractiveness.js';
+import { leftoverAttractiveness, leftoverReachability } from './leftover-attractiveness.js';
 import {
   applyDrawToBank,
   applyTransferToBank,
@@ -2546,6 +2546,12 @@ function salvageContext(input, baseline) {
     // The tank is the salvage source: its floor is the configured source minimum, not a bank's.
     minimumSourcePressureBar: minimumSourcePressureBarFor(settings, {}),
     maxBoosterOutputPressureBar: boosterOutputLimitBar(settings),
+    bankReachOf: bank => leftoverReachability({
+      oxygenPercent: bank.oxygenPercent,
+      heliumPercent: bank.heliumPercent,
+      pressureBar: bank.pressureBar,
+      maxPressureBar: bank.maxPressureBar
+    }),
     bankScoresOf: bank => leftoverAttractiveness({
       oxygenPercent: bank.oxygenPercent,
       heliumPercent: bank.heliumPercent,
@@ -2578,7 +2584,7 @@ function rankSalvageReceivers(context) {
       transferredReceiver: applyTransferToBank(receiver, tankMix, probe.movedMoles, physics)
     });
   }
-  return rankReceivers(candidates, context.bankScoresOf).map(candidate => candidate.receiver.id);
+  return rankReceivers(candidates, context.bankScoresOf, context.bankReachOf).map(candidate => candidate.receiver.id);
 }
 
 // One salvage variant that moves gas into the given receiver prefix, re-solved for the
@@ -2651,6 +2657,7 @@ export function searchSalvageVariant(input) {
     baseline: salvageBaseline(baseline, context),
     variants,
     bankScoresOf: context.bankScoresOf,
+    bankReachOf: context.bankReachOf,
     physics: candidate.physics
   });
   return selected?.receiverIds ?? null;
@@ -2670,6 +2677,7 @@ export function optimizeBlendWithoutThermal(input) {
     baseline: salvageBaseline(baseline, context),
     variants: [variant],
     bankScoresOf: context.bankScoresOf,
+    bankReachOf: context.bankReachOf,
     physics: input.physics
   });
   if (!selected) return baseline;

@@ -147,3 +147,17 @@ test('the same 21/35 bank at 45 bar of 12/65 at 50 bar raises the score by about
   const delta = after - before;
   assert.ok(delta > 6.8 && delta < 7.2, `delta ${delta}`);
 });
+
+import { leftoverReachability } from '../js/leftover-attractiveness.js';
+
+test('reachability counts the standard targets a bank can still be topped up to within its max pressure', () => {
+  // 21/35 gas at exactly its max pressure reaches only the 21/35 target (ratio 1).
+  assert.equal(leftoverReachability({ oxygenPercent: 21, heliumPercent: 35, pressureBar: 200, maxPressureBar: 200 }), 1);
+  assert.equal(leftoverReachability({ oxygenPercent: 21, heliumPercent: 35, pressureBar: 200, maxPressureBar: 199.99 }), 0);
+  // Pure O2 reaches all five at 35 bar with a 350 bar max, and none at 74 bar.
+  assert.equal(leftoverReachability({ oxygenPercent: 100, heliumPercent: 0, pressureBar: 35, maxPressureBar: 350 }), 5);
+  assert.equal(leftoverReachability({ oxygenPercent: 100, heliumPercent: 0, pressureBar: 74, maxPressureBar: 350 }), 0);
+  // Invalid fractions or pressures reach nothing.
+  assert.equal(leftoverReachability({ oxygenPercent: 60, heliumPercent: 60, pressureBar: 10, maxPressureBar: 200 }), 0);
+  assert.equal(leftoverReachability({ oxygenPercent: 18, heliumPercent: 45, pressureBar: -1, maxPressureBar: 200 }), 0);
+});
