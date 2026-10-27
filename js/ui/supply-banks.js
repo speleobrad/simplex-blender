@@ -1,6 +1,7 @@
 import { getSelectedGasPreset, sortGasPresetEntries } from '../settings.js';
 import { convertToDisplay, unitLabel } from '../units.js';
 import { formatMoney } from '../currency-format.js';
+import { isPureComposition } from '../pure-prices.js';
 const COLUMN_CLASSES = {
   name: 'py-2 px-2 min-w-32',
   volumeL: 'py-2 px-1',
@@ -15,6 +16,9 @@ export const BANK_FIELD_QUANTITIES = Object.freeze({
   pressureBar: 'pressureBar',
   pricePerLitre: 'pricePerVolumeL'
 });
+
+export const PRICE_BASIS_PER_VOLUME = 'per-volume';
+export const PRICE_BASIS_FULL_TANK = 'full-tank';
 
 function bankFieldDefinition(key, units) {
   const definitions = {
@@ -35,14 +39,15 @@ function makeCell(className, child) {
   return cell;
 }
 
-function makeBankInput(bank, field, units) {
+function makeBankInput(bank, field, units, { fullTank = false } = {}) {
   const input = document.createElement('input');
   input.type = field.type;
   const quantity = BANK_FIELD_QUANTITIES[field.key] ?? null;
   const toDisplay = value => (quantity ? convertToDisplay(value, quantity, units) : value);
   if (field.key === 'pricePerLitre') {
-    input.value = formatBankPrice(bank.pricePerLitre, units);
-    input.placeholder = 'Not set';
+    // Full-tank mode is a currency entry: the input starts empty and the stored per-litre price is shown after commit.
+    input.value = fullTank ? '' : formatBankPrice(bank.pricePerLitre, units);
+    input.placeholder = fullTank ? 'Full tank price' : 'Not set';
   } else {
     input.value = toDisplay(bank[field.key]);
   }
@@ -52,14 +57,14 @@ function makeBankInput(bank, field, units) {
   if (field.min !== undefined) input.min = toDisplay(field.min);
   if (field.max !== undefined) input.max = toDisplay(field.max);
   if (field.step !== undefined) input.step = typeof field.step === 'number' ? toDisplay(field.step) : field.step;
-  input.setAttribute('aria-label', `${bank.name} ${field.label}`);
+  input.setAttribute('aria-label', fullTank ? `${bank.name} full tank price` : `${bank.name} ${field.label}`);
   return input;
 }
 
-/** Stored per-litre price as the text shown in the inventory price input; empty when unpriced. */
+/** Stored per-litre price as the text shown in the inventory price input, to 6 decimals; empty when unpriced. */
 export function formatBankPrice(pricePerLitre, units) {
   if (pricePerLitre === null || pricePerLitre === undefined) return '';
-  return String(Number(convertToDisplay(pricePerLitre, 'pricePerVolumeL', units).toPrecision(6)));
+  return convertToDisplay(pricePerLitre, 'pricePerVolumeL', units).toFixed(6);
 }
 
 function makeGasPresetSelect(bank, gasPresets) {
@@ -92,6 +97,24 @@ function makeBankNameControl(bank, gasPresets, units) {
   return control;
 }
 
+function makePriceBasisSelect(bank, basis, units) {
+  const select = document.createElement('select');
+  select.className = 'w-24 rounded border border-ocean-800 bg-ocean-950 px-1 py-0.5 text-[10px] text-slate-400';
+  select.dataset.action = 'select-bank-price-basis';
+  select.dataset.bankId = bank.id;
+  select.setAttribute('aria-label', `Price basis for ${bank.name}`);
+
+  const perVolume = document.createElement('option');
+  perVolume.value = PRICE_BASIS_PER_VOLUME;
+  perVolume.textContent = `Per ${unitLabel('volumeL', units)}`;
+  const fullTank = document.createElement('option');
+  fullTank.value = PRICE_BASIS_FULL_TANK;
+  fullTank.textContent = 'Full tank';
+  select.append(perVolume, fullTank);
+  select.value = basis;
+  return select;
+}
+
 function formatAmount(value) {
   return String(Number(value.toPrecision(6)));
 }
@@ -109,9 +132,16 @@ export function formatSuggestionNote(bank, suggestion, units, currencySymbol, le
   return text;
 }
 
-function makePriceControl(bank, units, suggestion, currencySymbol, leftoverDiscountPercent) {
+function makePriceControl(bank, units, { suggestion, currencySymbol, leftoverDiscountPercent, basis }) {
   const control = document.createElement('div');
   control.className = 'flex min-w-32 flex-col items-start gap-1';
+  control.append(
+    makeBankInput(bank, bankFieldDefinition('pricePerLitre', units), units, { fullTank: basis === PRICE_BASIS_FULL_TANK }),
+    makePriceBasisSelect(bank, basis, units)
+  );
+
+  // Pure oxygen and helium banks take their price by hand: their per-litre price is the pure-gas price itself.
+  if (isPureComposition(bank)) return control;
 
   const calculate = document.createElement('button');
   calculate.type = 'button';
@@ -127,7 +157,7 @@ function makePriceControl(bank, units, suggestion, currencySymbol, leftoverDisco
   note.dataset.bankNote = bank.id;
   note.textContent = suggestion ? formatSuggestionNote(bank, suggestion, units, currencySymbol, leftoverDiscountPercent) : '';
 
-  control.append(makeBankInput(bank, bankFieldDefinition('pricePerLitre', units), units), calculate, note);
+  control.append(calculate, note);
   if (suggestion?.status === 'ok') {
     const priced = bank.pricePerLitre !== null && bank.pricePerLitre !== undefined;
     const apply = document.createElement('button');
@@ -143,7 +173,7 @@ function makePriceControl(bank, units, suggestion, currencySymbol, leftoverDisco
 }
 
 
-export function renderSupplyBanks(banks, gasPresets, units = 'metric', { suggestions = {}, currencySymbol = '', leftoverDiscountPercent = 0 } = {}) {
+export function renderSupplyBanks(banks, gasPresets, units = 'metric', { suggestions = {}, currencySymbol = '', leftoverDiscountPercent = 0, priceBasis = {} } = {}) {
   const tbody = document.getElementById('tanks-tbody');
   if (!tbody) return;
   const volumeHeading = document.getElementById('inventory-volume-heading');
@@ -172,7 +202,12 @@ export function renderSupplyBanks(banks, gasPresets, units = 'metric', { suggest
         : makeBankInput(bank, bankFieldDefinition(key, units), units);
       row.append(makeCell(COLUMN_CLASSES[key], child));
     }
-    row.append(makeCell(COLUMN_CLASSES.pricePerLitre, makePriceControl(bank, units, suggestions[bank.id], currencySymbol, leftoverDiscountPercent)));
+    row.append(makeCell(COLUMN_CLASSES.pricePerLitre, makePriceControl(bank, units, {
+      suggestion: suggestions[bank.id],
+      currencySymbol,
+      leftoverDiscountPercent,
+      basis: priceBasis[bank.id] ?? PRICE_BASIS_PER_VOLUME
+    })));
 
     const remove = document.createElement('button');
     remove.type = 'button';

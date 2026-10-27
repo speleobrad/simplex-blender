@@ -4,6 +4,7 @@ import { fillWorkingTank, assertResultPanelExclusive } from './helpers/blending.
 import { selectResultTab } from './helpers/navigation.js';
 import { addBank, bankPrice, bankRows, editBank, removeBank } from './helpers/inventory.js';
 import { openSettingsCategory, saveSettings } from './helpers/settings.js';
+import { bankFreeGasLitres } from '../../js/pure-prices.js';
 
 async function assertNoFiniteAir(page) {
   const rows = bankRows(page);
@@ -116,6 +117,35 @@ test.describe('inventory supply banks', () => {
     }
   });
 
+  test('inventory gas temperature defaults to 21 °C and follows Blending ambient when Same as ambient is checked', async ({ appPage }) => {
+    const page = await appPage.goto('tourSeen');
+    await page.getByRole('tab', { name: 'Inventory', exact: true }).click();
+    const inlet = page.getByRole('spinbutton', { name: 'Temperature of inventory gases' });
+    const sameAsAmbient = page.getByRole('checkbox', { name: 'Same as ambient', exact: true });
+    await expect(inlet).toHaveValue('21');
+    await expect(inlet).toBeEnabled();
+    await expect(sameAsAmbient).not.toBeChecked();
+
+    await page.getByRole('tab', { name: 'Blending', exact: true }).click();
+    const ambient = page.locator('#ambient-temperature');
+    await ambient.fill('12');
+    await ambient.blur();
+
+    await page.getByRole('tab', { name: 'Inventory', exact: true }).click();
+    await sameAsAmbient.check();
+    await expect(inlet).toBeDisabled();
+    await expect(inlet).toHaveValue('12');
+
+    await page.getByRole('tab', { name: 'Blending', exact: true }).click();
+    await ambient.fill('18');
+    await ambient.blur();
+    await page.getByRole('tab', { name: 'Inventory', exact: true }).click();
+    await expect(inlet).toHaveValue('18');
+
+    await sameAsAmbient.uncheck();
+    await expect(inlet).toBeEnabled();
+  });
+
   test('bank edits persist after reload and Air remains an implicit source, not a finite row', async ({ appPage }) => {
     const page = await appPage.goto('tourSeen');
     await page.getByRole('tab', { name: 'Inventory', exact: true }).click();
@@ -148,13 +178,15 @@ test.describe('inventory supply banks', () => {
     await expect(page.locator('#equipment-summary')).toContainText('Maximator ROB22');
   });
 
-  test.describe('bank price suggestions', () => {
-    async function setSettingsPrices(page, { oxygen, helium }) {
-      const costs = await openSettingsCategory(page, 'costs');
-      await costs.getByRole('spinbutton', { name: 'Oxygen price (/L)', exact: true }).fill(String(oxygen));
-      await costs.getByRole('spinbutton', { name: 'Helium price (/L)', exact: true }).fill(String(helium));
-      await saveSettings(page);
+  test.describe('pure-gas prices and bank price suggestions', () => {
+    // Default banks: row 0 is the pure Helium bank, row 1 the pure Oxygen bank.
+    const HELIUM_ROW = 0;
+    const OXYGEN_ROW = 1;
+
+    async function setPurePrices(page, { oxygen, helium }) {
       await page.getByRole('tab', { name: 'Inventory', exact: true }).click();
+      await editBank(page, OXYGEN_ROW, { pricePerLitre: oxygen });
+      await editBank(page, HELIUM_ROW, { pricePerLitre: helium });
     }
 
     async function createBank(page, values) {
@@ -170,17 +202,17 @@ test.describe('inventory supply banks', () => {
       await page.getByRole('tab', { name: 'Inventory', exact: true }).click();
     }
 
-    test('stores a typed bank price, rejects a negative price, and clears when emptied', async ({ appPage }) => {
+    test('stores a typed bank price with six decimals, rejects a negative price, and clears when emptied', async ({ appPage }) => {
       const page = await appPage.goto('tourSeen');
       const index = await createBank(page, { pricePerLitre: 0.025 });
-      await expect(bankPrice(bankRows(page).nth(index))).toHaveValue('0.025');
+      await expect(bankPrice(bankRows(page).nth(index))).toHaveValue('0.025000');
 
       await reloadInventory(page);
-      await expect(bankPrice(bankRows(page).nth(index))).toHaveValue('0.025');
+      await expect(bankPrice(bankRows(page).nth(index))).toHaveValue('0.025000');
 
       await editBank(page, index, { pricePerLitre: -1 });
       await expect(page.getByRole('alert')).toContainText('Inventory edit rejected');
-      await expect(bankPrice(bankRows(page).nth(index))).toHaveValue('0.025');
+      await expect(bankPrice(bankRows(page).nth(index))).toHaveValue('0.025000');
 
       await editBank(page, index, { pricePerLitre: '' });
       await expect(page.getByRole('alert')).toBeHidden();
@@ -195,16 +227,53 @@ test.describe('inventory supply banks', () => {
       await page.keyboard.press('End');
       await page.keyboard.type('e');
       await page.keyboard.press('Tab');
-      await expect(price).toHaveValue('0.025');
+      await expect(price).toHaveValue('0.025000');
       await expect(page.getByRole('alert')).toBeHidden();
 
       await reloadInventory(page);
-      await expect(bankPrice(bankRows(page).nth(index))).toHaveValue('0.025');
+      await expect(bankPrice(bankRows(page).nth(index))).toHaveValue('0.025000');
+    });
+
+    test('pure banks have a price basis but no Calculate price control', async ({ appPage }) => {
+      const page = await appPage.goto('tourSeen');
+      await page.getByRole('tab', { name: 'Inventory', exact: true }).click();
+      for (const row of [bankRows(page).nth(HELIUM_ROW), bankRows(page).nth(OXYGEN_ROW)]) {
+        await expect(row.getByRole('combobox', { name: /^Price basis for /i })).toBeVisible();
+        await expect(row.getByRole('button', { name: /^Calculate price for /i })).toHaveCount(0);
+      }
+    });
+
+    test('full tank price is converted to a per-litre price at entry and stored across reload', async ({ appPage }) => {
+      const page = await appPage.goto('tourSeen');
+      const index = await createBank(page, { volumeL: 12, pressureBar: 200, oxygenPercent: 18, heliumPercent: 45 });
+      const row = bankRows(page).nth(index);
+      const basis = row.getByRole('combobox', { name: /^Price basis for /i });
+      await basis.selectOption({ value: 'full-tank' });
+      await expect(basis).toBeFocused();
+
+      const tankPrice = row.getByRole('spinbutton', { name: /full tank price$/i });
+      await expect(tankPrice).toHaveValue('');
+      await tankPrice.fill('100');
+      await tankPrice.blur();
+
+      // Free-gas litres at the default 21 °C inventory temperature under the default vdw model.
+      const litres = bankFreeGasLitres(
+        { volumeL: 12, pressureBar: 200, oxygenPercent: 18, heliumPercent: 45 },
+        { model: 'vdw' },
+        21
+      );
+      const expected = (100 / litres).toFixed(6);
+      await expect(page.locator('#bank-price-status')).toContainText('from full tank price');
+      await expect(basis).toHaveValue('per-volume');
+      await expect(bankPrice(row)).toHaveValue(expected);
+
+      await reloadInventory(page);
+      await expect(bankPrice(bankRows(page).nth(index))).toHaveValue(expected);
     });
 
     test('calculates a suggestion without touching the price, and Apply stores it across reload', async ({ appPage }) => {
       const page = await appPage.goto('tourSeen');
-      await setSettingsPrices(page, { oxygen: 0.01, helium: 0.02 });
+      await setPurePrices(page, { oxygen: 0.01, helium: 0.02 });
       const index = await createBank(page, {});
       const row = bankRows(page).nth(index);
       await row.getByRole('button', { name: /^Calculate price for /i }).click();
@@ -215,7 +284,7 @@ test.describe('inventory supply banks', () => {
 
       await row.getByRole('button', { name: /^Apply suggested price for /i }).click();
       const applied = await bankPrice(bankRows(page).nth(index)).inputValue();
-      expect(applied).toMatch(/^\d/);
+      expect(applied).toMatch(/^\d+\.\d{6}$/);
       await expect(bankRows(page).nth(index).locator('[data-bank-note]')).toBeEmpty();
       await expect(bankRows(page).nth(index).getByRole('button', { name: /^Calculate price for /i })).toBeFocused();
 
@@ -225,7 +294,7 @@ test.describe('inventory supply banks', () => {
 
     test('offers Replace for a bank that already has a price', async ({ appPage }) => {
       const page = await appPage.goto('tourSeen');
-      await setSettingsPrices(page, { oxygen: 0.01, helium: 0.02 });
+      await setPurePrices(page, { oxygen: 0.01, helium: 0.02 });
       const index = await createBank(page, { pricePerLitre: 0.03 });
       const row = bankRows(page).nth(index);
       await row.getByRole('button', { name: /^Calculate price for /i }).click();
@@ -236,7 +305,7 @@ test.describe('inventory supply banks', () => {
 
     test('discards a pending suggestion when the bank is edited', async ({ appPage }) => {
       const page = await appPage.goto('tourSeen');
-      await setSettingsPrices(page, { oxygen: 0.01, helium: 0.02 });
+      await setPurePrices(page, { oxygen: 0.01, helium: 0.02 });
       const index = await createBank(page, {});
       const row = bankRows(page).nth(index);
       await row.getByRole('button', { name: /^Calculate price for /i }).click();
@@ -247,36 +316,36 @@ test.describe('inventory supply banks', () => {
       await expect(row.getByRole('button', { name: /suggested price for /i })).toHaveCount(0);
     });
 
-    test('discards a pending suggestion when Settings prices change and keeps the stored price', async ({ appPage }) => {
+    test('discards a pending suggestion when a pure-gas price changes and keeps the stored price', async ({ appPage }) => {
       const page = await appPage.goto('tourSeen');
-      await setSettingsPrices(page, { oxygen: 0.01, helium: 0.02 });
+      await setPurePrices(page, { oxygen: 0.01, helium: 0.02 });
       const index = await createBank(page, { pricePerLitre: 0.03 });
       const row = bankRows(page).nth(index);
       await row.getByRole('button', { name: /^Calculate price for /i }).click();
       await expect(row.locator('[data-bank-note]')).toContainText('Indicative price');
 
-      await setSettingsPrices(page, { oxygen: 0.05, helium: 0.06 });
+      await setPurePrices(page, { oxygen: 0.05, helium: 0.06 });
       await expect(row.locator('[data-bank-note]')).toBeEmpty();
       await expect(row.getByRole('button', { name: /suggested price for /i })).toHaveCount(0);
-      await expect(bankPrice(row)).toHaveValue('0.03');
+      await expect(bankPrice(row)).toHaveValue('0.030000');
       await reloadInventory(page);
-      await expect(bankPrice(bankRows(page).nth(index))).toHaveValue('0.03');
+      await expect(bankPrice(bankRows(page).nth(index))).toHaveValue('0.030000');
     });
 
     test('shows the pricer reason for a bank below 10 bar and keeps its stored price', async ({ appPage }) => {
       const page = await appPage.goto('tourSeen');
-      await setSettingsPrices(page, { oxygen: 0.01, helium: 0.02 });
+      await setPurePrices(page, { oxygen: 0.01, helium: 0.02 });
       const index = await createBank(page, { pricePerLitre: 0.03, pressureBar: 8 });
       const row = bankRows(page).nth(index);
       await row.getByRole('button', { name: /^Calculate price for /i }).click();
       await expect(row.locator('[data-bank-note]')).toContainText('Banks below 10 bar cannot be priced by recipe');
       await expect(row.getByRole('button', { name: /suggested price for /i })).toHaveCount(0);
-      await expect(bankPrice(row)).toHaveValue('0.03');
+      await expect(bankPrice(row)).toHaveValue('0.030000');
     });
 
     test('keeps focus where the user put it after pricing another bank', async ({ appPage }) => {
       const page = await appPage.goto('tourSeen');
-      await setSettingsPrices(page, { oxygen: 0.01, helium: 0.02 });
+      await setPurePrices(page, { oxygen: 0.01, helium: 0.02 });
       const indexA = await createBank(page, {});
       const indexB = await createBank(page, {});
       const rowA = bankRows(page).nth(indexA);

@@ -2,7 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { calcMolarDensity } from '../js/physics.js';
 import { litresPerMole } from '../js/cost.js';
-import { isPureBank, isPureHeliumBank, isPureOxygenBank, pureGasPrices } from '../js/pure-prices.js';
+import {
+  bankFreeGasLitres,
+  isPureBank,
+  isPureComposition,
+  isPureHeliumBank,
+  isPureOxygenBank,
+  pricePerLitreFromFullTank,
+  pureGasPrices
+} from '../js/pure-prices.js';
 
 const T = 21;
 const ideal = { model: 'ideal', temperatureC: T };
@@ -92,4 +100,26 @@ test('isPureBank is true for either pure gas and false for mixes', () => {
   assert.equal(isPureBank(HE()), true);
   assert.equal(isPureBank(bank({ oxygenPercent: 21, heliumPercent: 35 })), false);
   assert.equal(isPureBank(O2({ enabled: false })), false);
+});
+test('isPureComposition ignores enabled and is true only for exact pure O2 or He', () => {
+  assert.equal(isPureComposition(O2()), true);
+  assert.equal(isPureComposition(HE()), true);
+  assert.equal(isPureComposition(O2({ enabled: false })), true);
+  assert.equal(isPureComposition(bank({ oxygenPercent: 21, heliumPercent: 35 })), false);
+  assert.equal(isPureComposition(bank({ oxygenPercent: 99.9, heliumPercent: 0 })), false);
+});
+test('bankFreeGasLitres is the free-gas litres a bank holds at the inventory temperature', () => {
+  assert.ok(Math.abs(bankFreeGasLitres(O2({ volumeL: 10, pressureBar: 150 }), ideal, T) - 1500) < 1e-9);
+  const expected = calcMolarDensity(150, 100, 0, 15, true) * 10 * litresPerMole(15);
+  assert.ok(Math.abs(bankFreeGasLitres(O2({ volumeL: 10, pressureBar: 150 }), vdw, 15) - expected) < 1e-9);
+  assert.equal(bankFreeGasLitres(O2({ pressureBar: 0 }), ideal, T), 0);
+});
+test('pricePerLitreFromFullTank divides the tank price by the free-gas litres once', () => {
+  assert.ok(Math.abs(pricePerLitreFromFullTank(30, 1500) - 0.02) < 1e-12);
+  assert.equal(pricePerLitreFromFullTank(0, 1500), 0);
+  assert.equal(pricePerLitreFromFullTank(30, 0), null);
+  assert.equal(pricePerLitreFromFullTank(30, -1), null);
+  assert.equal(pricePerLitreFromFullTank(-1, 1500), null);
+  assert.equal(pricePerLitreFromFullTank(Number.NaN, 1500), null);
+  assert.equal(pricePerLitreFromFullTank(30, Number.NaN), null);
 });

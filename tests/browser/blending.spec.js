@@ -273,7 +273,7 @@ test.describe('working tank blending inputs', () => {
 
     await editBank(page, 0, { pricePerLitre: 0.02 });
     const costs = await openSettingsCategory(page, 'costs');
-    await costs.getByRole('spinbutton', { name: 'Oxygen price (/L)', exact: true }).fill('0.03');
+    await costs.getByRole('spinbutton', { name: 'Boost (per operation)', exact: true }).fill('0.5');
     await saveSettings(page);
 
     await page.getByRole('tab', { name: 'Blending', exact: true }).click();

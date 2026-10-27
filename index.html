@@ -787,9 +787,13 @@
           <div class="mt-2 max-w-xs text-xs">
             <label for="inlet-gas-temperature" class="mb-1 block text-slate-400 font-medium">Temperature of inventory gases</label>
             <div class="flex items-center gap-2">
-              <input type="number" id="inlet-gas-temperature" value="25" min="5" max="40" step="0.1" data-recalculate="input" class="w-28 rounded-lg border border-ocean-700 bg-ocean-900 px-2 py-1.5 font-mono text-xs text-slate-100 focus:border-cyan-400 focus:outline-none">
+              <input type="number" id="inlet-gas-temperature" value="21" min="5" max="40" step="0.1" data-recalculate="input" class="w-28 rounded-lg border border-ocean-700 bg-ocean-900 px-2 py-1.5 font-mono text-xs text-slate-100 focus:border-cyan-400 focus:outline-none">
               <span class="font-mono text-slate-400">°C</span>
             </div>
+            <label class="mt-1 flex items-center gap-2 text-slate-400">
+              <input type="checkbox" id="inlet-gas-same-as-ambient" data-recalculate="change" class="rounded bg-ocean-900 border-ocean-700 text-cyan-500 focus:ring-0">
+              <span>Same as ambient</span>
+            </label>
             <p class="mt-1 text-[10px] text-slate-500">The temperature at which inventory gases are assumed to be stored; compressor and source-specific temperature modifiers still apply.</p>
           </div>
         </section>

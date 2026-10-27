@@ -110,10 +110,11 @@ test('converts editable imperial supply-bank values and constraints', () => {
   }
 });
 
-test('formats stored prices for the inventory input in the display unit', () => {
+test('formats stored prices for the inventory input in the display unit to 6 decimals', () => {
   assert.equal(formatBankPrice(undefined, 'metric'), '');
   assert.equal(formatBankPrice(null, 'metric'), '');
-  assert.equal(formatBankPrice(0.02, 'metric'), '0.02');
+  assert.equal(formatBankPrice(0.02, 'metric'), '0.020000');
+  assert.equal(formatBankPrice(0.0123456789, 'metric'), '0.012346');
   assert.equal(formatBankPrice(0.02, 'imperial'), '0.566337');
 });
 
@@ -152,6 +153,10 @@ function noteOf(tbody, bankId) {
   return tbody.querySelectorAll('p').find(paragraph => paragraph.dataset.bankNote === bankId);
 }
 
+function basisSelectOf(tbody, bankId) {
+  return tbody.querySelectorAll('select').find(select => select.dataset.action === 'select-bank-price-basis' && select.dataset.bankId === bankId);
+}
+
 const OK_SUGGESTION = { status: 'ok', pricePerLitre: 0.023, recipeCost: 12.4, litres: 540, signature: 'current' };
 
 test('renders an empty price input and a Calculate button for an unpriced bank', () => {
@@ -166,7 +171,7 @@ test('renders an empty price input and a Calculate button for an unpriced bank',
 
 test('labels the price column and input in the display unit', () => {
   const metric = renderOne(priceBank({ pricePerLitre: 0.02 }));
-  assert.equal(priceInputOf(metric.tbody).value, '0.02');
+  assert.equal(priceInputOf(metric.tbody).value, '0.020000');
   assert.equal(metric.priceHeading.textContent, 'Price (/L)');
   const imperial = renderOne(priceBank({ pricePerLitre: 0.02 }), {}, 'imperial');
   const input = priceInputOf(imperial.tbody);
@@ -218,4 +223,35 @@ test('ignores suggestions that belong to other banks', () => {
 test('notes the leftover discount when one is configured', () => {
   const { tbody } = renderOne(priceBank(), { suggestions: { 'bank-mix': OK_SUGGESTION }, currencySymbol: '€', leftoverDiscountPercent: 10 });
   assert.equal(noteOf(tbody, 'bank-mix').textContent, 'Indicative price €0.0230 per L after 10% leftover discount (recipe cost €12.40 for 540 L).');
+});
+
+test('pure oxygen and helium banks have no Calculate control or note, enabled or not', () => {
+  for (const composition of [{ oxygenPercent: 100, heliumPercent: 0 }, { oxygenPercent: 0, heliumPercent: 100 }]) {
+    for (const enabled of [true, false]) {
+      const { tbody } = renderOne(priceBank({ ...composition, enabled }), { suggestions: { 'bank-mix': OK_SUGGESTION }, currencySymbol: '€' });
+      assert.equal(buttonWithAction(tbody, 'calculate-bank-price'), undefined);
+      assert.equal(buttonWithAction(tbody, 'apply-bank-price'), undefined);
+      assert.equal(noteOf(tbody, 'bank-mix'), undefined);
+      assert.ok(priceInputOf(tbody), 'the price input stays for hand entry');
+    }
+  }
+});
+
+test('offers a per-volume or full-tank price basis for every bank', () => {
+  const mix = renderOne(priceBank()).tbody;
+  const select = basisSelectOf(mix, 'bank-mix');
+  assert.deepEqual(select.children.map(option => option.value), ['per-volume', 'full-tank']);
+  assert.equal(select.value, 'per-volume');
+  assert.equal(select.attributes.get('aria-label'), 'Price basis for Tx 18/45');
+  const pure = renderOne(priceBank({ oxygenPercent: 100, heliumPercent: 0 })).tbody;
+  assert.equal(basisSelectOf(pure, 'bank-mix').value, 'per-volume');
+});
+
+test('full-tank basis shows an empty input for the tank price', () => {
+  const { tbody } = renderOne(priceBank({ pricePerLitre: 0.03 }), { priceBasis: { 'bank-mix': 'full-tank' } });
+  assert.equal(basisSelectOf(tbody, 'bank-mix').value, 'full-tank');
+  const input = priceInputOf(tbody);
+  assert.equal(input.value, '');
+  assert.equal(input.placeholder, 'Full tank price');
+  assert.equal(input.attributes.get('aria-label'), 'Tx 18/45 full tank price');
 });

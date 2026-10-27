@@ -51,7 +51,9 @@ import { renderCompareRecipe } from './ui/compare-recipe.js';
 import { renderPressureLimitWarnings, renderResults } from './ui/results.js';
 import { renderSettingsDialog, renderPresetOptions, parseCostNumber, setCostField } from './ui/settings-dialog.js';
 import { renderEquipmentSummary } from './ui/equipment-summary.js';
-import { formatBankPrice, formatSuggestionNote, renderSupplyBanks } from './ui/supply-banks.js';
+import { formatBankPrice, formatSuggestionNote, PRICE_BASIS_FULL_TANK, renderSupplyBanks } from './ui/supply-banks.js';
+import { formatMoney } from './currency-format.js';
+import { bankFreeGasLitres, pricePerLitreFromFullTank, pureGasPrices } from './pure-prices.js';
 import { renderStorageWarning } from './ui/storage-warning.js';
 import { renderThermalCharts } from './ui/thermal-charts.js';
 import { changeTernaryZoom, clearTernaryDiagram, observeTernaryCanvas, renderTernaryDiagram } from './ui/ternary.js';
@@ -114,6 +116,7 @@ const state = {
   bankSaveFailure: null,
   bankInputFailure: null,
   bankSuggestions: {},
+  bankPriceBasis: {},
   activeScreen: 'blending',
   activeTab: 'recipe',
   interimMeasurements: [],
@@ -285,6 +288,19 @@ function currentPhysicsForBanks() {
   };
 }
 
+function effectiveInletTemperatureC() {
+  return byId('inlet-gas-same-as-ambient').checked
+    ? canonicalNumberValue('ambient-temperature', 'temperatureC')
+    : canonicalNumberValue('inlet-gas-temperature', 'temperatureC');
+}
+
+function syncInletGasTemperatureControl() {
+  const sameAsAmbient = byId('inlet-gas-same-as-ambient').checked;
+  const input = byId('inlet-gas-temperature');
+  input.disabled = sameAsAmbient;
+  if (sameAsAmbient) input.value = byId('ambient-temperature').value;
+}
+
 function bankPricingSignature(bank) {
   return JSON.stringify({
     volumeL: bank.volumeL,
@@ -295,7 +311,12 @@ function bankPricingSignature(bank) {
     booster: state.settings.booster,
     pressureLimitMode: state.settings.pressureLimitMode,
     physics: currentPhysicsForBanks(),
-    inventoryBanks: state.banks // redesign: wired in Task 3/4
+    inventoryGasPrices: pureGasPrices({
+      banks: state.banks,
+      physics: currentPhysicsForBanks(),
+      inventoryTemperatureC: effectiveInletTemperatureC()
+    }),
+    inventoryTemperatureC: effectiveInletTemperatureC()
   });
 }
 
@@ -343,7 +364,8 @@ function renderBankTable() {
   renderSupplyBanks(state.banks, state.settings.gasPresets, state.settings.units, {
     suggestions,
     currencySymbol: state.settings.costs.currencySymbol,
-    leftoverDiscountPercent: state.settings.costs.leftoverDiscountPercent
+    leftoverDiscountPercent: state.settings.costs.leftoverDiscountPercent,
+    priceBasis: state.bankPriceBasis
   });
   restoreBankPriceFocus();
 }
@@ -400,7 +422,7 @@ function finishBankPriceCalculation(bankId) {
       settings: state.settings,
       physics: currentPhysicsForBanks(),
       inventoryBanks: state.banks,
-      inventoryTemperatureC: currentPhysicsForBanks().temperatureC // redesign: wired in Task 3/4
+      inventoryTemperatureC: effectiveInletTemperatureC()
     });
   } catch (error) {
     delete state.bankSuggestions[bankId];
@@ -1047,7 +1069,7 @@ function readInput() {
       ambientTemperatureC: canonicalNumberValue('ambient-temperature', 'temperatureC'),
       targetInWaterTemperatureC: canonicalNumberValue('target-temperature', 'temperatureC'),
       targetMediumTemperatureC: canonicalNumberValue('wait-target-temperature', 'temperatureC'),
-      inletTemperatureC: canonicalNumberValue('inlet-gas-temperature', 'temperatureC'),
+      inletTemperatureC: effectiveInletTemperatureC(),
       waitMode: byId('wait-mode').value,
       waitMinutes: numberValue('wait-minutes'),
       interimMeasurements: state.interimMeasurements,
@@ -1149,7 +1171,7 @@ function whatIfCurrentSharedSignature() {
     settings: state.settings,
     banks: state.banks,
     cylinderPresetName: state.whatIfScenario.start?.cylinderPresetName,
-    inletTemperatureC: canonicalNumberValue('inlet-gas-temperature', 'temperatureC')
+    inletTemperatureC: effectiveInletTemperatureC()
   });
 }
 
@@ -1164,7 +1186,7 @@ function scenarioInputForCurrentDraft() {
   return buildWhatIfInput(state.whatIfScenario, {
     settings: state.settings,
     banks: state.banks,
-    inletTemperatureC: canonicalNumberValue('inlet-gas-temperature', 'temperatureC')
+    inletTemperatureC: effectiveInletTemperatureC()
   });
 }
 
@@ -1782,6 +1804,7 @@ function runCompare() {
 }
 
 function recalculate() {
+  syncInletGasTemperatureControl();
   renderBankTable();
   renderEquipmentSummary(state.settings);
   if (state.activeScreen === 'what-if') {
@@ -1944,7 +1967,7 @@ function selectBankGasPreset(select) {
 function restoreBankInputValue(input, bank) {
   const { bankField } = input.dataset;
   if (bankField === 'pricePerLitre') {
-    input.value = formatBankPrice(bank.pricePerLitre, state.settings.units);
+    input.value = state.bankPriceBasis[bank.id] === PRICE_BASIS_FULL_TANK ? '' : formatBankPrice(bank.pricePerLitre, state.settings.units);
     return;
   }
   const quantity = bankField === 'volumeL' ? 'volumeL' : bankField === 'pressureBar' ? 'pressureBar' : null;
@@ -1952,6 +1975,36 @@ function restoreBankInputValue(input, bank) {
     ? convertToDisplay(bank[bankField], quantity, state.settings.units)
     : bank[bankField];
   input.value = String(value);
+}
+
+function updateBankFromFullTankInput(input, bank) {
+  if (input.validity?.badInput) {
+    restoreBankInputValue(input, bank);
+    clearBankInputFailure(bank.id);
+    return;
+  }
+  if (input.value.trim() === '') {
+    clearBankInputFailure(bank.id);
+    return;
+  }
+  const tankPrice = Number.parseFloat(input.value);
+  const freeGasLitres = bankFreeGasLitres(bank, currentPhysicsForBanks(), effectiveInletTemperatureC());
+  const pricePerLitre = Number.isFinite(tankPrice) ? pricePerLitreFromFullTank(tankPrice, freeGasLitres) : null;
+  if (pricePerLitre === null) {
+    restoreBankInputValue(input, bank);
+    rejectBankEdit(bank, 'Enter a non-negative full tank price for a bank that holds gas.');
+    return;
+  }
+  const previousBasis = state.bankPriceBasis[bank.id];
+  delete state.bankPriceBasis[bank.id];
+  const error = commitBankUpdate(bank, { ...bank, pricePerLitre });
+  if (error) {
+    state.bankPriceBasis[bank.id] = previousBasis;
+    restoreBankInputValue(input, bank);
+    rejectBankEdit(bank, error);
+    return;
+  }
+  announceBankPrice(`Stored ${formatBankPrice(pricePerLitre, state.settings.units)} per ${unitLabel('volumeL', state.settings.units)} from full tank price ${formatMoney(tankPrice, state.settings.costs.currencySymbol, 2)}`);
 }
 
 function updateBankFromInput(input) {
@@ -1962,6 +2015,9 @@ function updateBankFromInput(input) {
   const updatedBank = { ...bank };
   if (bankField === 'name') {
     updatedBank.name = input.value;
+  } else if (bankField === 'pricePerLitre' && state.bankPriceBasis[bank.id] === PRICE_BASIS_FULL_TANK) {
+    updateBankFromFullTankInput(input, bank);
+    return;
   } else if (bankField === 'pricePerLitre') {
     if (input.validity?.badInput) {
       restoreBankInputValue(input, bank);
@@ -2184,6 +2240,14 @@ function handleInputOrChange(event) {
   if (event.type !== 'change') return;
   if (target.dataset.action === 'select-bank-gas') {
     selectBankGasPreset(target);
+    return;
+  }
+  if (target.dataset.action === 'select-bank-price-basis') {
+    const { bankId } = target.dataset;
+    if (target.value === PRICE_BASIS_FULL_TANK) state.bankPriceBasis[bankId] = PRICE_BASIS_FULL_TANK;
+    else delete state.bankPriceBasis[bankId];
+    renderBankTable();
+    document.querySelector(`#tanks-tbody [data-action="select-bank-price-basis"][data-bank-id="${bankId}"]`)?.focus();
     return;
   }
   if (target.dataset.action === 'toggle-bank') {

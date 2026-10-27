@@ -15,9 +15,15 @@ export function isPureBank(bank) {
   return isPureOxygenBank(bank) || isPureHeliumBank(bank);
 }
 
+/** Exactly pure O2 or pure He by composition, regardless of whether the bank is enabled. */
+export function isPureComposition(bank) {
+  return (bank?.oxygenPercent === 100 && bank.heliumPercent === 0)
+    || (bank?.oxygenPercent === 0 && bank.heliumPercent === 100);
+}
+
 // Free-gas litres a bank holds now: moles at its pressure and volume under the active
 // physics model, times litres per mole at the inventory gas temperature.
-function freeGasLitres(bank, physics, inventoryTemperatureC) {
+export function bankFreeGasLitres(bank, physics, inventoryTemperatureC) {
   const moles = calcMolarDensity(
     bank.pressureBar,
     bank.oxygenPercent,
@@ -28,12 +34,21 @@ function freeGasLitres(bank, physics, inventoryTemperatureC) {
   return moles * litresPerMole(inventoryTemperatureC);
 }
 
+/**
+ * Per-free-gas-litre price implied by a full-tank price. `null` when the tank price is not a
+ * non-negative number or the bank holds no free gas to divide by.
+ */
+export function pricePerLitreFromFullTank(tankPrice, freeGasLitres) {
+  if (!hasPrice(tankPrice) || !(freeGasLitres > 0) || !Number.isFinite(freeGasLitres)) return null;
+  return tankPrice / freeGasLitres;
+}
+
 function weightedPrice(banks, isPure, { physics, inventoryTemperatureC }) {
   let weightSum = 0;
   let costSum = 0;
   for (const bank of banks) {
     if (!isPure(bank) || !hasPrice(bank.pricePerLitre)) continue;
-    const weight = freeGasLitres(bank, physics, inventoryTemperatureC);
+    const weight = bankFreeGasLitres(bank, physics, inventoryTemperatureC);
     if (!(weight > 0)) continue;
     weightSum += weight;
     costSum += weight * bank.pricePerLitre;
