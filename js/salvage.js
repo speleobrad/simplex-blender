@@ -4,6 +4,9 @@ export const SALVAGE_HE_PRICE_PER_LITRE = 0.075;
 export const SALVAGE_O2_PRICE_PER_LITRE = 0.007;
 export const SALVAGE_MIN_VALUE = 1.0;
 export const SALVAGE_ATTRACTIVENESS_GATE = -2;
+// Attractiveness changes within this many points of the best are a near tie; a near tie is
+// decided by the number of standard targets the receiving banks can still reach.
+export const SALVAGE_NEAR_TIE_POINTS = 1.0;
 
 const TOLERANCE = 1e-9;
 const RETENTION_RELATIVE_TOLERANCE = 1e-9;
@@ -72,6 +75,20 @@ function compareDescending(a, b) {
 function compareAscending(a, b) {
   if (a === b || Math.abs(a - b) <= TOLERANCE) return 0;
   return a < b ? -1 : 1;
+}
+
+/**
+ * Chooses the preferred entry: among entries whose `change` is within SALVAGE_NEAR_TIE_POINTS of
+ * the best, the one with the most reachable targets (`reach`), then the larger `change`.
+ */
+function preferredEntry(entries) {
+  const bestChange = Math.max(...entries.map(entry => entry.change));
+  const nearTie = entries.filter(entry => bestChange - entry.change <= SALVAGE_NEAR_TIE_POINTS + TOLERANCE);
+  return nearTie.reduce((best, entry) => (
+    entry.reach > best.reach || (entry.reach === best.reach && compareDescending(entry.change, best.change) < 0)
+      ? entry
+      : best
+  ));
 }
 
 export function isSalvageReceiver(bank) {
@@ -181,6 +198,22 @@ function attractivenessDeltas(baselineBanks, variantBanks, bankScoresOf) {
   return deltas;
 }
 
+// Mean number of reachable standard targets over the banks this variant changed (the receivers
+// and any bank whose draw changed), judged on their final post-recipe state. 0 when none changed.
+function receiverReach(baselineBanks, variantBanks, bankReachOf) {
+  const baselineById = new Map(baselineBanks.map(bank => [bank.id, bank]));
+  const reaches = [];
+  for (const bank of variantBanks) {
+    const before = baselineById.get(bank.id);
+    const changed = !before
+      || Math.abs(bank.pressureBar - before.pressureBar) > TOLERANCE
+      || Math.abs(bank.oxygenPercent - before.oxygenPercent) > TOLERANCE
+      || Math.abs(bank.heliumPercent - before.heliumPercent) > TOLERANCE;
+    if (changed) reaches.push(bankReachOf(bank));
+  }
+  return reaches.length === 0 ? 0 : reaches.reduce((sum, reach) => sum + reach, 0) / reaches.length;
+}
+
 /**
  * Picks the salvage variant to apply, or null when none passes the gates.
  * Gates: cylinder retention (re-solved retained moles at least the baseline's, within a
@@ -190,7 +223,7 @@ function attractivenessDeltas(baselineBanks, variantBanks, bankScoresOf) {
  * (missing LP cost ranks last). `bankScoresOf(bank)` returns that bank's attractiveness score.
  * Each variant and the baseline carry `retainedMoles`, the re-solved cylinder moles.
  */
-export function selectSalvageVariant({ baseline, variants, bankScoresOf, physics }) {
+export function selectSalvageVariant({ baseline, variants, bankScoresOf, bankReachOf = () => 0, physics }) {
   const baselineValue = netStockValue(baseline.finalBanks, physics);
   const qualifying = [];
 
@@ -207,7 +240,8 @@ export function selectSalvageVariant({ baseline, variants, bankScoresOf, physics
     qualifying.push({
       variant,
       valueKept,
-      attractivenessChange: deltas.reduce((sum, delta) => sum + delta, 0)
+      attractivenessChange: deltas.reduce((sum, delta) => sum + delta, 0),
+      reachChange: receiverReach(baseline.finalBanks, variant.finalBanks, bankReachOf)
     });
   }
 
@@ -216,21 +250,35 @@ export function selectSalvageVariant({ baseline, variants, bankScoresOf, physics
     || compareDescending(a.attractivenessChange, b.attractivenessChange)
     || compareAscending(a.variant.lpCost ?? Infinity, b.variant.lpCost ?? Infinity)
   ));
+  if (qualifying.length === 0) return null;
 
-  return qualifying[0]?.variant ?? null;
+  // Near ties in attractiveness (at equal value kept) go to the variant that leaves more targets reachable.
+  const sameValue = qualifying.filter(entry => compareDescending(entry.valueKept, qualifying[0].valueKept) === 0);
+  return preferredEntry(sameValue.map(entry => ({
+    ...entry,
+    change: entry.attractivenessChange,
+    reach: entry.reachChange
+  }))).variant;
 }
 
 /**
- * Sorts receiver candidates `{ receiver, transferredReceiver }` by how much the
- * receiving bank's attractiveness changes right after the transfer, best first.
- * Deltas within TOLERANCE are ties; ties keep input order.
+ * Sorts receiver candidates `{ receiver, transferredReceiver }` best first by how much the
+ * receiving bank's attractiveness changes right after the transfer. Changes within
+ * SALVAGE_NEAR_TIE_POINTS of the best are a near tie, decided by the number of standard targets
+ * the receiver can still reach after the transfer (`bankReachOf`, default: no preference).
+ * Exact ties keep input order.
  */
-export function rankReceivers(candidates, bankScoresOf) {
-  return candidates
-    .map(candidate => ({
-      candidate,
-      delta: bankScoresOf(candidate.transferredReceiver) - bankScoresOf(candidate.receiver)
-    }))
-    .sort((a, b) => compareDescending(a.delta, b.delta))
-    .map(entry => entry.candidate);
+export function rankReceivers(candidates, bankScoresOf, bankReachOf = () => 0) {
+  const remaining = candidates.map(candidate => ({
+    candidate,
+    change: bankScoresOf(candidate.transferredReceiver) - bankScoresOf(candidate.receiver),
+    reach: bankReachOf(candidate.transferredReceiver)
+  }));
+  const ranked = [];
+  while (remaining.length > 0) {
+    const next = preferredEntry(remaining);
+    ranked.push(next.candidate);
+    remaining.splice(remaining.indexOf(next), 1);
+  }
+  return ranked;
 }
