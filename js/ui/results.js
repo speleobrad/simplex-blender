@@ -306,14 +306,16 @@ function renderManualReading(plannedValue, actualValue, formatter) {
   return value;
 }
 
-function renderDetailGrid(rows, className) {
+function renderDetailGrid(rows, className, { stacked = false } = {}) {
   const grid = document.createElement('dl');
   grid.className = className;
   for (const [label, value, color = SUMMARY_COLORS.neutral] of rows) {
     const cell = document.createElement('div');
     const isEmpty = !label && !value;
     if (isEmpty) cell.setAttribute('aria-hidden', 'true');
-    cell.className = `${isEmpty ? 'hidden sm:flex ' : 'flex '}min-w-0 items-start justify-between gap-2`;
+    cell.className = stacked
+      ? 'flex min-w-0 flex-col gap-0.5 sm:flex-row sm:items-start sm:justify-between sm:gap-2'
+      : `${isEmpty ? 'hidden sm:flex ' : 'flex '}min-w-0 items-start justify-between gap-2`;
     const term = document.createElement('dt');
     const labelColor = color === true
       ? TECHNICAL_COLORS.warning
@@ -328,7 +330,9 @@ function renderDetailGrid(rows, className) {
       : color === false || color === TECHNICAL_COLORS.neutral
         ? TECHNICAL_COLORS.neutral
         : color;
-    description.className = `min-w-0 text-right font-mono ${valueColor}`;
+    description.className = stacked
+      ? `min-w-0 break-words text-left sm:text-right font-mono ${valueColor}`
+      : `min-w-0 text-right font-mono ${valueColor}`;
     if (typeof value === 'string') {
       description.textContent = value;
     } else if (value) {
@@ -346,12 +350,16 @@ function renderSalvageDetails(step, units = 'metric') {
   const moved = Number.isFinite(step.movedHeliumLitres)
     ? formatUnitValue(step.movedHeliumLitres, 'volumeL', units, 0)
     : '—';
-  return renderDetailGrid([
+  const rows = [
     ['Receiver', step.receiverBankName ?? '—'],
     ['Helium moved', moved],
     ['Receiver before', `${pressure(step.receiverStartPressureBar)} · ${mix(step.receiverStartMix)}`],
     ['Receiver after', `${pressure(step.receiverEndPressureBar)} · ${mix(step.receiverEndMix)}`]
-  ], 'mt-2 grid grid-cols-1 sm:grid-cols-2 auto-rows-fr gap-x-4');
+  ];
+  const box = document.createElement('div');
+  box.className = 'mt-2 rounded-lg border border-ocean-800/80 bg-ocean-950/50 px-3 py-2 text-[11px] text-slate-400';
+  box.append(renderDetailGrid(rows, 'grid grid-cols-1 sm:grid-cols-2 auto-rows-fr gap-x-4', { stacked: true }));
+  return box;
 }
 
 function renderThermalDetails(

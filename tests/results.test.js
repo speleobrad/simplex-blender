@@ -924,6 +924,62 @@ test('keeps wait-only technical details in a uniform single-column grid', () => 
   }
 });
 
+test('renders salvage rows inside the styled 11px box with stacked cells on narrow screens', () => {
+  const previousDocument = globalThis.document;
+  const document = createFakeDocument();
+  globalThis.document = document;
+
+  try {
+    renderResults({
+      feasible: true,
+      blend: {
+        retainedPressureBar: 80, retainedPercent: 80, ventedPressureBar: 20,
+        ventedGasLitres: 40, heliumVentedLitres: 10, heliumSalvagedLitres: 251, finalPressureBar: 200,
+        finalOxygenPercent: 18, finalHeliumPercent: 45
+      },
+      protocolSteps: [{
+        type: 'salvage',
+        title: 'Salvage: boost into Sample scrap to 82.9 bar',
+        description: 'Boost helium into the receiver.',
+        resultingPressureBar: 5,
+        receiverBankName: 'Sample scrap',
+        movedHeliumLitres: 251,
+        receiverStartPressureBar: 45,
+        receiverStartMix: { oxygenPercent: 19, heliumPercent: 40 },
+        receiverEndPressureBar: 82.9,
+        receiverEndMix: { oxygenPercent: 15, heliumPercent: 48.8 },
+        thermal: { rateSource: 'none', waitMinutes: 0, pressureAfterWaitBar: 5, temperatureAfterWaitC: 25 }
+      }]
+    });
+
+    const findAll = (node, predicate, found = []) => {
+      if (predicate(node)) found.push(node);
+      for (const child of node.children ?? []) findAll(child, predicate, found);
+      return found;
+    };
+    const step = document.elements.get('steps-container').children[0];
+    const boxes = findAll(step, node => /\btext-\[11px\]/.test(node.className ?? ''));
+    const box = boxes.find(node => findAll(node, child => child.tagName === 'dt' && child.textContent === 'Receiver').length > 0);
+    assert.ok(box, 'salvage rows need the styled 11px container');
+    assert.match(box.className, /\bborder\b/);
+    const grid = box.children.find(child => child.tagName === 'dl');
+    assert.ok(grid);
+    assert.deepEqual(grid.children.map(cell => cell.children[0].textContent), [
+      'Receiver', 'Helium moved', 'Receiver before', 'Receiver after'
+    ]);
+    assert.deepEqual(grid.children.map(cell => cell.children[1].textContent), [
+      'Sample scrap', '251 L', '45.0 bar · Tx 19.0/40.0', '82.9 bar · Tx 15.0/48.8'
+    ]);
+    for (const cell of grid.children) {
+      assert.match(cell.className, /\bflex-col\b/);
+      assert.match(cell.className, /\bsm:flex-row\b/);
+      assert.match(cell.children[1].className, /\bbreak-words\b/);
+    }
+  } finally {
+    globalThis.document = previousDocument;
+  }
+});
+
 test('keeps step numbering singular and places actual readings inside the next step', () => {
   const previousDocument = globalThis.document;
   const document = createFakeDocument();
