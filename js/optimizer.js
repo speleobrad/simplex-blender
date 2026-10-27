@@ -2996,6 +2996,10 @@ function thermalLimitResult(input, requested, maximum) {
       requested.result.diagnostics ?? null,
       requested.result.reasonCode
     ),
+    ...(maximum.result.salvageTransfers ? {
+      salvageTransfers: maximum.result.salvageTransfers,
+      salvageBanks: maximum.result.salvageBanks
+    } : {}),
     thermal
   };
 }

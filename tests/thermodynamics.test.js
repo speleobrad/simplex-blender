@@ -14,6 +14,7 @@ import {
   simulateCompareProtocol,
   simulateThermalProtocol
 } from '../js/thermodynamics.js';
+import { calcMolarDensity } from '../js/physics.js';
 
 test('booster rate uses displacement, BPM, and receiver/source compressibility', () => {
   const rate = calculateBoosterFillRate({
@@ -1307,4 +1308,73 @@ test('salvage booster stage uses the booster fill-rate model and cools the tank'
   assert.ok(thermal.durationMinutes > 0);
   assert.ok(thermal.pressureAtTransferEndHotBar < 100);
   assert.ok(thermal.temperatureAtTransferEndC < thermal.temperatureStartC);
+});
+
+test('salvage booster rate is the booster fill rate at the transfer midpoint pressures', () => {
+  const simulation = simulateThermalProtocol({
+    protocolSteps: [{
+      type: 'salvage',
+      stage: 'boost',
+      operation: 'Salvage Boost',
+      receiverStartPressureBar: 40,
+      receiverEndPressureBar: 90,
+      receiverVolumeL: 50,
+      receiverStartMix: { oxygenPercent: 32, heliumPercent: 0 },
+      resultingPressureBar: 80,
+      resultingMix: { oxygenPercent: 21, heliumPercent: 35 },
+      sourceOxygenPercent: 21,
+      sourceHeliumPercent: 35
+    }],
+    cylinder: { initialPressureBar: 100, volumeL: 12 },
+    physics: { model: 'ideal', temperatureC: 40 },
+    thermal: {
+      tankMaterial: 'steel',
+      coolingMedium: 'air',
+      ambientTemperatureC: 20,
+      inletTemperatureC: 20,
+      waitMode: 'minutes',
+      waitMinutes: 0,
+      targetTemperatureC: 25
+    },
+    settings: { booster: { otherBoostBpm: 60, cylinderVolumeCm3: 500, maxCompressorPressureBar: 232 } }
+  });
+
+  const thermal = simulation.protocolSteps[0].thermal;
+  const expected = calculateBoosterFillRate({
+    cylinderVolumeCm3: 500,
+    bpm: 60,
+    sourcePressureBar: (100 + 80) / 2,
+    receiverPressureBar: (40 + 90) / 2,
+    sourceOxygenPercent: 21,
+    sourceHeliumPercent: 35,
+    receiverOxygenPercent: 32,
+    receiverHeliumPercent: 0,
+    receiverVolumeL: 50,
+    temperatureC: thermal.temperatureStartC,
+    useVdw: false
+  }).fillRateBarPerMin;
+  assert.ok(Math.abs(thermal.rateBarPerMin - expected) < 1e-9);
+});
+
+test('booster midpoint rate moves within 3.5% of the real-gas receiver moles over a 40-90 bar van der Waals rise', () => {
+  // The rate is evaluated at midpoint pressures, so it is exact for ideal gas but not for
+  // van der Waals. Measured error here is -2.9%; it reaches about 23% for a 100-350 bar pure-O2
+  // rise at 0 C, which is why the moles-per-minute figure is not an exact conservation check.
+  const rate = calculateBoosterFillRate({
+    cylinderVolumeCm3: 500,
+    bpm: 60,
+    sourcePressureBar: (150 + 100) / 2,
+    receiverPressureBar: (40 + 90) / 2,
+    sourceOxygenPercent: 21,
+    sourceHeliumPercent: 35,
+    receiverOxygenPercent: 32,
+    receiverHeliumPercent: 0,
+    receiverVolumeL: 50,
+    temperatureC: 20,
+    useVdw: true
+  });
+  const durationMinutes = (90 - 40) / rate.fillRateBarPerMin;
+  const boosterMoles = rate.molesPerMin * durationMinutes;
+  const bankMoles = (calcMolarDensity(90, 32, 0, 20, true) - calcMolarDensity(40, 32, 0, 20, true)) * 50;
+  assert.ok(Math.abs(boosterMoles / bankMoles - 1) < 0.035);
 });

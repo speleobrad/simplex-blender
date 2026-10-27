@@ -101,6 +101,21 @@ test('booster minimum source pressure leaves the remainder to be vented', () => 
   assert.ok(Math.abs(result.receiverEndPressureBar - 150) < 1e-6);
 });
 
+test('under van der Waals the reported receiver end pressure holds exactly the moved moles', () => {
+  const bank = bankAt(20, { maxPressureBar: 350, volumeL: 10 });
+  const tank = { volumeL: 10, pressureBar: 200, oxygenPercent: 21, heliumPercent: 35 };
+  const result = salvageTransferMoles({
+    bank, tank, surplusMoles: molesFor(190, 10), physics: VDW,
+    minimumSourcePressureBar: 50, maxBoosterOutputPressureBar: 350, retainedMoles: 0
+  });
+  const bankMoles = calcMolarDensity(20, 18, 45, 20, true) * 10;
+  // Moles are conserved: bank before + moved = bank after, at the mixed composition.
+  const next = applyTransferToBank(bank, { oxygenPercent: 21, heliumPercent: 35 }, result.movedMoles, VDW);
+  const total = bankMoles + result.movedMoles;
+  assert.ok(Math.abs(calcMolarDensity(next.pressureBar, next.oxygenPercent, next.heliumPercent, 20, true) * 10 - total) < 1e-6);
+  assert.ok(Math.abs(next.pressureBar - result.receiverEndPressureBar) < 1e-6);
+});
+
 test('retained moles raise the tank floor above the minimum source pressure', () => {
   const result = salvageTransferMoles({
     bank: bankAt(0, { maxPressureBar: 350 }), tank: tankAt(200), surplusMoles: molesFor(190, 10), physics: IDEAL,
