@@ -9,15 +9,16 @@ const RETAINED_TOLERANCE_L = 1e-9;
  *
  * - savedCost: retained helium litres of the original tank × weighted pure helium price.
  *   No retained helium gives 0 without needing a price.
- * - salvagedSaving: for each used non-pure bank, litres used × its discount-0 recipe price
- *   minus the gas it charged.
+ * - salvagedSaving: the avoided purchase. For each used non-pure bank, litres used × the price per
+ *   litre of building that bank's composition from pure gases (`priceBankByRecipe` at leftover
+ *   discount 0, the bank's own volume and pressure as target: gas + flat operation fees). Nothing
+ *   of the bank's own stored price or of what its gas line charged is subtracted, so an unpriced
+ *   leftover bank counts in full.
  *
  * `missing` lists what prevented a number. Each entry appears once, as one of:
  * - {code: 'pure-price', gas: 'oxygen'|'helium'}: a needed pure-gas price is unavailable.
  *   Without bankId it is the Saved cost gap; with bankId it is a salvage gap for that bank.
  *   Saved cost is null when it is helium; salvagedSaving is null for a salvage gap.
- * - {code: 'unpriced-bank', bankId, name}: a used non-pure bank has no price. It is left out
- *   of salvagedSaving, which stays numeric.
  * - {code: 'recipe-unavailable', bankId, name}: a used bank cannot be priced by recipe for a
  *   reason other than a missing pure price (equipment limits, more than 6 virtual sources,
  *   pressure below 10 bar). salvagedSaving is null.
@@ -52,16 +53,13 @@ export function computeSavings({ result, banks = [], costs, settings, physics, i
     }
   }
 
+  const discountFree = { ...costs, leftoverDiscountPercent: 0 };
   const cost = computeFillCost({ steps: result.protocolSteps ?? [], banks, costs, temperatureC: physics.temperatureC });
   let salvagedSaving = 0;
   for (const line of cost.gasLines) {
     const bank = banks.find(candidate => candidate.id === line.sourceBankId);
     if (bank && isPureBank(bank)) continue;
-    if (line.unitPrice === null) {
-      addMissing({ code: 'unpriced-bank', bankId: line.sourceBankId, name: line.name });
-      continue;
-    }
-    const recipe = priceBankByRecipe({ bank, costs, settings, physics, inventoryBanks: banks, inventoryTemperatureC });
+    const recipe = priceBankByRecipe({ bank, costs: discountFree, settings, physics, inventoryBanks: banks, inventoryTemperatureC });
     if (!recipe.ok) {
       salvagedSaving = null;
       addMissing(recipe.missingGas
@@ -70,7 +68,7 @@ export function computeSavings({ result, banks = [], costs, settings, physics, i
       continue;
     }
     if (salvagedSaving !== null) {
-      salvagedSaving += line.litres * (recipe.recipeCost / recipe.litres) - line.cost;
+      salvagedSaving += line.litres * (recipe.recipeCost / recipe.litres);
     }
   }
 

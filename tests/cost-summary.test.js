@@ -270,6 +270,16 @@ test('banner marks the total incomplete when a used bank is unpriced', () => {
   });
 });
 
+test('banner shows the avoided-purchase salvage as a number when the leftover bank is unpriced', () => {
+  withDocument(() => {
+    const { host, hooks } = createBannerHost();
+    renderCostBanner({ ...PRICED_COST, incomplete: true, unpricedSources: [{ sourceBankId: 'b', name: 'EAN32' }] },
+      { savedCost: 0, salvagedSaving: 19.76, missing: [] }, { root: host, currencySymbol: '€' });
+    assert.equal(hooks['cost-salvaged'].textContent, '€19.76');
+    assert.equal(hooks['cost-fill-total'].textContent, '€10.25 (incomplete)');
+  });
+});
+
 test('banner prompts for a missing pure price instead of a number', () => {
   withDocument(() => {
     const { host, hooks } = createBannerHost();
