@@ -273,5 +273,24 @@ test.describe('inventory supply banks', () => {
       await expect(row.getByRole('button', { name: /suggested price for /i })).toHaveCount(0);
       await expect(bankPrice(row)).toHaveValue('0.03');
     });
+
+    test('keeps focus where the user put it after pricing another bank', async ({ appPage }) => {
+      const page = await appPage.goto('tourSeen');
+      await setSettingsPrices(page, { oxygen: 0.01, helium: 0.02 });
+      const indexA = await createBank(page, {});
+      const indexB = await createBank(page, {});
+      const rowA = bankRows(page).nth(indexA);
+      const rowB = bankRows(page).nth(indexB);
+      const calculateA = rowA.getByRole('button', { name: /^Calculate price for /i });
+      await calculateA.click();
+      await expect(rowA.locator('[data-bank-note]')).toContainText('Indicative price');
+      await expect(calculateA).toBeFocused();
+
+      const enabledB = rowB.getByRole('checkbox', { name: /^Use /i });
+      const wasChecked = await enabledB.isChecked();
+      await enabledB.click();
+      await expect(enabledB).toBeChecked({ checked: !wasChecked });
+      await expect(calculateA).not.toBeFocused();
+    });
   });
 });

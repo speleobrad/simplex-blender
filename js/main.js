@@ -375,11 +375,16 @@ function calculateBankPrice(bankId) {
 function finishBankPriceCalculation(bankId) {
   const pending = state.bankSuggestions[bankId];
   const bank = state.banks.find(candidate => candidate.id === bankId);
-  if (!bank || pending?.status !== 'calculating') return;
+  if (!bank || pending?.status !== 'calculating') {
+    pendingBankFocus = null;
+    return;
+  }
   const signature = bankPricingSignature(bank);
   if (pending.signature !== signature) {
     delete state.bankSuggestions[bankId];
+    announceBankPrice(`Price calculation for ${bank.name} was discarded.`);
     renderBankTable();
+    pendingBankFocus = null;
     return;
   }
   let result;
@@ -392,7 +397,9 @@ function finishBankPriceCalculation(bankId) {
     });
   } catch (error) {
     delete state.bankSuggestions[bankId];
+    announceBankPrice(`Price calculation for ${bank.name} failed.`);
     renderBankTable();
+    pendingBankFocus = null;
     throw error;
   }
   state.bankSuggestions[bankId] = result.ok
@@ -400,6 +407,7 @@ function finishBankPriceCalculation(bankId) {
     : { status: 'failed', reason: result.reason, signature };
   announceBankPrice(`${bank.name}: ${formatSuggestionNote(bank, state.bankSuggestions[bankId], state.settings.units, state.settings.costs.currencySymbol)}`);
   renderBankTable();
+  pendingBankFocus = null;
 }
 
 function applyBankPrice(bankId) {
@@ -409,13 +417,12 @@ function applyBankPrice(bankId) {
   const suggestion = bankSuggestionFor(bank);
   if (suggestion?.status !== 'ok') {
     renderBankTable();
+    pendingBankFocus = null;
     return;
   }
   const error = commitBankUpdate(bank, { ...bank, pricePerLitre: suggestion.pricePerLitre });
-  if (error) {
-    pendingBankFocus = null;
-    rejectBankEdit(bank, error);
-  }
+  pendingBankFocus = null;
+  if (error) rejectBankEdit(bank, error);
 }
 
 function applyTheme(theme) {
