@@ -177,7 +177,7 @@ test('labels the price column and input in the display unit', () => {
 
 test('shows an indicative price with Apply for an unpriced bank', () => {
   const { tbody } = renderOne(priceBank(), { suggestions: { 'bank-mix': OK_SUGGESTION }, currencySymbol: '€' });
-  assert.equal(noteOf(tbody, 'bank-mix').textContent, 'Indicative price €0.023 per L (recipe cost €12.4 for 540 L).');
+  assert.equal(noteOf(tbody, 'bank-mix').textContent, 'Indicative price €0.0230 per L (recipe cost €12.40 for 540 L).');
   const apply = buttonWithAction(tbody, 'apply-bank-price');
   assert.equal(apply.textContent, 'Apply');
   assert.equal(apply.dataset.bankId, 'bank-mix');
@@ -185,13 +185,13 @@ test('shows an indicative price with Apply for an unpriced bank', () => {
 
 test('offers Replace beside the current price for a priced bank', () => {
   const { tbody } = renderOne(priceBank({ pricePerLitre: 0.03 }), { suggestions: { 'bank-mix': OK_SUGGESTION }, currencySymbol: '€' });
-  assert.equal(noteOf(tbody, 'bank-mix').textContent, 'Indicative price €0.023 per L (recipe cost €12.4 for 540 L). Current price €0.03 per L.');
+  assert.equal(noteOf(tbody, 'bank-mix').textContent, 'Indicative price €0.0230 per L (recipe cost €12.40 for 540 L). Current price €0.0300 per L.');
   assert.equal(buttonWithAction(tbody, 'apply-bank-price').textContent, 'Replace');
 });
 
 test('separates word currency symbols from the amount', () => {
   const { tbody } = renderOne(priceBank(), { suggestions: { 'bank-mix': OK_SUGGESTION }, currencySymbol: 'USD' });
-  assert.match(noteOf(tbody, 'bank-mix').textContent, /^Indicative price USD 0\.023 per L/);
+  assert.match(noteOf(tbody, 'bank-mix').textContent, /^Indicative price USD 0\.0230 per L/);
 });
 
 test('disables Calculate and shows progress while a calculation runs', () => {

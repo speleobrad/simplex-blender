@@ -51,7 +51,7 @@ import { renderCompareRecipe } from './ui/compare-recipe.js';
 import { renderPressureLimitWarnings, renderResults } from './ui/results.js';
 import { renderSettingsDialog, renderPresetOptions, costFieldToStored, setCostField } from './ui/settings-dialog.js';
 import { renderEquipmentSummary } from './ui/equipment-summary.js';
-import { formatBankPrice, renderSupplyBanks } from './ui/supply-banks.js';
+import { formatBankPrice, formatSuggestionNote, renderSupplyBanks } from './ui/supply-banks.js';
 import { renderStorageWarning } from './ui/storage-warning.js';
 import { renderThermalCharts } from './ui/thermal-charts.js';
 import { changeTernaryZoom, clearTernaryDiagram, observeTernaryCanvas, renderTernaryDiagram } from './ui/ternary.js';
@@ -303,6 +303,30 @@ function bankSuggestionFor(bank) {
   return null;
 }
 
+/** Bank whose Calculate or Apply control must regain focus once the table is rebuilt. */
+let pendingBankFocus = null;
+
+function announceBankPrice(message) {
+  byId('bank-price-status').textContent = message;
+}
+
+function restoreBankPriceFocus() {
+  if (!pendingBankFocus) return;
+  const status = byId('bank-price-status');
+  const calculate = [...document.querySelectorAll('#tanks-tbody [data-action="calculate-bank-price"]')]
+    .find(button => button.dataset.bankId === pendingBankFocus);
+  const active = document.activeElement;
+  if (!calculate || (active && active !== document.body && active !== status && active !== calculate)) {
+    pendingBankFocus = null;
+    return;
+  }
+  if (calculate.disabled) {
+    status.focus();
+    return;
+  }
+  calculate.focus();
+}
+
 function renderBankTable() {
   const suggestions = {};
   for (const bank of state.banks) {
@@ -316,6 +340,7 @@ function renderBankTable() {
     suggestions,
     currencySymbol: state.settings.costs.currencySymbol
   });
+  restoreBankPriceFocus();
 }
 
 function rejectBankEdit(bank, message) {
@@ -340,7 +365,9 @@ function commitBankUpdate(bank, updatedBank) {
 function calculateBankPrice(bankId) {
   const bank = state.banks.find(candidate => candidate.id === bankId);
   if (!bank) return;
+  pendingBankFocus = bank.id;
   state.bankSuggestions[bank.id] = { status: 'calculating', signature: bankPricingSignature(bank) };
+  announceBankPrice(`Calculating price for ${bank.name}…`);
   renderBankTable();
   setTimeout(() => finishBankPriceCalculation(bank.id), 0);
 }
@@ -371,19 +398,24 @@ function finishBankPriceCalculation(bankId) {
   state.bankSuggestions[bankId] = result.ok
     ? { status: 'ok', pricePerLitre: result.pricePerLitre, recipeCost: result.recipeCost, litres: result.litres, signature }
     : { status: 'failed', reason: result.reason, signature };
+  announceBankPrice(`${bank.name}: ${formatSuggestionNote(bank, state.bankSuggestions[bankId], state.settings.units, state.settings.costs.currencySymbol)}`);
   renderBankTable();
 }
 
 function applyBankPrice(bankId) {
   const bank = state.banks.find(candidate => candidate.id === bankId);
   if (!bank) return;
+  pendingBankFocus = bank.id;
   const suggestion = bankSuggestionFor(bank);
   if (suggestion?.status !== 'ok') {
     renderBankTable();
     return;
   }
   const error = commitBankUpdate(bank, { ...bank, pricePerLitre: suggestion.pricePerLitre });
-  if (error) rejectBankEdit(bank, error);
+  if (error) {
+    pendingBankFocus = null;
+    rejectBankEdit(bank, error);
+  }
 }
 
 function applyTheme(theme) {
@@ -1871,6 +1903,11 @@ function updateBankFromInput(input) {
   if (bankField === 'name') {
     updatedBank.name = input.value;
   } else if (bankField === 'pricePerLitre') {
+    if (input.validity?.badInput) {
+      restoreBankInputValue(input, bank);
+      clearBankInputFailure(bank.id);
+      return;
+    }
     if (input.value.trim() === '') {
       updatedBank.pricePerLitre = null;
     } else {

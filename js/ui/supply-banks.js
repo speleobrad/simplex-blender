@@ -100,14 +100,14 @@ function formatAmount(value) {
   return String(Number(value.toPrecision(6)));
 }
 
-function suggestionNote(bank, suggestion, units, currencySymbol) {
+export function formatSuggestionNote(bank, suggestion, units, currencySymbol) {
   if (suggestion.status === 'calculating') return 'Calculating…';
   if (suggestion.status === 'failed') return suggestion.reason;
   const perVolume = unitLabel('volumeL', units);
-  const money = amount => `${currencyPrefix(currencySymbol)}${formatAmount(amount)}`;
-  const price = pricePerLitre => `${money(convertToDisplay(pricePerLitre, 'pricePerVolumeL', units))} per ${perVolume}`;
+  const money = (amount, digits) => `${currencyPrefix(currencySymbol)}${amount.toFixed(digits)}`;
+  const price = pricePerLitre => `${money(convertToDisplay(pricePerLitre, 'pricePerVolumeL', units), 4)} per ${perVolume}`;
   const litres = formatAmount(convertToDisplay(suggestion.litres, 'volumeL', units));
-  let text = `Indicative price ${price(suggestion.pricePerLitre)} (recipe cost ${money(suggestion.recipeCost)} for ${litres} ${perVolume}).`;
+  let text = `Indicative price ${price(suggestion.pricePerLitre)} (recipe cost ${money(suggestion.recipeCost, 2)} for ${litres} ${perVolume}).`;
   if (bank.pricePerLitre !== null && bank.pricePerLitre !== undefined) text += ` Current price ${price(bank.pricePerLitre)}.`;
   return text;
 }
@@ -127,9 +127,8 @@ function makePriceControl(bank, units, suggestion, currencySymbol) {
 
   const note = document.createElement('p');
   note.className = 'text-[11px] text-slate-400';
-  note.setAttribute('aria-live', 'polite');
   note.dataset.bankNote = bank.id;
-  note.textContent = suggestion ? suggestionNote(bank, suggestion, units, currencySymbol) : '';
+  note.textContent = suggestion ? formatSuggestionNote(bank, suggestion, units, currencySymbol) : '';
 
   control.append(makeBankInput(bank, bankFieldDefinition('pricePerLitre', units), units), calculate, note);
   if (suggestion?.status === 'ok') {

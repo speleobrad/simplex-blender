@@ -187,6 +187,21 @@ test.describe('inventory supply banks', () => {
       await expect(bankPrice(bankRows(page).nth(index))).toHaveValue('');
     });
 
+    test('keeps the stored price when a bad-input edit is typed', async ({ appPage }) => {
+      const page = await appPage.goto('tourSeen');
+      const index = await createBank(page, { pricePerLitre: 0.025 });
+      const price = bankPrice(bankRows(page).nth(index));
+      await price.click();
+      await page.keyboard.press('End');
+      await page.keyboard.type('e');
+      await page.keyboard.press('Tab');
+      await expect(price).toHaveValue('0.025');
+      await expect(page.getByRole('alert')).toBeHidden();
+
+      await reloadInventory(page);
+      await expect(bankPrice(bankRows(page).nth(index))).toHaveValue('0.025');
+    });
+
     test('calculates a suggestion without touching the price, and Apply stores it across reload', async ({ appPage }) => {
       const page = await appPage.goto('tourSeen');
       await setSettingsPrices(page, { oxygen: 0.01, helium: 0.02 });
@@ -194,12 +209,15 @@ test.describe('inventory supply banks', () => {
       const row = bankRows(page).nth(index);
       await row.getByRole('button', { name: /^Calculate price for /i }).click();
       await expect(row.locator('[data-bank-note]')).toContainText('Indicative price');
+      await expect(page.locator('#bank-price-status')).toContainText('Indicative price');
+      await expect(row.getByRole('button', { name: /^Calculate price for /i })).toBeFocused();
       await expect(bankPrice(row)).toHaveValue('');
 
       await row.getByRole('button', { name: /^Apply suggested price for /i }).click();
       const applied = await bankPrice(bankRows(page).nth(index)).inputValue();
       expect(applied).toMatch(/^\d/);
       await expect(bankRows(page).nth(index).locator('[data-bank-note]')).toBeEmpty();
+      await expect(bankRows(page).nth(index).getByRole('button', { name: /^Calculate price for /i })).toBeFocused();
 
       await reloadInventory(page);
       await expect(bankPrice(bankRows(page).nth(index))).toHaveValue(applied);
