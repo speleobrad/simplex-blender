@@ -8,7 +8,7 @@ const OPERATION_LABELS = Object.freeze({
 });
 
 const NO_PRICE = 'no price set';
-const NOT_CONFIGURED = 'No prices set. Set bank prices in Inventory and fees in Settings → Costs.';
+export const NOT_CONFIGURED = 'No prices apply to this fill. Set bank prices in Inventory and fees in Settings → Costs.';
 const NO_PLAN = 'Costs appear when a feasible blend is available.';
 
 function hook(root, key) {

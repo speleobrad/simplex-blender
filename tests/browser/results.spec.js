@@ -312,7 +312,7 @@ test.describe('fill costs in the Tanks and costs', () => {
     await selectResultTab(page, 'Tanks and costs');
 
     const section = costSection(page);
-    await expect(section.locator('[data-result-key="cost-status"]')).toHaveText('No prices set. Set bank prices in Inventory and fees in Settings → Costs.');
+    await expect(section.locator('[data-result-key="cost-status"]')).toHaveText('No prices apply to this fill. Set bank prices in Inventory and fees in Settings → Costs.');
     await expect(section.getByRole('table', { name: 'Gas cost' })).toBeHidden();
   });
 
@@ -342,6 +342,9 @@ test.describe('fill costs in the Tanks and costs', () => {
     const banner = page.locator('[data-result-key="cost-banner"]:visible');
     const saved = banner.locator('[data-result-key="cost-saved"]');
     await expect(saved).toHaveText('Price pure helium in Inventory');
+    for (const key of ['cost-fill-total', 'cost-saved', 'cost-salvaged']) {
+      await expect(banner.locator(`[data-result-key="${key}"]`)).toHaveCSS('text-align', 'right');
+    }
 
     await setPurePrices(page, { helium: 0.05 });
     const first = await saved.textContent();
@@ -356,5 +359,30 @@ test.describe('fill costs in the Tanks and costs', () => {
     await selectResultTab(page, 'Tanks and costs');
     const costTotal = await costSection(page).locator('[data-result-key="cost-total"]').textContent();
     expect(costTotal.startsWith(fillTotal)).toBe(true);
+  });
+
+  test('keeps cost tables scrollable with no page overflow and no price overlap on narrow screens', async ({ appPage }) => {
+    const page = await appPage.goto('tourSeen');
+    const costs = await openSettingsCategory(page, 'costs');
+    await costs.getByRole('textbox', { name: 'Currency symbol', exact: true }).fill('€');
+    await saveSettings(page);
+    await priceEveryBank(page, 0.02);
+    await openRecipeScenario(page);
+    await selectResultTab(page, 'Tanks and costs');
+
+    const section = costSection(page);
+    await expect(section.getByRole('table', { name: 'Gas cost' })).toBeVisible();
+    const pageOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(pageOverflow).toBeLessThanOrEqual(0);
+    const overlaps = await section.locator('table tbody tr').evaluateAll(rows => rows
+      .map(row => [...row.children])
+      .filter(cells => cells.length === 4)
+      .map(cells => {
+        const range = document.createRange();
+        range.selectNodeContents(cells[2]);
+        return range.getBoundingClientRect().right - cells[3].getBoundingClientRect().left;
+      }));
+    expect(overlaps.length).toBeGreaterThan(0);
+    for (const overlap of overlaps) expect(overlap).toBeLessThanOrEqual(0);
   });
 });

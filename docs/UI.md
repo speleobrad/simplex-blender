@@ -138,12 +138,12 @@ Hovering either graph moves the shared guide/readout across both charts. Alterna
 
 The tab exposes accessible tables for:
 
-- **Reference mixes in the tank summary**: mix, O₂/He, start pressure, and end pressure.
+- **Reference mixes in Tanks and costs**: mix, O₂/He, start pressure, and end pressure.
 - **Blend trajectory**: stage, O₂/He, and pressure.
 
 The tab reports when feasible chart data is unavailable. The tables are the keyboard-operable/reference view of the Diagram data, including source-bank start/end pressure information where supplied by the calculation.
 
-The Costs section sits at the end of the pane. It has a gas table (litres, price per litre in the display unit, and cost for each finite bank; unpriced banks show "no price set"), an operation table for Boost, Decant, Equalize, and Top-up (the Top-up row shows its litres as information only and includes compressor air), and a total row aligned with the Cost column. A total with unpriced gas reads "(incomplete: … unpriced)". With no prices set it shows "No prices set. Set bank prices in Inventory and fees in Settings → Costs."; with no feasible blend it shows "Costs appear when a feasible blend is available." Costs appear in the Blending and What-if Tanks and costs panes.
+The Costs section sits at the end of the pane. It has a gas table (litres, price per litre in the display unit, and cost for each finite bank; unpriced banks show "no price set"), an operation table for Boost, Decant, Equalize, and Top-up (the Top-up row shows its litres as information only and includes compressor air), and a total row aligned with the Cost column. A total with unpriced gas reads "(incomplete: … unpriced)". With no priced gas or fees for this fill it shows "No prices apply to this fill. Set bank prices in Inventory and fees in Settings → Costs."; with no feasible blend it shows "Costs appear when a feasible blend is available." With nothing priced at all, Inventory's suggestion reads "Nothing is priced yet. Set fees in Settings → Costs and a price on a pure oxygen or helium bank." Costs appear in the Blending and What-if Tanks and costs panes.
 
 #### In water pressure tab
 

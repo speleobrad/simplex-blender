@@ -669,7 +669,7 @@
           </div>
           <div class="grid gap-4 overflow-x-auto pb-2">
             <table class="min-w-full text-left font-mono text-xs">
-              <caption class="py-2 text-left font-sans text-slate-300">Reference mixes in the tank summary</caption>
+              <caption class="py-2 text-left font-sans text-slate-300">Reference mixes in Tanks and costs</caption>
               <thead>
                 <tr class="text-slate-400">
                   <th scope="col" class="px-2 py-1">Mix</th>
@@ -692,11 +692,11 @@
               <tbody id="ternary-data-trajectory"></tbody>
             </table>
           </div>
-          <section data-result-key="cost-summary" aria-label="Costs">
+          <section data-result-key="cost-summary" aria-label="Costs" class="min-w-0">
             <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300">Costs</h3>
             <p data-result-key="cost-status" class="py-2 text-slate-400 text-xs">Costs appear when a feasible blend is available.</p>
-            <div data-result-key="cost-tables" class="overflow-x-auto pb-2" hidden>
-              <table class="mb-4 w-full table-fixed text-left font-mono text-xs">
+            <div data-result-key="cost-tables" class="min-w-0 max-w-full overflow-x-auto pb-2" hidden>
+              <table class="mb-4 w-full min-w-[30rem] table-fixed text-left font-mono text-xs">
                 <caption class="py-2 text-left font-sans text-slate-300">Gas cost</caption>
                 <colgroup><col class="w-2/5"><col class="w-1/5"><col class="w-1/5"><col class="w-1/5"></colgroup>
                 <thead>
@@ -717,7 +717,7 @@
                   </tr>
                 </tfoot>
               </table>
-              <table class="mb-4 w-full table-fixed text-left font-mono text-xs">
+              <table class="mb-4 w-full min-w-[30rem] table-fixed text-left font-mono text-xs">
                 <caption class="py-2 text-left font-sans text-slate-300">Operation cost</caption>
                 <colgroup><col class="w-2/5"><col class="w-1/5"><col class="w-1/5"><col class="w-1/5"></colgroup>
                 <thead>

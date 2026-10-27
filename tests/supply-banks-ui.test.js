@@ -207,7 +207,7 @@ test('disables Calculate and shows progress while a calculation runs', () => {
 });
 
 test('shows the pricer reason for a failed calculation without Apply', () => {
-  const reason = 'No prices set. Set bank prices in Inventory and fees in Settings → Costs.';
+  const reason = 'Nothing is priced yet. Set fees in Settings → Costs and a price on a pure oxygen or helium bank.';
   const { tbody } = renderOne(priceBank(), { suggestions: { 'bank-mix': { status: 'failed', reason, signature: 'current' } } });
   assert.equal(noteOf(tbody, 'bank-mix').textContent, reason);
   assert.equal(buttonWithAction(tbody, 'apply-bank-price'), undefined);

@@ -155,7 +155,7 @@ test('no fees and no pure price, with no pure gas needed, report that no prices 
   // A bank with no oxygen and no helium needs no pure gas, so no gas is named.
   const result = priceWith({ bank: bank({ oxygenPercent: 0, heliumPercent: 0 }), costs: zeroCosts(), inventoryBanks: [] });
   assert.equal(result.ok, false);
-  assert.match(result.reason, /^No prices set\. Set bank prices in Inventory and fees in Settings → Costs\.$/);
+  assert.match(result.reason, /^Nothing is priced yet\. Set fees in Settings → Costs and a price on a pure oxygen or helium bank\.$/);
   assert.equal(result.missingGas, undefined);
 });
 

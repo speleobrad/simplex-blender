@@ -61,10 +61,16 @@ function createHost() {
   gasBody.setAttribute('data-result-key', 'cost-gas-body');
   const operationBody = new FakeNode('tbody');
   operationBody.setAttribute('data-result-key', 'cost-operations-body');
-  const total = new FakeNode('p');
+  const operationsTable = new FakeNode('table');
+  const operationsFoot = new FakeNode('tfoot');
+  const totalRow = new FakeNode('tr');
+  const total = new FakeNode('td');
   total.setAttribute('data-result-key', 'cost-total');
-  tables.append(gasBody, operationBody);
-  section.append(status, tables, total);
+  totalRow.append(total);
+  operationsFoot.append(totalRow);
+  operationsTable.append(operationBody, operationsFoot);
+  tables.append(gasBody, operationsTable);
+  section.append(status, tables);
   panel.append(section);
   host.append(panel);
   return { host, status, tables, gasBody, operationBody, total };
@@ -170,7 +176,7 @@ test('prompts for Settings when nothing is configured and hides the tables', () 
     const { host, status, tables, total } = createHost();
     renderCostSummary({ ...PRICED_COST, configured: false }, { root: host, units: 'metric', currencySymbol: '€' });
 
-    assert.equal(status.textContent, 'No prices set. Set bank prices in Inventory and fees in Settings → Costs.');
+    assert.equal(status.textContent, 'No prices apply to this fill. Set bank prices in Inventory and fees in Settings → Costs.');
     assert.equal(status.hidden, false);
     assert.equal(tables.hidden, true);
     assert.equal(total.hidden, true);

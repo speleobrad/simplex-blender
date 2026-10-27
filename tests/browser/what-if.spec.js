@@ -349,7 +349,7 @@ test.describe('fill costs in What-if', () => {
     await page.locator('#what-if-result-host').getByRole('tab', { name: 'Tanks and costs', exact: true }).click();
 
     const section = page.locator('#what-if-result-host [data-result-key="cost-summary"]');
-    await expect(section).toContainText('No prices set. Set bank prices in Inventory and fees in Settings → Costs.');
+    await expect(section).toContainText('No prices apply to this fill. Set bank prices in Inventory and fees in Settings → Costs.');
     await expect(page.locator('#what-if-result-host [data-result-key="cost-banner"]')).toHaveCount(0);
   });
 
@@ -359,7 +359,7 @@ test.describe('fill costs in What-if', () => {
     await runWhatIf(page);
     await page.locator('#what-if-result-host').getByRole('tab', { name: 'Tanks and costs', exact: true }).click();
     const section = page.locator('#what-if-result-host [data-result-key="cost-summary"]');
-    await expect(section.locator('[data-result-key="cost-status"]')).toHaveText('No prices set. Set bank prices in Inventory and fees in Settings → Costs.');
+    await expect(section.locator('[data-result-key="cost-status"]')).toHaveText('No prices apply to this fill. Set bank prices in Inventory and fees in Settings → Costs.');
 
     const costs = await openSettingsCategory(page, 'costs');
     await costs.getByRole('textbox', { name: 'Currency symbol', exact: true }).fill('CHF');
