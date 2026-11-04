@@ -1049,6 +1049,21 @@ function cascadeGroups(activeBanks) {
   return counts;
 }
 
+function compareActiveBoosts(a, b, airFirst = false) {
+  const airOrder = Number(isAirBank(a.bank)) - Number(isAirBank(b.bank));
+  const orderedAir = airFirst ? -airOrder : airOrder;
+  return orderedAir
+    || b.bank.oxygenPercent - a.bank.oxygenPercent
+    || a.priority - b.priority
+    || Number(b.cascade) - Number(a.cascade)
+    || cascadeCompositionKey(a.bank).localeCompare(cascadeCompositionKey(b.bank))
+    || (a.cascade && b.cascade ? a.bank.pressureBar - b.bank.pressureBar : 0)
+    || b.addedMoles - a.addedMoles
+    || String(a.bank.id ?? '').localeCompare(String(b.bank.id ?? ''))
+    || String(a.bank.name ?? '').localeCompare(String(b.bank.name ?? ''))
+    || a.index - b.index;
+}
+
 function activeBoostsFor(solverResult, activeBanks, { airFirst = false } = {}) {
   const boosts = [];
   const compositionCounts = cascadeGroups(activeBanks);
@@ -1058,17 +1073,9 @@ function activeBoostsFor(solverResult, activeBanks, { airFirst = false } = {}) {
     if (addedMoles <= 1e-9) return;
 
     const cascade = !isAirBank(bank) && compositionCounts.get(cascadeCompositionKey(bank)) > 1;
-    boosts.push({ bank, addedMoles, priority: boostPriority(bank), cascade });
+    boosts.push({ bank, addedMoles, priority: boostPriority(bank), cascade, index });
   });
-  boosts.sort((a, b) => (airFirst
-    ? Number(isAirBank(b.bank)) - Number(isAirBank(a.bank))
-    : Number(isAirBank(a.bank)) - Number(isAirBank(b.bank)))
-    || b.bank.oxygenPercent - a.bank.oxygenPercent
-    || a.priority - b.priority
-    || (a.cascade && b.cascade
-      ? a.bank.pressureBar - b.bank.pressureBar
-      : 0)
-    || b.addedMoles - a.addedMoles);
+  boosts.sort((a, b) => compareActiveBoosts(a, b, airFirst));
   return boosts;
 }
 

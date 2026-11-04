@@ -552,6 +552,33 @@ test('cascades interchangeable banks in ascending pressure order', () => {
   );
 });
 
+test('orders mixed cascade and non-cascade boost sources deterministically', () => {
+  const result = optimizeBlend({
+    cylinder: {
+      volumeL: 10,
+      initialPressureBar: 0,
+      initialOxygenPercent: 0,
+      initialHeliumPercent: 0,
+      targetPressureBar: 140,
+      targetOxygenPercent: 20,
+      targetHeliumPercent: 25
+    },
+    physics: { model: 'ideal', temperatureC: 20 },
+    banks: [
+      { id: 'cascade-low', name: 'CascadeLow', volumeL: 1, pressureBar: 100, maxPressureBar: 200, minimumPressureBar: 0, oxygenPercent: 20, heliumPercent: 20, enabled: true },
+      { id: 'cascade-high', name: 'CascadeHigh', volumeL: 50, pressureBar: 170, maxPressureBar: 200, minimumPressureBar: 0, oxygenPercent: 20, heliumPercent: 20, enabled: true },
+      { id: 'single-helium-rich', name: 'SingleHeliumRich', volumeL: 50, pressureBar: 30, maxPressureBar: 200, minimumPressureBar: 0, oxygenPercent: 20, heliumPercent: 30, enabled: true }
+    ],
+    settings: { booster: { maxCompressorPressureBar: 350, maxBoosterOutputPressureBar: 350 } }
+  });
+
+  assert.equal(result.feasible, true);
+  assert.deepEqual(
+    result.protocolSteps.filter(step => step.sourceBankId).map(step => step.recipeGas),
+    ['CascadeLow', 'CascadeLow', 'CascadeHigh', 'SingleHeliumRich']
+  );
+});
+
 test('uses decant when source and receiver start at equal pressure', () => {
   const result = optimizeBlend(equalGasTransferInput({
     initialPressureBar: 100,
