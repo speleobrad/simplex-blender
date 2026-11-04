@@ -927,6 +927,7 @@ function solveTargetBlendAtMoles({
       };
     })
   ];
+  const compositionCounts = cascadeGroups(activeBanks);
   const decisionCosts = [
     retainedGasCost(targetMoles, prioritizeTransferSafety),
     ...activeBanks.map(bank => {
@@ -939,7 +940,10 @@ function solveTargetBlendAtMoles({
         if (bank.id === preferredBankId) return -10_000;
         return -bank.pressureBar + 1 / bank.volumeL;
       }
-      return heliumFraction * heliumFraction * 100 + oxygenFraction * 0.4 + 1;
+      const baseCost = heliumFraction * heliumFraction * 100 + oxygenFraction * 0.4 + 1;
+      const isCascadeBank = !isAirBank(bank)
+        && compositionCounts.get(cascadeCompositionKey(bank)) > 1;
+      return baseCost + (isCascadeBank ? bank.pressureBar * 1e-6 : 0);
     })
   ];
 
@@ -1030,25 +1034,45 @@ function isCompressorAir(bank) {
   return bank?.isCompressor === true;
 }
 
+function cascadeCompositionKey(bank) {
+  return `${bank.oxygenPercent}/${bank.heliumPercent}`;
+}
+
+function cascadeGroups(activeBanks) {
+  const counts = new Map();
+  activeBanks.forEach(bank => {
+    if (!isAirBank(bank)) {
+      const key = cascadeCompositionKey(bank);
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+  });
+  return counts;
+}
+
 function activeBoostsFor(solverResult, activeBanks, { airFirst = false } = {}) {
   const boosts = [];
+  const compositionCounts = cascadeGroups(activeBanks);
   activeBanks.forEach((bank, index) => {
     const variableName = solverResult.variableNames[index + 1];
     const addedMoles = solverResult.solution[variableName] || 0;
     if (addedMoles <= 1e-9) return;
 
-    boosts.push({ bank, addedMoles, priority: boostPriority(bank) });
+    const cascade = !isAirBank(bank) && compositionCounts.get(cascadeCompositionKey(bank)) > 1;
+    boosts.push({ bank, addedMoles, priority: boostPriority(bank), cascade });
   });
   boosts.sort((a, b) => (airFirst
     ? Number(isAirBank(b.bank)) - Number(isAirBank(a.bank))
     : Number(isAirBank(a.bank)) - Number(isAirBank(b.bank)))
     || b.bank.oxygenPercent - a.bank.oxygenPercent
     || a.priority - b.priority
+    || (a.cascade && b.cascade
+      ? a.bank.pressureBar - b.bank.pressureBar
+      : 0)
     || b.addedMoles - a.addedMoles);
   return boosts;
 }
 
-function protocolOperation(stage, bank) {
+function protocolOperation(stage, bank, cascade = false) {
   if (isAirBank(bank)) return 'Top-up';
   const tolerance = Math.max(
     1e-9,
@@ -1060,15 +1084,16 @@ function protocolOperation(stage, bank) {
   const startsHigher = stage.sourceStartPressureBar > stage.receiverStartPressureBar + tolerance;
   const startsEqual = Math.abs(stage.sourceStartPressureBar - stage.receiverStartPressureBar) <= tolerance;
   const endsEqual = Math.abs(stage.sourceEndPressureBar - stage.receiverEndPressureBar) <= tolerance;
-  if (startsHigher && endsEqual) return 'Equalize';
+  if (startsHigher && endsEqual) return cascade ? 'Cascade equalize' : 'Equalize';
   if ((stage.type === 'decant' && startsEqual) || (
     stage.sourceStartPressureBar > stage.receiverStartPressureBar + tolerance
     && stage.sourceEndPressureBar >= stage.receiverEndPressureBar - tolerance
   )) {
     return 'Decant';
   }
-  return 'Boost';
+  return cascade ? 'Cascade boost' : 'Boost';
 }
+
 
 function sourceResidualPressureAfterTransfer(bank, addedMoles, bankDensityByBankId, temperatureC, useVdw) {
   if (bank.isCompressor) return bank.pressureBar;
@@ -2255,7 +2280,7 @@ function solveBlendWithoutSalvage(input) {
 
   let stepNumber = 0;
   let costOperationCounter = 0;
-  for (const { bank, addedMoles } of recipeBoosts) {
+  for (const { bank, addedMoles, cascade } of recipeBoosts) {
     const transferStages = pressureTransferStages({
       cumulativeMoles,
       cumulativeOxygenMoles,
@@ -2311,7 +2336,7 @@ function solveBlendWithoutSalvage(input) {
       });
 
       const pressureAmount = Math.abs(stage.receiverEndPressureBar - stage.receiverStartPressureBar);
-      const operation = protocolOperation(stage, bank);
+      const operation = protocolOperation(stage, bank, cascade);
       const targetPressure = stage.receiverEndPressureBar.toFixed(1);
       const leftoverPressure = stage.sourceEndPressureBar.toFixed(1);
       const descriptionParts = [

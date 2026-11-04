@@ -510,6 +510,38 @@ test('uses decant when source pressure is not lower than receiver pressure for t
   assert.equal(transferSteps[0].operation, 'Decant');
 });
 
+
+test('cascades interchangeable banks in ascending pressure order', () => {
+  const result = optimizeBlend({
+    cylinder: {
+      volumeL: 50,
+      initialPressureBar: 0,
+      initialOxygenPercent: 0,
+      initialHeliumPercent: 0,
+      targetPressureBar: 180,
+      targetOxygenPercent: 100,
+      targetHeliumPercent: 0
+    },
+    physics: { model: 'ideal', temperatureC: 20 },
+    banks: [
+      { id: 'o2-170', name: 'Oxygen 170 bar', volumeL: 50, pressureBar: 170, maxPressureBar: 200, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true },
+      { id: 'o2-100', name: 'Oxygen 100 bar', volumeL: 50, pressureBar: 100, maxPressureBar: 200, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true },
+      { id: 'o2-120', name: 'Oxygen 120 bar', volumeL: 50, pressureBar: 120, maxPressureBar: 200, minimumPressureBar: 0, oxygenPercent: 100, heliumPercent: 0, enabled: true }
+    ],
+    settings: { booster: { maxCompressorPressureBar: 350, maxBoosterOutputPressureBar: 350 } }
+  });
+
+  assert.equal(result.feasible, true);
+  const transfers = result.protocolSteps.filter(step => step.sourceBankId);
+  assert.deepEqual([...new Set(transfers.map(step => step.recipeGas))], [
+    'Oxygen 100 bar',
+    'Oxygen 120 bar',
+    'Oxygen 170 bar'
+  ]);
+  assert.ok(transfers.some(step => step.operation === 'Cascade equalize'));
+  assert.ok(transfers.some(step => step.operation === 'Cascade boost'));
+});
+
 test('uses decant when source and receiver start at equal pressure', () => {
   const result = optimizeBlend(equalGasTransferInput({
     initialPressureBar: 100,
