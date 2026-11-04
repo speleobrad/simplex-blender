@@ -95,11 +95,11 @@ export function validateCalculatorInputs(cylinder, physics, thermal, options = {
     && !WATER_SUBMERSION_PERCENT_OPTIONS.includes(thermal.waterSubmersionPercent)) {
     errors.push('Thermal water submersion must be 20, 40, 60, or 80%.');
   }
-  const legacy = thermal.targetInWaterTemperatureC === undefined
+  const legacy = thermal.diveSiteTemperatureC === undefined
     && thermal.targetMediumTemperatureC === undefined;
   const ambient = thermal.ambientTemperatureC;
   const targetMedium = thermal.targetMediumTemperatureC ?? thermal.targetTemperatureC;
-  const targetInWater = thermal.targetInWaterTemperatureC
+  const diveSiteTemperatureC = thermal.diveSiteTemperatureC
     ?? thermal.settledTemperatureC
     ?? (legacy ? ambient : undefined);
   if (!Number.isFinite(ambient) || ambient < 5 || ambient > 40) {
@@ -115,9 +115,9 @@ export function validateCalculatorInputs(cylinder, physics, thermal, options = {
   } else if (Number.isFinite(ambient) && targetMedium < ambient) {
     errors.push('Thermal target-medium temperature cannot be below ambient temperature.');
   }
-  if (!Number.isFinite(targetInWater)
-    || targetInWater < 1 || targetInWater > 30) {
-    errors.push('Thermal target in-water temperature must be between 1 and 30°C.');
+  if (!Number.isFinite(diveSiteTemperatureC)
+    || diveSiteTemperatureC < 1 || diveSiteTemperatureC > 30) {
+    errors.push('Thermal dive site temperature must be between 1 and 30°C.');
   }
   if (thermal.interimMeasurements !== undefined) {
     if (!Array.isArray(thermal.interimMeasurements)) {

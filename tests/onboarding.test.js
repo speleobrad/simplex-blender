@@ -80,7 +80,7 @@ test('wizard steps walk a new user from the main menu to the result tabs', () =>
   const temperatures = WIZARD_STEPS.find(step => step.id === 'temperatures');
   assert.deepEqual(temperatures.spotlights.map(spotlight => spotlight.targetId), [
     'ambient-temperature',
-    'target-temperature'
+    'dive-site-temperature'
   ]);
   const recipe = WIZARD_STEPS.find(step => step.id === 'recipe');
   assert.equal(recipe.targetId, 'mixing-steps-section');

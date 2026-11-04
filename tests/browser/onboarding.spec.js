@@ -63,7 +63,7 @@ test.describe('consent and guided tour', () => {
     await nextTourStep(page);
     await expect(page.locator('.driver-popover-title')).toHaveText('Set the temperatures');
     await expect(page.locator('#ambient-temperature')).toBeVisible();
-    await expect(page.locator('#target-temperature')).toBeVisible();
+    await expect(page.locator('#dive-site-temperature')).toBeVisible();
 
     await nextTourStep(page);
     await expect(page.locator('.driver-popover-title')).toHaveText('Follow the recipe');

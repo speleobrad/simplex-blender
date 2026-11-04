@@ -1289,7 +1289,7 @@ export function simulateCompareProtocol({
     oxygenPercent: recipeEnd.oxygenPercent,
     heliumPercent: recipeEnd.heliumPercent
   };
-  const inWaterTemperatureC = thermal.targetInWaterTemperatureC;
+  const inWaterTemperatureC = thermal.diveSiteTemperatureC;
   const inWater = Number.isFinite(inWaterTemperatureC)
     ? {
       pressureBar: Math.max(0, calculatePressureAtTemperature({

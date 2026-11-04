@@ -26,7 +26,7 @@ test.describe('working tank blending inputs', () => {
     await expect(page.locator('#init-p')).toHaveValue(/^45(\.0+)?$/);
     await expect(page.locator('#target-p')).toHaveValue(/^195(\.0+)?$/);
     await expect(page.locator('#ambient-temperature')).toHaveValue(/^21(\.0+)?$/);
-    await expect(page.locator('#target-temperature')).toHaveValue(/^10(\.0+)?$/);
+    await expect(page.locator('#dive-site-temperature')).toHaveValue(/^10(\.0+)?$/);
     await expect(page.locator('#wait-minutes')).toHaveValue(/^5(\.0+)?$/);
     await expect(page.locator('#cylinder-preset')).toHaveValue('Catalina S80');
     await expect(page.locator('#cooling-medium')).toHaveValue('air');
@@ -77,7 +77,7 @@ test.describe('working tank blending inputs', () => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     const pairs = [
       ['#init-p', '#target-p'],
-      ['#ambient-temperature', '#target-temperature']
+      ['#ambient-temperature', '#dive-site-temperature']
     ];
     for (const [currentSelector, targetSelector] of pairs) {
       const current = await page.locator(currentSelector).boundingBox();
@@ -103,9 +103,9 @@ test.describe('working tank blending inputs', () => {
     await expect(page.locator('#wait-minutes-field')).toBeVisible();
   });
 
-  test('uses the target in-water temperature for the recipe result', async ({ appPage }) => {
+  test('uses the dive site temperature for the recipe result', async ({ appPage }) => {
     const page = await load(appPage);
-    await fillWorkingTank(page, { targetInWaterTemperature: 30 });
+    await fillWorkingTank(page, { diveSiteTemperature: 30 });
     await page.locator('[data-result-host="blending"] [data-action="select-tab"][data-tab="thermal"]').click();
     await expect(page.locator('[data-result-host="blending"] [data-result-key="thermal-chart-status"]')).toContainText(/30\.0/);
   });
@@ -114,7 +114,7 @@ test.describe('working tank blending inputs', () => {
     const page = await load(appPage);
     const targetPreset = page.locator('#target-gas-preset option').filter({ hasText: 'Tx 18/45' }).first();
     await page.locator('#target-gas-preset').selectOption(await targetPreset.getAttribute('value'));
-    await fillWorkingTank(page, { startPressure: 50, ambientTemperature: 25, targetPressure: 188.6, targetInWaterTemperature: 10, medium: 'water', waitMode: 'temperature', targetTemperature: 25 });
+    await fillWorkingTank(page, { startPressure: 50, ambientTemperature: 25, targetPressure: 188.6, diveSiteTemperature: 10, medium: 'water', waitMode: 'temperature', targetTemperature: 25 });
     const results = page.locator('[data-result-host="blending"]');
     await expect(results.locator('[data-result-key="blend-status"]')).toContainText(/feasible/i);
     await expect(results.locator('[data-result-key="res-ambient-pressure"]')).toContainText(/20[0-1]\.[0-9] bar/);
@@ -143,7 +143,7 @@ test.describe('working tank blending inputs', () => {
       startPressure: 0,
       ambientTemperature: 20,
       targetPressure: 99,
-      targetInWaterTemperature: 20,
+      diveSiteTemperature: 20,
       medium: 'air',
       waitMode: 'minutes',
       waitMinutes: 0
@@ -189,7 +189,7 @@ test.describe('working tank blending inputs', () => {
     });
     await fillWorkingTank(page, {
       startPressure: 0, targetPressure: 99, ambientTemperature: 20,
-      targetInWaterTemperature: 20, medium: 'air', waitMode: 'minutes', waitMinutes: 0
+      diveSiteTemperature: 20, medium: 'air', waitMode: 'minutes', waitMinutes: 0
     });
     await page.locator('#inlet-gas-temperature').dispatchEvent('input');
     await expect(page.locator('[data-result-host="blending"] [data-result-key="blend-status"]')).toContainText(/feasible/i);
@@ -313,7 +313,7 @@ test.describe('working tank blending inputs', () => {
 
   test('enforces thermal boundaries and rejects target medium below ambient', async ({ appPage }) => {
     const page = await load(appPage);
-    for (const [id, min, max] of [['#ambient-temperature', '5', '40'], ['#inlet-gas-temperature', '5', '40'], ['#wait-target-temperature', '5', '40'], ['#target-temperature', '1', '30']]) {
+    for (const [id, min, max] of [['#ambient-temperature', '5', '40'], ['#inlet-gas-temperature', '5', '40'], ['#wait-target-temperature', '5', '40'], ['#dive-site-temperature', '1', '30']]) {
       await expect(page.locator(id)).toHaveAttribute('min', min);
       await expect(page.locator(id)).toHaveAttribute('max', max);
     }

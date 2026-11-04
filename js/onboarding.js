@@ -48,10 +48,10 @@ export const WIZARD_STEPS = Object.freeze([
   Object.freeze({
     id: 'temperatures',
     title: 'Set the temperatures',
-    body: 'Pay close attention to two temperatures: the ambient temperature of environment where you fill, and the dive site\'s water temperature, entered as the target in-water temperature.',
+    body: 'Pay close attention to two temperatures: the ambient temperature of environment where you fill, and the dive site\'s water temperature, entered as the dive site temperature.',
     spotlights: Object.freeze([
       Object.freeze({ targetId: 'ambient-temperature' }),
-      Object.freeze({ targetId: 'target-temperature' })
+      Object.freeze({ targetId: 'dive-site-temperature' })
     ]),
     screen: 'blending'
   }),

@@ -19,7 +19,7 @@ const defaultScenario = {
   banks: [bank('oxygen', 'Oxygen', 100, 0), bank('helium', 'Helium', 0, 100)],
   thermal: {
     tankMaterial: 'steel', coolingMedium: 'air', ambientTemperatureC: 21, inletTemperatureC: 25,
-    targetMediumTemperatureC: 21, targetInWaterTemperatureC: 10,
+    targetMediumTemperatureC: 21, diveSiteTemperatureC: 10,
     waitMode: 'minutes', waitMinutes: 5, interimMeasurements: []
   },
   settings: { booster: {}, units: 'metric', pressureLimitMode: 'hard-stop' }
@@ -29,7 +29,7 @@ const defaultScenario = {
 const drainScenario = {
   ...defaultScenario,
   cylinder: { ...defaultScenario.cylinder, initialPressureBar: 150, targetPressureBar: 100 },
-  thermal: { ...defaultScenario.thermal, targetInWaterTemperatureC: 21 }
+  thermal: { ...defaultScenario.thermal, diveSiteTemperatureC: 21 }
 };
 
 const tolerancePercent = 3;
@@ -95,7 +95,7 @@ const salvageScenario = {
   ],
   thermal: {
     tankMaterial: 'steel', coolingMedium: 'air', ambientTemperatureC: 20, inletTemperatureC: 40,
-    targetMediumTemperatureC: 20, targetInWaterTemperatureC: 20, waitMode: 'minutes', waitMinutes: 0,
+    targetMediumTemperatureC: 20, diveSiteTemperatureC: 20, waitMode: 'minutes', waitMinutes: 0,
     interimMeasurements: []
   },
   settings: { booster: { maxCompressorPressureBar: 350, maxBoosterOutputPressureBar: 350 } }

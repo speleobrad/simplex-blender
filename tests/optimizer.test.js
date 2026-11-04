@@ -654,7 +654,7 @@ test('drain steps retain receiver composition for a following transfer in both g
         ambientTemperatureC: 20,
         inletTemperatureC: 20,
         targetMediumTemperatureC: 20,
-        targetInWaterTemperatureC: 20,
+        diveSiteTemperatureC: 20,
         waitMode: 'minutes',
         waitMinutes: 0
       },
@@ -1725,7 +1725,7 @@ test('optimizeBlend exposes the hot transfer endpoint separately from the physic
       ambientTemperatureC: 20,
       inletTemperatureC: 40,
       targetMediumTemperatureC: 20,
-      targetInWaterTemperatureC: 20,
+      diveSiteTemperatureC: 20,
       waitMode: 'minutes',
       waitMinutes: 0
     },
@@ -1782,7 +1782,7 @@ test('thermal trajectory maps each bank point to its corresponding transfer stat
       ambientTemperatureC: 20,
       inletTemperatureC: 40,
       targetMediumTemperatureC: 20,
-      targetInWaterTemperatureC: 20,
+      diveSiteTemperatureC: 20,
       waitMode: 'minutes',
       waitMinutes: 0
     },
@@ -1860,7 +1860,7 @@ test('optimizeBlend returns a feasible automatic wait extension with complete sa
       ambientTemperatureC: 20,
       inletTemperatureC: 40,
       targetMediumTemperatureC: 20,
-      targetInWaterTemperatureC: 20,
+      diveSiteTemperatureC: 20,
       waitMode: 'minutes',
       waitMinutes: 0,
       interimMeasurements: [{ pressureBar: 0, temperatureC: 40 }]
@@ -1926,7 +1926,7 @@ const warningInput = (maxCompressorPressureBar = 232) => ({
     ambientTemperatureC: 20,
     inletTemperatureC: 40,
     targetMediumTemperatureC: 20,
-    targetInWaterTemperatureC: 20,
+    diveSiteTemperatureC: 20,
     waitMode: 'minutes',
     waitMinutes: 0
   },
@@ -1980,7 +1980,7 @@ test('optimizeBlend returns a feasible split protocol with safe endpoints and ta
       ambientTemperatureC: 20,
       inletTemperatureC: 40,
       targetMediumTemperatureC: 20,
-      targetInWaterTemperatureC: 20,
+      diveSiteTemperatureC: 20,
       waitMode: 'minutes',
       waitMinutes: 0
     },
@@ -2061,7 +2061,7 @@ const schedulerSplitInput = {
     ambientTemperatureC: 20,
     inletTemperatureC: 40,
     targetMediumTemperatureC: 20,
-    targetInWaterTemperatureC: 20,
+    diveSiteTemperatureC: 20,
     waitMode: 'minutes',
     waitMinutes: 0
   },
@@ -2190,7 +2190,7 @@ test('thermal final settling defaults to ambient before in-water projection', ()
       ambientTemperatureC: 20,
       inletTemperatureC: 20,
       targetMediumTemperatureC: 30,
-      targetInWaterTemperatureC: 10,
+      diveSiteTemperatureC: 10,
       waitMode: 'minutes',
       waitMinutes: 0
     },
@@ -2261,7 +2261,7 @@ test('projects a below-ambient water target after ambient settling', () => {
       ambientTemperatureC: 25,
       inletTemperatureC: 25,
       targetMediumTemperatureC: 25,
-      targetInWaterTemperatureC: 15,
+      diveSiteTemperatureC: 15,
       waitMode: 'minutes',
       waitMinutes: 10,
       targetTemperatureC: 15
@@ -2309,7 +2309,7 @@ test('fixed-minute waits allow a hidden target temperature below ambient', () =>
       ambientTemperatureC: 30,
       inletTemperatureC: 29,
       targetMediumTemperatureC: 30,
-      targetInWaterTemperatureC: 25,
+      diveSiteTemperatureC: 25,
       waitMode: 'minutes',
       waitMinutes: 10,
       targetTemperatureC: 25
@@ -2392,7 +2392,7 @@ test('rejects invalid thermal inputs with the existing invalid result shape', ()
     ambientTemperatureC: 20,
     inletTemperatureC: 20,
     targetMediumTemperatureC: 25,
-    targetInWaterTemperatureC: 20,
+    diveSiteTemperatureC: 20,
     waitMode: 'minutes',
     waitMinutes: 10,
     targetTemperatureC: 25
@@ -2551,7 +2551,7 @@ test('normalizes the requested in-water target and reports all thermal states', 
     physics: { model: 'vdw', temperatureC: 25 },
     thermal: {
       tankMaterial: 'steel', coolingMedium: 'water', ambientTemperatureC: 25,
-      inletTemperatureC: 25, targetMediumTemperatureC: 25, targetInWaterTemperatureC: 10,
+      inletTemperatureC: 25, targetMediumTemperatureC: 25, diveSiteTemperatureC: 10,
       waitMode: 'minutes', waitMinutes: 10
     },
     banks: [{ id: '1845', name: '18/45', volumeL: 50, pressureBar: 200, maxPressureBar: 350, minimumPressureBar: 20, oxygenPercent: 18, heliumPercent: 45, enabled: true }],
@@ -2573,7 +2573,7 @@ const thermalFailureFixture = {
   ambientTemperatureC: 25,
   inletTemperatureC: 25,
   targetMediumTemperatureC: 25,
-  targetInWaterTemperatureC: 10,
+  diveSiteTemperatureC: 10,
   waitMode: 'minutes',
   waitMinutes: 10,
   targetTemperatureC: 25
@@ -2646,7 +2646,7 @@ const schedulerFixture = {
   physics: { model: 'ideal', temperatureC: 20 },
   thermal: {
     tankMaterial: 'steel', coolingMedium: 'air', ambientTemperatureC: 20,
-    inletTemperatureC: 40, targetMediumTemperatureC: 20, targetInWaterTemperatureC: 20,
+    inletTemperatureC: 40, targetMediumTemperatureC: 20, diveSiteTemperatureC: 20,
     waitMode: 'minutes', waitMinutes: 0
   },
   settings: {}
@@ -2667,7 +2667,7 @@ test('scheduler enforces working pressure at above-ambient target-temperature wa
       waitMode: 'temperature',
       targetMediumTemperatureC: 30,
       targetTemperatureC: 30,
-      targetInWaterTemperatureC: 20
+      diveSiteTemperatureC: 20
     },
     protocolSteps: [
       {
@@ -3022,7 +3022,7 @@ test('optimizer returns a safe split protocol near the thermal working-pressure 
       ambientTemperatureC: 20,
       inletTemperatureC: 40,
       targetMediumTemperatureC: 20,
-      targetInWaterTemperatureC: 20,
+      diveSiteTemperatureC: 20,
       waitMode: 'minutes',
       waitMinutes: 0
     },
@@ -3240,7 +3240,7 @@ test('thermal safety allows transient hot overfill but keeps settled pressure at
     workingPressureBar: 100,
     hotOverfillPercent: 2
   };
-  const thermal = { ambientTemperatureC: 20, targetInWaterTemperatureC: 10 };
+  const thermal = { ambientTemperatureC: 20, diveSiteTemperatureC: 10 };
   const physics = { model: 'ideal' };
   const state = {
     pressureStartBar: 0,
@@ -3387,7 +3387,7 @@ test('hot overfill preserves the requested ambient and target pressure at safe e
       ambientTemperatureC: 20,
       inletTemperatureC: 40,
       targetMediumTemperatureC: 20,
-      targetInWaterTemperatureC: 20,
+      diveSiteTemperatureC: 20,
       waitMode: 'minutes',
       waitMinutes: 0
     },
@@ -3456,7 +3456,7 @@ const defaultRecipeInput = {
   banks: DEFAULT_BANKS.map(bank => ({ ...bank })),
   thermal: {
     tankMaterial: 'aluminum', coolingMedium: 'air', ambientTemperatureC: 21, inletTemperatureC: 25,
-    targetMediumTemperatureC: 21, targetInWaterTemperatureC: 10,
+    targetMediumTemperatureC: 21, diveSiteTemperatureC: 10,
     waitMode: 'minutes', waitMinutes: 5, interimMeasurements: []
   },
   settings: DEFAULT_SETTINGS
@@ -3631,7 +3631,7 @@ test('thermal fallback returns the feasible vent baseline when the salvage winne
       ambientTemperatureC: 20,
       inletTemperatureC: 20,
       targetMediumTemperatureC: 20,
-      targetInWaterTemperatureC: 20,
+      diveSiteTemperatureC: 20,
       waitMode: 'minutes',
       waitMinutes: 0
     }
@@ -3677,7 +3677,7 @@ test('thermal salvage step cools the tank while its pressure falls', () => {
       ambientTemperatureC: 20,
       inletTemperatureC: 40,
       targetMediumTemperatureC: 20,
-      targetInWaterTemperatureC: 20,
+      diveSiteTemperatureC: 20,
       waitMode: 'minutes',
       waitMinutes: 0
     },
@@ -3722,7 +3722,7 @@ const SALVAGE_THERMAL = {
   ambientTemperatureC: 20,
   inletTemperatureC: 40,
   targetMediumTemperatureC: 20,
-  targetInWaterTemperatureC: 20,
+  diveSiteTemperatureC: 20,
   waitMode: 'minutes',
   waitMinutes: 0
 };
@@ -3787,7 +3787,7 @@ test('salvage search ignores invalid input and reports the usual invalid result'
     ambientTemperatureC: 20,
     inletTemperatureC: 20,
     targetMediumTemperatureC: 25,
-    targetInWaterTemperatureC: 20,
+    diveSiteTemperatureC: 20,
     waitMode: 'minutes',
     waitMinutes: 10,
     targetTemperatureC: 25
@@ -3855,7 +3855,7 @@ test('salvage near tie goes to the receiver that can still reach more standard m
 test('salvage near-tie preference also holds in the thermal path', () => {
   const thermal = {
     tankMaterial: 'aluminum', coolingMedium: 'air', ambientTemperatureC: 21, inletTemperatureC: 25,
-    targetMediumTemperatureC: 21, targetInWaterTemperatureC: 21, waitMode: 'minutes', waitMinutes: 0, interimMeasurements: []
+    targetMediumTemperatureC: 21, diveSiteTemperatureC: 21, waitMode: 'minutes', waitMinutes: 0, interimMeasurements: []
   };
   const result = optimizeBlend({ ...shallowDeepInput, thermal });
   assert.equal(result.feasible, true);

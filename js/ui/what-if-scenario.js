@@ -143,7 +143,7 @@ function renderScenarioStart(container, { scenario = {}, cylinderPresets = [], g
     copyWrap,
     renderScenarioControl('coolingMedium', 'Surrounding medium', medium, units, errors),
     ...(start.coolingMedium === 'water' ? [renderScenarioControl('waterSubmersionPercent', 'Tank submerged', submersion, units, errors)] : []),
-    renderScenarioControl('inWaterTemperatureC', 'Target in-water temperature', inWater, units, errors, 'temperatureC')
+    renderScenarioControl('inWaterTemperatureC', 'Dive site temperature', inWater, units, errors, 'temperatureC')
   );
   scenarioCard.append(scenarioGrid);
 

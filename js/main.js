@@ -190,7 +190,7 @@ function convertDisplayedInputs(fromUnits, toUnits) {
     ['init-p', 'pressureBar'],
     ['target-p', 'pressureBar'],
     ['ambient-temperature', 'temperatureC'],
-    ['target-temperature', 'temperatureC'],
+    ['dive-site-temperature', 'temperatureC'],
     ['inlet-gas-temperature', 'temperatureC'],
     ['wait-target-temperature', 'temperatureC']
   ]) {
@@ -216,7 +216,7 @@ function convertDisplayedInputs(fromUnits, toUnits) {
   }
   for (const [id, minimumC, maximumC] of [
     ['ambient-temperature', 5, 40],
-    ['target-temperature', 1, 30],
+    ['dive-site-temperature', 1, 30],
     ['inlet-gas-temperature', 5, 40],
     ['wait-target-temperature', 5, 40]
   ]) {
@@ -1087,7 +1087,7 @@ function readInput() {
       coolingMedium: byId('cooling-medium').value,
       waterSubmersionPercent: Number.parseInt(byId('water-submersion').value, 10),
       ambientTemperatureC: canonicalNumberValue('ambient-temperature', 'temperatureC'),
-      targetInWaterTemperatureC: canonicalNumberValue('target-temperature', 'temperatureC'),
+      diveSiteTemperatureC: canonicalNumberValue('dive-site-temperature', 'temperatureC'),
       targetMediumTemperatureC: canonicalNumberValue('wait-target-temperature', 'temperatureC'),
       inletTemperatureC: effectiveInletTemperatureC(),
       waitMode: byId('wait-mode').value,
@@ -1654,7 +1654,7 @@ function scenarioSharedInputErrors(input) {
   const thermal = {
     ...input.thermal,
     targetMediumTemperatureC: input.thermal.ambientTemperatureC,
-    targetInWaterTemperatureC: input.thermal.inWaterTemperatureC
+    diveSiteTemperatureC: input.thermal.inWaterTemperatureC
   };
   const targetPressureBar = Math.max(10, input.cylinder.initialPressureBar);
   const validationMessages = validateCalculatorInputs(
@@ -1671,7 +1671,7 @@ function scenarioSharedInputErrors(input) {
       : message.startsWith('Thermal ambient temperature')
         || message.startsWith('Thermal target-medium temperature')
         ? 'ambientTemperatureC'
-        : message.startsWith('Thermal target in-water temperature')
+        : message.startsWith('Thermal dive site temperature')
           ? 'inWaterTemperatureC'
           : message.startsWith('Thermal cooling medium')
             ? 'coolingMedium'

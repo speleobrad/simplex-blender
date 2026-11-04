@@ -35,7 +35,7 @@ export function snapshotWhatIfFromBlending(input) {
     cylinderPresetName: cylinder.presetName,
     coolingMedium: thermal.coolingMedium,
     waterSubmersionPercent: thermal.waterSubmersionPercent,
-    inWaterTemperatureC: thermal.targetInWaterTemperatureC
+    inWaterTemperatureC: thermal.diveSiteTemperatureC
   };
 }
 

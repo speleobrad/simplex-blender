@@ -12,7 +12,7 @@ const TOUR_TARGET_IDS = [
   'settings-category-equipment',
   'working-tank-section',
   'ambient-temperature',
-  'target-temperature',
+  'dive-site-temperature',
   'mixing-steps-section',
   'results-tablist'
 ];
@@ -51,8 +51,8 @@ test('keeps the working tank and optimized results in Blending, with What-if ste
   assert.ok(markup.indexOf('id="inventory-section"', inventoryStart) > inventoryStart);
   assert.ok(markup.indexOf('id="tanks-tbody"', inventoryStart) > inventoryStart);
   assert.match(markup, /id="working-tank-section"[\s\S]*?id="init-p"[\s\S]*?id="ambient-temperature"[\s\S]*?id="init-gas-preset"[\s\S]*?id="init-o2"[\s\S]*?id="init-he"/);
-  assert.match(markup, /id="working-tank-section"[\s\S]*?id="target-p"[\s\S]*?id="target-temperature"[\s\S]*?id="target-gas-preset"[\s\S]*?id="target-o2"[\s\S]*?id="target-he"/);
-  for (const id of ['init-p', 'target-p', 'ambient-temperature', 'target-temperature']) {
+  assert.match(markup, /id="working-tank-section"[\s\S]*?id="target-p"[\s\S]*?id="dive-site-temperature"[\s\S]*?id="target-gas-preset"[\s\S]*?id="target-o2"[\s\S]*?id="target-he"/);
+  for (const id of ['init-p', 'target-p', 'ambient-temperature', 'dive-site-temperature']) {
     assert.match(markup, new RegExp(`id="${id}"[^>]*class="[^"]*w-full`));
   }
   for (const id of ['init-gas-preset', 'target-gas-preset']) {

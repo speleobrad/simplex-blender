@@ -93,7 +93,7 @@ async function warningSettings(page) {
     await expect(medium).toHaveClass(await page.locator('#init-gas-preset').getAttribute('class'));
     await expect(temperature).toHaveClass(await page.locator('#init-p').getAttribute('class'));
     await expect(temperature.locator('xpath=following-sibling::span[@data-unit-quantity="temperature"]')).toBeVisible();
-    await expect(whatIfTank.locator('label[for="what-if-inWaterTemperatureC"]')).toHaveText('Target in-water temperature:');
+    await expect(whatIfTank.locator('label[for="what-if-inWaterTemperatureC"]')).toHaveText('Dive site temperature:');
     const mediumBox = await medium.boundingBox();
     const temperatureBox = await temperature.boundingBox();
     expect(Math.abs(mediumBox.y - temperatureBox.y)).toBeLessThan(1);
@@ -170,7 +170,7 @@ async function warningSettings(page) {
       ambientTemperatureC: await page.locator('#ambient-temperature').inputValue(),
       cylinderPresetName: await page.locator('#cylinder-preset').inputValue(),
       coolingMedium: await page.locator('#cooling-medium').inputValue(),
-      inWaterTemperatureC: await page.locator('#target-temperature').inputValue()
+      inWaterTemperatureC: await page.locator('#dive-site-temperature').inputValue()
     };
     await openWhatIf(page);
     for (const [field, value] of Object.entries(values)) await expect(page.locator(`[data-what-if-field="${field}"]`)).toHaveValue(value);
@@ -180,7 +180,7 @@ async function warningSettings(page) {
     await expect(page.locator('#init-he')).toHaveValue(values.heliumPercent);
     await expect(page.locator('#ambient-temperature')).toHaveValue(values.ambientTemperatureC);
     await expect(page.locator('#cooling-medium')).toHaveValue(values.coolingMedium);
-    await expect(page.locator('#target-temperature')).toHaveValue(values.inWaterTemperatureC);
+    await expect(page.locator('#dive-site-temperature')).toHaveValue(values.inWaterTemperatureC);
     await page.locator('#screen-what-if [data-action="copy-what-if-from-blending"]:visible').evaluate(button => button.click());
     for (const [field, value] of Object.entries(values)) await expect(page.locator(`#screen-what-if [data-what-if-field="${field}"]:visible`)).toHaveValue(value);
   });

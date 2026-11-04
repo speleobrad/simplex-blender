@@ -99,7 +99,7 @@ test('rejects a temperature wait target at or below ambient', () => {
       ambientTemperatureC: 25,
       inletTemperatureC: 25,
       targetMediumTemperatureC: 24,
-      targetInWaterTemperatureC: 1,
+      diveSiteTemperatureC: 1,
       waitMode: 'temperature',
       waitMinutes: 10
     }
@@ -116,7 +116,7 @@ test('rejects target-medium below ambient regardless of cooling medium', () => {
       ambientTemperatureC: 25,
       inletTemperatureC: 25,
       targetMediumTemperatureC: 15,
-      targetInWaterTemperatureC: 15,
+      diveSiteTemperatureC: 15,
       waitMode: 'minutes',
       waitMinutes: 10
     }
@@ -130,7 +130,7 @@ test('accepts only 20% steps up to 80% for water submersion and ignores it for a
     { temperatureC: 25 },
     {
       tankMaterial: 'steel', coolingMedium, waterSubmersionPercent, ambientTemperatureC: 25,
-      inletTemperatureC: 25, targetMediumTemperatureC: 25, targetInWaterTemperatureC: 15,
+      inletTemperatureC: 25, targetMediumTemperatureC: 25, diveSiteTemperatureC: 15,
       waitMode: 'minutes', waitMinutes: 10
     }
   );
@@ -151,7 +151,7 @@ test('rejects a settled temperature below ambient for air cooling', () => {
       coolingMedium: 'air',
       ambientTemperatureC: 25,
       targetMediumTemperatureC: 15,
-      targetInWaterTemperatureC: 15,
+      diveSiteTemperatureC: 15,
       inletTemperatureC: 25,
       waitMode: 'minutes',
       waitMinutes: 10,
@@ -172,7 +172,7 @@ test('fixed-minute waits require a target-medium temperature at or above ambient
       ambientTemperatureC: 26,
       inletTemperatureC: 26,
       targetMediumTemperatureC: 26,
-      targetInWaterTemperatureC: 25,
+      diveSiteTemperatureC: 25,
       waitMode: 'minutes',
       waitMinutes: 10
     }
@@ -191,7 +191,7 @@ test('rejects unsupported thermal selectors and negative fixed waits', () => {
       ambientTemperatureC: 20,
       inletTemperatureC: 20,
       targetMediumTemperatureC: 25,
-      targetInWaterTemperatureC: 20,
+      diveSiteTemperatureC: 20,
       waitMode: 'temperature',
       waitMinutes: -1,
       targetTemperatureC: 25
@@ -209,7 +209,7 @@ test('rejects invalid fixed wait minutes and unknown wait modes', () => {
     ambientTemperatureC: 20,
     inletTemperatureC: 20,
     targetMediumTemperatureC: 25,
-    targetInWaterTemperatureC: 20,
+    diveSiteTemperatureC: 20,
     waitMode: 'minutes',
     waitMinutes: 5
   };
@@ -242,16 +242,16 @@ test('rejects finite Air supply banks because Air is an implicit compressor sour
 });
 
 test('accepts thermal temperature boundaries and semantic combinations', () => {
-  const valid = { tankMaterial: 'steel', coolingMedium: 'air', ambientTemperatureC: 5, inletTemperatureC: 5, targetMediumTemperatureC: 5, targetInWaterTemperatureC: 1, waitMode: 'minutes', waitMinutes: 0 };
+  const valid = { tankMaterial: 'steel', coolingMedium: 'air', ambientTemperatureC: 5, inletTemperatureC: 5, targetMediumTemperatureC: 5, diveSiteTemperatureC: 1, waitMode: 'minutes', waitMinutes: 0 };
   for (const field of ['ambientTemperatureC', 'inletTemperatureC', 'targetMediumTemperatureC']) for (const value of [5, 40]) { const thermal = { ...valid, [field]: value }; if (field === 'ambientTemperatureC') thermal.targetMediumTemperatureC = value; assert.deepEqual(validateCalculatorInputs(defaultCylinder, defaultPhysics, thermal), []); }
-  for (const value of [1, 30]) assert.deepEqual(validateCalculatorInputs(defaultCylinder, defaultPhysics, { ...valid, targetInWaterTemperatureC: value }), []);
+  for (const value of [1, 30]) assert.deepEqual(validateCalculatorInputs(defaultCylinder, defaultPhysics, { ...valid, diveSiteTemperatureC: value }), []);
 });
 test('rejects values outside every thermal temperature range', () => {
-  const valid = { tankMaterial: 'steel', coolingMedium: 'air', ambientTemperatureC: 20, inletTemperatureC: 20, targetMediumTemperatureC: 20, targetInWaterTemperatureC: 15, waitMode: 'minutes', waitMinutes: 0 };
-  for (const [field, value, message] of [['ambientTemperatureC', 4, /ambient.*5 and 40/i], ['ambientTemperatureC', 41, /ambient.*5 and 40/i], ['inletTemperatureC', 4, /inlet.*5 and 40/i], ['inletTemperatureC', 41, /inlet.*5 and 40/i], ['targetMediumTemperatureC', 4, /target-medium.*5 and 40/i], ['targetMediumTemperatureC', 41, /target-medium.*5 and 40/i], ['targetInWaterTemperatureC', 0, /target in-water.*1 and 30/i], ['targetInWaterTemperatureC', 31, /target in-water.*1 and 30/i]]) assert.match(validateCalculatorInputs(defaultCylinder, defaultPhysics, { ...valid, [field]: value }).join(' '), message);
+  const valid = { tankMaterial: 'steel', coolingMedium: 'air', ambientTemperatureC: 20, inletTemperatureC: 20, targetMediumTemperatureC: 20, diveSiteTemperatureC: 15, waitMode: 'minutes', waitMinutes: 0 };
+  for (const [field, value, message] of [['ambientTemperatureC', 4, /ambient.*5 and 40/i], ['ambientTemperatureC', 41, /ambient.*5 and 40/i], ['inletTemperatureC', 4, /inlet.*5 and 40/i], ['inletTemperatureC', 41, /inlet.*5 and 40/i], ['targetMediumTemperatureC', 4, /target-medium.*5 and 40/i], ['targetMediumTemperatureC', 41, /target-medium.*5 and 40/i], ['diveSiteTemperatureC', 0, /dive site.*1 and 30/i], ['diveSiteTemperatureC', 31, /dive site.*1 and 30/i]]) assert.match(validateCalculatorInputs(defaultCylinder, defaultPhysics, { ...valid, [field]: value }).join(' '), message);
 });
-test('allows target in-water below ambient while target medium remains valid', () => assert.deepEqual(validateCalculatorInputs(defaultCylinder, defaultPhysics, { tankMaterial: 'steel', coolingMedium: 'air', ambientTemperatureC: 25, inletTemperatureC: 25, targetMediumTemperatureC: 25, targetInWaterTemperatureC: 1, waitMode: 'minutes', waitMinutes: 0 }), []));
-test('allows target medium equal to ambient in temperature mode', () => assert.deepEqual(validateCalculatorInputs(defaultCylinder, defaultPhysics, { tankMaterial: 'steel', coolingMedium: 'air', ambientTemperatureC: 25, inletTemperatureC: 25, targetMediumTemperatureC: 25, targetInWaterTemperatureC: 10, waitMode: 'temperature', waitMinutes: 0 }), []));
+test('allows dive site temperature below ambient while target medium remains valid', () => assert.deepEqual(validateCalculatorInputs(defaultCylinder, defaultPhysics, { tankMaterial: 'steel', coolingMedium: 'air', ambientTemperatureC: 25, inletTemperatureC: 25, targetMediumTemperatureC: 25, diveSiteTemperatureC: 1, waitMode: 'minutes', waitMinutes: 0 }), []));
+test('allows target medium equal to ambient in temperature mode', () => assert.deepEqual(validateCalculatorInputs(defaultCylinder, defaultPhysics, { tankMaterial: 'steel', coolingMedium: 'air', ambientTemperatureC: 25, inletTemperatureC: 25, targetMediumTemperatureC: 25, diveSiteTemperatureC: 10, waitMode: 'temperature', waitMinutes: 0 }), []));
 test('measured interim overfill is allowed only while hotter than ambient and within the allowance', () => {
   const cylinder = {
     ...defaultCylinder,
@@ -266,7 +266,7 @@ test('measured interim overfill is allowed only while hotter than ambient and wi
     ambientTemperatureC: 20,
     inletTemperatureC: 20,
     targetMediumTemperatureC: 20,
-    targetInWaterTemperatureC: 10,
+    diveSiteTemperatureC: 10,
     waitMode: 'minutes',
     waitMinutes: 10,
     interimMeasurements: [{ pressureBar: 101.5, temperatureC: 40 }]
@@ -297,7 +297,7 @@ test('Warning mode bypasses only cylinder ceilings, not supported calculator inp
     ambientTemperatureC: 20,
     inletTemperatureC: 20,
     targetMediumTemperatureC: 20,
-    targetInWaterTemperatureC: 10,
+    diveSiteTemperatureC: 10,
     waitMode: 'minutes',
     waitMinutes: 0,
     interimMeasurements: [null]

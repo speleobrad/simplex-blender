@@ -996,7 +996,7 @@ test('compare simulation keeps a wait at fixed transfer pressure and projects a 
     protocolSteps: [{ type: 'add', method: 'decant', operation: 'Decant', receiverEndPressureBar: 100, resultingPressureBar: 100, resultingMix: { oxygenPercent: 32, heliumPercent: 0 }, sourceOxygenPercent: 32, sourceHeliumPercent: 0 }],
     cylinder: { initialPressureBar: 50, volumeL: 12 },
     physics: { model: 'ideal', temperatureC: 20 },
-    thermal: { tankMaterial: 'steel', coolingMedium: 'air', ambientTemperatureC: 20, inletTemperatureC: 20, targetInWaterTemperatureC: 10 },
+    thermal: { tankMaterial: 'steel', coolingMedium: 'air', ambientTemperatureC: 20, inletTemperatureC: 20, diveSiteTemperatureC: 10 },
     settings: { booster: { otherDecantRateBarPerMin: 5 } }
   });
   assert.ok(transferResult.final.recipeEnd.temperatureC > 20);

@@ -2762,7 +2762,7 @@ const MAXIMUM_TARGET_PRESSURE_BAR = 350;
 function normalizeInWaterTarget(input) {
   const thermal = input.thermal;
   const requestedInWaterPressureBar = input.cylinder.targetPressureBar;
-  const requestedInWaterTemperatureC = thermal.targetInWaterTemperatureC
+  const requestedInWaterTemperatureC = thermal.diveSiteTemperatureC
     ?? thermal.ambientTemperatureC;
   return calculatePressureAtTemperature({
     pressureBar: requestedInWaterPressureBar,
@@ -2912,7 +2912,7 @@ function evaluateThermalCandidate(input, optimizeStatic, targetPressureBar) {
   return { candidateInput, result, simulation };
 }
 
-function thermalResult(candidate, requestedInWaterPressureBar = candidate.candidateInput._requestedInWaterPressureBar ?? candidate.candidateInput.cylinder.targetPressureBar, requestedInWaterTemperatureC = candidate.candidateInput.thermal.targetInWaterTemperatureC ?? candidate.candidateInput.thermal.ambientTemperatureC, ambientSettledTargetPressureBar = candidate.candidateInput._ambientSettledTargetPressureBar ?? candidate.candidateInput.cylinder.targetPressureBar) {
+function thermalResult(candidate, requestedInWaterPressureBar = candidate.candidateInput._requestedInWaterPressureBar ?? candidate.candidateInput.cylinder.targetPressureBar, requestedInWaterTemperatureC = candidate.candidateInput.thermal.diveSiteTemperatureC ?? candidate.candidateInput.thermal.ambientTemperatureC, ambientSettledTargetPressureBar = candidate.candidateInput._ambientSettledTargetPressureBar ?? candidate.candidateInput.cylinder.targetPressureBar) {
   const thermal = thermalState(candidate, requestedInWaterPressureBar, requestedInWaterTemperatureC, ambientSettledTargetPressureBar);
   return {
     ...candidate.result,
@@ -3031,7 +3031,7 @@ function thermalizedMaximumResult(candidate, requestedInWaterPressureBar, reques
 
 function thermalLimitResult(input, requested, maximum) {
   const requestedInWaterPressureBar = input.cylinder.targetPressureBar;
-  const requestedInWaterTemperatureC = input.thermal.targetInWaterTemperatureC ?? input.thermal.ambientTemperatureC;
+  const requestedInWaterTemperatureC = input.thermal.diveSiteTemperatureC ?? input.thermal.ambientTemperatureC;
   const ambientSettledTargetPressureBar = normalizeInWaterTarget(input);
   const maximumCandidate = {
     candidateInput: maximum.candidateInput,
@@ -3103,7 +3103,7 @@ function optimizeThermalBlend(input, optimizeStatic) {
   }
 
   const requestedInWaterPressureBar = input.cylinder.targetPressureBar;
-  const requestedInWaterTemperatureC = input.thermal.targetInWaterTemperatureC ?? input.thermal.ambientTemperatureC;
+  const requestedInWaterTemperatureC = input.thermal.diveSiteTemperatureC ?? input.thermal.ambientTemperatureC;
   const ambientSettledTargetPressureBar = normalizeInWaterTarget(input);
   const searchInput = {
     ...input,

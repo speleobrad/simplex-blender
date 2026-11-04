@@ -58,7 +58,7 @@ test('a Carbondive 12 L preset runs through validation and the optimizer with th
     ambientTemperatureC: 20,
     inletTemperatureC: 20,
     targetMediumTemperatureC: 20,
-    targetInWaterTemperatureC: 15,
+    diveSiteTemperatureC: 15,
     waitMode: 'minutes',
     waitMinutes: 10
   };

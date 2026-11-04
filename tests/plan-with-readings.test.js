@@ -17,7 +17,7 @@ const input = {
   banks: DEFAULT_BANKS.map(bank => ({ ...bank })),
   thermal: {
     tankMaterial: 'aluminum', coolingMedium: 'air', ambientTemperatureC: 21, inletTemperatureC: 25,
-    targetMediumTemperatureC: 21, targetInWaterTemperatureC: 10,
+    targetMediumTemperatureC: 21, diveSiteTemperatureC: 10,
     waitMode: 'minutes', waitMinutes: 5, interimMeasurements: []
   },
   settings: DEFAULT_SETTINGS
@@ -273,7 +273,7 @@ const salvageInput = {
   ],
   thermal: {
     tankMaterial: 'steel', coolingMedium: 'air', ambientTemperatureC: 20, inletTemperatureC: 40,
-    targetMediumTemperatureC: 20, targetInWaterTemperatureC: 20, waitMode: 'minutes', waitMinutes: 0,
+    targetMediumTemperatureC: 20, diveSiteTemperatureC: 20, waitMode: 'minutes', waitMinutes: 0,
     interimMeasurements: []
   },
   settings: { booster: { maxCompressorPressureBar: 350, maxBoosterOutputPressureBar: 350 } }
@@ -327,7 +327,7 @@ const drainFixture = {
   ],
   thermal: {
     tankMaterial: 'steel', coolingMedium: 'air', ambientTemperatureC: 20, inletTemperatureC: 40,
-    targetMediumTemperatureC: 20, targetInWaterTemperatureC: 20, waitMode: 'minutes', waitMinutes: 0,
+    targetMediumTemperatureC: 20, diveSiteTemperatureC: 20, waitMode: 'minutes', waitMinutes: 0,
     interimMeasurements: []
   },
   settings: { booster: { maxCompressorPressureBar: 350, maxBoosterOutputPressureBar: 350 } }

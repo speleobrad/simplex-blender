@@ -207,7 +207,7 @@ function createController(options = {}) {
   const storage = options.storage ?? memoryStorage();
   const launchButton = document.createElement('button');
   document.body.append(launchButton);
-  for (const id of ['primary-navigation', 'supply-banks-section', 'equipment-section', 'ambient-temperature', 'target-temperature']) {
+  for (const id of ['primary-navigation', 'supply-banks-section', 'equipment-section', 'ambient-temperature', 'dive-site-temperature']) {
     const target = document.createElement(id.endsWith('-section') ? 'section' : 'button');
     target.setAttribute('id', id);
     document.body.append(target);
@@ -327,7 +327,7 @@ test('temperatures step highlights the in-water target beside the ambient input'
   const fixture = createController();
   fixture.controller.open();
   const driver = fixture.drivers[0];
-  const targetInput = fixture.document.getElementById('target-temperature');
+  const targetInput = fixture.document.getElementById('dive-site-temperature');
 
   for (let index = 0; index < 5; index += 1) driver.clickNext();
   assert.equal(targetInput.classList.contains('onboarding-secondary-highlight'), true);
