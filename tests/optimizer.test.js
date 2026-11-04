@@ -538,8 +538,18 @@ test('cascades interchangeable banks in ascending pressure order', () => {
     'Oxygen 120 bar',
     'Oxygen 170 bar'
   ]);
-  assert.ok(transfers.some(step => step.operation === 'Cascade equalize'));
-  assert.ok(transfers.some(step => step.operation === 'Cascade boost'));
+  const cascadeTransfers = transfers.filter(step => step.operation.startsWith('Cascade '));
+  assert.ok(cascadeTransfers.some(step => step.operation === 'Cascade equalize'));
+  assert.ok(cascadeTransfers.some(step => step.operation === 'Cascade boost'));
+  for (const step of cascadeTransfers) {
+    assert.equal(step.costOperation, step.type === 'decant' ? 'decant' : 'boost');
+    assert.match(step.costOperationId, /^op-\d+$/);
+    assert.ok(Number.isFinite(step.sourceConsumedMoles) && step.sourceConsumedMoles > 0);
+  }
+  assert.equal(
+    new Set(cascadeTransfers.map(step => step.costOperationId)).size,
+    cascadeTransfers.length
+  );
 });
 
 test('uses decant when source and receiver start at equal pressure', () => {
