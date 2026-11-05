@@ -458,7 +458,7 @@ function thermalPointAttributes(pointValue, index) {
   };
 }
 
-function renderChart(container, { title, unit, key, color, points, samples, bands, segments = [], referenceLine = null }) {
+function renderChart(container, { title, unit, key, color, points, samples, bands, segments = [], referenceLine = null, overlay = null }) {
   container.replaceChildren();
   if (!points.length) {
     const empty = document.createElement('p');
@@ -597,6 +597,40 @@ function renderChart(container, { title, unit, key, color, points, samples, band
   const curveSegments = segments.length
     ? segments
     : [{ style: 'observed', samples: samples.length ? samples : points }];
+  if (overlay) {
+    const overlaySamples = samples.length ? samples : points;
+    const overlayValues = overlaySamples.map(sample => sample[overlay.key]).filter(finite);
+    if (overlayValues.length) {
+      const overlayDomain = calculateChartDomain(overlayValues, overlay.unit);
+      const overlayY = value => calculateReferenceLineY(value, overlayDomain.min, overlayDomain.max, plotHeight);
+      const runs = [];
+      let run = [];
+      for (const sample of overlaySamples) {
+        if (finite(sample[overlay.key])) {
+          run.push(sample);
+        } else if (run.length) {
+          runs.push(run);
+          run = [];
+        }
+      }
+      if (run.length) runs.push(run);
+      svg.append(...runs.map(rateRun => svgElement('path', {
+        d: buildChartPath(rateRun, overlay.key, xForTime, overlayY),
+        fill: 'none',
+        stroke: overlay.color,
+        'stroke-width': 1.5,
+        'stroke-dasharray': '4 3',
+        opacity: 0.8,
+        'data-thermal-rate-overlay': 'true'
+      })));
+      svg.append(textNode(CHART_WIDTH - CHART_MARGIN.right, CHART_MARGIN.top + 28, `dashed = rate (${overlay.unit}) ${formatValue(overlayDomain.min)} to ${formatValue(overlayDomain.max)}`, {
+        fill: 'currentColor',
+        'font-size': 10,
+        'text-anchor': 'end',
+        opacity: 0.75
+      }));
+    }
+  }
   svg.append(
     svgElement('line', {
       x1: CHART_MARGIN.left,
@@ -787,6 +821,9 @@ export function renderThermalCharts(result, input = {}, units = 'metric', { root
     ...point,
     pressureBar: convertToDisplay(point.pressureBar, 'pressure', units),
     temperatureC: convertToDisplay(point.temperatureC, 'temperature', units),
+    rateBarPerMin: finite(point.rateBarPerMin)
+      ? convertToDisplay(point.rateBarPerMin, 'pressureBarPerMin', units)
+      : null,
     pressureUnit: getUnitLabel('pressure', units),
     temperatureUnit: getUnitLabel('temperature', units)
   });
@@ -824,7 +861,12 @@ export function renderThermalCharts(result, input = {}, units = 'metric', { root
     points: displaySeries.points,
     samples: displaySeries.samples,
     bands: displaySeries.bands,
-    segments: displaySeries.segments
+    segments: displaySeries.segments,
+    overlay: {
+      key: 'rateBarPerMin',
+      unit: getUnitLabel('pressureBarPerMin', units),
+      color: 'currentColor'
+    }
   });
   renderDataTable(dataTable, displaySeries.points);
   if (status) {
