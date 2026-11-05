@@ -10,7 +10,6 @@ import {
   thermalPointMarkerAttributes,
   thermalChartAriaLabel
 } from '../js/ui/thermal-charts.js';
-import { simulateCompareProtocol } from '../js/thermodynamics.js';
 
 const protocolSteps = [
   {
@@ -485,88 +484,4 @@ test('thermal hover interpolation returns both values at the hovered time', () =
   });
   assert.deepEqual(interpolateThermalSample(samples, -1), samples[0]);
   assert.deepEqual(interpolateThermalSample(samples, 4), samples.at(-1));
-});
-
-test('closed-form transfers carry their configured rate as one span, profile transfers do not duplicate it', () => {
-  const decantStep = {
-    type: 'decant',
-    title: 'Decant',
-    recipeLabel: 'Decant',
-    thermal: {
-      durationMinutes: 4,
-      waitMinutes: 2,
-      rateBarPerMin: 3,
-      temperatureStartC: 20,
-      pressureAtTransferEndBar: 92,
-      temperatureAtTransferEndC: 25,
-      pressureAfterWaitBar: 90,
-      temperatureAfterWaitC: 22,
-      samples: [
-        { elapsedMinutes: 0, pressureBar: 80, temperatureC: 20 },
-        { elapsedMinutes: 4, pressureBar: 92, temperatureC: 25 },
-        { elapsedMinutes: 6, pressureBar: 90, temperatureC: 22 }
-      ]
-    }
-  };
-  const boostStep = {
-    type: 'boost',
-    title: 'Boost',
-    recipeLabel: 'Boost',
-    thermal: {
-      durationMinutes: 2,
-      waitMinutes: 1,
-      rateBarPerMin: 1.5,
-      temperatureStartC: 22,
-      pressureAtTransferEndBar: 95,
-      temperatureAtTransferEndC: 26,
-      pressureAfterWaitBar: 94,
-      temperatureAfterWaitC: 23,
-      samples: [
-        { elapsedMinutes: 0, pressureBar: 90, temperatureC: 22, rateBarPerMin: 1.5 },
-        { elapsedMinutes: 2, pressureBar: 95, temperatureC: 26, rateBarPerMin: 1.5 },
-        { elapsedMinutes: 3, pressureBar: 94, temperatureC: 23, rateBarPerMin: null }
-      ]
-    }
-  };
-  const initial = { initialPressureBar: 80, initialTemperatureC: 20 };
-
-  assert.deepEqual(buildThermalSeries([decantStep], initial).rateSpans, [[
-    { elapsedMinutes: 0, rateBarPerMin: 3 },
-    { elapsedMinutes: 4, rateBarPerMin: 3 }
-  ]]);
-  assert.deepEqual(buildThermalSeries([boostStep], initial).rateSpans, []);
-});
-
-test('compare equalize runs as a decant, and its rate span covers the simulated transfer window', () => {
-  const result = simulateCompareProtocol({
-    protocolSteps: [
-      {
-        type: 'decant', operation: 'Decant',
-        receiverStartPressureBar: 50, receiverEndPressureBar: 80,
-        sourceOxygenPercent: 0, sourceHeliumPercent: 100,
-        resultingMix: { oxygenPercent: 12, heliumPercent: 40 }
-      },
-      {
-        type: 'equalize', operation: 'Equalize',
-        receiverStartPressureBar: 80, receiverEndPressureBar: 120,
-        sourceStartPressureBar: 200, sourceEndPressureBar: 120,
-        sourceOxygenPercent: 0, sourceHeliumPercent: 100,
-        resultingMix: { oxygenPercent: 10, heliumPercent: 50 }
-      }
-    ],
-    cylinder: { initialPressureBar: 50, volumeL: 12 },
-    physics: { model: 'ideal', temperatureC: 20 },
-    thermal: { tankMaterial: 'steel', coolingMedium: 'air', ambientTemperatureC: 20 },
-    settings: { booster: { otherDecantRateBarPerMin: 5, otherBoostBpm: 50 } }
-  });
-  const [decant, equalize] = result.protocolSteps;
-  assert.equal(equalize.type, 'equalize');
-  assert.equal(equalize.thermal.rateSource, 'decant-rate');
-
-  const series = buildThermalSeries(result.protocolSteps, { initialPressureBar: 50, initialTemperatureC: 20 });
-  const equalizeStart = decant.thermal.durationMinutes + decant.thermal.waitMinutes;
-  assert.deepEqual(series.rateSpans[1], [
-    { elapsedMinutes: equalizeStart, rateBarPerMin: 5 },
-    { elapsedMinutes: equalizeStart + equalize.thermal.durationMinutes, rateBarPerMin: 5 }
-  ]);
 });

@@ -1,8 +1,53 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { renderResults } from '../js/ui/results.js';
+import { formatTransferRate, renderResults } from '../js/ui/results.js';
 import { buildThermalSeries } from '../js/ui/thermal-charts.js';
 import { isPressureAboveWorkingPressure } from '../js/ui/water-pressure.js';
+
+test('transfer rate shows the first and last sampled rate for profile transfers', () => {
+  assert.equal(formatTransferRate({
+    rateBarPerMin: 1.5,
+    durationMinutes: 2,
+    samples: [
+      { elapsedMinutes: 0, rateBarPerMin: 3 },
+      { elapsedMinutes: 1, rateBarPerMin: 1.5 },
+      { elapsedMinutes: 2, rateBarPerMin: 0.8 }
+    ]
+  }), '3.0 - 0.8 bar/min');
+});
+
+test('transfer rate ignores null trailing samples and collapses a constant rate', () => {
+  assert.equal(formatTransferRate({
+    rateBarPerMin: 1.5,
+    durationMinutes: 2,
+    samples: [
+      { elapsedMinutes: 0, rateBarPerMin: 1.5 },
+      { elapsedMinutes: 2, rateBarPerMin: 1.5 },
+      { elapsedMinutes: 3, rateBarPerMin: null }
+    ]
+  }), '1.5 bar/min');
+});
+
+test('transfer rate uses the configured rate for closed-form transfers and dashes when absent', () => {
+  assert.equal(formatTransferRate({ rateBarPerMin: 3 }), '3.0 bar/min');
+  assert.equal(formatTransferRate({}), '—');
+});
+
+test('transfer rate converts to imperial units', () => {
+  assert.equal(formatTransferRate({ rateBarPerMin: 1 }, 'imperial'), '14.5 psi/min');
+});
+
+test('transfer rate ignores samples after the transfer window', () => {
+  assert.equal(formatTransferRate({
+    rateBarPerMin: 1.5,
+    durationMinutes: 2,
+    samples: [
+      { elapsedMinutes: 0, rateBarPerMin: 3 },
+      { elapsedMinutes: 2, rateBarPerMin: 0.8 },
+      { elapsedMinutes: 3, rateBarPerMin: 0.1 }
+    ]
+  }), '3.0 - 0.8 bar/min');
+});
 
 class FakeElement {
   constructor(tagName = 'div') {

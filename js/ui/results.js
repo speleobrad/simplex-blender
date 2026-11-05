@@ -249,6 +249,24 @@ function renderInfeasible(
 function formatThermalValue(value) {
   return Number.isFinite(value) ? value.toFixed(1) : '—';
 }
+
+// Start and end transfer rate in display units, e.g. "3.2 - 0.8 bar/min". Profile transfers use
+// their first and last per-sample rates; closed-form transfers use the configured rate.
+export function formatTransferRate(thermal, units = 'metric') {
+  const sampleRates = (thermal?.samples ?? [])
+    .filter(sample => sample.elapsedMinutes <= thermal?.durationMinutes)
+    .map(sample => sample.rateBarPerMin)
+    .filter(Number.isFinite);
+  const startRate = sampleRates[0] ?? thermal?.rateBarPerMin;
+  const endRate = sampleRates.at(-1) ?? thermal?.rateBarPerMin;
+  if (!Number.isFinite(startRate) || !Number.isFinite(endRate)) return '—';
+  const display = value => convertToDisplay(value, 'pressureBarPerMin', units).toFixed(1);
+  const range = Math.abs(startRate - endRate) < 1e-9
+    ? display(startRate)
+    : `${display(startRate)} - ${display(endRate)}`;
+  return `${range} ${unitLabel('pressureBarPerMin', units)}`;
+}
+
 function formatAutomaticWaitWarning(metadata, thermal, units = 'metric', stepTitle = null) {
   if (!metadata) return '';
   const value = minutes => Number.isFinite(minutes) ? `${minutes.toFixed(1)} min` : '—';
@@ -380,7 +398,6 @@ function renderThermalDetails(
 
   const pressure = value => Number.isFinite(value) ? formatUnitValue(value, 'pressureBar', units) : '—';
   const temperature = value => Number.isFinite(value) ? formatUnitValue(value, 'temperatureC', units) : '—';
-  const rate = value => Number.isFinite(value) ? `${formatUnitValue(value, 'pressureBar', units)}/min` : '—';
   const waitLabel = isFinalStep
     ? `Final cool-off to ${temperature(thermal.temperatureAfterWaitC)} (${formatThermalValue(thermal.waitMinutes)} min)`
     : `${formatThermalValue(thermal.waitMinutes)} min`;
@@ -435,7 +452,7 @@ function renderThermalDetails(
   }
 
   const leftRows = [
-    ['Rate', `${thermal.rateSource} · ${rate(thermal.rateBarPerMin)}`],
+    ['Rate', [thermal.rateSource, formatTransferRate(thermal, units)].filter(Boolean).join(' · ')],
     ['Duration', `${formatThermalValue(thermal.durationMinutes)} min`],
     [
       'Pressure at transfer end',
