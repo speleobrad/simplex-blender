@@ -10,6 +10,7 @@ import {
   calculateTemperatureAfterWait,
   coolingTimeConstantMinutes,
   estimateTransferTemperature,
+  integrateTransferRateProfile,
   projectPressureAtTemperatures,
   simulateCompareProtocol,
   simulateThermalProtocol
@@ -1417,4 +1418,128 @@ test('booster midpoint rate moves within 3.5% of the real-gas receiver moles ove
   const boosterMoles = rate.molesPerMin * durationMinutes;
   const bankMoles = (calcMolarDensity(90, 32, 0, 20, true) - calcMolarDensity(40, 32, 0, 20, true)) * 50;
   assert.ok(Math.abs(boosterMoles / bankMoles - 1) < 0.035);
+});
+
+function integratorFixture({
+  rateSource,
+  startPressureBar,
+  endPressureBar,
+  temperatureC = 20,
+  sourceStartPressureBar = 200,
+  sourceVolumeL = 50
+}) {
+  const sourceOxygenPercent = 21;
+  const sourceHeliumPercent = 0;
+  return {
+    rateSource,
+    startPressureBar,
+    endPressureBar,
+    temperatureSamples: [
+      { elapsedMinutes: 0, temperatureC },
+      { elapsedMinutes: 600, temperatureC }
+    ],
+    receiverVolumeL: 12,
+    receiverStartMix: { oxygenPercent: 21, heliumPercent: 0 },
+    receiverEndMix: { oxygenPercent: 21, heliumPercent: 0 },
+    useVdw: false,
+    ambientTemperatureC: 20,
+    cylinderVolumeCm3: 9,
+    bpm: 50,
+    sourceVolumeL,
+    sourceStartMoles: calcMolarDensity(
+      sourceStartPressureBar,
+      sourceOxygenPercent,
+      sourceHeliumPercent,
+      20,
+      false
+    ) * sourceVolumeL,
+    sourceOxygenPercent,
+    sourceHeliumPercent,
+    inletFlowLPerMin: 100
+  };
+}
+
+test('booster profile ends at the requested receiver pressure', () => {
+  const profile = integrateTransferRateProfile(integratorFixture({
+    rateSource: 'booster',
+    startPressureBar: 20,
+    endPressureBar: 120
+  }));
+  assert.equal(profile.reachedEndPressure, true);
+  assert.ok(Math.abs(profile.samples.at(-1).pressureBar - 120) < 0.5);
+});
+
+test('booster rate falls as the source drains', () => {
+  const { samples } = integrateTransferRateProfile(integratorFixture({
+    rateSource: 'booster',
+    startPressureBar: 20,
+    endPressureBar: 120
+  }));
+  assert.ok(samples.at(-1).sourcePressureBar < samples[0].sourcePressureBar);
+  assert.ok(samples.at(-1).rateBarPerMin < samples[0].rateBarPerMin);
+});
+
+test('booster profile duration matches the closed-form rate at the mid-transfer source pressure', () => {
+  const fixture = integratorFixture({
+    rateSource: 'booster',
+    startPressureBar: 20,
+    endPressureBar: 120
+  });
+  const profile = integrateTransferRateProfile(fixture);
+  const midSample = profile.samples.find(sample => sample.pressureBar >= 70);
+  const closedFormRate = calculateBoosterFillRate({
+    cylinderVolumeCm3: 9,
+    bpm: 50,
+    sourcePressureBar: midSample.sourcePressureBar,
+    receiverPressureBar: 70,
+    sourceOxygenPercent: 21,
+    sourceHeliumPercent: 0,
+    receiverOxygenPercent: 21,
+    receiverHeliumPercent: 0,
+    receiverVolumeL: 12,
+    temperatureC: 20,
+    useVdw: false
+  }).fillRateBarPerMin;
+  const closedFormDuration = 100 / closedFormRate;
+  assert.ok(Math.abs(profile.durationMinutes - closedFormDuration) / closedFormDuration < 0.05);
+});
+
+test('compressor duration scales with receiver temperature at identical pressure and mix', () => {
+  const cool = integrateTransferRateProfile(integratorFixture({
+    rateSource: 'compressor',
+    startPressureBar: 20,
+    endPressureBar: 150,
+    temperatureC: 20
+  }));
+  const hot = integrateTransferRateProfile(integratorFixture({
+    rateSource: 'compressor',
+    startPressureBar: 20,
+    endPressureBar: 150,
+    temperatureC: 60
+  }));
+  // Without VdW the rate is proportional to receiver absolute temperature.
+  assert.ok(Math.abs(hot.durationMinutes / cool.durationMinutes - 293.15 / 333.15) < 0.005);
+});
+
+test('profile samples sit on the 60 s grid and end at the endpoint', () => {
+  const profile = integrateTransferRateProfile(integratorFixture({
+    rateSource: 'booster',
+    startPressureBar: 20,
+    endPressureBar: 120
+  }));
+  const minutes = profile.samples.map(sample => sample.elapsedMinutes);
+  minutes.slice(0, -1).forEach((minute, index) => assert.equal(minute, index));
+  assert.equal(minutes.at(-1), profile.durationMinutes);
+});
+
+test('reports when the source cannot supply the requested pressure', () => {
+  const profile = integrateTransferRateProfile(integratorFixture({
+    rateSource: 'booster',
+    startPressureBar: 20,
+    endPressureBar: 120,
+    sourceVolumeL: 0.5,
+    sourceStartPressureBar: 30
+  }));
+  assert.equal(profile.reachedEndPressure, false);
+  assert.ok(profile.samples.at(-1).pressureBar < 120);
 });

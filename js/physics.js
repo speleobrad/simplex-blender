@@ -82,3 +82,13 @@ export function calcZ(pressureBar, oxygenPercent, heliumPercent, temperatureC, u
   const density = calcMolarDensity(pressureBar, oxygenPercent, heliumPercent, temperatureC, true);
   return calcZFromDensity(pressureBar, density, temperatureC, true);
 }
+
+export function inventoryPressure(moles, volumeL, oxygenMoles, heliumMoles, temperatureC, useVdw) {
+  return calcPressure(
+    moles / volumeL,
+    moles > 0 ? oxygenMoles / moles * 100 : 0,
+    moles > 0 ? heliumMoles / moles * 100 : 0,
+    temperatureC,
+    useVdw
+  );
+}

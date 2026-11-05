@@ -136,7 +136,8 @@ export function buildThermalSeries(protocolSteps, initial = {}, terminalProjecti
       title,
       elapsedMinutes: stepStartMinutes + sample.elapsedMinutes,
       pressureBar: sample.pressureBar,
-      temperatureC: sample.temperatureC
+      temperatureC: sample.temperatureC,
+      rateBarPerMin: sample.rateBarPerMin ?? null
     }));
     samples.push(...mappedSamples);
 

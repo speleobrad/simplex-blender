@@ -2,7 +2,8 @@ import {
   GAS_CONSTANT,
   calcMolarDensity,
   calcPressure,
-  calcZ
+  calcZ,
+  inventoryPressure
 } from './physics.js';
 
 import { materialThermal } from './materials.js';
@@ -307,6 +308,158 @@ function estimateTransferTemperatureSamples({
   return samples;
 }
 
+const PROFILE_TIME_EPSILON_MINUTES = 1e-9;
+const PROFILE_PRESSURE_EPSILON_BAR = 1e-9;
+const PROFILE_MAX_MINUTES = 24 * 60;
+
+function interpolateTemperatureC(samples, elapsedMinutes) {
+  if (elapsedMinutes <= samples[0].elapsedMinutes) return samples[0].temperatureC;
+  for (let index = 1; index < samples.length; index += 1) {
+    const upper = samples[index];
+    if (elapsedMinutes <= upper.elapsedMinutes) {
+      const lower = samples[index - 1];
+      const spanMinutes = upper.elapsedMinutes - lower.elapsedMinutes;
+      const fraction = spanMinutes > 0
+        ? (elapsedMinutes - lower.elapsedMinutes) / spanMinutes
+        : 1;
+      return lower.temperatureC + (upper.temperatureC - lower.temperatureC) * fraction;
+    }
+  }
+  return samples.at(-1).temperatureC;
+}
+
+// Advances receiver pressure on the same 0.5 s grid as the temperature model.
+// Each step re-evaluates the existing rate function at the current receiver
+// pressure, temperature, and mix. The booster source is tracked as moles: each
+// step removes the molar flow the rate function returns, and its pressure comes
+// from the shared inventory helper at the ambient-temperature basis.
+export function integrateTransferRateProfile({
+  rateSource,
+  startPressureBar,
+  endPressureBar,
+  temperatureSamples,
+  receiverVolumeL,
+  receiverStartMix,
+  receiverEndMix,
+  useVdw,
+  ambientTemperatureC,
+  cylinderVolumeCm3,
+  bpm,
+  sourceVolumeL,
+  sourceStartMoles,
+  sourceOxygenPercent,
+  sourceHeliumPercent,
+  inletFlowLPerMin
+}) {
+  const isBooster = rateSource === 'booster';
+  const stepMinutes = THERMAL_INTEGRATION_STEP_SECONDS / 60;
+  const pressureSpanBar = endPressureBar - startPressureBar;
+
+  const evaluate = (pressureBar, elapsedMinutes, sourceMoles) => {
+    const progress = pressureSpanBar > 0
+      ? clamp((pressureBar - startPressureBar) / pressureSpanBar, 0, 1)
+      : 1;
+    const oxygenPercent = receiverStartMix.oxygenPercent
+      + (receiverEndMix.oxygenPercent - receiverStartMix.oxygenPercent) * progress;
+    const heliumPercent = receiverStartMix.heliumPercent
+      + (receiverEndMix.heliumPercent - receiverStartMix.heliumPercent) * progress;
+    const temperatureC = interpolateTemperatureC(temperatureSamples, elapsedMinutes);
+    if (!isBooster) {
+      return {
+        rateBarPerMin: calculateCompressorFillRate({
+          inletFlowLPerMin,
+          receiverPressureBar: pressureBar,
+          receiverOxygenPercent: oxygenPercent,
+          receiverHeliumPercent: heliumPercent,
+          receiverVolumeL,
+          ambientTemperatureC,
+          receiverTemperatureC: temperatureC,
+          useVdw
+        }),
+        molesPerMin: 0,
+        sourcePressureBar: null,
+        temperatureC,
+        oxygenPercent,
+        heliumPercent
+      };
+    }
+    const sourcePressureBar = inventoryPressure(
+      sourceMoles,
+      sourceVolumeL,
+      sourceMoles * sourceOxygenPercent / 100,
+      sourceMoles * sourceHeliumPercent / 100,
+      ambientTemperatureC,
+      useVdw
+    );
+    const flow = sourceMoles > 0
+      ? calculateBoosterFillRate({
+        cylinderVolumeCm3,
+        bpm,
+        sourcePressureBar,
+        receiverPressureBar: pressureBar,
+        sourceOxygenPercent,
+        sourceHeliumPercent,
+        receiverOxygenPercent: oxygenPercent,
+        receiverHeliumPercent: heliumPercent,
+        receiverVolumeL,
+        temperatureC,
+        useVdw
+      })
+      : { fillRateBarPerMin: 0, molesPerMin: 0 };
+    return {
+      rateBarPerMin: flow.fillRateBarPerMin,
+      molesPerMin: flow.molesPerMin,
+      sourcePressureBar,
+      temperatureC,
+      oxygenPercent,
+      heliumPercent
+    };
+  };
+
+  const samples = [];
+  let pressureBar = startPressureBar;
+  let sourceMoles = sourceStartMoles;
+  let elapsedMinutes = 0;
+  let nextSampleMinutes = 0;
+  let reachedEndPressure = false;
+
+  for (;;) {
+    const state = evaluate(pressureBar, elapsedMinutes, sourceMoles);
+    const atEnd = pressureBar >= endPressureBar - PROFILE_PRESSURE_EPSILON_BAR;
+    const stalled = !(state.rateBarPerMin > 0) || elapsedMinutes >= PROFILE_MAX_MINUTES;
+    const onSampleBoundary = elapsedMinutes + PROFILE_TIME_EPSILON_MINUTES >= nextSampleMinutes;
+    if (onSampleBoundary || atEnd || stalled) {
+      const sampleMinutes = onSampleBoundary ? nextSampleMinutes : elapsedMinutes;
+      if (samples.at(-1)?.elapsedMinutes !== sampleMinutes) {
+        samples.push({
+          elapsedMinutes: sampleMinutes,
+          pressureBar,
+          rateBarPerMin: state.rateBarPerMin,
+          sourcePressureBar: state.sourcePressureBar,
+          temperatureC: state.temperatureC,
+          oxygenPercent: state.oxygenPercent,
+          heliumPercent: state.heliumPercent
+        });
+      }
+    }
+    if (onSampleBoundary) nextSampleMinutes += 1;
+    if (atEnd) {
+      reachedEndPressure = true;
+      break;
+    }
+    if (stalled) break;
+
+    const minutesToEnd = (endPressureBar - pressureBar) / state.rateBarPerMin;
+    const finalStep = minutesToEnd <= stepMinutes;
+    const dtMinutes = finalStep ? minutesToEnd : stepMinutes;
+    pressureBar = finalStep ? endPressureBar : pressureBar + state.rateBarPerMin * dtMinutes;
+    sourceMoles = Math.max(0, sourceMoles - state.molesPerMin * dtMinutes);
+    elapsedMinutes += dtMinutes;
+  }
+
+  return { durationMinutes: elapsedMinutes, reachedEndPressure, samples };
+}
+
 export function estimateTransferTemperature({
   startTemperatureC,
   startPressureBar = 0,
@@ -568,11 +721,112 @@ function rateForProtocolStep({
   };
 }
 
+const PROFILE_DURATION_TOLERANCE_MINUTES = 1e-6;
+const PROFILE_DURATION_MAX_ITERATIONS = 8;
+
+// Solves the fill duration and the receiver temperature history together. The
+// rate depends on receiver temperature, and the temperature history depends on
+// how long the fill takes, so the integrated duration is fed back until it
+// stops moving. Returns null for steps without a profile model: transfers other
+// than booster and compressor, and booster steps without source inventory. Those
+// steps keep the closed-form duration.
+function solveTransferProfile({
+  step,
+  transfer,
+  currentPressureBar,
+  currentTemperatureC,
+  transferEndPressureBar,
+  currentMix,
+  receiverMix,
+  cylinder,
+  physics,
+  thermal,
+  booster,
+  inletTemperatureC
+}) {
+  const isBooster = transfer.rateSource === 'booster';
+  if (!isBooster && transfer.rateSource !== 'compressor') return null;
+  if (!(transfer.rateBarPerMin > 0) || !(transfer.pressureIncreaseBar > 0)) return null;
+  const hasSourceInventory = Number.isFinite(step.sourceVolumeL)
+    && step.sourceVolumeL > 0
+    && Number.isFinite(step.sourceStartMoles)
+    && step.sourceStartMoles >= 0;
+  if (isBooster && !hasSourceInventory) return null;
+  const sourceOxygenPercent = step.sourceOxygenPercent ?? receiverMix.oxygenPercent;
+  const sourceHeliumPercent = step.sourceHeliumPercent ?? receiverMix.heliumPercent;
+  const receiverStartMix = step.receiverStartMix ?? currentMix;
+  const useVdw = physics.model === 'vdw';
+  const isOxygenRich = sourceOxygenPercent >= OXYGEN_RICH_THRESHOLD;
+  const temperatureBasis = {
+    startTemperatureC: currentTemperatureC,
+    startPressureBar: currentPressureBar,
+    addedPressureBar: transfer.pressureChangeBar ?? transfer.pressureIncreaseBar,
+    volumeL: cylinder.volumeL,
+    heliumFraction: sourceHeliumPercent / 100,
+    oxygenFraction: sourceOxygenPercent / 100,
+    tankMaterial: thermal.tankMaterial,
+    coolingMedium: thermal.coolingMedium,
+    waterSubmersionPercent: thermal.waterSubmersionPercent,
+    tankMassKg: thermal.tankMassKg,
+    ambientTemperatureC: thermal.ambientTemperatureC,
+    inletTemperatureC
+  };
+
+  let durationMinutes = transfer.pressureIncreaseBar / transfer.rateBarPerMin;
+  let temperatureSamples = null;
+  let profile = null;
+  let converged = false;
+  for (
+    let iteration = 0;
+    iteration < PROFILE_DURATION_MAX_ITERATIONS && !converged;
+    iteration += 1
+  ) {
+    temperatureSamples = estimateTransferTemperatureSamples({
+      ...temperatureBasis,
+      fillTimeMinutes: durationMinutes
+    });
+    profile = integrateTransferRateProfile({
+      rateSource: transfer.rateSource,
+      startPressureBar: currentPressureBar,
+      endPressureBar: transferEndPressureBar,
+      temperatureSamples,
+      receiverVolumeL: cylinder.volumeL,
+      receiverStartMix,
+      receiverEndMix: receiverMix,
+      useVdw,
+      ambientTemperatureC: thermal.ambientTemperatureC,
+      cylinderVolumeCm3: booster.cylinderVolumeCm3,
+      bpm: isOxygenRich ? booster.oxygenBoostBpm : booster.otherBoostBpm,
+      sourceVolumeL: step.sourceVolumeL,
+      sourceStartMoles: step.sourceStartMoles,
+      sourceOxygenPercent,
+      sourceHeliumPercent,
+      inletFlowLPerMin: booster.compressorInletFlowLPerMin
+    });
+    converged = Math.abs(profile.durationMinutes - durationMinutes)
+      < PROFILE_DURATION_TOLERANCE_MINUTES;
+    durationMinutes = profile.durationMinutes;
+  }
+
+  const achievedPressureBar = profile.samples.at(-1).pressureBar - currentPressureBar;
+  return {
+    durationMinutes,
+    rateBarPerMin: durationMinutes > 0
+      ? achievedPressureBar / durationMinutes
+      : transfer.rateBarPerMin,
+    reachedEndPressure: profile.reachedEndPressure,
+    converged,
+    temperatureSamples,
+    profileSamples: profile.samples
+  };
+}
+
 function buildThermalStepSamples({
   currentPressureBar,
   currentTemperatureC,
   transfer,
   transferTemperatureSamples,
+  transferProfileSamples,
   durationMinutes,
   transferEndPressureBar,
   pressureAtTransferEndAmbientBar,
@@ -620,7 +874,36 @@ function buildThermalStepSamples({
     ?? transferEndPressureBar;
   const ambientTransferEndPressure = pressureAtTransferEndAmbientBar
     ?? transferEndPressureBar;
-  if (hasTransferProfile) {
+  if (transferProfileSamples) {
+    for (const point of transferProfileSamples) {
+      const ambientPressureBar = calculatePressureAtTemperature({
+        pressureBar: point.pressureBar,
+        oxygenPercent: point.oxygenPercent,
+        heliumPercent: point.heliumPercent,
+        fromTemperatureC: point.temperatureC,
+        toTemperatureC: thermal.ambientTemperatureC,
+        volumeL: cylinder.volumeL,
+        useVdw
+      });
+      const projectedPressureBar = calculatePressureAtTemperature({
+        pressureBar: ambientPressureBar,
+        oxygenPercent: point.oxygenPercent,
+        heliumPercent: point.heliumPercent,
+        fromTemperatureC: thermal.ambientTemperatureC,
+        toTemperatureC: point.temperatureC,
+        volumeL: cylinder.volumeL,
+        useVdw
+      });
+      append(point.elapsedMinutes, point.temperatureC, point.pressureBar, {
+        ambientPressureBar,
+        projectedPressureBar,
+        oxygenPercent: point.oxygenPercent,
+        heliumPercent: point.heliumPercent,
+        rateBarPerMin: point.rateBarPerMin,
+        pressureReferenceTemperatureC: point.temperatureC
+      });
+    }
+  } else if (hasTransferProfile) {
     const startMix = receiverMix.startMix ?? receiverMix;
     const startAmbientPressureBar = calculatePressureAtTemperature({
       pressureBar: currentPressureBar,
@@ -845,9 +1128,6 @@ export function simulateThermalProtocol({
       thermal,
       booster
     });
-    const durationMinutes = transfer.rateBarPerMin && transfer.rateBarPerMin > 0
-      ? transfer.pressureIncreaseBar / transfer.rateBarPerMin
-      : 0;
     const noTransfer = transfer.rateSource === 'none'
       && transfer.pressureIncreaseBar <= 0;
     const receiverMix = noTransfer ? currentMix : targetMix;
@@ -859,23 +1139,43 @@ export function simulateThermalProtocol({
       || transfer.rateSource === 'draining-rate'
       || transfer.rateSource === 'salvage-decant'
       || transfer.rateSource === 'salvage-booster';
-    const transferTemperatureSamples = hasTransferProfile
-      ? estimateTransferTemperatureSamples({
-        startTemperatureC: currentTemperatureC,
-        startPressureBar: currentPressureBar,
-        addedPressureBar: transfer.pressureChangeBar ?? transfer.pressureIncreaseBar,
-        fillTimeMinutes: durationMinutes,
-        volumeL: cylinder.volumeL,
-        heliumFraction: (step.sourceHeliumPercent ?? receiverMix.heliumPercent) / 100,
-        oxygenFraction: (step.sourceOxygenPercent ?? receiverMix.oxygenPercent) / 100,
-        tankMaterial: thermal.tankMaterial,
-        coolingMedium: thermal.coolingMedium,
-        waterSubmersionPercent: thermal.waterSubmersionPercent,
-        tankMassKg: thermal.tankMassKg,
-        ambientTemperatureC: thermal.ambientTemperatureC,
-        inletTemperatureC
-      })
-      : [{ elapsedMinutes: 0, temperatureC: currentTemperatureC }];
+    const profileTransfer = solveTransferProfile({
+      step,
+      transfer,
+      currentPressureBar,
+      currentTemperatureC,
+      transferEndPressureBar,
+      currentMix,
+      receiverMix,
+      cylinder,
+      physics,
+      thermal,
+      booster,
+      inletTemperatureC
+    });
+    const durationMinutes = profileTransfer?.durationMinutes
+      ?? (transfer.rateBarPerMin && transfer.rateBarPerMin > 0
+        ? transfer.pressureIncreaseBar / transfer.rateBarPerMin
+        : 0);
+    const transferRateBarPerMin = profileTransfer?.rateBarPerMin ?? transfer.rateBarPerMin;
+    const transferTemperatureSamples = profileTransfer?.temperatureSamples
+      ?? (hasTransferProfile
+        ? estimateTransferTemperatureSamples({
+          startTemperatureC: currentTemperatureC,
+          startPressureBar: currentPressureBar,
+          addedPressureBar: transfer.pressureChangeBar ?? transfer.pressureIncreaseBar,
+          fillTimeMinutes: durationMinutes,
+          volumeL: cylinder.volumeL,
+          heliumFraction: (step.sourceHeliumPercent ?? receiverMix.heliumPercent) / 100,
+          oxygenFraction: (step.sourceOxygenPercent ?? receiverMix.oxygenPercent) / 100,
+          tankMaterial: thermal.tankMaterial,
+          coolingMedium: thermal.coolingMedium,
+          waterSubmersionPercent: thermal.waterSubmersionPercent,
+          tankMassKg: thermal.tankMassKg,
+          ambientTemperatureC: thermal.ambientTemperatureC,
+          inletTemperatureC
+        })
+        : [{ elapsedMinutes: 0, temperatureC: currentTemperatureC }]);
     const temperatureAtTransferEndC = transferTemperatureSamples.at(-1).temperatureC;
     const pressureAtTransferEndReferenceBar = noTransfer
       ? calculatePressureAtTemperature({
@@ -970,7 +1270,8 @@ export function simulateThermalProtocol({
       plannedStartTemperatureC,
       pressureStartBar,
       rateSource: transfer.rateSource,
-      rateBarPerMin: transfer.rateBarPerMin,
+      rateBarPerMin: transferRateBarPerMin,
+      transferReachedEndPressure: profileTransfer?.reachedEndPressure ?? null,
       durationMinutes,
       inletTemperatureC,
       measurementIndex,
@@ -1002,6 +1303,7 @@ export function simulateThermalProtocol({
         currentTemperatureC,
         transfer,
         transferTemperatureSamples,
+        transferProfileSamples: profileTransfer?.profileSamples ?? null,
         durationMinutes,
         transferEndPressureBar: pressureAtTransferEndReferenceBar,
         pressureAtTransferEndAmbientBar,
@@ -1077,6 +1379,8 @@ export function simulateCompareProtocol({
     let transferTemperatureSamples = [{ elapsedMinutes: 0, temperatureC: currentTemperatureC }];
     let temperatureAtTransferEndC = currentTemperatureC;
     let hasTransferProfile = false;
+    let profileTransfer = null;
+    let transferRateBarPerMin = null;
     let pressureAtTransferEndHotBar = transferEndPressureBar;
     const solveHotEndpoint = !isWait
       && !isKeep
@@ -1114,9 +1418,6 @@ export function simulateCompareProtocol({
           thermal,
           booster
         });
-      durationMinutes = transfer.rateBarPerMin && transfer.rateBarPerMin > 0
-        ? transfer.pressureIncreaseBar / transfer.rateBarPerMin
-        : 0;
       inletTemperatureC = inletTemperatureFor(transfer.rateSource, thermal, booster);
       hasTransferProfile = transfer.rateSource === 'booster'
         || transfer.rateSource === 'compressor'
@@ -1124,23 +1425,43 @@ export function simulateCompareProtocol({
         || transfer.rateSource === 'draining-rate'
         || transfer.rateSource === 'salvage-decant'
         || transfer.rateSource === 'salvage-booster';
-      transferTemperatureSamples = hasTransferProfile
-        ? estimateTransferTemperatureSamples({
-          startTemperatureC: currentTemperatureC,
-          startPressureBar: currentPressureBar,
-          addedPressureBar: transfer.pressureChangeBar ?? transfer.pressureIncreaseBar,
-          fillTimeMinutes: durationMinutes,
-          volumeL: cylinder.volumeL,
-          heliumFraction: (step.sourceHeliumPercent ?? receiverMix.heliumPercent) / 100,
-          oxygenFraction: (step.sourceOxygenPercent ?? receiverMix.oxygenPercent) / 100,
-          tankMaterial: thermal.tankMaterial,
-          coolingMedium: thermal.coolingMedium,
-          waterSubmersionPercent: thermal.waterSubmersionPercent,
-          tankMassKg: thermal.tankMassKg,
-          ambientTemperatureC: thermal.ambientTemperatureC,
-          inletTemperatureC
-        })
-        : [{ elapsedMinutes: 0, temperatureC: currentTemperatureC }];
+      profileTransfer = solveTransferProfile({
+        step: transferStep,
+        transfer,
+        currentPressureBar,
+        currentTemperatureC,
+        transferEndPressureBar,
+        currentMix,
+        receiverMix,
+        cylinder,
+        physics,
+        thermal,
+        booster,
+        inletTemperatureC
+      });
+      durationMinutes = profileTransfer?.durationMinutes
+        ?? (transfer.rateBarPerMin && transfer.rateBarPerMin > 0
+          ? transfer.pressureIncreaseBar / transfer.rateBarPerMin
+          : 0);
+      transferRateBarPerMin = profileTransfer?.rateBarPerMin ?? transfer.rateBarPerMin;
+      transferTemperatureSamples = profileTransfer?.temperatureSamples
+        ?? (hasTransferProfile
+          ? estimateTransferTemperatureSamples({
+            startTemperatureC: currentTemperatureC,
+            startPressureBar: currentPressureBar,
+            addedPressureBar: transfer.pressureChangeBar ?? transfer.pressureIncreaseBar,
+            fillTimeMinutes: durationMinutes,
+            volumeL: cylinder.volumeL,
+            heliumFraction: (step.sourceHeliumPercent ?? receiverMix.heliumPercent) / 100,
+            oxygenFraction: (step.sourceOxygenPercent ?? receiverMix.oxygenPercent) / 100,
+            tankMaterial: thermal.tankMaterial,
+            coolingMedium: thermal.coolingMedium,
+            waterSubmersionPercent: thermal.waterSubmersionPercent,
+            tankMassKg: thermal.tankMassKg,
+            ambientTemperatureC: thermal.ambientTemperatureC,
+            inletTemperatureC
+          })
+          : [{ elapsedMinutes: 0, temperatureC: currentTemperatureC }]);
       temperatureAtTransferEndC = transferTemperatureSamples.at(-1).temperatureC;
       pressureAtTransferEndHotBar = hasTransferProfile
         ? calculatePressureAtTemperature({
@@ -1226,7 +1547,7 @@ export function simulateCompareProtocol({
     }));
     const thermalStep = {
       rateSource: transfer.rateSource,
-      rateBarPerMin: transfer.rateBarPerMin,
+      rateBarPerMin: transferRateBarPerMin,
       durationMinutes,
       inletTemperatureC,
       pressureStartBar,
@@ -1245,6 +1566,7 @@ export function simulateCompareProtocol({
         currentTemperatureC,
         transfer,
         transferTemperatureSamples,
+        transferProfileSamples: profileTransfer?.profileSamples ?? null,
         durationMinutes,
         transferEndPressureBar,
         pressureAtTransferEndAmbientBar,

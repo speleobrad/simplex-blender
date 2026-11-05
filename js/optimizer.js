@@ -1,4 +1,4 @@
-import { GAS_CONSTANT, HELIUM_SALVAGE_MAX_PERCENT, calcMolarDensity, calcPressure, calcZFromDensity, getMixParams } from './physics.js';
+import { GAS_CONSTANT, HELIUM_SALVAGE_MAX_PERCENT, calcMolarDensity, calcPressure, calcZFromDensity, getMixParams, inventoryPressure } from './physics.js';
 import { solveTwoPhaseSimplex } from './simplex.js';
 import { isValidGasComposition } from './gas-input.js';
 import { validateCalculatorInputs, validateSupplyBankInput } from './input-validation.js';
@@ -313,27 +313,6 @@ function mixForStep(step, state, fallback = { oxygenPercent: 21, heliumPercent: 
       ?? step.receiverStartMix?.heliumPercent
       ?? fallback.heliumPercent
   };
-}
-
-function pressureFromMoles(moles, volumeL, oxygenPercent, heliumPercent, temperatureC, useVdw) {
-  return calcPressure(
-    moles / volumeL,
-    oxygenPercent,
-    heliumPercent,
-    temperatureC,
-    useVdw
-  );
-}
-
-function inventoryPressure(moles, volumeL, oxygenMoles, heliumMoles, temperatureC, useVdw) {
-  return pressureFromMoles(
-    moles,
-    volumeL,
-    moles > 0 ? oxygenMoles / moles * 100 : 0,
-    moles > 0 ? heliumMoles / moles * 100 : 0,
-    temperatureC,
-    useVdw
-  );
 }
 
 function splitTransferAtSafeHotEndpoint({
@@ -2217,7 +2196,7 @@ function solveBlendWithoutSalvage(input) {
     useVdw
   );
   const postSalvagePressure = salvagedMoles > 0
-    ? pressureFromMoles(initialMoles - salvagedMoles, volumeL, initialOxygenPercent, initialHeliumPercent, temperatureC, useVdw)
+    ? calcPressure((initialMoles - salvagedMoles) / volumeL, initialOxygenPercent, initialHeliumPercent, temperatureC, useVdw)
     : initialPressureBar;
   const drainPressure = Math.max(0, postSalvagePressure - retainedPressure);
   const recipeBoosts = activeBoostsFor(recipeSolverResult, activeBanks, {
@@ -2514,9 +2493,8 @@ function runSalvageCascade({
       const receiverStart = receiver;
       const receiverEnd = applyTransferToBank(receiverStart, tankMix, sized.movedMoles, physics);
       tankMoles -= sized.movedMoles;
-      tankPressureBar = pressureFromMoles(
-        tankMoles,
-        cylinder.volumeL,
+      tankPressureBar = calcPressure(
+        tankMoles / cylinder.volumeL,
         tankMix.oxygenPercent,
         tankMix.heliumPercent,
         temperatureC,

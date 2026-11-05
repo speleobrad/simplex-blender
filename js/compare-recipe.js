@@ -464,6 +464,8 @@ function plannedTransferStep(type, row, sourceStart, sourceEnd, receiverStart, r
     },
     sourceOxygenPercent: row.sourceBank.oxygenPercent,
     sourceHeliumPercent: row.sourceBank.heliumPercent,
+    sourceVolumeL: row.sourceBank.volumeL,
+    sourceStartMoles: sourceStart.moles,
     sourceStartPressureBar: sourceStart.pressureBar,
     sourceEndPressureBar: sourceEnd.pressureBar,
     sourceState: sourceEnd,
