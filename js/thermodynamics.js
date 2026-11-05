@@ -567,6 +567,12 @@ function compareTargetWaitError(message, details) {
   return error;
 }
 
+function transferProfileError(message) {
+  const error = new RangeError(message);
+  error.code = 'TRANSFER_PROFILE_UNSATISFIED';
+  return error;
+}
+
 function salvageTransferRate({
   step,
   currentPressureBar,
@@ -797,7 +803,7 @@ function solveSalvageBoosterProfile({
   });
   if (!profile.reachedEndPressure) {
     const stalledAtBar = profile.samples.at(-1).pressureBar;
-    throw new RangeError(`Transfer stalled at ${stalledAtBar.toFixed(2)} bar before reaching ${bankEndPressureBar.toFixed(2)} bar; the salvage-booster source cannot supply it.`);
+    throw transferProfileError(`Transfer stalled at ${stalledAtBar.toFixed(2)} bar before reaching ${bankEndPressureBar.toFixed(2)} bar; the salvage-booster source cannot supply it.`);
   }
   const durationMinutes = profile.durationMinutes;
   const bankRiseBar = profile.samples.at(-1).pressureBar - bankStartPressureBar;
@@ -941,11 +947,11 @@ function solveTransferProfile({
   }
 
   if (!converged) {
-    throw new RangeError(`Transfer duration did not converge within ${PROFILE_DURATION_MAX_ITERATIONS} iterations; the rate and receiver temperature history disagree.`);
+    throw transferProfileError(`Transfer duration did not converge within ${PROFILE_DURATION_MAX_ITERATIONS} iterations; the rate and receiver temperature history disagree.`);
   }
   if (!profile.reachedEndPressure) {
     const stalledAtBar = profile.samples.at(-1).pressureBar;
-    throw new RangeError(`Transfer stalled at ${stalledAtBar.toFixed(2)} bar before reaching ${transferEndPressureBar.toFixed(2)} bar; the ${transfer.rateSource} source cannot supply it.`);
+    throw transferProfileError(`Transfer stalled at ${stalledAtBar.toFixed(2)} bar before reaching ${transferEndPressureBar.toFixed(2)} bar; the ${transfer.rateSource} source cannot supply it.`);
   }
   const achievedPressureBar = profile.samples.at(-1).pressureBar - currentPressureBar;
   return {
