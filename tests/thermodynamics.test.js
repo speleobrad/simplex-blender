@@ -1543,3 +1543,64 @@ test('reports when the source cannot supply the requested pressure', () => {
   assert.equal(profile.reachedEndPressure, false);
   assert.ok(profile.samples.at(-1).pressureBar < 120);
 });
+
+function boosterInventoryProtocol(sourceVolumeL) {
+  const sourceOxygenPercent = 21;
+  const sourceHeliumPercent = 0;
+  return {
+    protocolSteps: [{
+      type: 'boost',
+      operation: 'Boost',
+      receiverStartPressureBar: 20,
+      receiverEndPressureBar: 120,
+      receiverVolumeL: 12,
+      receiverStartMix: { oxygenPercent: 21, heliumPercent: 0 },
+      resultingPressureBar: 120,
+      resultingMix: { oxygenPercent: 21, heliumPercent: 0 },
+      sourceOxygenPercent,
+      sourceHeliumPercent,
+      sourcePressureBar: 200,
+      sourceVolumeL,
+      sourceStartMoles: calcMolarDensity(200, sourceOxygenPercent, sourceHeliumPercent, 20, false) * sourceVolumeL
+    }],
+    cylinder: { initialPressureBar: 20, volumeL: 12 },
+    physics: { model: 'ideal', temperatureC: 20 },
+    thermal: {
+      tankMaterial: 'steel',
+      coolingMedium: 'air',
+      ambientTemperatureC: 20,
+      inletTemperatureC: 20,
+      waitMode: 'minutes',
+      waitMinutes: 0,
+      targetTemperatureC: 25
+    },
+    settings: { booster: { otherBoostBpm: 50, cylinderVolumeCm3: 9 } }
+  };
+}
+
+test('booster transfer with source inventory averages a rate below its starting rate', () => {
+  const simulation = simulateThermalProtocol(boosterInventoryProtocol(50));
+  const thermal = simulation.protocolSteps[0].thermal;
+  const startRate = calculateBoosterFillRate({
+    cylinderVolumeCm3: 9,
+    bpm: 50,
+    sourcePressureBar: 200,
+    receiverPressureBar: 20,
+    sourceOxygenPercent: 21,
+    sourceHeliumPercent: 0,
+    receiverOxygenPercent: 21,
+    receiverHeliumPercent: 0,
+    receiverVolumeL: 12,
+    temperatureC: thermal.temperatureStartC,
+    useVdw: false
+  }).fillRateBarPerMin;
+  assert.ok(thermal.rateBarPerMin > 0);
+  assert.ok(thermal.rateBarPerMin < startRate);
+});
+
+test('booster transfer that the source cannot complete fails instead of reporting a partial transfer', () => {
+  assert.throws(
+    () => simulateThermalProtocol(boosterInventoryProtocol(0.5)),
+    error => error instanceof RangeError && /stalled/.test(error.message)
+  );
+});

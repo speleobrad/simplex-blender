@@ -808,6 +808,13 @@ function solveTransferProfile({
     durationMinutes = profile.durationMinutes;
   }
 
+  if (!converged) {
+    throw new RangeError(`Transfer duration did not converge within ${PROFILE_DURATION_MAX_ITERATIONS} iterations; the rate and receiver temperature history disagree.`);
+  }
+  if (!profile.reachedEndPressure) {
+    const stalledAtBar = profile.samples.at(-1).pressureBar;
+    throw new RangeError(`Transfer stalled at ${stalledAtBar.toFixed(2)} bar before reaching ${transferEndPressureBar.toFixed(2)} bar; the ${transfer.rateSource} source cannot supply it.`);
+  }
   const achievedPressureBar = profile.samples.at(-1).pressureBar - currentPressureBar;
   return {
     durationMinutes,
