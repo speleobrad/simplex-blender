@@ -485,3 +485,69 @@ test('thermal hover interpolation returns both values at the hovered time', () =
   assert.deepEqual(interpolateThermalSample(samples, -1), samples[0]);
   assert.deepEqual(interpolateThermalSample(samples, 4), samples.at(-1));
 });
+
+test('closed-form transfers carry their configured rate as one span, profile transfers do not duplicate it', () => {
+  const decantStep = {
+    type: 'decant',
+    title: 'Decant',
+    recipeLabel: 'Decant',
+    thermal: {
+      durationMinutes: 4,
+      waitMinutes: 2,
+      rateBarPerMin: 3,
+      temperatureStartC: 20,
+      pressureAtTransferEndBar: 92,
+      temperatureAtTransferEndC: 25,
+      pressureAfterWaitBar: 90,
+      temperatureAfterWaitC: 22,
+      samples: [
+        { elapsedMinutes: 0, pressureBar: 80, temperatureC: 20 },
+        { elapsedMinutes: 4, pressureBar: 92, temperatureC: 25 },
+        { elapsedMinutes: 6, pressureBar: 90, temperatureC: 22 }
+      ]
+    }
+  };
+  const equalizeStep = {
+    type: 'equalize',
+    title: 'Equalize',
+    recipeLabel: 'Equalize',
+    thermal: {
+      durationMinutes: 0,
+      waitMinutes: 1,
+      rateBarPerMin: null,
+      temperatureStartC: 22,
+      pressureAtTransferEndBar: 90,
+      temperatureAtTransferEndC: 22,
+      pressureAfterWaitBar: 90,
+      temperatureAfterWaitC: 22
+    }
+  };
+  const boostStep = {
+    type: 'boost',
+    title: 'Boost',
+    recipeLabel: 'Boost',
+    thermal: {
+      durationMinutes: 2,
+      waitMinutes: 1,
+      rateBarPerMin: 1.5,
+      temperatureStartC: 22,
+      pressureAtTransferEndBar: 95,
+      temperatureAtTransferEndC: 26,
+      pressureAfterWaitBar: 94,
+      temperatureAfterWaitC: 23,
+      samples: [
+        { elapsedMinutes: 0, pressureBar: 90, temperatureC: 22, rateBarPerMin: 1.5 },
+        { elapsedMinutes: 2, pressureBar: 95, temperatureC: 26, rateBarPerMin: 1.5 },
+        { elapsedMinutes: 3, pressureBar: 94, temperatureC: 23, rateBarPerMin: null }
+      ]
+    }
+  };
+  const initial = { initialPressureBar: 80, initialTemperatureC: 20 };
+
+  assert.deepEqual(buildThermalSeries([decantStep], initial).rateSpans, [[
+    { elapsedMinutes: 0, rateBarPerMin: 3 },
+    { elapsedMinutes: 4, rateBarPerMin: 3 }
+  ]]);
+  assert.deepEqual(buildThermalSeries([equalizeStep], initial).rateSpans, []);
+  assert.deepEqual(buildThermalSeries([boostStep], initial).rateSpans, []);
+});

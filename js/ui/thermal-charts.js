@@ -67,6 +67,7 @@ export function buildThermalSeries(protocolSteps, initial = {}, terminalProjecti
   const samples = [];
   const bands = [];
   const lineSegments = [];
+  const rateSpans = [];
 
   for (const step of protocolSteps) {
     if (step?.type === 'keep') continue;
@@ -140,6 +141,15 @@ export function buildThermalSeries(protocolSteps, initial = {}, terminalProjecti
       rateBarPerMin: sample.rateBarPerMin ?? null
     }));
     samples.push(...mappedSamples);
+    const hasSampleRate = mappedSamples.some(sample => finite(sample.rateBarPerMin));
+    if (!hasSampleRate && finite(thermal.rateBarPerMin) && thermal.rateBarPerMin > 0 && durationMinutes > 0) {
+      // Closed-form transfers (decant, draining, salvage) carry a configured rate but no per-sample
+      // profile. The rate overlay draws each one as a constant span over the transfer.
+      rateSpans.push([
+        { elapsedMinutes: stepStartMinutes, rateBarPerMin: thermal.rateBarPerMin },
+        { elapsedMinutes: transferEndMinutes, rateBarPerMin: thermal.rateBarPerMin }
+      ]);
+    }
 
     const stepSegment = {
       style: 'observed',
@@ -260,6 +270,7 @@ export function buildThermalSeries(protocolSteps, initial = {}, terminalProjecti
     points,
     samples,
     bands,
+    rateSpans,
     segments: lineSegments.map(({ style, samples: segmentSamples }) => ({
       style,
       samples: segmentSamples
@@ -471,7 +482,7 @@ function thermalPointAttributes(pointValue, index) {
   };
 }
 
-function renderChart(container, { title, unit, key, color, points, samples, bands, segments = [], referenceLine = null, overlay = null }) {
+function renderChart(container, { title, unit, key, color, points, samples, bands, segments = [], rateSpans = [], referenceLine = null, overlay = null }) {
   container.replaceChildren();
   if (!points.length) {
     const empty = document.createElement('p');
@@ -612,7 +623,7 @@ function renderChart(container, { title, unit, key, color, points, samples, band
     : [{ style: 'observed', samples: samples.length ? samples : points }];
   if (overlay) {
     const overlaySamples = samples.length ? samples : points;
-    const overlayValues = overlaySamples.map(sample => sample[overlay.key]).filter(finite);
+    const overlayValues = [...overlaySamples, ...rateSpans.flat()].map(sample => sample[overlay.key]).filter(finite);
     if (overlayValues.length) {
       const overlayDomain = calculateChartDomain(overlayValues, overlay.unit);
       const overlayY = value => calculateReferenceLineY(value, overlayDomain.min, overlayDomain.max, plotHeight);
@@ -627,6 +638,7 @@ function renderChart(container, { title, unit, key, color, points, samples, band
         }
       }
       if (run.length) runs.push(run);
+      runs.push(...rateSpans);
       svg.append(...runs.map(rateRun => svgElement('path', {
         d: buildChartPath(rateRun, overlay.key, xForTime, overlayY),
         fill: 'none',
@@ -845,6 +857,10 @@ export function renderThermalCharts(result, input = {}, units = 'metric', { root
     points: series.points.map(displayPoint),
     samples: series.samples.map(displayPoint),
     segments: series.segments.map(segment => ({ ...segment, samples: segment.samples.map(displayPoint) })),
+    rateSpans: (series.rateSpans ?? []).map(run => run.map(sample => ({
+      elapsedMinutes: sample.elapsedMinutes,
+      rateBarPerMin: convertToDisplay(sample.rateBarPerMin, 'pressureBarPerMin', units)
+    }))),
     final: series.final ? displayPoint(series.final) : null
   };
   const state = getThermalState(root);
@@ -875,6 +891,7 @@ export function renderThermalCharts(result, input = {}, units = 'metric', { root
     samples: displaySeries.samples,
     bands: displaySeries.bands,
     segments: displaySeries.segments,
+    rateSpans: displaySeries.rateSpans,
     overlay: {
       key: 'rateBarPerMin',
       unit: getUnitLabel('pressureBarPerMin', units),
