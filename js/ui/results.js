@@ -382,7 +382,6 @@ function renderSalvageDetails(step, units = 'metric') {
 
 function renderThermalDetails(
   thermal,
-  isFinalStep,
   step = {},
   units = 'metric',
   cylinder = null,
@@ -398,9 +397,7 @@ function renderThermalDetails(
 
   const pressure = value => Number.isFinite(value) ? formatUnitValue(value, 'pressureBar', units) : '—';
   const temperature = value => Number.isFinite(value) ? formatUnitValue(value, 'temperatureC', units) : '—';
-  const waitLabel = isFinalStep
-    ? `Final cool-off to ${temperature(thermal.temperatureAfterWaitC)} (${formatThermalValue(thermal.waitMinutes)} min)`
-    : `${formatThermalValue(thermal.waitMinutes)} min`;
+  const waitLabel = `${formatThermalValue(thermal.waitMinutes)} min`;
   const isWaitOnly = step.type === 'wait' && thermal.rateSource === 'none' && thermal.waitMinutes > 0;
   const isExtendedWait = Number(step.automaticWaitMetadata?.addedWaitMinutes) > 0;
   const hasManualReading = measurement
@@ -613,8 +610,7 @@ function displayStepTitle(step, index, units = 'metric') {
 function renderProtocol(protocolSteps, alertMessage = null, calculation = null, {
   units = 'metric',
   showResultingMix = false,
-  showInterimMeasurements = true,
-  finalStepIncludesAmbientCoolOff = true
+  showInterimMeasurements = true
 } = {}) {
   const container = resultElement('steps-container');
   if (!container) return;
@@ -675,7 +671,6 @@ function renderProtocol(protocolSteps, alertMessage = null, calculation = null, 
       : null;
     const thermalDetails = renderThermalDetails(
       step.thermal,
-      finalStepIncludesAmbientCoolOff && index === protocolSteps.length - 1,
       step,
       units,
       calculation?.cylinder,
@@ -837,8 +832,7 @@ function renderCompareResults(compare, calculation) {
     description: step.description ?? (step.recipeGas ? `${step.operation}: ${step.recipeGas}` : step.operation ?? step.title)
   })), null, null, {
     showResultingMix: true,
-    showInterimMeasurements: false,
-    finalStepIncludesAmbientCoolOff: false
+    showInterimMeasurements: false
   });
 }
 function clearOptimizerSummary() {
@@ -920,8 +914,7 @@ function renderWhatIfResults(result, calculation) {
   renderProtocol(compare.protocolSteps, null, calculation, {
     units: calculation?.settings?.units ?? 'metric',
     showResultingMix: true,
-    showInterimMeasurements: false,
-    finalStepIncludesAmbientCoolOff: false
+    showInterimMeasurements: false
   });
   renderWaterPressurePane({
     thermal,
