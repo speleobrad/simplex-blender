@@ -104,7 +104,9 @@ export function calculateCompressorFillRate({
   const molesPerMin = ATMOSPHERIC_PRESSURE_BAR * inletFlowLPerMin
     / (zInlet * GAS_CONSTANT * inletTemperatureK);
 
-  return molesPerMin * zReceiver * GAS_CONSTANT * receiverTemperatureK / receiverVolumeL;
+  const fillRateBarPerMin = molesPerMin * zReceiver * GAS_CONSTANT * receiverTemperatureK / receiverVolumeL;
+
+  return { fillRateBarPerMin, molesPerMin };
 }
 
 export function calculateCoolingTime({
@@ -332,9 +334,10 @@ function interpolateTemperatureC(samples, elapsedMinutes) {
 
 // Advances receiver pressure on the same 0.5 s grid as the temperature model.
 // Each step re-evaluates the existing rate function at the current receiver
-// pressure, temperature, and mix. The booster source is tracked as moles: each
-// step removes the molar flow the rate function returns, and its pressure comes
-// from the shared inventory helper at the ambient-temperature basis.
+// pressure, temperature, and mix. Both devices track the receiver as moles: each
+// step adds the molar flow the rate function returns, and pressure comes from the
+// shared EOS at the step's temperature. The booster source is also tracked as
+// moles, using the shared inventory helper at the ambient-temperature basis.
 export function integrateTransferRateProfile({
   rateSource,
   startPressureBar,
@@ -367,18 +370,19 @@ export function integrateTransferRateProfile({
       + (receiverEndMix.heliumPercent - receiverStartMix.heliumPercent) * progress;
     const temperatureC = interpolateTemperatureC(temperatureSamples, elapsedMinutes);
     if (!isBooster) {
+      const flow = calculateCompressorFillRate({
+        inletFlowLPerMin,
+        receiverPressureBar: pressureBar,
+        receiverOxygenPercent: oxygenPercent,
+        receiverHeliumPercent: heliumPercent,
+        receiverVolumeL,
+        ambientTemperatureC,
+        receiverTemperatureC: temperatureC,
+        useVdw
+      });
       return {
-        rateBarPerMin: calculateCompressorFillRate({
-          inletFlowLPerMin,
-          receiverPressureBar: pressureBar,
-          receiverOxygenPercent: oxygenPercent,
-          receiverHeliumPercent: heliumPercent,
-          receiverVolumeL,
-          ambientTemperatureC,
-          receiverTemperatureC: temperatureC,
-          useVdw
-        }),
-        molesPerMin: 0,
+        rateBarPerMin: flow.fillRateBarPerMin,
+        molesPerMin: flow.molesPerMin,
         sourcePressureBar: null,
         temperatureC,
         oxygenPercent,
@@ -421,15 +425,13 @@ export function integrateTransferRateProfile({
   const samples = [];
   let pressureBar = startPressureBar;
   let sourceMoles = sourceStartMoles;
-  let receiverMoles = isBooster
-    ? calcMolarDensity(
-      startPressureBar,
-      receiverStartMix.oxygenPercent,
-      receiverStartMix.heliumPercent,
-      interpolateTemperatureC(temperatureSamples, 0),
-      useVdw
-    ) * receiverVolumeL
-    : 0;
+  let receiverMoles = calcMolarDensity(
+    startPressureBar,
+    receiverStartMix.oxygenPercent,
+    receiverStartMix.heliumPercent,
+    interpolateTemperatureC(temperatureSamples, 0),
+    useVdw
+  ) * receiverVolumeL;
   let elapsedMinutes = 0;
   let nextSampleIndex = 0;
   let reachedEndPressure = false;
@@ -462,43 +464,36 @@ export function integrateTransferRateProfile({
     if (stalled) break;
 
     const untilSampleMinutes = nextSampleIndex * PROFILE_SAMPLE_MINUTES - elapsedMinutes;
-    if (isBooster) {
-      // Booster: receiver moles advance by the molar flow and pressure follows the EOS, so the
-      // receiver and the source inventory draw the same gas. A step never draws more gas than the
-      // source holds; when it would, the step ends at exhaustion and the source is set to zero.
-      const sourceLimitMinutes = state.molesPerMin > 0 ? sourceMoles / state.molesPerMin : Infinity;
-      const drainsSource = sourceLimitMinutes < Math.min(stepMinutes, untilSampleMinutes);
-      const dtMinutes = drainsSource ? sourceLimitMinutes : Math.min(stepMinutes, untilSampleMinutes);
-      const stepMoles = state.molesPerMin * dtMinutes;
-      const nextMinutes = elapsedMinutes + dtMinutes;
-      const nextPressureBar = calcPressure(
-        (receiverMoles + stepMoles) / receiverVolumeL,
-        state.oxygenPercent,
-        state.heliumPercent,
-        interpolateTemperatureC(temperatureSamples, nextMinutes),
-        useVdw
-      );
-      if (nextPressureBar >= endPressureBar) {
-        // Crossing inside the step: commit only the moles drawn up to the crossing.
-        const fraction = (endPressureBar - pressureBar) / (nextPressureBar - pressureBar);
-        receiverMoles += stepMoles * fraction;
-        sourceMoles = Math.max(0, sourceMoles - stepMoles * fraction);
-        elapsedMinutes += dtMinutes * fraction;
-        pressureBar = endPressureBar;
-      } else {
-        receiverMoles += stepMoles;
-        sourceMoles = drainsSource ? 0 : Math.max(0, sourceMoles - stepMoles);
-        elapsedMinutes = nextMinutes;
-        pressureBar = nextPressureBar;
-      }
-      continue;
+    // Both devices advance receiver moles by their molar flow, and pressure follows the EOS at the
+    // step's temperature, so receiver mass and pressure agree at every sample. The booster also draws
+    // those moles from a finite source: a step never draws more gas than the source holds, and when it
+    // would, the step ends at exhaustion and the source is set to zero. The compressor draws from
+    // ambient air, which is not limited.
+    const sourceLimitMinutes = isBooster && state.molesPerMin > 0 ? sourceMoles / state.molesPerMin : Infinity;
+    const drainsSource = sourceLimitMinutes < Math.min(stepMinutes, untilSampleMinutes);
+    const dtMinutes = drainsSource ? sourceLimitMinutes : Math.min(stepMinutes, untilSampleMinutes);
+    const stepMoles = state.molesPerMin * dtMinutes;
+    const nextMinutes = elapsedMinutes + dtMinutes;
+    const nextPressureBar = calcPressure(
+      (receiverMoles + stepMoles) / receiverVolumeL,
+      state.oxygenPercent,
+      state.heliumPercent,
+      interpolateTemperatureC(temperatureSamples, nextMinutes),
+      useVdw
+    );
+    if (nextPressureBar >= endPressureBar) {
+      // Crossing inside the step: commit only the moles drawn up to the crossing.
+      const fraction = (endPressureBar - pressureBar) / (nextPressureBar - pressureBar);
+      receiverMoles += stepMoles * fraction;
+      if (isBooster) sourceMoles = Math.max(0, sourceMoles - stepMoles * fraction);
+      elapsedMinutes += dtMinutes * fraction;
+      pressureBar = endPressureBar;
+    } else {
+      receiverMoles += stepMoles;
+      if (isBooster) sourceMoles = drainsSource ? 0 : Math.max(0, sourceMoles - stepMoles);
+      elapsedMinutes = nextMinutes;
+      pressureBar = nextPressureBar;
     }
-    const minutesToEnd = (endPressureBar - pressureBar) / state.rateBarPerMin;
-    const dtMinutes = Math.min(stepMinutes, untilSampleMinutes, minutesToEnd);
-    const reachesEnd = dtMinutes === minutesToEnd;
-    pressureBar = reachesEnd ? endPressureBar : pressureBar + state.rateBarPerMin * dtMinutes;
-    sourceMoles = Math.max(0, sourceMoles - state.molesPerMin * dtMinutes);
-    elapsedMinutes += dtMinutes;
   }
 
   return { durationMinutes: elapsedMinutes, reachedEndPressure, samples };
@@ -726,7 +721,7 @@ function rateForProtocolStep({
         ambientTemperatureC: thermal.ambientTemperatureC,
         receiverTemperatureC: currentTemperatureC,
         useVdw
-      }),
+      }).fillRateBarPerMin,
       pressureIncreaseBar
     };
   }

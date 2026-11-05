@@ -74,7 +74,7 @@ test('booster clearance efficiency falls when receiver pressure exceeds source p
 });
 
 test('compressor inlet flow converts free-air flow to receiver pressure rate', () => {
-  const rate = calculateCompressorFillRate({
+  const { fillRateBarPerMin: rate } = calculateCompressorFillRate({
     inletFlowLPerMin: 100,
     receiverPressureBar: 1.01325,
     receiverOxygenPercent: 21,
@@ -100,7 +100,7 @@ test('compressor real-gas receiver compressibility uses absolute pressure', asyn
     receiverTemperatureC: 20,
     useVdw: true
   };
-  const rate = calculateCompressorFillRate(input);
+  const { fillRateBarPerMin: rate } = calculateCompressorFillRate(input);
   const temperatureK = input.receiverTemperatureC + 273.15;
   const inletMolesPerMin = 1.01325 * input.inletFlowLPerMin
     / (calcZ(1.01325, 21, 0, input.ambientTemperatureC, true) * GAS_CONSTANT * temperatureK);
@@ -1529,6 +1529,29 @@ test('booster rate falls as the source drains', () => {
   }));
   assert.ok(samples.at(-1).sourcePressureBar < samples[0].sourcePressureBar);
   assert.ok(samples.at(-1).rateBarPerMin < samples[0].rateBarPerMin);
+});
+
+test('compressor receiver gains exactly the inlet moles over the transfer under real-gas EOS', () => {
+  const startPressureBar = 20;
+  const endPressureBar = 120;
+  const inletMolesPerMin = calculateCompressorFillRate({
+    inletFlowLPerMin: 100,
+    receiverPressureBar: startPressureBar,
+    receiverOxygenPercent: 21,
+    receiverHeliumPercent: 0,
+    receiverVolumeL: 12,
+    ambientTemperatureC: 20,
+    receiverTemperatureC: 20,
+    useVdw: true
+  }).molesPerMin;
+  const profile = integrateTransferRateProfile({
+    ...integratorFixture({ rateSource: 'compressor', startPressureBar, endPressureBar }),
+    useVdw: true
+  });
+  const receiverGainMoles = (calcMolarDensity(endPressureBar, 21, 0, 20, true)
+    - calcMolarDensity(startPressureBar, 21, 0, 20, true)) * 12;
+  assert.equal(profile.reachedEndPressure, true);
+  assert.ok(Math.abs(receiverGainMoles / (inletMolesPerMin * profile.durationMinutes) - 1) < 1e-3);
 });
 
 test('booster profile duration matches the closed-form rate at the mid-transfer source pressure', () => {
