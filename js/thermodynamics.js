@@ -728,12 +728,126 @@ function rateForProtocolStep({
 const PROFILE_DURATION_TOLERANCE_MINUTES = 1e-6;
 const PROFILE_DURATION_MAX_ITERATIONS = 8;
 
+// Salvage boost: the working tank is the booster source and the bank is the
+// receiver. The bank is held at the current temperature, so the integrated bank
+// rise needs no fixed point. The tank pressure timeline follows the integrated
+// source depletion and is pinned to the planner's tank endpoints.
+function solveSalvageBoosterProfile({
+  step,
+  transfer,
+  currentPressureBar,
+  currentTemperatureC,
+  transferEndPressureBar,
+  cylinder,
+  physics,
+  thermal,
+  booster,
+  inletTemperatureC
+}) {
+  if (!(transfer.rateBarPerMin > 0) || !(transfer.pressureIncreaseBar > 0)) return null;
+  const useVdw = physics.model === 'vdw';
+  const ambientTemperatureC = thermal.ambientTemperatureC;
+  const sourceOxygenPercent = step.sourceOxygenPercent ?? step.resultingMix?.oxygenPercent ?? 0;
+  const sourceHeliumPercent = step.sourceHeliumPercent ?? step.resultingMix?.heliumPercent ?? 0;
+  const isOxygenRich = sourceOxygenPercent >= OXYGEN_RICH_THRESHOLD;
+  const bankStartPressureBar = Math.max(0, step.receiverStartPressureBar ?? 0);
+  const bankEndPressureBar = bankStartPressureBar + transfer.pressureIncreaseBar;
+  const bankMix = {
+    oxygenPercent: step.receiverStartMix?.oxygenPercent ?? 0,
+    heliumPercent: step.receiverStartMix?.heliumPercent ?? 0
+  };
+  const tankAmbientStartPressureBar = calculatePressureAtTemperature({
+    pressureBar: currentPressureBar,
+    oxygenPercent: sourceOxygenPercent,
+    heliumPercent: sourceHeliumPercent,
+    fromTemperatureC: currentTemperatureC,
+    toTemperatureC: ambientTemperatureC,
+    volumeL: cylinder.volumeL,
+    useVdw
+  });
+  const sourceStartMoles = calcMolarDensity(
+    tankAmbientStartPressureBar,
+    sourceOxygenPercent,
+    sourceHeliumPercent,
+    ambientTemperatureC,
+    useVdw
+  ) * cylinder.volumeL;
+  const bankTemperatureSamples = [
+    { elapsedMinutes: 0, temperatureC: currentTemperatureC },
+    { elapsedMinutes: PROFILE_MAX_MINUTES, temperatureC: currentTemperatureC }
+  ];
+  // The integrator's booster branch is the salvage boost rate, so it runs as 'booster'.
+  const profile = integrateTransferRateProfile({
+    rateSource: 'booster',
+    startPressureBar: bankStartPressureBar,
+    endPressureBar: bankEndPressureBar,
+    temperatureSamples: bankTemperatureSamples,
+    receiverVolumeL: step.receiverVolumeL,
+    receiverStartMix: bankMix,
+    receiverEndMix: bankMix,
+    useVdw,
+    ambientTemperatureC,
+    cylinderVolumeCm3: booster.cylinderVolumeCm3,
+    bpm: isOxygenRich ? booster.oxygenBoostBpm : booster.otherBoostBpm,
+    sourceVolumeL: cylinder.volumeL,
+    sourceStartMoles,
+    sourceOxygenPercent,
+    sourceHeliumPercent,
+    inletFlowLPerMin: booster.compressorInletFlowLPerMin
+  });
+  if (!profile.reachedEndPressure) {
+    const stalledAtBar = profile.samples.at(-1).pressureBar;
+    throw new RangeError(`Transfer stalled at ${stalledAtBar.toFixed(2)} bar before reaching ${bankEndPressureBar.toFixed(2)} bar; the salvage-booster source cannot supply it.`);
+  }
+  const durationMinutes = profile.durationMinutes;
+  const bankRiseBar = profile.samples.at(-1).pressureBar - bankStartPressureBar;
+  const temperatureSamples = estimateTransferTemperatureSamples({
+    startTemperatureC: currentTemperatureC,
+    startPressureBar: currentPressureBar,
+    addedPressureBar: transfer.pressureChangeBar,
+    fillTimeMinutes: durationMinutes,
+    volumeL: cylinder.volumeL,
+    heliumFraction: sourceHeliumPercent / 100,
+    oxygenFraction: sourceOxygenPercent / 100,
+    tankMaterial: thermal.tankMaterial,
+    coolingMedium: thermal.coolingMedium,
+    waterSubmersionPercent: thermal.waterSubmersionPercent,
+    tankMassKg: thermal.tankMassKg,
+    ambientTemperatureC,
+    inletTemperatureC
+  });
+  const sourceStartBar = profile.samples[0].sourcePressureBar;
+  const depletionSpanBar = sourceStartBar - profile.samples.at(-1).sourcePressureBar;
+  const tankDropBar = transferEndPressureBar - currentPressureBar;
+  const profileSamples = profile.samples.map(sample => {
+    const depletedFraction = depletionSpanBar > 0
+      ? (sourceStartBar - sample.sourcePressureBar) / depletionSpanBar
+      : sample.elapsedMinutes / durationMinutes;
+    return {
+      elapsedMinutes: sample.elapsedMinutes,
+      pressureBar: currentPressureBar + depletedFraction * tankDropBar,
+      temperatureC: interpolateTemperatureC(temperatureSamples, sample.elapsedMinutes),
+      rateBarPerMin: sample.rateBarPerMin,
+      oxygenPercent: sourceOxygenPercent,
+      heliumPercent: sourceHeliumPercent
+    };
+  });
+  return {
+    durationMinutes,
+    rateBarPerMin: durationMinutes > 0 ? bankRiseBar / durationMinutes : transfer.rateBarPerMin,
+    reachedEndPressure: true,
+    converged: true,
+    temperatureSamples,
+    profileSamples
+  };
+}
+
 // Solves the fill duration and the receiver temperature history together. The
 // rate depends on receiver temperature, and the temperature history depends on
 // how long the fill takes, so the integrated duration is fed back until it
 // stops moving. Returns null for steps without a profile model: transfers other
-// than booster and compressor, and booster steps without source inventory. Those
-// steps keep the closed-form duration.
+// than booster, compressor, and salvage-booster, and booster steps without source
+// inventory. Those steps keep the closed-form duration.
 function solveTransferProfile({
   step,
   transfer,
@@ -748,6 +862,20 @@ function solveTransferProfile({
   booster,
   inletTemperatureC
 }) {
+  if (transfer.rateSource === 'salvage-booster') {
+    return solveSalvageBoosterProfile({
+      step,
+      transfer,
+      currentPressureBar,
+      currentTemperatureC,
+      transferEndPressureBar,
+      cylinder,
+      physics,
+      thermal,
+      booster,
+      inletTemperatureC
+    });
+  }
   const isBooster = transfer.rateSource === 'booster';
   if (!isBooster && transfer.rateSource !== 'compressor') return null;
   if (!(transfer.rateBarPerMin > 0) || !(transfer.pressureIncreaseBar > 0)) return null;

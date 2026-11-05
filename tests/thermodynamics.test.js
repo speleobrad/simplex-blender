@@ -1322,7 +1322,7 @@ test('salvage booster stage uses the booster fill-rate model and cools the tank'
       stage: 'boost',
       operation: 'Salvage Boost',
       receiverStartPressureBar: 40,
-      receiverEndPressureBar: 90,
+      receiverEndPressureBar: 44,
       receiverVolumeL: 50,
       receiverStartMix: { oxygenPercent: 32, heliumPercent: 0 },
       resultingPressureBar: 80,
@@ -1351,14 +1351,14 @@ test('salvage booster stage uses the booster fill-rate model and cools the tank'
   assert.ok(thermal.temperatureAtTransferEndC < thermal.temperatureStartC);
 });
 
-test('salvage booster rate is the booster fill rate at the transfer midpoint pressures', () => {
-  const simulation = simulateThermalProtocol({
+function simulateSalvageBoost(receiverEndPressureBar) {
+  return simulateThermalProtocol({
     protocolSteps: [{
       type: 'salvage',
       stage: 'boost',
       operation: 'Salvage Boost',
       receiverStartPressureBar: 40,
-      receiverEndPressureBar: 90,
+      receiverEndPressureBar,
       receiverVolumeL: 50,
       receiverStartMix: { oxygenPercent: 32, heliumPercent: 0 },
       resultingPressureBar: 80,
@@ -1379,22 +1379,41 @@ test('salvage booster rate is the booster fill rate at the transfer midpoint pre
     },
     settings: { booster: { otherBoostBpm: 60, cylinderVolumeCm3: 500, maxCompressorPressureBar: 232 } }
   });
+}
 
-  const thermal = simulation.protocolSteps[0].thermal;
-  const expected = calculateBoosterFillRate({
-    cylinderVolumeCm3: 500,
-    bpm: 60,
-    sourcePressureBar: (100 + 80) / 2,
-    receiverPressureBar: (40 + 90) / 2,
-    sourceOxygenPercent: 21,
-    sourceHeliumPercent: 35,
-    receiverOxygenPercent: 32,
-    receiverHeliumPercent: 0,
-    receiverVolumeL: 50,
-    temperatureC: thermal.temperatureStartC,
-    useVdw: false
-  }).fillRateBarPerMin;
-  assert.ok(Math.abs(thermal.rateBarPerMin - expected) < 1e-9);
+test('salvage booster profile samples on a 1 s grid and walks the tank down to its endpoint', () => {
+  const thermal = simulateSalvageBoost(44).protocolSteps[0].thermal;
+  const duration = thermal.durationMinutes;
+  const transfer = thermal.samples.filter(sample => sample.elapsedMinutes <= duration + 1e-9);
+
+  const gridSamples = transfer.filter(sample => sample.elapsedMinutes < duration - 1e-9);
+  for (let index = 1; index < gridSamples.length; index += 1) {
+    assert.ok(Math.abs(gridSamples[index].elapsedMinutes - gridSamples[index - 1].elapsedMinutes - 1 / 60) < 1e-9);
+  }
+
+  assert.ok(Math.abs(transfer[0].pressureBar - 100) < 1e-6);
+  for (let index = 1; index < transfer.length; index += 1) {
+    assert.ok(transfer[index].pressureBar < transfer[index - 1].pressureBar);
+  }
+  assert.ok(Math.abs(transfer.at(-1).pressureBar - 80) < 1e-6);
+});
+
+test('salvage booster bank rate falls as the tank depletes and averages to the bank rise over the duration', () => {
+  const thermal = simulateSalvageBoost(44).protocolSteps[0].thermal;
+  const duration = thermal.durationMinutes;
+  const rates = thermal.samples
+    .filter(sample => sample.elapsedMinutes <= duration + 1e-9)
+    .map(sample => sample.rateBarPerMin);
+
+  assert.ok(rates.every(Number.isFinite));
+  for (let index = 1; index < rates.length; index += 1) {
+    assert.ok(rates[index] < rates[index - 1]);
+  }
+  assert.ok(Math.abs(thermal.rateBarPerMin - 4 / duration) < 1e-9);
+});
+
+test('salvage booster profile throws when the tank cannot supply the bank rise', () => {
+  assert.throws(() => simulateSalvageBoost(90), /salvage-booster source cannot supply it/);
 });
 
 test('booster midpoint rate moves within 3.5% of the real-gas receiver moles over a 40-90 bar van der Waals rise', () => {
