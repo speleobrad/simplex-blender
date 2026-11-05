@@ -194,6 +194,9 @@ export function buildThermalSeries(protocolSteps, initial = {}, terminalProjecti
     && finite(terminalProjection?.durationMinutes)
     && terminalProjection.durationMinutes >= 0) {
     const terminalElapsedMinutes = elapsedMinutes + terminalProjection.durationMinutes;
+    // A zero-length projection repeats the last sample. Drawing it again stacks a second marker
+    // on the same coordinates and adds an empty estimated segment.
+    const repeatsLastSample = points.length > 0 && terminalProjection.durationMinutes === 0;
     const terminalPoint = point(
       points.at(-1)?.step ?? 0,
       'ambient-settled',
@@ -212,10 +215,12 @@ export function buildThermalSeries(protocolSteps, initial = {}, terminalProjecti
       pressureBar: terminalProjection.pressureBar,
       temperatureC: terminalProjection.temperatureC
     };
-    if (points.length === 0) samples.push(terminalStart);
-    points.push(terminalPoint);
-    samples.push(terminalSample);
-    lineSegments.push({ style: 'estimated', samples: [terminalStart, terminalSample] });
+    if (!repeatsLastSample) {
+      if (points.length === 0) samples.push(terminalStart);
+      points.push(terminalPoint);
+      samples.push(terminalSample);
+      lineSegments.push({ style: 'estimated', samples: [terminalStart, terminalSample] });
+    }
     if (finite(terminalProjection.inWaterPressureBar)
       && finite(terminalProjection.inWaterTemperatureC)) {
       const explicitInWater = terminalProjection.mode === 'what-if';

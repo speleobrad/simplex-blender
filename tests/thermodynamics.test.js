@@ -1488,6 +1488,39 @@ test('booster profile ends at the requested receiver pressure', () => {
   assert.ok(Math.abs(profile.samples.at(-1).pressureBar - 120) < 0.5);
 });
 
+test('booster step never moves more gas into the receiver than the source holds', () => {
+  const stepMinutes = 0.5 / 60;
+  const receiverStartPressureBar = 20;
+  const molesPerMin = calculateBoosterFillRate({
+    cylinderVolumeCm3: 9,
+    bpm: 50,
+    sourcePressureBar: 10,
+    receiverPressureBar: receiverStartPressureBar,
+    sourceOxygenPercent: 21,
+    sourceHeliumPercent: 0,
+    receiverOxygenPercent: 21,
+    receiverHeliumPercent: 0,
+    receiverVolumeL: 12,
+    temperatureC: 20,
+    useVdw: false
+  }).molesPerMin;
+  // The source holds half of one integration step's draw, so the step must end at exhaustion.
+  const sourceStartMoles = molesPerMin * stepMinutes * 0.5;
+  const profile = integrateTransferRateProfile({
+    ...integratorFixture({
+      rateSource: 'booster',
+      startPressureBar: receiverStartPressureBar,
+      endPressureBar: 120
+    }),
+    sourceStartMoles
+  });
+  const receiverGainMoles = (calcMolarDensity(profile.samples.at(-1).pressureBar, 21, 0, 20, false)
+    - calcMolarDensity(receiverStartPressureBar, 21, 0, 20, false)) * 12;
+  assert.equal(profile.reachedEndPressure, false);
+  assert.ok(receiverGainMoles <= sourceStartMoles * (1 + 1e-9));
+  assert.ok(receiverGainMoles >= sourceStartMoles * (1 - 1e-6));
+});
+
 test('booster rate falls as the source drains', () => {
   const { samples } = integrateTransferRateProfile(integratorFixture({
     rateSource: 'booster',

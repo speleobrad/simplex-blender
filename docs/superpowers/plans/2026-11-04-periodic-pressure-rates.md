@@ -6,6 +6,8 @@
 
 **Architecture:** Temperature already comes from a fixed-step integration (`estimateTransferTemperatureSamples`, 0.5 s steps, samples every 60 s plus endpoint). Add a sibling integration that advances receiver pressure and source inventory on the same grid, evaluates the existing rate functions at each sample, and returns `{elapsedMinutes, pressureBar, rateBarPerMin, sourcePressureBar, ...}`. The thermal timeline and chart consume that profile in place of the linear pressure interpolation they use today.
 
+**As built (deviations from the tasks below):** Profile samples are recorded every 1 s rather than every 60 s, and the integrator steps at 0.5 s and always includes the endpoint. The 60 s grid left sub-minute booster transfers drawn as one straight pressure segment (commit `0b7d0ee`). The booster advances receiver moles and caps each step at source exhaustion, so it never moves more gas than the source holds (commit `7f186a2`). The compressor keeps the rate-driven `rate * dt` pressure timeline from Task 1; it does not track receiver moles, so the receiver pressure can differ from the EOS pressure of the moles added by about 0.6% over a fill. This is an open modeling decision; see the Compressor-specific note.
+
 **Tech Stack:** Plain JavaScript ES modules, `node:test` for tests, SVG thermal chart in `js/ui/thermal-charts.js`.
 
 **Spec:** None separate. Source of truth is the investigation in this session; the relevant code is cited below.

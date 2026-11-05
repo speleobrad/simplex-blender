@@ -187,6 +187,41 @@ test('compare series retains explicit waits before adding an ambient-settled pro
   assert.equal(series.final.elapsedMinutes, 63);
 });
 
+test('a zero-length ambient-settled projection does not repeat the last state', () => {
+  const series = buildThermalSeries([{
+    type: 'wait',
+    title: 'Wait 15 minutes',
+    recipeLabel: 'Wait 15 minutes',
+    recipeAction: 'Wait',
+    thermal: {
+      durationMinutes: 0,
+      waitMinutes: 15,
+      temperatureStartC: 20,
+      temperatureAtTransferEndC: 20,
+      pressureAtTransferEndBar: 100,
+      temperatureAfterWaitC: 20,
+      pressureAfterWaitBar: 100
+    }
+  }], {
+    initialPressureBar: 100,
+    initialTemperatureC: 20
+  }, {
+    pressureBar: 100,
+    temperatureC: 20,
+    durationMinutes: 0,
+    inWaterPressureBar: 95,
+    inWaterTemperatureC: 10
+  });
+
+  assert.deepEqual(series.points.map(point => point.phase), [
+    'start', 'transfer-end', 'settled', 'in-water-target'
+  ]);
+  assert.deepEqual(series.points.map(point => point.elapsedMinutes), [0, 0, 15, 15]);
+  assert.equal(series.final.pressureBar, 95);
+  assert.equal(series.final.temperatureC, 10);
+  assert.equal(series.final.elapsedMinutes, 15);
+});
+
 test('keep-only compare series projects from the initial state to ambient settled', () => {
   const series = buildThermalSeries([{ type: 'keep' }], {
     initialPressureBar: 100,
