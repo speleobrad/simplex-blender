@@ -2850,6 +2850,18 @@ function thermalState(candidate, requestedInWaterPressureBar, requestedInWaterTe
   };
 
 }
+
+// A transfer profile the physics cannot satisfy makes that candidate unsafe;
+// the search rejects it instead of aborting the whole optimization.
+export function scheduleCandidateProtocol(args) {
+  try {
+    return scheduleSafeThermalProtocol(args);
+  } catch (error) {
+    if (error?.code !== 'TRANSFER_PROFILE_UNSATISFIED') throw error;
+    return { protocolSteps: null, automaticWaits: [], simulation: null, unsafe: true };
+  }
+}
+
 function evaluateThermalCandidate(input, optimizeStatic, targetPressureBar) {
   const candidateInput = {
     ...input,
@@ -2862,7 +2874,7 @@ function evaluateThermalCandidate(input, optimizeStatic, targetPressureBar) {
   const result = optimizeStatic(candidateInput);
   if (!result.feasible) return { candidateInput, result, simulation: null };
 
-  const scheduled = scheduleSafeThermalProtocol({
+  const scheduled = scheduleCandidateProtocol({
     protocolSteps: result.protocolSteps,
     cylinder: candidateInput.cylinder,
     physics: candidateInput.physics,
@@ -2922,7 +2934,7 @@ export function finalizeComposedPlan({ input, template, protocolSteps, trajector
     _ambientSettledTargetPressureBar: normalizeInWaterTarget(input),
     cylinder: { ...input.cylinder, targetPressureBar }
   };
-  const scheduled = scheduleSafeThermalProtocol({
+  const scheduled = scheduleCandidateProtocol({
     protocolSteps,
     cylinder: candidateInput.cylinder,
     physics: candidateInput.physics,
@@ -2961,7 +2973,7 @@ function thermalizedMaximumResult(candidate, requestedInWaterPressureBar, reques
       }
     };
   }
-  const scheduled = scheduleSafeThermalProtocol({
+  const scheduled = scheduleCandidateProtocol({
     protocolSteps: maximum.protocolSteps,
     cylinder: candidate.candidateInput.cylinder,
     physics: candidate.candidateInput.physics,

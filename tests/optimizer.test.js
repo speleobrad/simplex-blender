@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { optimizeBlend, isSafeSimulation, scheduleSafeThermalProtocol, solveThermalWithSalvageFallback } from '../js/optimizer.js';
+import { optimizeBlend, isSafeSimulation, scheduleCandidateProtocol, scheduleSafeThermalProtocol, solveThermalWithSalvageFallback } from '../js/optimizer.js';
 import * as optimizerModule from '../js/optimizer.js';
 import { calcMolarDensity } from '../js/physics.js';
 import { calculatePressureAtTemperature } from '../js/thermodynamics.js';
@@ -2731,6 +2731,33 @@ test('scheduler rejects an unsafe transfer after the 1440-minute ceiling', () =>
   assert.ok(scheduled.automaticWaits.every(wait => (
     wait.configuredWaitMinutes + wait.addedWaitMinutes <= 1440
   )));
+});
+
+test('candidate scheduling rejects a transfer profile the source cannot supply instead of throwing', () => {
+  const input = {
+    ...schedulerFixture,
+    cylinder: { volumeL: 12, initialPressureBar: 100, workingPressureBar: 200 },
+    physics: { model: 'ideal', temperatureC: 40 },
+    settings: { booster: { otherBoostBpm: 60, cylinderVolumeCm3: 500, maxCompressorPressureBar: 232 } },
+    protocolSteps: [{
+      type: 'salvage',
+      stage: 'boost',
+      operation: 'Salvage Boost',
+      receiverStartPressureBar: 40,
+      receiverEndPressureBar: 90,
+      receiverVolumeL: 50,
+      receiverStartMix: { oxygenPercent: 32, heliumPercent: 0 },
+      resultingPressureBar: 80,
+      resultingMix: { oxygenPercent: 21, heliumPercent: 35 },
+      sourceOxygenPercent: 21,
+      sourceHeliumPercent: 35
+    }]
+  };
+  assert.throws(() => scheduleSafeThermalProtocol(input), { code: 'TRANSFER_PROFILE_UNSATISFIED' });
+
+  const scheduled = scheduleCandidateProtocol(input);
+  assert.equal(scheduled.unsafe, true);
+  assert.equal(scheduled.simulation, null);
 });
 
 test('scheduler reports split stages and warning metadata at a hot boundary', () => {
