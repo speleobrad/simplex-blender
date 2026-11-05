@@ -886,13 +886,42 @@ function solveSalvageBoosterProfile({
   };
 }
 
+// solveTransferProfile is a pure function of its input, and the optimizer re-simulates the same
+// protocol prefix for every candidate, so identical transfers recur many times per recalculation.
+// Successful results are memoized in a small least-recently-used cache; the limit keeps the cached
+// sample arrays bounded. Errors are not cached and are thrown again on each call.
+const TRANSFER_PROFILE_CACHE_LIMIT = 64;
+const transferProfileCache = new Map();
+
+function transferProfileKey(input) {
+  return JSON.stringify(input, (key, value) => (
+    typeof value === 'number' && !Number.isFinite(value) ? { nonFinite: String(value) } : value
+  ));
+}
+
 // Solves the fill duration and the receiver temperature history together. The
 // rate depends on receiver temperature, and the temperature history depends on
 // how long the fill takes, so the integrated duration is fed back until it
 // stops moving. Returns null for steps without a profile model: transfers other
 // than booster, compressor, and salvage-booster, and booster steps without source
 // inventory. Those steps keep the closed-form duration.
-function solveTransferProfile({
+function solveTransferProfile(input) {
+  const key = transferProfileKey(input);
+  if (transferProfileCache.has(key)) {
+    const cached = transferProfileCache.get(key);
+    transferProfileCache.delete(key);
+    transferProfileCache.set(key, cached);
+    return cached;
+  }
+  const result = computeTransferProfile(input);
+  if (transferProfileCache.size >= TRANSFER_PROFILE_CACHE_LIMIT) {
+    transferProfileCache.delete(transferProfileCache.keys().next().value);
+  }
+  transferProfileCache.set(key, result);
+  return result;
+}
+
+function computeTransferProfile({
   step,
   transfer,
   currentPressureBar,
