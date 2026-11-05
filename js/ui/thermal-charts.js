@@ -179,6 +179,7 @@ export function buildThermalSeries(protocolSteps, initial = {}, terminalProjecti
     previousTemperatureC = settledTemperatureC;
   }
 
+  let ambientSettledPoint = null;
   const terminalStart = points.length > 0
     ? samples.at(-1)
     : finite(previousPressureBar) && finite(previousTemperatureC)
@@ -194,9 +195,15 @@ export function buildThermalSeries(protocolSteps, initial = {}, terminalProjecti
     && finite(terminalProjection?.durationMinutes)
     && terminalProjection.durationMinutes >= 0) {
     const terminalElapsedMinutes = elapsedMinutes + terminalProjection.durationMinutes;
-    // A zero-length projection repeats the last sample. Drawing it again stacks a second marker
-    // on the same coordinates and adds an empty estimated segment.
-    const repeatsLastSample = points.length > 0 && terminalProjection.durationMinutes === 0;
+    // A projection that lands on the last sample adds no new state; drawing it again stacks a second
+    // marker on the same coordinates. `ambientSettledPoint` still backs `final`, so the status text
+    // keeps reporting the settled tank state.
+    const lastSample = samples.at(-1);
+    const repeatsLastSample = points.length > 0
+      && lastSample !== undefined
+      && Math.abs(lastSample.elapsedMinutes - terminalElapsedMinutes) < 1e-6
+      && Math.abs(lastSample.pressureBar - terminalProjection.pressureBar) < 1e-6
+      && Math.abs(lastSample.temperatureC - terminalProjection.temperatureC) < 1e-6;
     const terminalPoint = point(
       points.at(-1)?.step ?? 0,
       'ambient-settled',
@@ -208,6 +215,7 @@ export function buildThermalSeries(protocolSteps, initial = {}, terminalProjecti
       terminalProjection.temperatureC,
       terminalElapsedMinutes
     );
+    ambientSettledPoint = terminalPoint;
     const terminalSample = {
       step: terminalPoint.step,
       title: terminalPoint.title,
@@ -256,7 +264,7 @@ export function buildThermalSeries(protocolSteps, initial = {}, terminalProjecti
       style,
       samples: segmentSamples
     })),
-    final: [...points].reverse().find(pointValue => pointValue.phase === 'ambient-settled')
+    final: ambientSettledPoint ?? [...points].reverse().find(pointValue => pointValue.phase === 'ambient-settled')
       ?? (points.length > 0 ? points.at(-1) : null)
   };
 }

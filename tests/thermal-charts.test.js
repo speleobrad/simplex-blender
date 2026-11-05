@@ -217,9 +217,43 @@ test('a zero-length ambient-settled projection does not repeat the last state', 
     'start', 'transfer-end', 'settled', 'in-water-target'
   ]);
   assert.deepEqual(series.points.map(point => point.elapsedMinutes), [0, 0, 15, 15]);
-  assert.equal(series.final.pressureBar, 95);
-  assert.equal(series.final.temperatureC, 10);
+  // The ambient-settled state is still the series endpoint; only its duplicate marker is omitted.
+  assert.equal(series.final.phase, 'ambient-settled');
+  assert.equal(series.final.pressureBar, 100);
+  assert.equal(series.final.temperatureC, 20);
   assert.equal(series.final.elapsedMinutes, 15);
+  assert.equal(series.points.at(-1).phase, 'in-water-target');
+  assert.equal(series.points.at(-1).pressureBar, 95);
+});
+
+test('a zero-length ambient-settled projection that differs from the last state is still drawn', () => {
+  const series = buildThermalSeries([{
+    type: 'wait',
+    title: 'Wait 15 minutes',
+    recipeLabel: 'Wait 15 minutes',
+    recipeAction: 'Wait',
+    thermal: {
+      durationMinutes: 0,
+      waitMinutes: 15,
+      temperatureStartC: 20,
+      temperatureAtTransferEndC: 20,
+      pressureAtTransferEndBar: 100,
+      temperatureAfterWaitC: 20,
+      pressureAfterWaitBar: 100
+    }
+  }], {
+    initialPressureBar: 100,
+    initialTemperatureC: 20
+  }, {
+    pressureBar: 101,
+    temperatureC: 20,
+    durationMinutes: 0
+  });
+
+  const ambient = series.points.filter(point => point.phase === 'ambient-settled');
+  assert.equal(ambient.length, 1);
+  assert.equal(ambient[0].pressureBar, 101);
+  assert.equal(series.final.pressureBar, 101);
 });
 
 test('keep-only compare series projects from the initial state to ambient settled', () => {
