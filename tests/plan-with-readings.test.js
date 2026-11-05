@@ -107,6 +107,17 @@ test('a reading that implies no gas was added keeps the original recipe and repo
   assert.deepEqual(titles(plan), titles(base));
 });
 
+test('a rejected later reading keeps the earlier accepted reading and does not count itself', () => {
+  const first = { [scrapIndex]: { pressureBar: 54, temperatureC: 22 } };
+  const afterFirst = planWithReadings(withReadings(first));
+  const laterIndex = afterFirst.protocolSteps.at(-2)._measurementIndex;
+  const plan = planWithReadings(withReadings({ ...first, [laterIndex]: { pressureBar: 40, temperatureC: 21 } }));
+  assert.match(plan.interimReadings.error, /cannot be derived/);
+  assert.equal(plan.interimReadings.count, 1);
+  assert.deepEqual(titles(plan), titles(afterFirst));
+  assert.equal(stepAt(plan, scrapIndex).thermal.pressureStartBar, 54);
+});
+
 test('later readings chain on the re-planned recipe and every recompute keeps index to step mapping stable', () => {
   const first = { [scrapIndex]: { pressureBar: 54, temperatureC: 22 } };
   const afterFirst = planWithReadings(withReadings(first));

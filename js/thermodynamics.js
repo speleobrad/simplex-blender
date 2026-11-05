@@ -464,8 +464,11 @@ export function integrateTransferRateProfile({
     const untilSampleMinutes = nextSampleIndex * PROFILE_SAMPLE_MINUTES - elapsedMinutes;
     if (isBooster) {
       // Booster: receiver moles advance by the molar flow and pressure follows the EOS, so the
-      // receiver and the source inventory draw the same gas. The end crossing is interpolated inside the step.
-      const dtMinutes = Math.min(stepMinutes, untilSampleMinutes);
+      // receiver and the source inventory draw the same gas. A step never draws more gas than the
+      // source holds; when it would, the step ends at exhaustion and the source is set to zero.
+      const sourceLimitMinutes = state.molesPerMin > 0 ? sourceMoles / state.molesPerMin : Infinity;
+      const drainsSource = sourceLimitMinutes < Math.min(stepMinutes, untilSampleMinutes);
+      const dtMinutes = drainsSource ? sourceLimitMinutes : Math.min(stepMinutes, untilSampleMinutes);
       const stepMoles = state.molesPerMin * dtMinutes;
       const nextMinutes = elapsedMinutes + dtMinutes;
       const nextPressureBar = calcPressure(
@@ -476,12 +479,15 @@ export function integrateTransferRateProfile({
         useVdw
       );
       if (nextPressureBar >= endPressureBar) {
+        // Crossing inside the step: commit only the moles drawn up to the crossing.
         const fraction = (endPressureBar - pressureBar) / (nextPressureBar - pressureBar);
+        receiverMoles += stepMoles * fraction;
+        sourceMoles = Math.max(0, sourceMoles - stepMoles * fraction);
         elapsedMinutes += dtMinutes * fraction;
         pressureBar = endPressureBar;
       } else {
         receiverMoles += stepMoles;
-        sourceMoles = Math.max(0, sourceMoles - stepMoles);
+        sourceMoles = drainsSource ? 0 : Math.max(0, sourceMoles - stepMoles);
         elapsedMinutes = nextMinutes;
         pressureBar = nextPressureBar;
       }
@@ -765,10 +771,10 @@ function rateForProtocolStep({
   };
 }
 
-// The duration map contracts by about 0.2 per iteration. 1e-5 min is 0.6 ms, far
+// The duration map contracts by about 0.2 per iteration. 1e-6 min is 60 microseconds, far
 // below the 1 s profile sample, and 12 iterations give ample margin before the
 // non-convergence error is raised.
-const PROFILE_DURATION_TOLERANCE_MINUTES = 1e-5;
+const PROFILE_DURATION_TOLERANCE_MINUTES = 1e-6;
 const PROFILE_DURATION_MAX_ITERATIONS = 12;
 
 // Salvage boost: the working tank is the booster source and the bank is the
@@ -1135,6 +1141,7 @@ function buildThermalStepSamples({
     });
   }
 
+  const transferEndSample = samples.at(-1);
   const appendWaitSample = elapsedMinutes => {
     const temperatureC = skipsConfiguredWait
       ? temperatureAtTransferEndC
@@ -1153,7 +1160,7 @@ function buildThermalStepSamples({
     const pressureBar = elapsedMinutes >= waitMinutes
       ? pressureAfterWaitBar
       : calculatePressureAtTemperature({
-        pressureBar: transferEndPressureBar,
+        pressureBar: transferEndSample.pressureBar,
         oxygenPercent: receiverMix.oxygenPercent,
         heliumPercent: receiverMix.heliumPercent,
         fromTemperatureC: temperatureAtTransferEndC,

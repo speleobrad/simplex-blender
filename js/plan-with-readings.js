@@ -346,17 +346,17 @@ export function planWithReadings(input) {
   const base = optimizeBlend(withReadings(input, []));
   if (indices.length === 0) return base;
 
-  const fallback = (index, error) => ({
-    ...optimizeBlend(withReadings(input, readingsUpTo(measurements, index - 1))),
-    interimReadings: { count: indices.length, error }
-  });
   if (base.feasible === false || !base.logicalPlan || !base.blend) return optimizeBlend(input);
 
+  // A rejected reading keeps the plan built from the readings accepted before it, so the
+  // recipe is never re-optimized and the reported count excludes the rejected reading.
   let plan = startingPlan(base, input);
+  let applied = 0;
   for (const index of indices) {
-    const applied = applyReading(plan, input, withReadings(input, readingsUpTo(measurements, index)), index, measurements[index]);
-    if (applied.error) return fallback(index, applied.error);
-    plan = applied.plan;
+    const result = applyReading(plan, input, withReadings(input, readingsUpTo(measurements, index)), index, measurements[index]);
+    if (result.error) return { ...plan, interimReadings: { count: applied, error: result.error } };
+    plan = result.plan;
+    applied += 1;
   }
-  return { ...plan, interimReadings: { count: indices.length, error: null } };
+  return { ...plan, interimReadings: { count: applied, error: null } };
 }

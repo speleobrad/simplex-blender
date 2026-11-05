@@ -3946,3 +3946,33 @@ test('a receiver that fails alone as first-ranked cannot hide another receiver t
   assert.equal(result.feasible, true);
   assert.deepEqual([...new Set(salvageReceivers(result))], ['deep']);
 });
+
+// The default page recipe with a configured 5 minute wait after every transfer.
+test('every waited transfer hands off to its wait at the pressure the transfer reached', () => {
+  const plan = optimizeBlend({
+    cylinder: {
+      volumeL: 11.1, initialPressureBar: 45, targetPressureBar: 195,
+      initialOxygenPercent: 21, initialHeliumPercent: 0,
+      targetOxygenPercent: 18, targetHeliumPercent: 45,
+      workingPressureBar: 207, hotOverfillPercent: 2
+    },
+    physics: { model: 'vdw', temperatureC: 21 },
+    banks: DEFAULT_BANKS.map(bank => ({ ...bank })),
+    thermal: {
+      tankMaterial: 'aluminum', coolingMedium: 'air', ambientTemperatureC: 21, inletTemperatureC: 25,
+      targetMediumTemperatureC: 21, diveSiteTemperatureC: 10,
+      waitMode: 'minutes', waitMinutes: 5, interimMeasurements: []
+    },
+    settings: DEFAULT_SETTINGS
+  });
+  const profileSteps = plan.protocolSteps.filter(step => step.thermal?.samples
+    && ['booster', 'compressor'].includes(step.thermal.rateSource) && step.thermal.waitMinutes > 0);
+  assert.ok(profileSteps.length >= 2);
+  for (const step of profileSteps) {
+    const { samples, durationMinutes } = step.thermal;
+    const handoff = samples.findLast(sample => sample.elapsedMinutes <= durationMinutes + 1e-9);
+    const firstWait = samples.find(sample => sample.elapsedMinutes > durationMinutes + 1e-9);
+    assert.ok(Math.abs(firstWait.pressureBar - handoff.pressureBar) < 0.5,
+      `${step.title}: transfer ends at ${handoff.pressureBar.toFixed(2)} bar but the wait starts at ${firstWait.pressureBar.toFixed(2)} bar`);
+  }
+});
