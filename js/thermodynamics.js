@@ -311,6 +311,8 @@ function estimateTransferTemperatureSamples({
 const PROFILE_TIME_EPSILON_MINUTES = 1e-9;
 const PROFILE_PRESSURE_EPSILON_BAR = 1e-9;
 const PROFILE_MAX_MINUTES = 24 * 60;
+const PROFILE_SAMPLE_SECONDS = 1;
+const PROFILE_SAMPLE_MINUTES = PROFILE_SAMPLE_SECONDS / 60;
 
 function interpolateTemperatureC(samples, elapsedMinutes) {
   if (elapsedMinutes <= samples[0].elapsedMinutes) return samples[0].temperatureC;
@@ -420,13 +422,14 @@ export function integrateTransferRateProfile({
   let pressureBar = startPressureBar;
   let sourceMoles = sourceStartMoles;
   let elapsedMinutes = 0;
-  let nextSampleMinutes = 0;
+  let nextSampleIndex = 0;
   let reachedEndPressure = false;
 
   for (;;) {
     const state = evaluate(pressureBar, elapsedMinutes, sourceMoles);
     const atEnd = pressureBar >= endPressureBar - PROFILE_PRESSURE_EPSILON_BAR;
     const stalled = !(state.rateBarPerMin > 0) || elapsedMinutes >= PROFILE_MAX_MINUTES;
+    const nextSampleMinutes = nextSampleIndex * PROFILE_SAMPLE_MINUTES;
     const onSampleBoundary = elapsedMinutes + PROFILE_TIME_EPSILON_MINUTES >= nextSampleMinutes;
     if (onSampleBoundary || atEnd || stalled) {
       const sampleMinutes = onSampleBoundary ? nextSampleMinutes : elapsedMinutes;
@@ -442,7 +445,7 @@ export function integrateTransferRateProfile({
         });
       }
     }
-    if (onSampleBoundary) nextSampleMinutes += 1;
+    if (onSampleBoundary) nextSampleIndex += 1;
     if (atEnd) {
       reachedEndPressure = true;
       break;
@@ -450,9 +453,10 @@ export function integrateTransferRateProfile({
     if (stalled) break;
 
     const minutesToEnd = (endPressureBar - pressureBar) / state.rateBarPerMin;
-    const finalStep = minutesToEnd <= stepMinutes;
-    const dtMinutes = finalStep ? minutesToEnd : stepMinutes;
-    pressureBar = finalStep ? endPressureBar : pressureBar + state.rateBarPerMin * dtMinutes;
+    const untilSampleMinutes = nextSampleIndex * PROFILE_SAMPLE_MINUTES - elapsedMinutes;
+    const dtMinutes = Math.min(stepMinutes, untilSampleMinutes, minutesToEnd);
+    const reachesEnd = dtMinutes === minutesToEnd;
+    pressureBar = reachesEnd ? endPressureBar : pressureBar + state.rateBarPerMin * dtMinutes;
     sourceMoles = Math.max(0, sourceMoles - state.molesPerMin * dtMinutes);
     elapsedMinutes += dtMinutes;
   }

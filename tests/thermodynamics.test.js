@@ -1521,15 +1521,36 @@ test('compressor duration scales with receiver temperature at identical pressure
   assert.ok(Math.abs(hot.durationMinutes / cool.durationMinutes - 293.15 / 333.15) < 0.005);
 });
 
-test('profile samples sit on the 60 s grid and end at the endpoint', () => {
+test('profile samples sit on the 1 s grid and end at the endpoint', () => {
   const profile = integrateTransferRateProfile(integratorFixture({
     rateSource: 'booster',
     startPressureBar: 20,
     endPressureBar: 120
   }));
   const minutes = profile.samples.map(sample => sample.elapsedMinutes);
-  minutes.slice(0, -1).forEach((minute, index) => assert.equal(minute, index));
+  minutes.slice(0, -1).forEach((minute, index) => assert.ok(Math.abs(minute - index / 60) < 1e-9));
   assert.equal(minutes.at(-1), profile.durationMinutes);
+});
+
+test('short booster transfer keeps a changing pressure slope between interior samples', () => {
+  const profile = integrateTransferRateProfile({
+    ...integratorFixture({
+      rateSource: 'booster',
+      startPressureBar: 91,
+      endPressureBar: 180
+    }),
+    cylinderVolumeCm3: 500,
+    bpm: 60
+  });
+  assert.ok(profile.durationMinutes < 1);
+  const pressures = profile.samples.map(sample => sample.pressureBar);
+  const interiorSlopes = [];
+  for (let index = 1; index < pressures.length - 2; index += 1) {
+    interiorSlopes.push(pressures[index + 1] - pressures[index]);
+  }
+  assert.ok(interiorSlopes.length >= 8);
+  const spread = (Math.max(...interiorSlopes) - Math.min(...interiorSlopes)) / Math.max(...interiorSlopes);
+  assert.ok(spread > 0.02, `interior slope spread ${spread} is too flat`);
 });
 
 test('reports when the source cannot supply the requested pressure', () => {
