@@ -120,6 +120,7 @@ const state = {
   bankPriceBasis: {},
   activeScreen: 'blending',
   activeTab: 'recipe',
+  pendingBlendingSurfaces: { thermal: false, ternary: false },
   interimMeasurements: [],
   interimMeasurementSignature: null,
   lastInput: null,
@@ -1405,6 +1406,40 @@ function renderTernary(screen = state.activeScreen) {
   if (data && canvas) renderTernaryDiagram(canvas, data, { root });
 }
 
+function blendingTernaryCanvas() {
+  return document.querySelector('[data-result-host="blending"] [data-result-key="ternary-canvas"]');
+}
+
+function renderBlendingTernary() {
+  if (ternaryData()) renderTernary();
+  else clearTernaryDiagram(blendingTernaryCanvas());
+}
+
+function visibleBlendingTab() {
+  return document.querySelector('[data-result-host="blending"] [role="tab"][aria-selected="true"]')?.dataset.tab ?? null;
+}
+
+// Thermal charts and the simplex diagram are drawn only when their tab is visible. A recalculation marks them
+// pending; selecting the tab (or returning to Blending) draws them from the stored result.
+function renderVisibleBlendingSurfaces() {
+  if (state.activeScreen !== 'blending') return;
+  const pending = state.pendingBlendingSurfaces;
+  const tab = visibleBlendingTab();
+  if (tab === 'thermal' && pending.thermal) {
+    pending.thermal = false;
+    renderThermalCharts(state.lastResult, state.lastInput, state.settings.units);
+  }
+  if ((tab === 'ternary' || tab === 'summary') && pending.ternary) {
+    pending.ternary = false;
+    renderBlendingTernary();
+  }
+}
+
+function redrawBlendingTernaryIfVisible() {
+  // A hidden pane collapses the canvas to zero size; drawing into it is wasted work.
+  if (blendingTernaryCanvas()?.getClientRects().length) renderTernary();
+}
+
 function invalidInputResult(errors) {
   return {
     feasible: false,
@@ -1881,9 +1916,8 @@ function recalculate() {
   renderEquipmentSummary(state.settings, state.settings.units);
   renderResults(resultWithWarnings, input);
 
-  renderThermalCharts(resultWithWarnings, input, state.settings.units);
-  if (ternaryData()) renderTernary();
-  else clearTernaryDiagram(document.querySelector('[data-result-host="blending"] [data-result-key="ternary-canvas"]'));
+  state.pendingBlendingSurfaces = { thermal: true, ternary: true };
+  renderVisibleBlendingSurfaces();
   refreshCostSummaries();
 }
 
@@ -1898,6 +1932,7 @@ function selectScreen(screenId) {
   }
   if (!setPrimaryScreen(document, screenId)) return;
   state.activeScreen = screenId;
+  renderVisibleBlendingSurfaces();
   if (screenId === 'what-if') {
     initializeWhatIfScenario();
     runWhatIf();
@@ -1916,10 +1951,11 @@ function setTab(tabId, focus = false) {
   state.activeTab = tabId;
   if (focus) root.querySelector?.(`[data-result-key="tab-btn-${tabId}"]`)?.focus();
   if (tabId === 'ternary') {
-    renderTernary();
+    if (state.activeScreen === 'what-if') renderTernary();
     const hover = root.querySelector?.('[data-result-key="ternary-coords-hover"]');
     if (hover) hover.textContent = 'Move over diagram for gas fractions';
   }
+  renderVisibleBlendingSurfaces();
 }
 
 function handleResultTabKeydown(event) {
@@ -2597,7 +2633,7 @@ function initialize() {
   refreshPresetOptions();
   updateWaitModeFields();
   updateWaterSubmersionField();
-  observeTernaryCanvas(document.querySelector('[data-result-host="blending"] [data-result-key="ternary-canvas"]'), renderTernary);
+  observeTernaryCanvas(blendingTernaryCanvas(), redrawBlendingTernaryIfVisible);
   const whatIfResultRoot = byId('what-if-result-host')?.querySelector?.('[data-result-panel]')
     ?? byId('what-if-result-host');
   observeTernaryCanvas(

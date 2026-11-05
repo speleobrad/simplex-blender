@@ -9,7 +9,7 @@
     "test:ui:core": "playwright test tests/browser/smoke.spec.js tests/browser/onboarding.spec.js tests/browser/global-shell.spec.js",
     "test:ui:blending": "playwright test tests/browser/blending.spec.js tests/browser/what-if.spec.js",
     "test:ui:settings": "playwright test tests/browser/settings.spec.js",
-    "test:ui:results": "playwright test tests/browser/results.spec.js",
+    "test:ui:results": "playwright test tests/browser/results.spec.js tests/browser/lazy-blending-surfaces.spec.js",
     "test:ui:data": "playwright test tests/browser/inventory.spec.js tests/browser/persistence.spec.js tests/browser/multi-session.spec.js",
     "test:ui:layout": "playwright test tests/browser/layout-invariants.spec.js tests/browser/responsive-artifacts.spec.js",
     "test:ui:screenshots": "playwright test tests/browser/screenshots.spec.js"
