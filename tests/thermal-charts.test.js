@@ -10,6 +10,7 @@ import {
   thermalPointMarkerAttributes,
   thermalChartAriaLabel
 } from '../js/ui/thermal-charts.js';
+import { simulateCompareProtocol } from '../js/thermodynamics.js';
 
 const protocolSteps = [
   {
@@ -507,21 +508,6 @@ test('closed-form transfers carry their configured rate as one span, profile tra
       ]
     }
   };
-  const equalizeStep = {
-    type: 'equalize',
-    title: 'Equalize',
-    recipeLabel: 'Equalize',
-    thermal: {
-      durationMinutes: 0,
-      waitMinutes: 1,
-      rateBarPerMin: null,
-      temperatureStartC: 22,
-      pressureAtTransferEndBar: 90,
-      temperatureAtTransferEndC: 22,
-      pressureAfterWaitBar: 90,
-      temperatureAfterWaitC: 22
-    }
-  };
   const boostStep = {
     type: 'boost',
     title: 'Boost',
@@ -548,6 +534,39 @@ test('closed-form transfers carry their configured rate as one span, profile tra
     { elapsedMinutes: 0, rateBarPerMin: 3 },
     { elapsedMinutes: 4, rateBarPerMin: 3 }
   ]]);
-  assert.deepEqual(buildThermalSeries([equalizeStep], initial).rateSpans, []);
   assert.deepEqual(buildThermalSeries([boostStep], initial).rateSpans, []);
+});
+
+test('compare equalize runs as a decant, and its rate span covers the simulated transfer window', () => {
+  const result = simulateCompareProtocol({
+    protocolSteps: [
+      {
+        type: 'decant', operation: 'Decant',
+        receiverStartPressureBar: 50, receiverEndPressureBar: 80,
+        sourceOxygenPercent: 0, sourceHeliumPercent: 100,
+        resultingMix: { oxygenPercent: 12, heliumPercent: 40 }
+      },
+      {
+        type: 'equalize', operation: 'Equalize',
+        receiverStartPressureBar: 80, receiverEndPressureBar: 120,
+        sourceStartPressureBar: 200, sourceEndPressureBar: 120,
+        sourceOxygenPercent: 0, sourceHeliumPercent: 100,
+        resultingMix: { oxygenPercent: 10, heliumPercent: 50 }
+      }
+    ],
+    cylinder: { initialPressureBar: 50, volumeL: 12 },
+    physics: { model: 'ideal', temperatureC: 20 },
+    thermal: { tankMaterial: 'steel', coolingMedium: 'air', ambientTemperatureC: 20 },
+    settings: { booster: { otherDecantRateBarPerMin: 5, otherBoostBpm: 50 } }
+  });
+  const [decant, equalize] = result.protocolSteps;
+  assert.equal(equalize.type, 'equalize');
+  assert.equal(equalize.thermal.rateSource, 'decant-rate');
+
+  const series = buildThermalSeries(result.protocolSteps, { initialPressureBar: 50, initialTemperatureC: 20 });
+  const equalizeStart = decant.thermal.durationMinutes + decant.thermal.waitMinutes;
+  assert.deepEqual(series.rateSpans[1], [
+    { elapsedMinutes: equalizeStart, rateBarPerMin: 5 },
+    { elapsedMinutes: equalizeStart + equalize.thermal.durationMinutes, rateBarPerMin: 5 }
+  ]);
 });
