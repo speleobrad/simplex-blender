@@ -452,7 +452,7 @@ function renderThermalDetails(
   }
 
   const leftRows = [
-    ['Rate', [thermal.rateSource, formatTransferRate(thermal, units)].filter(Boolean).join(' · ')],
+    ['Rate', formatTransferRate(thermal, units)],
     ['Duration', `${formatThermalValue(thermal.durationMinutes)} min`],
     [
       'Pressure at transfer end',

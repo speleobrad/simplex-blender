@@ -538,7 +538,7 @@ test('renders recipe aggregates and normalized technical details', () => {
       ''
     ]);
     assert.deepEqual(values, [
-      'booster · 5.0 bar/min',
+      '5.0 bar/min',
       '25.0 bar',
       '10.0 min',
       'Final cool-off to 30.0 °C (4.0 min)',
