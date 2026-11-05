@@ -2357,6 +2357,9 @@ function solveBlendWithoutSalvage(input) {
         sourceStartPressureBar: stage.sourceStartPressureBar,
         sourceEndPressureBar: stage.sourceEndPressureBar,
         sourceVolumeL: bank.volumeL,
+        sourceStartMoles: isCompressorAir(bank)
+          ? null
+          : Math.max(0, bankDensityByBankId.get(bank.id) * bank.volumeL - addedMoles * stage.startFraction),
         receiverStartPressureBar: stage.receiverStartPressureBar,
         receiverEndPressureBar: stage.receiverEndPressureBar,
         ...(input.thermal ? {

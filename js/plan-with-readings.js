@@ -335,8 +335,8 @@ function applyReading(plan, input, readingsInput, index, reading) {
 }
 
 // Returns an optimizeBlend-shaped result. `interimReadings` reports how many readings
-// were applied and, when the recipe could not be re-planned, why the original recipe
-// (with the readings applied thermally only) is shown instead.
+// were applied and, when a reading cannot be applied, why. The recipe shown then is the
+// original one with only the readings before the rejected reading applied thermally.
 export function planWithReadings(input) {
   const measurements = input?.thermal?.interimMeasurements ?? [];
   const indices = [];
@@ -346,8 +346,8 @@ export function planWithReadings(input) {
   const base = optimizeBlend(withReadings(input, []));
   if (indices.length === 0) return base;
 
-  const fallback = error => ({
-    ...optimizeBlend(input),
+  const fallback = (index, error) => ({
+    ...optimizeBlend(withReadings(input, readingsUpTo(measurements, index - 1))),
     interimReadings: { count: indices.length, error }
   });
   if (base.feasible === false || !base.logicalPlan || !base.blend) return optimizeBlend(input);
@@ -355,7 +355,7 @@ export function planWithReadings(input) {
   let plan = startingPlan(base, input);
   for (const index of indices) {
     const applied = applyReading(plan, input, withReadings(input, readingsUpTo(measurements, index)), index, measurements[index]);
-    if (applied.error) return fallback(applied.error);
+    if (applied.error) return fallback(index, applied.error);
     plan = applied.plan;
   }
   return { ...plan, interimReadings: { count: indices.length, error: null } };

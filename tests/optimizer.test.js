@@ -496,6 +496,42 @@ test('uses boost when source pressure is lower than receiver pressure for the wh
   assert.equal(transferSteps[0].operation, 'Boost');
 });
 
+test('bank boost steps carry source inventory so the booster transfer is integrated', () => {
+  const result = optimizeBlend({
+    ...equalGasTransferInput({
+      initialPressureBar: 100,
+      targetPressureBar: 130,
+      bankPressureBar: 80
+    }),
+    thermal: {
+      tankMaterial: 'steel',
+      coolingMedium: 'air',
+      ambientTemperatureC: 20,
+      waitMode: 'minutes',
+      waitMinutes: 10,
+      targetTemperatureC: 25
+    },
+    settings: {
+      booster: {
+        minimumSourcePressureBar: 0,
+        cylinderVolumeCm3: 9,
+        oxygenBoostBpm: 50,
+        otherBoostBpm: 50,
+        oxygenDecantRateBarPerMin: 5,
+        otherDecantRateBarPerMin: 5,
+        compressorInletFlowLPerMin: 100
+      }
+    }
+  });
+
+  assert.equal(result.feasible, true);
+  const boosts = result.protocolSteps.filter(step => step.type === 'boost' && step.operation === 'Boost');
+  assert.equal(boosts.length, 1);
+  assert.equal(boosts[0].thermal.rateSource, 'booster');
+  assert.ok(Number.isFinite(boosts[0].sourceStartMoles));
+  assert.ok(boosts[0].sourceStartMoles > 0);
+});
+
 test('uses decant when source pressure is not lower than receiver pressure for the whole transfer', () => {
   const result = optimizeBlend(equalGasTransferInput({
     initialPressureBar: 100,

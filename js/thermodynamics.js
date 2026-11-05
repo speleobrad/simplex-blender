@@ -421,6 +421,15 @@ export function integrateTransferRateProfile({
   const samples = [];
   let pressureBar = startPressureBar;
   let sourceMoles = sourceStartMoles;
+  let receiverMoles = isBooster
+    ? calcMolarDensity(
+      startPressureBar,
+      receiverStartMix.oxygenPercent,
+      receiverStartMix.heliumPercent,
+      interpolateTemperatureC(temperatureSamples, 0),
+      useVdw
+    ) * receiverVolumeL
+    : 0;
   let elapsedMinutes = 0;
   let nextSampleIndex = 0;
   let reachedEndPressure = false;
@@ -452,8 +461,33 @@ export function integrateTransferRateProfile({
     }
     if (stalled) break;
 
-    const minutesToEnd = (endPressureBar - pressureBar) / state.rateBarPerMin;
     const untilSampleMinutes = nextSampleIndex * PROFILE_SAMPLE_MINUTES - elapsedMinutes;
+    if (isBooster) {
+      // Booster: receiver moles advance by the molar flow and pressure follows the EOS, so the
+      // receiver and the source inventory draw the same gas. The end crossing is interpolated inside the step.
+      const dtMinutes = Math.min(stepMinutes, untilSampleMinutes);
+      const stepMoles = state.molesPerMin * dtMinutes;
+      const nextMinutes = elapsedMinutes + dtMinutes;
+      const nextPressureBar = calcPressure(
+        (receiverMoles + stepMoles) / receiverVolumeL,
+        state.oxygenPercent,
+        state.heliumPercent,
+        interpolateTemperatureC(temperatureSamples, nextMinutes),
+        useVdw
+      );
+      if (nextPressureBar >= endPressureBar) {
+        const fraction = (endPressureBar - pressureBar) / (nextPressureBar - pressureBar);
+        elapsedMinutes += dtMinutes * fraction;
+        pressureBar = endPressureBar;
+      } else {
+        receiverMoles += stepMoles;
+        sourceMoles = Math.max(0, sourceMoles - stepMoles);
+        elapsedMinutes = nextMinutes;
+        pressureBar = nextPressureBar;
+      }
+      continue;
+    }
+    const minutesToEnd = (endPressureBar - pressureBar) / state.rateBarPerMin;
     const dtMinutes = Math.min(stepMinutes, untilSampleMinutes, minutesToEnd);
     const reachesEnd = dtMinutes === minutesToEnd;
     pressureBar = reachesEnd ? endPressureBar : pressureBar + state.rateBarPerMin * dtMinutes;
@@ -731,8 +765,11 @@ function rateForProtocolStep({
   };
 }
 
-const PROFILE_DURATION_TOLERANCE_MINUTES = 1e-6;
-const PROFILE_DURATION_MAX_ITERATIONS = 8;
+// The duration map contracts by about 0.2 per iteration. 1e-5 min is 0.6 ms, far
+// below the 1 s profile sample, and 12 iterations give ample margin before the
+// non-convergence error is raised.
+const PROFILE_DURATION_TOLERANCE_MINUTES = 1e-5;
+const PROFILE_DURATION_MAX_ITERATIONS = 12;
 
 // Salvage boost: the working tank is the booster source and the bank is the
 // receiver. The bank is held at the current temperature, so the integrated bank
